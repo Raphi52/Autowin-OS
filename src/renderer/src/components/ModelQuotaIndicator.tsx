@@ -10,18 +10,15 @@ import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../../../shared
 import { quotaGradientColor } from './quota-gradient'
 import type { OrchestratorAccounts } from './OrchestratorModelSelector'
 import { createPortal } from 'react-dom'
-import { formaterDate, formaterNombre, langueCourante } from '../langue'
-import type { ValeursDeTexte } from '../textes'
-import { traduireChatPanneaux, useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
+import { formaterDate, formaterNombre } from '../langue'
+import {
+  traduireChatPanneaux,
+  useTextesChatPanneaux,
+  texteChatPanneaux as tx
+} from '../textes-ecrans/chat-panneaux'
 import './ModelQuotaIndicator.css'
 
-/**
- * Le texte d'une clé dans la langue COURANTE, pour les libellés calculés hors du composant : ils
- * sont appelés pendant son rendu, qui lit la langue par `useTextesChatPanneaux`.
- */
 type CleDuPanneau = Parameters<typeof traduireChatPanneaux>[0]
-const tx = (cle: CleDuPanneau, valeurs?: ValeursDeTexte): string =>
-  traduireChatPanneaux(cle, langueCourante(), valeurs)
 
 const providerLabels = LIBELLES_FOURNISSEURS
 

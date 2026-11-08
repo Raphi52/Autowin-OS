@@ -59,3 +59,10 @@ export function motsDe(texte: string, longueurMin = 3): string[] {
     )
   ]
 }
+
+/** Un titre comparable : `replier`, puis tout ce qui n'est ni lettre ni chiffre devient un espace. */
+export function normaliserTitre(titre: string): string {
+  return replier(titre)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}

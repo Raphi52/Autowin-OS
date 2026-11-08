@@ -61,10 +61,6 @@ function outputLines(data: Record<string, unknown>): string[] {
   return lignes
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined
-}
-
 /**
  * Résumé du résultat d'une commande `verify` — la seule action dont le verdict est la valeur.
  * Rend `undefined` si l'action n'est pas une vérification ou n'a pas encore de résultat : l'appelant
@@ -288,3 +284,4 @@ import {
   formatExecutionCostCoverage
 } from '../../../shared/orchestration-outcome'
 import { texteChatExecution as t } from '../textes-ecrans/chat-execution'
+import { asRecord } from '../../../shared/is-record'

@@ -14,7 +14,8 @@ export const RAYON_GLYPHE = 46
 /** Le côté du carré du halo, en unités du dessin. */
 export const TAILLE_GLYPHE = 64
 
-const r2 = (v: number): number => Math.round(v * 100) / 100
+/** Arrondi au centième : les nombres écrits dans le dessin restent courts. */
+export const r2 = (v: number): number => Math.round(v * 100) / 100
 
 /** Des runes à traits droits, debout, dans une boîte d'environ 2,4 × 3,4 centrée sur 0. */
 const RUNES = [

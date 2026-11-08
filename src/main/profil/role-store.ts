@@ -21,7 +21,7 @@ function rolesPath(): string {
   return join(ensureAutowinAppData(), 'roles.json')
 }
 
-function nonEmptyString(value: unknown): value is string {
+export function nonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 

@@ -116,7 +116,7 @@ const RAISON_ILLISIBLE =
   "n'y est écrit. Déplace coffre-cles.bin pour repartir d'un coffre vide."
 
 const vide = (): ContenuCoffre => ({ version: 1, entrees: [], ecartees: [] })
-const memeNom = (a: string, b: string): boolean => a.toUpperCase() === b.toUpperCase()
+export const memeNom = (a: string, b: string): boolean => a.toUpperCase() === b.toUpperCase()
 
 /**
  * Un nom de variable qui DÉSIGNE une clé, hors réglages d'Autowin et jeton de session. La même règle

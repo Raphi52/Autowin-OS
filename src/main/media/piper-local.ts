@@ -19,7 +19,7 @@
  *    reparle avec la voix du système : un poste sans Piper marche comme avant.
  */
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, type Dirent } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, posix } from 'node:path'
@@ -30,6 +30,7 @@ import {
   type Decompresseur,
   type Telechargeur
 } from './telechargement'
+import { listerRecursif } from '../fichiers/dossiers'
 
 /**
  * LA VOIX. `fr_FR-siwis-medium` : voix française, 22 kHz. Tailles RELEVÉES le 2026-09-02 sur les
@@ -80,22 +81,6 @@ export interface EtatPiper {
 /** Le dossier d'installation, sous les données de l'application. */
 export function racinePiper(userData: string): string {
   return join(userData, 'piper')
-}
-
-function listerRecursif(racine: string, prefixe = ''): string[] {
-  let entrees: Dirent[]
-  try {
-    entrees = readdirSync(racine, { withFileTypes: true }) as Dirent[]
-  } catch {
-    return []
-  }
-  const trouves: string[] = []
-  for (const entree of entrees) {
-    const relatif = prefixe === '' ? entree.name : `${prefixe}/${entree.name}`
-    if (entree.isDirectory()) trouves.push(...listerRecursif(join(racine, entree.name), relatif))
-    else trouves.push(relatif)
-  }
-  return trouves
 }
 
 /**

@@ -1,7 +1,5 @@
 import { watchdogRegexProblem } from '../../../shared/watchdog-regex'
-import { langueCourante } from '../langue'
-import { traduireTaskManager, type CleTaskManager } from '../textes-ecrans/task-manager'
-import type { ValeursDeTexte } from '../textes'
+import { texteTaskManager as texte, type CleTaskManager } from '../textes-ecrans/task-manager'
 
 /**
  * Modèle de présentation de la section « Watchdog Agents ».
@@ -13,9 +11,6 @@ import type { ValeursDeTexte } from '../textes'
  * Les phrases suivent la langue de l'interface (traduction anglaise) : lues au moment de
  * l'appel, pendant le rendu de WatchdogAgentsSection ou de TaskManagerView, qui suivent la langue.
  */
-
-const texte = (cle: CleTaskManager, valeurs?: ValeursDeTexte): string =>
-  traduireTaskManager(cle, langueCourante(), valeurs)
 
 export type WatchdogAppEvent =
   | 'orchestration-red'

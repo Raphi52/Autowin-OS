@@ -1,4 +1,5 @@
-import { tableDeTextes } from '../textes'
+import { tableDeTextes, type ValeursDeTexte } from '../textes'
+import { langueCourante } from '../langue'
 
 /**
  * TEXTES — CHAT — CONTRÔLE DE SOURCE, MODÈLES, QUOTAS ET COÛT (traduction anglaise, 2026-10-27).
@@ -920,3 +921,11 @@ export const { useTextes: useTextesChatPanneaux, traduire: traduireChatPanneaux 
   TEXTES_FR,
   TEXTES_EN
 )
+
+/** Hors composant : le texte dans la langue COURANTE, lue au moment de l'appel. */
+export function texteChatPanneaux(
+  cle: Parameters<typeof traduireChatPanneaux>[0],
+  valeurs?: ValeursDeTexte
+): string {
+  return traduireChatPanneaux(cle, langueCourante(), valeurs)
+}

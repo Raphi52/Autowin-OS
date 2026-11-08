@@ -32,7 +32,7 @@
  *    laisse alors un fichier de travail, jamais un modèle tronqué qui passerait pour installé.
  */
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, rmSync, type Dirent } from 'node:fs'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { cpus, tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
@@ -43,6 +43,7 @@ import {
   type Decompresseur,
   type Telechargeur
 } from './telechargement'
+import { listerRecursif } from '../fichiers/dossiers'
 
 /**
  * Le modèle. `small` quantifié en q5_1 : ~190 Mo au lieu de 466 Mo pour le `small` complet, pour une
@@ -93,22 +94,6 @@ export interface EtatWhisper {
 /** Le dossier d'installation, sous les données de l'application. */
 export function racineWhisper(userData: string): string {
   return join(userData, 'whisper')
-}
-
-function listerRecursif(racine: string, prefixe = ''): string[] {
-  let entrees: Dirent[]
-  try {
-    entrees = readdirSync(racine, { withFileTypes: true }) as Dirent[]
-  } catch {
-    return []
-  }
-  const trouves: string[] = []
-  for (const entree of entrees) {
-    const relatif = prefixe === '' ? entree.name : `${prefixe}/${entree.name}`
-    if (entree.isDirectory()) trouves.push(...listerRecursif(join(racine, entree.name), relatif))
-    else trouves.push(relatif)
-  }
-  return trouves
 }
 
 /**

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { formaterDate } from '../langue'
 import { riche } from '../textes'
 import {
   auPluriel,
@@ -7,6 +6,7 @@ import {
   type CleChatFilsEtLots
 } from '../textes-ecrans/chat-fils-et-lots'
 import './MessagesEntreFils.css'
+import { heure } from './lots-mesures'
 
 /*
  * MESSAGES ENTRE FILS, DANS LE FIL (2026-10-24).
@@ -34,8 +34,6 @@ const NATURES: Record<string, CleChatFilsEtLots> = {
   decouverte: 'messages.nature.decouverte',
   ordre: 'messages.nature.ordre'
 }
-
-const heure = (ms: number): string => formaterDate(ms, { hour: '2-digit', minute: '2-digit' })
 
 export function MessagesEntreFils({
   conversationId,

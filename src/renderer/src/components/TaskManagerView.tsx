@@ -34,20 +34,12 @@ import { MODELE_PROMPT_TACHE } from '../../../shared/modele-prompt-tache'
 import './ViewPage.css'
 import './TaskManagerView.css'
 import { Spinner } from './Spinner'
-import { formaterDate, formaterNombre, langueCourante } from '../langue'
-import type { ValeursDeTexte } from '../textes'
+import { formaterDate, formaterNombre } from '../langue'
 import {
-  traduireTaskManager,
   useTextesTaskManager,
+  texteTaskManager as texte,
   type CleTaskManager
 } from '../textes-ecrans/task-manager'
-
-/**
- * Hors composant, le texte dans la langue courante (traduction anglaise) : ces fonctions
- * sont appelées pendant le rendu de la vue, qui suit la langue par `useTextesTaskManager`.
- */
-const texte = (cle: CleTaskManager, valeurs?: ValeursDeTexte): string =>
-  traduireTaskManager(cle, langueCourante(), valeurs)
 
 type ExecutionMode = 'windows' | 'active-only'
 type RecurrenceUnit = 'none' | 'minute' | 'hour' | 'day' | 'week' | 'month'

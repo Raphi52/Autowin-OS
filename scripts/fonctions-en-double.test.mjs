@@ -82,3 +82,18 @@ describe('groupesDeCopies', () => {
     expect(groupesDeCopies([A, C], { racine, nom: 'isRecord' })).toEqual([])
   })
 })
+
+describe('le code de chaque groupe, pour décider sans rouvrir les fichiers', () => {
+  it('rend le corps tel qu’écrit, sans le commentaire qui le précède', () => {
+    const [fonction] = fonctionsDuTexte(`// note\nconst f = (x: number): number =>\n  x + 1\n`)
+    expect(fonction.corps).toBe('const f = (x: number): number =>\n  x + 1')
+    expect(fonction.exportee).toBe(false)
+  })
+
+  it('dit quelles copies sont exportées, et garde le corps de la première', () => {
+    const fichiers = fichiersSources(join(racine, 'src'))
+    const isRecord = groupesDeCopies(fichiers, { racine, nom: 'isRecord' })[0]
+    expect(isRecord.copies.map((c) => c.exportee)).toEqual([true, false])
+    expect(isRecord.corps.startsWith('export function isRecord(v: unknown)')).toBe(true)
+  })
+})

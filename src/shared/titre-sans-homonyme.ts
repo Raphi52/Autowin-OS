@@ -19,7 +19,11 @@
 import { replierComplet } from './mots'
 import { deuxChiffres } from './deux-chiffres'
 
-/** Longueur max d'un titre, comme `conversation-demandee.ts` et la barre laterale. */
+/**
+ * Longueur max d'un titre, la SEULE : titre automatique, titre demandé par l'agent
+ * (`conversation-demandee.ts`) et barre latérale. Deux règles de nommage différentes redonneraient un
+ * titre qui n'est pas celui que l'utilisateur voit.
+ */
 export const LONGUEUR_TITRE = 42
 
 /** Les blancs (retours à la ligne compris) repliés en un espace, sans blancs aux bords. */

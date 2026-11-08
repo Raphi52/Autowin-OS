@@ -9,6 +9,7 @@ import type {
   Usage
 } from '../providers/types'
 import { fetchFabricTransport } from './fabric-http-client'
+import { cancelBody } from './corps-de-reponse'
 import type { FabricNodeTransportStore } from './node-transport-store'
 
 const REQUEST_SCHEMA = 'autowin.node-chat-request/v1'
@@ -16,14 +17,6 @@ const EVENT_SCHEMA = 'autowin.node-chat-event/v1'
 const MAX_REQUEST_BYTES = 8 * 1024 * 1024
 const MAX_STREAM_BYTES = 8 * 1024 * 1024
 const MAX_EVENT_BYTES = 256 * 1024
-
-async function cancelBody(response: Response, reason: string): Promise<void> {
-  try {
-    await response.body?.cancel(reason)
-  } catch {
-    // The original protocol error remains authoritative.
-  }
-}
 
 export interface FabricResourceAdapterOptions {
   nodeId: string

@@ -25,6 +25,11 @@ export const STATUTS_DEMANDE: readonly StatutDemande[] = [
   'prouve'
 ]
 
+/** Un compteur neuf, à zéro pour chaque état d'une demande. */
+export function comptesVides(): Record<StatutDemande, number> {
+  return { prouve: 0, refuse: 0, 'en-cours': 0, 'sans-preuve': 0 }
+}
+
 export interface DemandeDeLaCarte {
   conversationId: string
   conversationTitre: string

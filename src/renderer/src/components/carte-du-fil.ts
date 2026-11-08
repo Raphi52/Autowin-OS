@@ -22,7 +22,7 @@ import {
   verifyOutcomeSummary,
   type OutcomeSummary
 } from './action-outcome-summary'
-import { compactageDuFil, questionOuverte } from './carnet-du-fil'
+import { compactageDuFil, questionOuverte, estFini, texteDe } from './carnet-du-fil'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { commandeJouee } from '../../../shared/chat-turn'
 import { constatsRetenus } from '../../../shared/preuve-du-tour'
@@ -117,16 +117,6 @@ function nettoyer(ligne: string, max = MAX_TITRE): string {
 
 function premiereLigne(texte: string, max = MAX_TITRE): string {
   return nettoyer(texte.split(/\r?\n/u).find((ligne) => ligne.trim() !== '') ?? '', max)
-}
-
-function texteDe(message: AsstMsg): string {
-  return (message.parts ?? [])
-    .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
-    .join('\n')
-}
-
-function estFini(message: AsstMsg): boolean {
-  return message.status !== 'streaming' && message.done !== false
 }
 
 function instantDe(message: Msg): number | undefined {

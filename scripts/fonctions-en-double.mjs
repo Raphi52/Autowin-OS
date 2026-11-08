@@ -11,12 +11,18 @@
  * Ce qu'il lit : les fonctions de premier niveau d'un fichier, `function f() {}` et
  * `const f = (…) => …` / `const f = function () {}`, exportées ou non. Les tests sont ignorés.
  *
+ * Limite : le texte identique ne suffit pas. Une copie qui lit un nom propre à son fichier (une
+ * constante, une table, un état) fait un autre travail sous le même texte : `largeurMemorisee` lit
+ * une clé de stockage différente dans chacun de ses deux fichiers. Relire avant de regrouper.
+ *
  * Usage :
  *   node scripts/fonctions-en-double.mjs [dossiers…]          tableau lisible (défaut : src)
  *   node scripts/fonctions-en-double.mjs --json [dossiers…]   la même chose en JSON
  *   node scripts/fonctions-en-double.mjs --nom isRecord        une seule fonction
  *   --min-copies N   ne garde que les groupes d'au moins N copies (défaut 2)
  *   --echouer        code de sortie 1 s'il reste au moins un groupe (preuve « plus aucune copie »)
+ *   --corps          affiche aussi le code de la première copie de chaque groupe, pour décider du
+ *                    regroupement sans ouvrir chaque fichier
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
@@ -64,7 +70,11 @@ const estAsync = (noeud) =>
     (m) => m.kind === ts.SyntaxKind.AsyncKeyword
   )
 
-/** Les fonctions de premier niveau d'un texte source : `{ nom, ligne, empreinte }`. */
+/**
+ * Les fonctions de premier niveau d'un texte source : `{ nom, ligne, empreinte, corps, exportee }`.
+ * `corps` est le code tel qu'écrit (sans le commentaire qui le précède), `exportee` dit si le fichier
+ * l'exporte déjà : une copie exportée peut avoir des appelants ailleurs.
+ */
 export function fonctionsDuTexte(texte, nomDeFichier = 'fichier.ts') {
   const source = ts.createSourceFile(
     nomDeFichier,
@@ -74,13 +84,24 @@ export function fonctionsDuTexte(texte, nomDeFichier = 'fichier.ts') {
     nomDeFichier.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   )
   const ligneDe = (noeud) => source.getLineAndCharacterOfPosition(noeud.getStart(source)).line + 1
+  const corpsDe = (noeud) => texte.slice(noeud.getStart(source), noeud.getEnd())
+  const estExportee = (noeud) =>
+    (ts.getModifiers?.(noeud) ?? noeud.modifiers ?? []).some(
+      (m) => m.kind === ts.SyntaxKind.ExportKeyword
+    )
   const trouvees = []
   for (const instruction of source.statements) {
     if (ts.isFunctionDeclaration(instruction) && instruction.name && instruction.body) {
       // Du `*` ou du nom jusqu'à la fin, sans `export` : une copie exportée reste une copie.
       const debut = (instruction.asteriskToken ?? instruction.name).getStart(source)
       const cle = `${estAsync(instruction) ? 'async ' : ''}${empreinte(source, debut, instruction.getEnd())}`
-      trouvees.push({ nom: instruction.name.text, ligne: ligneDe(instruction), empreinte: cle })
+      trouvees.push({
+        nom: instruction.name.text,
+        ligne: ligneDe(instruction),
+        empreinte: cle,
+        corps: corpsDe(instruction),
+        exportee: estExportee(instruction)
+      })
     } else if (ts.isVariableStatement(instruction)) {
       for (const declaration of instruction.declarationList.declarations) {
         const init = declaration.initializer
@@ -89,7 +110,9 @@ export function fonctionsDuTexte(texte, nomDeFichier = 'fichier.ts') {
         trouvees.push({
           nom: declaration.name.text,
           ligne: ligneDe(declaration),
-          empreinte: empreinte(source, declaration.name.getEnd(), init.getEnd())
+          empreinte: empreinte(source, declaration.name.getEnd(), init.getEnd()),
+          corps: corpsDe(instruction),
+          exportee: estExportee(instruction)
         })
       }
     }
@@ -113,10 +136,11 @@ export function groupesDeCopies(fichiers, { racine = process.cwd(), nom, minCopi
     for (const fonction of fonctionsDuTexte(texte, fichier)) {
       if (nom && fonction.nom !== nom) continue
       const cle = `${fonction.nom}\u0000${fonction.empreinte}`
-      const groupe = groupes.get(cle) ?? { nom: fonction.nom, copies: [] }
+      const groupe = groupes.get(cle) ?? { nom: fonction.nom, corps: fonction.corps, copies: [] }
       groupe.copies.push({
         fichier: relative(racine, fichier).split(sep).join('/'),
-        ligne: fonction.ligne
+        ligne: fonction.ligne,
+        exportee: fonction.exportee
       })
       groupes.set(cle, groupe)
     }
@@ -127,11 +151,19 @@ export function groupesDeCopies(fichiers, { racine = process.cwd(), nom, minCopi
 }
 
 function lireOptions(argv) {
-  const options = { json: false, echouer: false, nom: undefined, minCopies: 2, dossiers: [] }
+  const options = {
+    json: false,
+    echouer: false,
+    corps: false,
+    nom: undefined,
+    minCopies: 2,
+    dossiers: []
+  }
   for (let i = 0; i < argv.length; i++) {
     const argument = argv[i]
     if (argument === '--json') options.json = true
     else if (argument === '--echouer') options.echouer = true
+    else if (argument === '--corps') options.corps = true
     else if (argument === '--nom') options.nom = argv[++i]
     else if (argument === '--min-copies') options.minCopies = Math.max(2, Number(argv[++i]) || 2)
     else options.dossiers.push(argument)
@@ -161,7 +193,9 @@ function principal() {
     ]
     for (const groupe of groupes) {
       lignes.push(`- ${groupe.nom} : ${groupe.copies.length} copies`)
-      for (const copie of groupe.copies) lignes.push(`    ${copie.fichier}:${copie.ligne}`)
+      for (const copie of groupe.copies)
+        lignes.push(`    ${copie.fichier}:${copie.ligne}${copie.exportee ? ' (exportée)' : ''}`)
+      if (options.corps) lignes.push(...groupe.corps.split('\n').map((l) => `      | ${l}`))
     }
     process.stdout.write(`${lignes.join('\n')}\n`)
   }

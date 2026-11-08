@@ -25,6 +25,7 @@ import {
   ajouterCle as ajouterAuCoffre,
   LONGUEUR_MIN_MASQUAGE,
   listerCles as listerLeCoffre,
+  memeNom,
   type CleListee
 } from './coffre-cles'
 import { masquerFichierSansEchec, motifsDeMasquage } from '../runs/masquage-sur-disque'
@@ -74,8 +75,6 @@ async function journalDuTourEnCours(conversationId: string | undefined): Promise
   dates.sort((a, b) => b.quand - a.quand)
   return dates.slice(0, 1).map((d) => d.chemin)
 }
-
-const memeNom = (a: string, b: string): boolean => a.toUpperCase() === b.toUpperCase()
 
 export async function rangerDepuisPressePapier(entree: {
   nom: string

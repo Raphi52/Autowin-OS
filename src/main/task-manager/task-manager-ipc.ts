@@ -1,6 +1,6 @@
 import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 import type { TaskScheduler } from './task-scheduler'
-import type { TaskStore } from './task-store'
+import { hasOwn, type TaskStore } from './task-store'
 import type {
   ScheduledTaskInput,
   TaskAction,
@@ -195,10 +195,6 @@ export function parseTaskUpdate(current: ScheduledTaskInput, raw: unknown): Sche
     after.senders = { ...before.senders, ...after.senders }
   }
   return parsed
-}
-
-function hasOwn(value: object, key: PropertyKey): boolean {
-  return Object.prototype.hasOwnProperty.call(value, key)
 }
 
 /** Validation de l'écran Task Manager — partagée avec la commande agent `task_create`, jamais dupliquée. */

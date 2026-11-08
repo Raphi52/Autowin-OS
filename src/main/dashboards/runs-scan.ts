@@ -206,7 +206,7 @@ export async function scanRuns(
   return (await scanRunsBounded(root, options)).entries
 }
 
-function comparablePath(path: string): string {
+export function comparablePath(path: string): string {
   const absolute = resolve(path)
   return process.platform === 'win32' ? absolute.toLocaleLowerCase('en-US') : absolute
 }

@@ -42,6 +42,7 @@ import {
 } from '../../shared/quartier-presence'
 import { tachesDuBoard } from '../../shared/taches-du-board'
 import { DOSSIER_DES_FICHES } from './fiches-de-demande'
+import { estUnDossier } from '../fichiers/dossiers'
 
 export const FICHIER_DU_REGLAGE = 'board-dossier.json'
 export const FORMAT_DU_BOARD = 'autowin-board/1'
@@ -441,14 +442,6 @@ export function sousDossierDuPoste(utilisateur: string): string {
     .join('')
     .replace(/^\.+|\.+$/g, '')
   return propre.trim() || 'poste'
-}
-
-async function estUnDossier(chemin: string): Promise<boolean> {
-  try {
-    return (await stat(chemin)).isDirectory()
-  } catch {
-    return false
-  }
 }
 
 /** Écrit en entier ou pas du tout : un lecteur du partage ne voit jamais un fichier à moitié écrit. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { LONGUEUR_TITRE } from '../../shared/titre-sans-homonyme'
 import {
   FENETRE_DOUBLON_MS,
-  LONGUEUR_TITRE,
   TITRE_PAR_DEFAUT,
   conversationRecenteEquivalente,
   titreDeConversationDemandee
@@ -90,5 +90,19 @@ describe('double envoi de create_conversation', () => {
         maintenant: 2_000
       })
     ).toBeUndefined()
+  })
+})
+
+/*
+ * UNE SEULE LONGUEUR DE TITRE. Elle était écrite deux fois (ici et dans le titre automatique) : une
+ * copie changée sans l'autre redonnerait deux coupes différentes du même titre.
+ */
+describe('la longueur de titre n’a qu’une définition', () => {
+  it('ce module n’en définit pas une seconde, et coupe comme le titre automatique', async () => {
+    const module = await import('./conversation-demandee')
+    const { titreCourt } = await import('../../shared/titre-sans-homonyme')
+    expect('LONGUEUR_TITRE' in module).toBe(false)
+    const long = 'mot '.repeat(40)
+    expect(titreDeConversationDemandee(undefined, long)).toBe(titreCourt(long))
   })
 })

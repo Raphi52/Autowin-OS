@@ -1,5 +1,6 @@
 import { isAbsolute, relative, resolve } from 'node:path'
 import { isForbidden } from '../commands/edit-file-command'
+import { memeContenu } from '../fichiers/meme-contenu'
 
 /**
  * LE BUREAU DOIT PORTER LE FICHIER QUE L'AGENT A LU — pas celui du dernier commit.
@@ -60,11 +61,4 @@ export function decisionDeSynchronisation(
     return { action: 'aucune', raison: 'déjà synchronisé' }
   }
   return { action: 'copier', cheminBureau: absoluBureau, cheminWorkspace: absoluWorkspace }
-}
-
-/** Egalite d'OCTETS : la comparaison texte re-encoderait, donc mentirait sur un fichier non-UTF-8. */
-function memeContenu(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false
-  return true
 }

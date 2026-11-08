@@ -19,6 +19,7 @@ import { join } from 'node:path'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk, Usage } from './types'
 import { envDuCoffre } from './cles-du-coffre'
+import { promptDuFil } from './prompt-du-fil'
 
 export const GROK_PROVIDER_ID = 'grok'
 
@@ -74,19 +75,6 @@ export function lireLigneGrok(ligne: string): LigneGrok {
 
 function estErreurConnexion(message: string): boolean {
   return /not signed in|not authenticated|grok login/i.test(message)
-}
-
-function promptDuFil(messages: Message[], system?: string): string {
-  const parties: string[] = []
-  if (system) parties.push(system)
-  for (const m of messages) {
-    const joints = (m.attachments ?? [])
-      .filter((a) => a.kind === 'text')
-      .map((a) => `\n\n[Pièce jointe ${a.name}]\n${a.content}`)
-      .join('')
-    parties.push(messages.length > 1 ? `[${m.role}]\n${m.content}${joints}` : m.content + joints)
-  }
-  return parties.join('\n\n')
 }
 
 /** Environnement du processus SANS clé d'API xAI : seule la session d'abonnement peut servir. */

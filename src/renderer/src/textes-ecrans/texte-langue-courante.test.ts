@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { appliquerLangue } from '../langue'
 import { texteArtefactsEtBandeaux, traduireArtefactsEtBandeaux } from './artefacts-et-bandeaux'
 import { texteChatDecisions, traduireChatDecisions } from './chat-decisions'
+import { texteTaskManager, traduireTaskManager } from './task-manager'
+import { texteChatPanneaux, traduireChatPanneaux } from './chat-panneaux'
 
 /*
  * Le texte d'une table dans la langue COURANTE, lue au moment de l'appel (comme `texteChatExecution`).
@@ -32,5 +34,19 @@ describe('texte d’une table dans la langue courante', () => {
     expect(texteChatDecisions('pensee.raisonnement')).toBe(
       traduireChatDecisions('pensee.raisonnement', 'fr', undefined)
     )
+  })
+})
+
+describe('texte des tables du Task Manager et des panneaux du fil', () => {
+  it('suit la langue appliquée, comme les copies `texte` et `tx` retirées', () => {
+    for (const langue of ['en', 'fr'] as const) {
+      appliquerLangue(langue)
+      expect(texteTaskManager('surveillance.source.outlook')).toBe(
+        traduireTaskManager('surveillance.source.outlook', langue, undefined)
+      )
+      expect(texteChatPanneaux('quota.fenetre.hebdo')).toBe(
+        traduireChatPanneaux('quota.fenetre.hebdo', langue, undefined)
+      )
+    }
   })
 })

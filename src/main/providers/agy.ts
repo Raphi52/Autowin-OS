@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk, Usage } from './types'
 import { envDuCoffre } from './cles-du-coffre'
+import { promptDuFil } from './prompt-du-fil'
 
 export const AGY_PROVIDER_ID = 'agy'
 
@@ -84,19 +85,6 @@ export function lireLigneAgy(ligne: string): LigneAgy {
 
 function estErreurConnexion(r: AgyResultat): boolean {
   return /authenticat|log ?in|sign ?in/i.test(r.error ?? '')
-}
-
-function promptDuFil(messages: Message[], system?: string): string {
-  const parties: string[] = []
-  if (system) parties.push(system)
-  for (const m of messages) {
-    const joints = (m.attachments ?? [])
-      .filter((a) => a.kind === 'text')
-      .map((a) => `\n\n[Pièce jointe ${a.name}]\n${a.content}`)
-      .join('')
-    parties.push(messages.length > 1 ? `[${m.role}]\n${m.content}${joints}` : m.content + joints)
-  }
-  return parties.join('\n\n')
 }
 
 type SpawnLike = typeof spawn

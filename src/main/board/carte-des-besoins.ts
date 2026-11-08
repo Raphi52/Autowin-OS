@@ -23,16 +23,16 @@ import {
 } from '../../renderer/src/components/chat-view-model'
 import type { Msg } from '../../renderer/src/components/chat-view-types'
 import { groupeDe } from '../../renderer/src/components/conversation-groups'
-import type {
-  CarteDesBesoins,
-  DemandeDeLaCarte,
-  DemandeurAuCompte,
-  DemandeurDeLaCarte,
-  EtapesDuCalcul,
-  NatureDuProjet,
-  ProjetDeLaCarte,
-  RunBloqueDeLaCarte,
-  StatutDemande
+import {
+  comptesVides,
+  type CarteDesBesoins,
+  type DemandeDeLaCarte,
+  type DemandeurAuCompte,
+  type DemandeurDeLaCarte,
+  type EtapesDuCalcul,
+  type NatureDuProjet,
+  type ProjetDeLaCarte,
+  type RunBloqueDeLaCarte
 } from '../../shared/carte-des-besoins'
 import { dossierDeLectureDuFil } from '../conversations/bascule-dossier-conversation'
 import { cleDuJournal, type EntreeDuJournal, type IdentiteGit } from './journal-des-besoins'
@@ -175,10 +175,6 @@ export function enrichirDemande(
     ...(demandeur ? { demandeur } : {}),
     ...(entree?.besoin ? { besoin: { ...entree.besoin } } : {})
   }
-}
-
-function comptesVides(): Record<StatutDemande, number> {
-  return { prouve: 0, refuse: 0, 'en-cours': 0, 'sans-preuve': 0 }
 }
 
 /** La conversation d'un run : celle qu'il nomme, celle dont il porte l'id de session, ou celle qui l'a attaché. */

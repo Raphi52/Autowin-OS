@@ -12,7 +12,11 @@
  * Hors du fichier de composant : un module de composants qui exporte aussi des fonctions casse le
  * rafraîchissement à chaud (même raison que `carte-des-besoins-libelles.ts`).
  */
-import type { DemandeDeLaCarte, StatutDemande } from '../../../shared/carte-des-besoins'
+import {
+  comptesVides,
+  type DemandeDeLaCarte,
+  type StatutDemande
+} from '../../../shared/carte-des-besoins'
 
 // Libellés laissés en français (traduction anglaise) : la Fiche et son menu « Branches »
 // ont été retirés de la vue le 23/10, ces libellés ne s'affichent plus nulle part — seul
@@ -55,10 +59,6 @@ export interface BrancheDeLaCarte {
   fils: FilDeLaCarte[]
   /** Le nombre de fils par état, pour la jauge de la branche. */
   comptes: Record<EtatDuFil, number>
-}
-
-function comptesVides(): Record<StatutDemande, number> {
-  return { prouve: 0, refuse: 0, 'en-cours': 0, 'sans-preuve': 0 }
 }
 
 function etatDe(comptes: Record<StatutDemande, number>): EtatDuFil {

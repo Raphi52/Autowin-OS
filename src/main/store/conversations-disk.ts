@@ -27,7 +27,7 @@ import {
 import type { Conversation, ConversationChange, Msg } from './conversations'
 import { ensureAutowinAppData } from '../app/app-data'
 import type { FinishedRunOutcome } from '../runs/run-interruption'
-import { isRecord } from '../../shared/is-record'
+import { isRecord, isOptionalString } from '../../shared/is-record'
 
 /**
  * Persistance disque des conversations (sinon TOUT disparaît au restart).
@@ -97,10 +97,6 @@ function restaurerContenuDuMessage(message: Msg): Msg {
 function restaurerContenus(conversation: Conversation): Conversation {
   for (const message of conversation.messages) restaurerContenuDuMessage(message)
   return conversation
-}
-
-function isOptionalString(value: unknown): boolean {
-  return value === undefined || typeof value === 'string'
 }
 
 function isOptionalBoolean(value: unknown): boolean {

@@ -562,7 +562,7 @@ export class TaskStore {
   }
 }
 
-function hasOwn(value: object, key: PropertyKey): boolean {
+export function hasOwn(value: object, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(value, key)
 }
 

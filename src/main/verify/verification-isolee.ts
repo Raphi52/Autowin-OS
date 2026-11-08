@@ -11,6 +11,7 @@ import { execFile } from 'node:child_process'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { isForbidden } from '../commands/edit-file-command'
+import { memeContenu } from '../fichiers/meme-contenu'
 
 const executer = promisify(execFile)
 
@@ -104,13 +105,6 @@ export function gestesDeVerification(
     gestes.push({ action: 'copier', relatif, source: absolu, destination })
   }
   return gestes
-}
-
-/** Egalite d'OCTETS : comparer en texte re-encoderait, donc mentirait sur un fichier non-UTF-8. */
-function memeContenu(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false
-  return true
 }
 
 /** Lecture qui ne jette jamais : un dossier, un lien casse ou un droit manquant valent « absent ». */

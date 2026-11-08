@@ -14,6 +14,7 @@
 
 import { sansSequencesAnsi } from '../../../shared/ansi'
 import { texteChatExecution } from '../textes-ecrans/chat-execution'
+import { asRecord } from '../../../shared/is-record'
 
 /** Commandes qui produisent un run consultable dans Workflows. */
 const RUN_PRODUCING = new Set(['orchestrate'])
@@ -91,10 +92,6 @@ function resumeLisible(brut: string): string {
   }
   const texte = retenues.join('\n')
   return texte.length > MAX_DETAIL_CHARS ? `${texte.slice(0, MAX_DETAIL_CHARS)}…` : texte
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined
 }
 
 /** Le corps d'un fait peut etre long : on le borne comme toute autre sortie. */

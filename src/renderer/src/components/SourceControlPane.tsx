@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { formaterDate, formaterNombre, langueCourante } from '../langue'
-import type { ValeursDeTexte } from '../textes'
-import { traduireChatPanneaux, useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
+import { formaterDate, formaterNombre } from '../langue'
+import {
+  traduireChatPanneaux,
+  useTextesChatPanneaux,
+  texteChatPanneaux as tx
+} from '../textes-ecrans/chat-panneaux'
 import { etapesGit } from './etapes-git'
 import { ProjectPane } from './ProjectPane'
 import { DiffView } from './DiffView'
@@ -99,13 +102,7 @@ type Typage =
   | { statut: 'echec'; projets: string[]; commande: string; erreurs: string[] }
   | { statut: 'non-verifie'; raison: string }
 
-/**
- * Le texte d'une clé dans la langue COURANTE, pour les libellés calculés hors du composant : ils
- * sont appelés pendant son rendu, qui lit la langue par `useTextesChatPanneaux`.
- */
 type CleDuPanneau = Parameters<typeof traduireChatPanneaux>[0]
-const tx = (cle: CleDuPanneau, valeurs?: ValeursDeTexte): string =>
-  traduireChatPanneaux(cle, langueCourante(), valeurs)
 
 /** Vécu le 2026-10-15 (`9d6bb850`) : un fichier publié sans son appelant a cassé la compilation de main. */
 function libelleTypage(typage: Typage): string {

@@ -40,6 +40,7 @@ import {
   type PresencesDesCollegues,
   type TenueAgent
 } from '../../shared/quartier-presence'
+import { objetOuNull as objet } from '../../shared/is-record'
 
 /** Au plus 100 sous-dossiers parcourus : un partage encombré ne transforme pas la relecture en scan. */
 const SOUS_DOSSIERS_MAX = 100
@@ -62,9 +63,6 @@ type FichierLu =
       agents: AgentPublie[]
     }
   | { kind: 'illisible'; motif: string }
-
-const objet = (v: unknown): Record<string, unknown> | null =>
-  v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 
 /**
  * Les caractères qui ne s'affichent pas mais changent l'affichage : contrôles C0 et C1, espaces de

@@ -42,7 +42,7 @@ export const image = async (src: string): Promise<HTMLImageElement> => {
 }
 
 const rnd = (a: number, b: number): number => a + Math.random() * (b - a)
-const lisse = (t: number): number => t * t * (3 - 2 * t)
+export const lisse = (t: number): number => t * t * (3 - 2 * t)
 
 /** Un rond flou d'une teinte : vapeurs, poussière, lueurs. */
 const rondFlou = (r: number, g: number, b: number): HTMLCanvasElement => {

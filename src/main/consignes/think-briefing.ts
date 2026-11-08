@@ -18,6 +18,8 @@
  * PUR : pas d'horloge, pas de provider, aucune E/S (git est passe en parametre a `sansThinkPerime`).
  */
 
+import { normaliserTitre as normaliser } from '../../shared/mots'
+
 /** Les six titres de `skills/think/SKILL.md` §5, normalises (sans accent, sans casse). */
 export const TITRES_BRIEFING = [
   'localisation',
@@ -30,15 +32,6 @@ export const TITRES_BRIEFING = [
 
 /** Marque de l'avertissement deja pose — rend l'application idempotente. */
 const MARQUE = '⚠️ Briefing `think` incomplet'
-
-function normaliser(titre: string): string {
-  return titre
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-}
 
 /**
  * Les titres de §5 absents du texte, dans l'ordre de la skill.

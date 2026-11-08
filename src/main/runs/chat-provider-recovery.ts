@@ -2,7 +2,7 @@ import { statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { Attachment, SendResult } from '../providers/types'
 import { guardAttachments } from '../ipc/ipc-guards'
-import { decodeRoleBinding } from '../profil/role-store'
+import { decodeRoleBinding, nonEmptyString } from '../profil/role-store'
 import { isReasoningEffort, type RoleBinding } from '../profil/roles'
 import { recoverDetachedProviderResult } from './run-reattach'
 import { survivableExitCode, survivableExitCodeAsync } from './stdout-journal'
@@ -123,10 +123,6 @@ export interface RecoveredChatActionResult {
 export interface ChatExecutionPolicy {
   readOnly: boolean
   maxIterations: number
-}
-
-function nonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0
 }
 
 function nonNegativeInteger(value: unknown): value is number {

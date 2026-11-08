@@ -22,18 +22,10 @@
  */
 
 import { decisionDepuisPiste, LIGNE_CIBLE, type DecisionScout } from '../../shared/scout-cible-lecture'
+import { normaliserTitre as normaliser } from '../../shared/mots'
 
 /** Le titre de section attendu, sans accent ni casse. */
 const TITRE_CIBLE = 'cible'
-
-function normaliser(titre: string): string {
-  return titre
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-}
 
 /** `#3`, `n°3`, `3` : un numéro de ligne, qui ne nomme rien une fois le tableau hors de vue. */
 function estNumeroNu(piste: string): boolean {

@@ -25,6 +25,7 @@ import type {
   StatutDuFichier
 } from '../../shared/board-collegues'
 import { nomDuPosteLisible } from '../../shared/board-nom-du-poste'
+import { objetOuNull as objet } from '../../shared/is-record'
 
 export const FORMAT_LU = 'autowin-board/1'
 export const DELAI_ENTRE_LECTURES_MS = 15_000
@@ -37,9 +38,6 @@ const TEXTE_MAX = 4_000
 
 const ETAGES: readonly EtageDuFichier[] = ['a-faire', 'refuse', 'en-cours', 'sans-preuve', 'prouve']
 const STATUTS: readonly StatutDuFichier[] = ['refuse', 'en-cours', 'sans-preuve', 'prouve']
-
-const objet = (v: unknown): Record<string, unknown> | null =>
-  v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 
 /** Une chaîne bornée, sans caractère de contrôle qui casserait une ligne affichée. */
 function texte(v: unknown, max = TEXTE_MAX): string | null {

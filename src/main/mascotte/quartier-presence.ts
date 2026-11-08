@@ -15,7 +15,7 @@
  * (`board-dossier.ts`), rien ici ne bloque ni ne lève d'exception. Une écriture à la fois, au plus
  * toutes les `PRESENCE_DELAI_ECRITURE_MS` ; un échec est gardé et retenté au battement suivant.
  */
-import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   FICHIER_PRESENCE,
@@ -36,6 +36,7 @@ import {
   type TenueAgent
 } from '../../shared/quartier-presence'
 import { filtrerTitre } from './quartier-presence-filtre'
+import { estUnDossier } from '../fichiers/dossiers'
 
 /** Ce que l'écrivain lit du réglage du poste, AU MOMENT d'écrire : un changement compte aussitôt. */
 export interface ReglageDeLaPresence {
@@ -179,14 +180,6 @@ export function presenceAEcrire(
 }
 
 // ———————————————————————————————————————————————————————————————— l'écrivain
-
-async function estUnDossier(chemin: string): Promise<boolean> {
-  try {
-    return (await stat(chemin)).isDirectory()
-  } catch {
-    return false
-  }
-}
 
 /** Écrit en entier ou pas du tout : un lecteur du partage ne voit jamais un fichier à moitié écrit. */
 async function ecrireEntier(fichier: string, contenu: string): Promise<void> {

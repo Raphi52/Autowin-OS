@@ -32,6 +32,8 @@
  * feuille de l'état (`Options.une`).
  */
 
+import { r2 } from '../../shared/glyphe-du-halo'
+
 // Le cercle magique qui tourne autour de la bille vit dans `shared` : l'accueil d'un fil vide le partage.
 export { glypheDuHalo, RAYON_GLYPHE } from '../../shared/glyphe-du-halo'
 
@@ -83,8 +85,6 @@ export function classesDuTrace(valeur: string | null): string[] {
 }
 
 const r1 = (v: number): number => Math.round(v * 10) / 10
-const r2 = (v: number): number => Math.round(v * 100) / 100
-
 // ---------------- Dégradés et motifs ----------------
 const st = (o: number, c: string, a = 1): string =>
   `<stop offset="${o}" stop-color="${c}"${a < 1 ? ` stop-opacity="${a}"` : ''}/>`

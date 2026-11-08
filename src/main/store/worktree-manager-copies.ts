@@ -32,6 +32,7 @@ import {
   RESIDU_SANS_ENJEU_MIN_AGE_MS
 } from './worktree-manager-outils'
 import { WorktreeManager } from './worktree-manager'
+import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
 
 export function listAgentIds(this: WorktreeManager): string[] {
   const directories = existsSync(this.worktreeRoot)
@@ -832,10 +833,6 @@ export function oublierSuppressionCommencee(this: WorktreeManager, chemin: strin
   const agentId = identifiantDeCopieAgent(chemin)
   if (!agentId || existsSync(chemin)) return
   retirerLaFiche(this.worktreeRoot, agentId)
-}
-
-function message(erreur: unknown): string {
-  return erreur instanceof Error ? erreur.message : String(erreur)
 }
 
 function fichesDeSuppression(racine: string): FicheDeSuppression[] {

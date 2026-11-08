@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseRun } from '../dashboards/runs'
-import { scanRunsBounded, type RunEntry } from '../dashboards/runs-scan'
+import { scanRunsBounded, comparablePath, type RunEntry } from '../dashboards/runs-scan'
 import type { OrchestrationStep } from '../orchestration/orchestrator'
 import { ensureAutowinAppData } from '../app/app-data'
 import type { RunClosureObservation, RunFileStatus } from '../../shared/run-execution'
@@ -924,11 +924,6 @@ export function listConvRuns(
     ).filter((entry): entry is RunEntry => entry !== null)
     return [...own, ...attached].sort((a, b) => b.mtime - a.mtime)
   })
-}
-
-function comparablePath(path: string): string {
-  const absolute = resolve(path)
-  return process.platform === 'win32' ? absolute.toLocaleLowerCase('en-US') : absolute
 }
 
 function samePath(left: string, right: string): boolean {

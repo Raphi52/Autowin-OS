@@ -12,22 +12,13 @@
  * deterministe, testable, hors du modele.
  */
 
-import { compacter } from '../../shared/titre-sans-homonyme'
+import { compacter, LONGUEUR_TITRE } from '../../shared/titre-sans-homonyme'
 
 /** Titre rendu quand ni l'appelant ni le fil ne fournissent le moindre mot. */
 export const TITRE_PAR_DEFAUT = 'Nouvelle conversation'
 
 /** Deux creations identiques a moins de ca d'intervalle sont le MEME geste, envoye deux fois. */
 export const FENETRE_DOUBLON_MS = 30_000
-
-/**
- * Longueur max d'un titre repris du fil.
- *
- * MEME valeur et MEME coupe que la barre laterale (`ChatView.tsx:2711` et `:2743`) : deux regles
- * de nommage differentes redonneraient exactement le defaut qu'on corrige — un titre qui n'est pas
- * celui que l'utilisateur voit.
- */
-export const LONGUEUR_TITRE = 42
 
 /**
  * Le titre a POSER : celui demande s'il existe, sinon LES MOTS DE L'UTILISATEUR.

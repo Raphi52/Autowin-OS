@@ -1,16 +1,9 @@
 import type { FabricManifestClient } from './control-plane'
 import { fetchFabricTransport } from './fabric-http-client'
+import { cancelBody } from './corps-de-reponse'
 import type { FabricNodeTransport } from './node-transport-store'
 
 const MAX_MANIFEST_BYTES = 1024 * 1024
-
-async function cancelBody(response: Response, reason: string): Promise<void> {
-  try {
-    await response.body?.cancel(reason)
-  } catch {
-    // The original validation error remains authoritative.
-  }
-}
 
 export interface FetchFabricManifestClientOptions {
   timeoutMs?: number

@@ -6,6 +6,7 @@ import { lireLaBaseDuFil } from '../git/photo-du-code'
 import { arbreDeLaCopie } from '../orchestration/garder-un-essai'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import { delierLesDependances } from '../store/dependances-copie-agent'
+import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
 
 /*
  * LE MÉNAGE DES COPIES DE FIL. Chaque fil du dépôt d'Autowin reçoit sa copie
@@ -135,10 +136,6 @@ export interface BilanDuMenage {
   gardees: Array<{ chemin: string; raison: string }>
   /** Les copies que le ménage n'a pas pu finir de retirer ; la passe suivante les reprend. */
   echecs: Array<{ chemin: string; raison: string }>
-}
-
-function message(erreur: unknown): string {
-  return erreur instanceof Error ? erreur.message : String(erreur)
 }
 
 /** Retire une copie déjà décrochée : la jonction des modules d'abord, puis l'arbre. */

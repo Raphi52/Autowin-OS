@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, timingSafeEqual } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { record } from '../../shared/compute-fabric'
 
 export const FABRIC_STATE_SCHEMA = 'autowin.fabric-state/v1' as const
 
@@ -34,13 +35,6 @@ export class FabricStateCorruptionError extends Error {
     this.name = 'FabricStateCorruptionError'
     this.statePath = statePath
   }
-}
-
-function record(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`${label} invalide`)
-  }
-  return value as Record<string, unknown>
 }
 
 function exactKeys(

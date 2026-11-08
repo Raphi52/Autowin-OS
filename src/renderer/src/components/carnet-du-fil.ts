@@ -76,13 +76,13 @@ function nettoyer(ligne: string): string {
   return nue.length > MAX_CARACTERES_LIGNE ? `${nue.slice(0, MAX_CARACTERES_LIGNE - 1)}…` : nue
 }
 
-function texteDe(message: AsstMsg): string {
+export function texteDe(message: AsstMsg): string {
   return (message.parts ?? [])
     .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
     .join('\n')
 }
 
-function estFini(message: AsstMsg): boolean {
+export function estFini(message: AsstMsg): boolean {
   return message.status !== 'streaming' && message.done !== false
 }
 

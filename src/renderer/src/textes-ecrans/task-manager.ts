@@ -1,4 +1,5 @@
-import { tableDeTextes } from '../textes'
+import { tableDeTextes, type ValeursDeTexte } from '../textes'
+import { langueCourante } from '../langue'
 
 /**
  * TEXTES — ÉCRAN TASK MANAGER (traduction anglaise, 2026-10-27).
@@ -701,3 +702,8 @@ export const { useTextes: useTextesTaskManager, traduire: traduireTaskManager } 
   TEXTES_FR,
   TEXTES_EN
 )
+
+/** Hors composant : le texte dans la langue COURANTE, lue au moment de l'appel. */
+export function texteTaskManager(cle: CleTaskManager, valeurs?: ValeursDeTexte): string {
+  return traduireTaskManager(cle, langueCourante(), valeurs)
+}

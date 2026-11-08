@@ -23,6 +23,7 @@
  * a pas, il fait les cent pas. Il en change au bout d'une minute environ.
  */
 import type { Metier } from './quartier-metiers'
+import { lisse } from './quartier-vie'
 
 /** Un agent planté pleure ('pr'), fume ('fu') ou boit ('bi') : une seule des trois, choisie d'après son identifiant. */
 export const POSES_PLANTE = ['pr', 'fu', 'bi'] as const
@@ -197,8 +198,6 @@ const TOUR_DEG_S = 360
 const V = (2 * 0.098) / (0.62 * 0.6)
 const FOULEE = V * 0.6
 const PEINE = [0, 2.2, 1.1, 0.5, 0.15, 0, 0, 0]
-const lisse = (t: number): number => t * t * (3 - 2 * t)
-
 const dans = (ps: readonly [number, number][], X: number, Y: number): boolean => {
   let o = false
   for (let i = 0, j = ps.length - 1; i < ps.length; j = i++) {
