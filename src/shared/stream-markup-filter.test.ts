@@ -41,6 +41,51 @@ describe('VisibleStreamFilter', () => {
     }
   })
 
+  it('laisse visible une balise de question citée dans du code, quel que soit le découpage', () => {
+    const sources = [
+      'Je garde la lecture de la balise `<question>` et la suite reste visible.',
+      'Exemple :\n```\n<question>{"text":"Exemple ?"}</question>\n```\nFin du message.',
+      'Double : ``<question>`` puis la suite.'
+    ]
+    for (const source of sources) {
+      expect(visible([source])).toBe(source)
+      for (let split = 1; split < source.length; split += 1) {
+        expect(visible([source.slice(0, split), source.slice(split)])).toBe(source)
+      }
+    }
+  })
+
+  it('masque toujours une vraie question posée après un passage de code refermé', () => {
+    const source = 'La balise `<question>` est citée. <question>{"text":"secret"}</question> fin'
+    for (let split = 1; split < source.length; split += 1) {
+      expect(visible([source.slice(0, split), source.slice(split)])).toBe(
+        'La balise `<question>` est citée.  fin'
+      )
+    }
+  })
+
+  it('masque une vraie question posée après un backtick isolé, quel que soit le découpage', () => {
+    const sources = [
+      'Voici le `souci. <question>{"text":"sk-secret-123"}</question> fin',
+      'Voici le `souci. <question>sk-secret-123',
+      'Bloc jamais fermé :\n```\n<question>{"text":"sk-secret-123"}</question>'
+    ]
+    for (const source of sources) {
+      for (let split = 1; split < source.length; split += 1) {
+        const sortie = visible([source.slice(0, split), source.slice(split)])
+        expect(sortie, `découpage ${split}`).not.toContain('sk-secret-123')
+        expect(sortie).not.toContain('<question>')
+      }
+    }
+  })
+
+  it('tient compte du texte qui précède le morceau filtré', () => {
+    const filtre = new VisibleStreamFilter('Avant\n```\n')
+    expect(filtre.push('<question>cité</question>\n```') + filtre.finish()).toBe(
+      '<question>cité</question>\n```'
+    )
+  })
+
   it('keeps an unclosed command tag mentioned in prose intact', () => {
     const source = 'Pour agir, émets une commande comme <cmd> par exemple, sans la fermer.'
     expect(visible([source])).toBe(source)

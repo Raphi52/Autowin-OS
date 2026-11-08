@@ -1,3 +1,5 @@
+import { lireLaBalise } from './balise-question'
+
 const CONTROL = [
   { open: '<cmd>', close: '</cmd>', control: 'cmd' },
   { open: '<question>', close: '</question>', control: 'question' }
@@ -39,6 +41,13 @@ function isSuppressibleCommand(inner: string): boolean {
 export class VisibleStreamFilter {
   private buffer = ''
   private active: ControlSpec | null = null
+  /** Tout le texte brut reçu, pour savoir si une balise `<question>` tombe dans du code. */
+  private lu: string
+
+  /** `contexte` : le texte qui précède le premier morceau, quand on filtre une tranche d'une réponse. */
+  constructor(contexte = '') {
+    this.lu = contexte
+  }
 
   push(delta: string): string {
     return this.textOf(this.pushSegments(delta))
@@ -46,6 +55,12 @@ export class VisibleStreamFilter {
 
   pushSegments(delta: string): VisibleStreamSegment[] {
     this.buffer += delta
+    this.lu += delta
+    return this.decouper(false)
+  }
+
+  /** `complet` : plus aucun morceau n'arrivera, une balise de question indécise se tranche. */
+  private decouper(complet: boolean): VisibleStreamSegment[] {
     const segments: VisibleStreamSegment[] = []
 
     while (this.buffer) {
@@ -83,6 +98,24 @@ export class VisibleStreamFilter {
         .filter((candidate) => candidate.index >= 0)
         .sort((a, b) => a.index - b.index)
       const next = candidates[0]
+      // Une balise de question CITÉE dans du code reste du texte ; tant que la fermeture du code
+      // peut encore arriver, le texte est retenu à partir de la balise (`balise-question.ts`).
+      if (next?.spec.control === 'question') {
+        const position = this.lu.length - this.buffer.length + next.index
+        const lecture = lireLaBalise(this.lu, position, complet)
+        if (lecture === 'indecise') {
+          const visible = this.buffer.slice(0, next.index)
+          if (visible) segments.push({ kind: 'text', text: visible })
+          this.buffer = this.buffer.slice(next.index)
+          break
+        }
+        if (lecture === 'citee') {
+          const fin = next.index + next.spec.open.length
+          segments.push({ kind: 'text', text: this.buffer.slice(0, fin) })
+          this.buffer = this.buffer.slice(fin)
+          continue
+        }
+      }
       if (next) {
         const visible = this.buffer.slice(0, next.index)
         if (visible) segments.push({ kind: 'text', text: visible })
@@ -111,6 +144,11 @@ export class VisibleStreamFilter {
   }
 
   finishSegments(): VisibleStreamSegment[] {
+    // Plus rien n'arrivera : une question retenue faute de savoir si le code se refermait se tranche.
+    return [...this.decouper(true), ...this.resteEnAttente()]
+  }
+
+  private resteEnAttente(): VisibleStreamSegment[] {
     const pending = this.buffer
     this.buffer = ''
     if (this.active) {

@@ -1,9 +1,9 @@
 // Lecture des blocs de commande et de question émis par le modèle, et réparation d’un bloc cassé
 // sans ambiguïté, sorties telles quelles de agent-pilot.ts (lot 1).
+import { lireLaBalise } from '../../shared/balise-question'
 import { VisibleStreamFilter } from '../../shared/stream-markup-filter'
 
 const CONTROL_RE = /<(cmd|question)>\s*([\s\S]*?)\s*<\/\1>/g
-export const REJECTED_QUESTION_RE = /<question>[\s\S]*?(?:<\/question>|$)/gi
 export const REJECTED_QUESTION_MARKER = '[question modèle refusée et masquée]'
 
 export type OrderedPilotToken =
@@ -23,8 +23,8 @@ export type OrderedPilotToken =
    */
   | { kind: 'invalid'; raw: string; reason: string }
 
-function filterVisibleText(raw: string): string {
-  const filter = new VisibleStreamFilter()
+function filterVisibleText(raw: string, contexte: string): string {
+  const filter = new VisibleStreamFilter(contexte)
   return filter.push(raw) + filter.finish()
 }
 
@@ -174,7 +174,12 @@ export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
   CONTROL_RE.lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = CONTROL_RE.exec(raw)) !== null) {
-    const visible = filterVisibleText(raw.slice(cursor, match.index))
+    // Une question citée dans du code n'est pas un bloc : on reprend la recherche juste après elle.
+    if (match[1] === 'question' && lireLaBalise(raw, match.index, true) === 'citee') {
+      CONTROL_RE.lastIndex = match.index + '<question>'.length
+      continue
+    }
+    const visible = filterVisibleText(raw.slice(cursor, match.index), raw.slice(0, cursor))
     if (visible) tokens.push({ kind: 'text', text: visible })
     if (match[1] === 'cmd') {
       const rawBlock = match[2]
@@ -237,7 +242,7 @@ export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
     }
     cursor = match.index + match[0].length
   }
-  const trailing = filterVisibleText(raw.slice(cursor))
+  const trailing = filterVisibleText(raw.slice(cursor), raw.slice(0, cursor))
   if (trailing) tokens.push({ kind: 'text', text: trailing })
   return tokens
 }

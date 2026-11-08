@@ -574,6 +574,46 @@ describe('AgentPilot turn contract', () => {
     expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Je poursuis sans question.' })
   })
 
+  /*
+   * Une réponse qui EXPLIQUE la balise (« la lecture de la balise `<question>` ») était prise pour
+   * une question posée : le tour était rejoué, et tout le texte après la citation disparaissait.
+   */
+  it('ne refuse ni ne masque une balise de question seulement citée dans du code', async () => {
+    const reponse =
+      'Je garde la lecture de la balise `<question>` dans les réponses du modèle.\n\n' +
+      '```text\n<question>{"text":"Exemple ?","options":["A"]}</question>\n```\n\n' +
+      'Elle ne sert plus qu’à refuser ces questions.'
+    const responses = [reponse, 'Ce second appel ne doit pas avoir lieu.']
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'explique la balise' }],
+      (event) => events.push(event),
+      vi.fn(),
+      2,
+      'conv-1'
+    )
+
+    expect(registry.send).toHaveBeenCalledTimes(1)
+    expect(events.find((event) => event.kind === 'prompt-call')?.response).toBe(reponse)
+    const fin = events.at(-1)
+    expect(fin?.kind).toBe('done')
+    const texteFinal = fin && 'text' in fin ? String(fin.text) : ''
+    expect(texteFinal).toContain('la balise `<question>` dans les réponses du modèle.')
+    expect(texteFinal).toContain('<question>{"text":"Exemple ?","options":["A"]}</question>')
+    expect(texteFinal).toContain('Elle ne sert plus qu’à refuser ces questions.')
+  })
+
   it('injecte une directive utilisateur au prochain point d’itération du tour', async () => {
     const responses = ['<cmd>{"name":"get_state","args":{}}</cmd>', 'Terminé']
     const send = vi

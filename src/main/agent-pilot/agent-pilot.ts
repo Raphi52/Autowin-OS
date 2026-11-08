@@ -3,6 +3,7 @@ import type { RoleBinding, RoleModelConfig } from '../profil/roles'
 import type { AppCommandBus } from '../commands/commands'
 import type { Message, SendOptions } from '../providers/types'
 import { parseModelQuestion, type ModelQuestion } from '../modeles/model-questions'
+import { contientUneQuestionPosee, masquerLesQuestionsPosees } from '../../shared/balise-question'
 import { motsUtilisateur } from '../chat/chat-turn-messages'
 import { courtCircuiteLeModele, routeSkillRequest } from '../skills/skill-routing'
 import { AVIS_DEUX_LECTURES, type TraceDesLectures } from '../chat/deux-lectures'
@@ -36,7 +37,6 @@ import type {
 import { commandResultSucceeded } from './issue-des-commandes'
 import {
   REJECTED_QUESTION_MARKER,
-  REJECTED_QUESTION_RE,
   normaliserFermeturesCmd,
   parseOrderedPilotTokens,
   reparerAccoladeFinaleManquante,
@@ -583,8 +583,9 @@ export class AgentPilot {
        * cas METIER, traite par la garde du tour muet, pas une panne d'interpreteur.
        */
       const texteProvider = res.text ?? ''
-      const rejectedQuestion = /<question>/i.test(texteProvider)
-      const text = texteProvider.replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER).trim()
+      // Seule une balise POSÉE est refusée : citée dans du code, elle reste du texte.
+      const rejectedQuestion = contientUneQuestionPosee(texteProvider)
+      const text = masquerLesQuestionsPosees(texteProvider, REJECTED_QUESTION_MARKER).trim()
       const question = parseModelQuestion(text)
       if (question && ask) {
         const answer = await waitForAnswer(ask(question), signal)

@@ -24,7 +24,8 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 import { captureSaufAnnulation } from './aides-du-tour'
 import type { ContexteDuTour } from './contexte-du-tour'
 import { iterationDuTour, type IterationDuTour } from './iteration-du-tour'
-import { REJECTED_QUESTION_MARKER, REJECTED_QUESTION_RE } from './jetons-de-commande'
+import { REJECTED_QUESTION_MARKER } from './jetons-de-commande'
+import { masquerLesQuestionsPosees } from '../../shared/balise-question'
 import { reprendreApresErreur } from './reprise-apres-erreur'
 
 /**
@@ -465,7 +466,7 @@ export async function appelDuModele(
     // le 2026-08-15 — une relance de forme supplementaire suffisait a epuiser la reponse et le
     // pilote tombait sur « Cannot read properties of undefined ». Un tour sans texte est un cas
     // METIER (le tour muet a sa garde) ; ce n'en est pas un pour l'interpreteur.
-    response: (res.text ?? '').replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER),
+    response: masquerLesQuestionsPosees(res.text ?? '', REJECTED_QUESTION_MARKER),
     status: 'completed',
     callUsage: res.usage,
     callDurationMs: performance.now() - callStartedAt,
