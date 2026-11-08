@@ -48,19 +48,27 @@ const MAX_IMAGES_DE_LA_DEMANDE = 4
  * dit « Retirer le bloc Sous-agents », le seul objet que le texte du fil nommait. « ces blocs »
  * n'était désigné que par l'image, et l'image n'atteignait pas ce modèle.
  *
- * Le DERNIER message de l'utilisateur seul : une image d'un tour antérieur a déjà eu sa ligne, et la
- * remettre ferait lire au petit modèle un écran que la demande ne vise plus. Les images seules : un
- * fichier texte ou binaire ne désigne pas un élément affiché, et chaque pièce se paie en lecture.
+ * Les messages qui FONT la demande seulement, dans l'ordre donné, le plus important d'abord : la
+ * demande, puis les messages restés sans réponse parce que leur tour a été coupé
+ * (`messagesRestesSansReponse`). Une image d'un message auquel l'agent a répondu a déjà eu sa ligne,
+ * et la remettre ferait lire au petit modèle un écran que la demande ne vise plus. Les images
+ * seules : un fichier texte ou binaire ne désigne pas un élément affiché, et chaque pièce se paie
+ * en lecture. La même capture renvoyée deux fois n'est lue qu'une fois.
  */
-export function imagesDeLaDemande(history: Message[]): NonNullable<Message['attachments']> {
-  const demande = [...history].reverse().find((message) => message.role === 'user')
+export function imagesDesMessages(messages: Message[]): NonNullable<Message['attachments']> {
+  const vues = new Set<string>()
   const images: NonNullable<Message['attachments']> = []
-  for (const brute of demande?.attachments ?? []) {
-    if (brute.kind !== 'image') continue
-    const lisible = aPieceJointeLisible(brute) ? brute : replierSurLaMiniature(brute)
-    if (lisible) images.push(lisible)
-    if (images.length >= MAX_IMAGES_DE_LA_DEMANDE) break
-  }
+  for (const message of messages)
+    for (const brute of message.attachments ?? []) {
+      if (brute.kind !== 'image') continue
+      const lisible = aPieceJointeLisible(brute) ? brute : replierSurLaMiniature(brute)
+      if (!lisible) continue
+      const cle = `${brute.name}|${lisible.content}`
+      if (vues.has(cle)) continue
+      vues.add(cle)
+      images.push(lisible)
+      if (images.length >= MAX_IMAGES_DE_LA_DEMANDE) return images
+    }
   return images
 }
 

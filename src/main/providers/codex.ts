@@ -560,7 +560,10 @@ export function contratHorsRun(opts: SendOptions): NonNullable<SendOptions['exec
   const fil = opts.conversationId?.trim()
   return {
     cwd: opts.workspaceCwd?.trim() || process.env[AUTOWIN_WORKSPACE_ENV]?.trim() || process.cwd(),
-    sandbox: fil && opts.toolProfile !== 'watchdog-read-only' ? 'danger-full-access' : 'read-only',
+    sandbox:
+      fil && opts.toolProfile !== 'watchdog-read-only' && opts.toolProfile !== 'lecture-seule'
+        ? 'danger-full-access'
+        : 'read-only',
     ...(fil ? { agentEnv: { AUTOWIN_CONVERSATION_ID: fil } } : {})
   }
 }

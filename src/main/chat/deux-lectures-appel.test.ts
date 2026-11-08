@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { lecteurDeDeuxLectures } from './deux-lectures-appel'
+import type { SendOptions } from '../providers/types'
 
 /**
  * L'APPEL « DEUX LECTURES » ÉCRIT SA LIGNE DE COÛT SOUS LE FIL DU TOUR (2026-11-02).
@@ -98,13 +99,21 @@ describe('lecteurDeDeuxLectures — la ligne de coût du contrôle', () => {
       Array<{ role: string; content: string; attachments?: unknown[] }>
     ]
     expect(messages).toEqual([{ role: 'user', content: 'charge', attachments: [capture] }])
+    // Lire la capture, rien d'autre : ni commande, ni écriture (claude.sans-outil.test.ts).
+    const [, , options] = b.send.mock.calls[0] as unknown as [string, unknown, SendOptions]
+    expect(options.toolProfile).toBe('lecture-seule')
   })
 
-  it('le jumeau : sans image, le message reste la charge seule', async () => {
+  it('le jumeau : sans image, le message reste la charge seule, et aucun outil n’est chargé', async () => {
     const b = banc(async () => ({ text: '{"lectures":[]}', provider: 'claude' }))
     await b.lecteur('consigne', 'charge', { issue: () => 'x' }, [])
-    const [, messages] = b.send.mock.calls[0] as unknown as [string, unknown[]]
+    const [, messages, options] = b.send.mock.calls[0] as unknown as [
+      string,
+      unknown[],
+      SendOptions
+    ]
     expect(messages).toEqual([{ role: 'user', content: 'charge' }])
+    expect(options.toolProfile).toBe('sans-outil')
   })
 
   it('une panne du modèle est nommée, rejetée, et n’écrit aucune ligne de coût', async () => {

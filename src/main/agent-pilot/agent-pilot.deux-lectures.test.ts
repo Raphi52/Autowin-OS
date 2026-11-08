@@ -489,6 +489,40 @@ describe('les deux autres points de passage', () => {
     expect(b.lecteur.mock.calls[0][1]).not.toMatch(/image/iu)
   })
 
+  /*
+   * Un message coupé fait partie de la demande (`demandesResteesSansReponse`) : son TEXTE était
+   * remis au petit modèle, pas son image. « vire ça » envoyé juste après une capture dont le tour a
+   * été coupé désignait alors un écran que la compréhension n'avait jamais vu.
+   */
+  it('les images des messages restés sans réponse (tour coupé) atteignent aussi le petit modèle', async () => {
+    const image = (nom: string, contenu: string) => ({
+      name: nom,
+      mimeType: 'image/png',
+      size: 4,
+      kind: 'image' as const,
+      content: contenu
+    })
+    const ancienne = image('ancienne.png', 'AAAA')
+    const coupee = image('coupee.png', 'BBBB')
+    const seule = image('seule.png', 'CCCC')
+    const courante = image('courante.png', 'DDDD')
+    const b = banc(reponse(['retirer les panneaux Scouts, Frame et Judges', 100]))
+    await b.jouer([
+      { role: 'user', content: 'regarde ces panneaux', attachments: [ancienne] },
+      { role: 'assistant', content: 'Ce sont les panneaux parallèles.' },
+      { role: 'user', content: 'ces panneaux-là', attachments: [coupee] },
+      // Tour coupé : il n'a écrit que sa ligne compréhension.
+      { role: 'assistant', content: 'Compréhension : « Regarder ces panneaux-là »' },
+      // Un message sans texte, juste une capture : il compte aussi.
+      { role: 'user', content: '', attachments: [seule] },
+      { role: 'user', content: 'vire ces blocs aussi alors', attachments: [courante] }
+    ])
+    // La demande d'abord, puis les messages coupés du plus récent au plus ancien ; jamais celle
+    // d'un message auquel l'agent a répondu.
+    expect(b.lecteur.mock.calls[0][3]).toEqual([courante, seule, coupee])
+    expect(b.lecteur.mock.calls[0][1]).toContain('3 images jointes')
+  })
+
   it('une question de l’utilisateur n’est pas une demande de changement : la ligne, jamais la question', async () => {
     const demande = 'comment rendre mon graph beaucoup plus clair ?'
     const b = banc(

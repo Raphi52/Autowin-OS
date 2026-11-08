@@ -1821,6 +1821,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     } else if (opts.toolProfile === 'sans-outil') {
       // fix-ok: claude.sans-outil.test.ts rouge sur a41081d6 : un appel sans `execution` chargeait Bash, Write et Edit en bypassPermissions. Une relecture a froid ne doit voir que son prompt.
       args.push('--tools', '')
+    } else if (opts.toolProfile === 'lecture-seule') {
+      // Ouvrir ses pièces jointes, rien d'autre : la ligne compréhension doit voir la capture, et
+      // elle partait avant avec Bash, Write et Edit en `bypassPermissions`. Ni dossier de travail
+      // (`readOnlyCwd` reste vide), ni droits élargis : `Read` est seul chargé et seul autorisé.
+      args.push(
+        ...(materialized ? ['--add-dir', materialized.dir] : []),
+        '--tools',
+        'Read',
+        '--allowedTools',
+        'Read'
+      )
     } else {
       /**
        * fix-ok: une piece jointe DESARMAIT le tour de chat (cause mesuree, 2026-09-17).

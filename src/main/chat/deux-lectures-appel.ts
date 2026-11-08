@@ -39,6 +39,10 @@ export function lecteurDeDeuxLectures(deps: {
         systemBlocks: [{ name: 'deuxLectures', chars: systeme.length }],
         model: binding.model,
         reasoningEffort: binding.reasoningEffort,
+        // Ouvrir la capture jointe, rien d'autre. Sans profil, l'appel prenait la branche du tour
+        // de chat : Bash, Write et Edit en `bypassPermissions` pour écrire une phrase. Sans image,
+        // il n'a rien à ouvrir : aucun outil, donc aucune définition d'outil payée.
+        toolProfile: images.length ? 'lecture-seule' : 'sans-outil',
         requestId: randomUUID()
       })
       .catch((error: unknown) => {

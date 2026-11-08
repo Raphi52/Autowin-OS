@@ -11,7 +11,7 @@ import {
   chargeDeuxLectures,
   commandesNommees,
   demandeDeChangementDeRendu,
-  demandesResteesSansReponse,
+  messagesRestesSansReponse,
   dernierMessageAgent,
   issueDesLecturesPourLaTrace,
   lectureAAnnoncer,
@@ -29,7 +29,7 @@ import { descriptionsDesCommandes } from './aides-du-tour'
 import type { ExecutionDeCommande } from './commandes-du-tour'
 import type { PilotEventVariant } from './evenements'
 import { commandResultSucceeded } from './issue-des-commandes'
-import { imagesDeLaDemande } from './pieces-jointes-du-fil'
+import { imagesDesMessages } from './pieces-jointes-du-fil'
 
 export type LectureRetenue = Extract<IssueDesLectures, { kind: 'retenue' }>
 
@@ -42,6 +42,40 @@ export type LecturesDuTour = {
   lancerAvantLeModele: () => Promise<IssueDesLectures | undefined> | undefined
   /** La lecture annoncée dans ce tour, lue au moment de l'appel. */
   lectureRetenue: () => LectureRetenue | undefined
+}
+
+/**
+ * Ce que reçoit le petit modèle pour écrire la ligne compréhension : sa charge (texte) et les
+ * images à regarder. Exportée pour que `scripts/rejeu-comprehension.mjs` rejoue un vrai message
+ * avec exactement la composition de l'app, sans en recopier la règle.
+ */
+export function entreeDuPetitModele(
+  history: Message[],
+  demande: string
+): { charge: string; images: Attachment[] } {
+  // Ce que font les commandes citées (`/scout`, `/arena`) : sans elles, le petit modèle a lu
+  // un fil comme nette — rejeu sur le vrai modèle du 2026-10-22, 0 question sur 3 cas visés.
+  const descriptions = descriptionsDesCommandes(commandesNommees(demande))
+  // Les messages que des tours coupés ont laissés sans réponse font partie de la demande
+  // (kaizen : « améliore tout » lu « tout sur le kimono », le dernier sujet seul).
+  // Ceux qu'écrit l'app ou un agent n'en sont pas : aucun humain ne les a tapés.
+  const restes = messagesRestesSansReponse(history).filter(
+    ({ content: texte }) =>
+      !estUneRepriseAutomatique(texte) && !estUnMessageDuPlan(texte) && !estUnPromptDOrdre(texte)
+  )
+  // La capture jointe nomme souvent seule l'objet de la demande (« vire ces blocs ») : sans elle,
+  // le petit modèle prenait dans le fil un autre objet que celui montré (pieces-jointes-du-fil.ts).
+  // Celle d'un message coupé aussi : la demande, puis les coupés du plus récent au plus ancien.
+  const derniere = [...history].reverse().find((message) => message.role === 'user')
+  const images = imagesDesMessages([...(derniere ? [derniere] : []), ...[...restes].reverse()])
+  const charge = chargeDeuxLectures(
+    demande,
+    dernierMessageAgent(history),
+    descriptions,
+    restes.flatMap(({ content }) => (content.trim() ? [content.trim()] : [])),
+    images.length
+  )
+  return { charge, images }
 }
 
 export function lecturesDuTour(entree: {
@@ -107,29 +141,10 @@ export function lecturesDuTour(entree: {
     const demande = latestUserMessage?.trim() ? latestUserMessage : undefined
     const demander = demanderDeuxLectures
     if (!lectureDuTourArmee || !demande || !demander) return Promise.resolve(undefined)
-    // Ce que font les commandes citées (`/scout`, `/arena`) : sans elles, le petit modèle a lu
-    // un fil comme nette — rejeu sur le vrai modèle du 2026-10-22, 0 question sur 3 cas visés.
-    const descriptions = descriptionsDesCommandes(commandesNommees(demande))
-    // La capture jointe nomme souvent seule l'objet de la demande (« vire ces blocs ») : sans elle,
-    // le petit modèle prenait dans le fil un autre objet que celui montré (pieces-jointes-du-fil.ts).
-    const images = imagesDeLaDemande(history)
+    const { charge, images } = entreeDuPetitModele(history, demande)
     lecturesMemorisees ??= demander(
       CONSIGNE_DEUX_LECTURES,
-      // Les messages que des tours coupés ont laissés sans réponse font partie de la demande
-      // (kaizen : « améliore tout » lu « tout sur le kimono », le dernier sujet seul).
-      // Ceux qu'écrit l'app ou un agent n'en sont pas : aucun humain ne les a tapés.
-      chargeDeuxLectures(
-        demande,
-        dernierMessageAgent(history),
-        descriptions,
-        demandesResteesSansReponse(history).filter(
-          (texte) =>
-            !estUneRepriseAutomatique(texte) &&
-            !estUnMessageDuPlan(texte) &&
-            !estUnPromptDOrdre(texte)
-        ),
-        images.length
-      ),
+      charge,
       // Le coût de l'appel appartient au fil, et sa trace dit ce que le contrôle a DÉCIDÉ, pas la
       // réponse brute coupée à 160 caractères (527 lignes sur 696 inclassables).
       {

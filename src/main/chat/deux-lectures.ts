@@ -544,21 +544,33 @@ export function dernierMessageAgent(historique: ReadonlyArray<MessageDuFil>): st
  * partie.
  */
 export function demandesResteesSansReponse(historique: ReadonlyArray<MessageDuFil>): string[] {
+  return messagesRestesSansReponse(historique).flatMap((message) =>
+    typeof message.content === 'string' && message.content.trim() ? [message.content.trim()] : []
+  )
+}
+
+/**
+ * Les mêmes messages, entiers et dans l'ordre où il les a écrits, y compris ceux SANS texte : une
+ * capture envoyée seule fait partie de la demande autant qu'une phrase, et c'est son image que le
+ * petit modèle doit voir (`imagesDesMessages`, pieces-jointes-du-fil.ts).
+ */
+export function messagesRestesSansReponse<M extends MessageDuFil>(
+  historique: ReadonlyArray<M>
+): M[] {
   let i = historique.length - 1
   while (i >= 0 && historique[i].role !== 'user') i--
   i-- // la demande courante
-  const restees: string[] = []
+  const restes: M[] = []
   for (; i >= 0; i--) {
     const message = historique[i]
     if (message.role === 'user') {
-      if (typeof message.content === 'string' && message.content.trim())
-        restees.unshift(message.content.trim())
+      restes.unshift(message)
       continue
     }
     if (message.role === 'assistant' && neRepondARien(message)) continue
     break
   }
-  return restees
+  return restes
 }
 
 /** Les messages qui ne portent pas de demande neuve : une relance reprend la précédente. */

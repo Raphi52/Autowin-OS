@@ -49,10 +49,11 @@ export interface SendOptions {
   maxBudgetUsd?: number
   /**
    * Surface d'outils imposee par le controleur pour les tours automatiques sensibles. `sans-outil` :
-   * le modele ne lit que ce qu'on lui envoie. Sans ce profil, un appel sans `execution` est un tour
-   * de chat, donc outille sur Claude.
+   * le modele ne lit que ce qu'on lui envoie. `lecture-seule` : il peut en plus OUVRIR des fichiers
+   * (ses pieces jointes), sans commande ni ecriture. Sans ce profil, un appel sans `execution` est
+   * un tour de chat, donc outille sur Claude.
    */
-  toolProfile?: 'watchdog-read-only' | 'sans-outil'
+  toolProfile?: 'watchdog-read-only' | 'sans-outil' | 'lecture-seule'
   /**
    * Dossier de travail de CE tour, resolu depuis la conversation courante (`dossierDeTravailDuTour`).
    * Passe en argument et jamais lu dans `process.env` : la variable globale est figee au demarrage et

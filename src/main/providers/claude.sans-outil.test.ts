@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { ClaudeCliAdapter } from './claude'
-import type { SendOptions } from './types'
+import type { Message, SendOptions } from './types'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 
 /**
@@ -56,10 +56,13 @@ afterEach(() => {
 })
 afterAll(() => rmSync(dossier, { recursive: true, force: true }))
 
-async function argsDuSpawn(options: SendOptions): Promise<string[]> {
+async function argsDuSpawn(
+  options: SendOptions,
+  attachments: Message['attachments'] = undefined
+): Promise<string[]> {
   process.env[AUTOWIN_WORKSPACE_ENV] = dossier
   const stream = new ClaudeCliAdapter({ bin: 'claude-test' }).send(
-    [{ role: 'user', content: 'bonjour' }],
+    [{ role: 'user', content: 'bonjour', ...(attachments ? { attachments } : {}) }],
     options
   )
   let step = await stream.next()
@@ -74,6 +77,32 @@ describe('profil sans-outil', () => {
     expect(args).not.toContain('--allowedTools')
     expect(args).not.toContain('--permission-mode')
     expect(args).not.toContain('--add-dir')
+    expect(capture.cwd).not.toBe(dossier)
+  })
+
+  /*
+   * La ligne compréhension doit OUVRIR la capture jointe, et rien d'autre : avant ce profil, son
+   * petit modèle partait avec Bash, Write et Edit en `bypassPermissions` (journal d'un rejeu réel :
+   * `tools` = Edit, Glob, Grep, Read, Write…).
+   */
+  it('lecture-seule : Read seul, sur le dossier des pièces jointes, sans dossier de travail', async () => {
+    const image = {
+      name: 'image.png',
+      mimeType: 'image/png',
+      size: 4,
+      kind: 'image' as const,
+      content: 'iVBO'
+    }
+    const args = await argsDuSpawn({ toolProfile: 'lecture-seule' }, [image])
+    expect(args[args.indexOf('--tools') + 1]).toBe('Read')
+    expect(args).toContain('--allowedTools')
+    const apres = args.slice(args.indexOf('--allowedTools') + 1)
+    const fin = apres.findIndex((a) => a.startsWith('--'))
+    expect(fin < 0 ? apres : apres.slice(0, fin)).toEqual(['Read'])
+    expect(args).not.toContain('--permission-mode')
+    const dossiers = args.flatMap((a, i) => (a === '--add-dir' ? [args[i + 1]] : []))
+    expect(dossiers).toHaveLength(1)
+    expect(dossiers[0]).toMatch(/autowin-os-attachments-/u)
     expect(capture.cwd).not.toBe(dossier)
   })
 
