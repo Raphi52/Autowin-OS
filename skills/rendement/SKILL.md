@@ -34,6 +34,9 @@ Le gaspillage = ce qui a coûté cher ET a dû être repris. C'est la cible.
    conversation récente ou EN COURS —, ne pas conclure « hors corpus ». Lire son
    `activity/conv-N.jsonl` (voir « Les LOGS de conversation » plus bas) : il est déjà écrit.
    « Corpus vide » ne se dit qu'après avoir cherché le journal ET ne l'avoir pas trouvé.
+   **Ce qui remplit le contexte relu** (socle, terminal, réflexion, Read…) se mesure par
+   `node scripts/poids-du-contexte.mjs [--tous] [--seuil-lignes N]` : part de chaque type de contenu
+   × étapes qui le relisent, et gain maximal de chaque prise d'économie AVANT de la construire.
 2. **CHOISIR la cible.** Les 3-5 conversations en tête du classement gaspillage — et TOUJOURS
    au moins une conversation « bon élève » (coût bas, zéro reprise) comme contrôle négatif :
    sans elle, on attribue à un défaut ce qui n'est que la difficulté de la tâche.

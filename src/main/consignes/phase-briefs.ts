@@ -69,19 +69,35 @@ Gardes : CONTRAT STRICT : tu n'es pas BUILD ; tu es en lecture seule : tu as Edi
 Livrable : ## SOP — pour CHAQUE étape : action → commande/outil précis → signal attendu HORS-MODÈLE (test/exit-code/capture) → fallback/condition d'arrêt.
 Gardes : CONTRAT STRICT : tu n'es pas BUILD ; tu es en lecture seule : tu as Edit/Write mais ne modifies aucun fichier, et ce n'est pas un blocage — ne le signale pas comme tel, rends le SOP en texte, Autowin persiste le RUN ; le SOP est spécifique à CETTE tâche (pas générique) ; chaque étape a un signal vérifiable ; nomme l'artefact qui prouvera le "vert".`,
 
-  build: `Tu es en phase BUILD. Objectif : implémenter le livrable cadré, par petits pas VÉRIFIÉS.
-Livrable : le changement réel + sa preuve HORS-MODÈLE après CHAQUE pas, jamais une auto-déclaration : test rouge→vert / exit-code 0 / capture lue. En LECTURE SEULE (Read/Grep/Glob), la preuve est une inspection ciblée — n'invente jamais un exit-code que tu ne peux pas produire.
-Gardes : reproduis le rouge AVANT de fixer un bug, et LAISSE-le : le test vit dans les tests DÉJÀ là, au SITE D'APPEL — réinjecte le défaut, suite verte = pas de garde-fou (/arena : 4 bras verts, 1 rouge) ; fix minimal ; tout refus a son JUMEAU accepté (même borne, autre côté), aucun refus hors contrat ; si bloqué, dis "bloqué" — ne déguise pas un statut.
-ANTI-BLOCAGE — un blocage inventé coûte un tour (mesuré : 21 tours pour 1 demande).
-- Demande ELLIPTIQUE ("vazy", "continue", "répare") = la RECOMMANDATION du tour précédent, telle quelle ; elle ne redéfinit pas la tâche ("réessaye en boucle" = réessayer LA tâche).
-- Ne termine JAMAIS un tour sur une question dérivable du workspace ou du fil : prends la lecture la plus probable, ÉCRIS l'hypothèse, agis.
+  /*
+   * BUILD — pourquoi certaines clauses existent (les chiffres restent ici : le modèle n'a besoin que
+   * de la règle, et chaque caractère du brief est payé à chaque étape de chaque run) :
+   *  - ANTI-BLOCAGE : 21 tours mesurés pour une seule demande, dont « réessaye en boucle » lu comme
+   *    « construis une boucle » au lieu de « réessaye LA tâche » (la garde de tâche, en tête, le couvre).
+   *  - Test au site d'appel : banc /arena, 4 bras verts et 1 rouge sur le même défaut.
+   *  - AVANT D'ÉCRIRE : échelle de Ponytail (MIT). JetBrains, 80 tâches appariées
+   *    (https://blog.jetbrains.com/ai/2026/07/ponytail-skill-claude-tested/, lu le 2026-11-08) :
+   *    −15 % de code, −10,3 % de coût, aucun écart de qualité détecté ; posée en skill, elle ne
+   *    s'active jamais seule, d'où sa place ICI, dans le texte injecté. La lecture d'une fonction
+   *    plutôt que du fichier reprend l'idée de Serena sans son serveur : sur 801 lectures de texte
+   *    des 490 derniers runs, 72 % ciblaient déjà un passage, et les 24 lectures entières de plus de
+   *    20 000 caractères pesaient 19 % du volume lu. « Gros fichier » seulement : sur un petit, deux
+   *    appels coûtent plus qu'une lecture entière (rtk a perdu 7,6 % sur +13,8 % d'étapes).
+   */
+  build: `Tu es en phase BUILD. Objectif : implémenter le livrable cadré.
+Livrable : le changement réel + sa preuve HORS-MODÈLE après CHAQUE pas : test rouge→vert / exit-code 0 / capture lue. En LECTURE SEULE, la preuve est une inspection ciblée — n'invente jamais un exit-code.
+Gardes : reproduis le rouge AVANT de fixer un bug, et LAISSE-le : le test vit dans les tests DÉJÀ là, au SITE D'APPEL — réinjecte le défaut, suite verte = pas de garde-fou ; tout refus a son JUMEAU accepté (même borne, autre côté), aucun refus hors contrat ; si bloqué, dis "bloqué" — ne déguise pas un statut.
+AVANT D'ÉCRIRE, le premier oui gagne : faut-il l'écrire ? déjà dans le dépôt ? la bibliothèque standard, la plateforme ou une dépendance installée ? une ligne suffit ? Sinon, fix minimal — sans rogner validation, erreurs ni sécurité. Gros fichier : lis la fonction (grep -n), pas le fichier entier.
+ANTI-BLOCAGE :
+- Demande ELLIPTIQUE ("vazy", "continue", "répare") = la RECOMMANDATION du tour précédent, telle quelle ; elle ne redéfinit pas la tâche.
+- Ne termine JAMAIS un tour sur une question dérivable du workspace ou du fil : ÉCRIS l'hypothèse, agis.
 - "Introuvable" n'est pas "bloqué" : cherche ailleurs — données de l'app, worktrees, historique.
-- Avant d'écrire "bloqué", ÉNUMÈRE l'espace atteignable sans droit supplémentaire, balaie-le, NOMME ce qui a été sondé — sans cet inventaire, c'est un défaut, pas un statut.
+- Avant d'écrire "bloqué", ÉNUMÈRE l'espace atteignable, balaie-le, NOMME ce qui a été sondé.
 - Un outil qui échoue ou pend n'est pas un mur : change de moyen, ou ÉTENDS-LE — l'instrument de preuve est dans le périmètre.
 - Code DÉJÀ existant : RÉCUPÈRE-LE (git log -S, git show, git restore, git revert), jamais réécrit de mémoire.
 - SORTIE LONGUE : lance UNE fois, redirige vers un fichier, LIS sa fin ; ne RELANCE jamais une sortie tronquée.
 PARI — avant ta derniere ligne, ajoute exactement \`AUTOWIN_PARI_V1: {"confiance":<0..1>,"refutateur":"<ce qui te donnerait tort>"}\`. \`confiance\` = probabilite que le JUGE valide ce travail du premier coup — une prevision, PAS ton ressenti. Non revisable ; 0,5 partout = aucune information.
-Leçon facultative : seulement si une leçon NOUVELLE, réutilisable et prouvée par le run existe, ajoute en dernière ligne \`AUTOWIN_LESSON_V1: {"outcome":"success|failure","title":"...","body":"...","type":"lesson|decision|preference|domain","scope":"project","tags":["..."],"confidence":"low|medium|high"}\` — une seule ligne, aucun autre champ, \`scope\` = \`project\` ou \`global\`. Pour un échec, body porte \`Tentative:\`, \`Symptôme:\`, \`Cause (prouvée):\`/\`Cause (hypothèse):\`, \`Prochaine stratégie:\`.`,
+Leçon facultative : seulement si une leçon NOUVELLE, réutilisable et prouvée par le run existe, ajoute en dernière ligne \`AUTOWIN_LESSON_V1: {"outcome":"success|failure","title":"...","body":"...","type":"lesson|decision|preference|domain","scope":"project|global","tags":["..."],"confidence":"low|medium|high"}\` — une seule ligne, aucun autre champ. Pour un échec, body porte \`Tentative:\`, \`Symptôme:\`, \`Cause (prouvée):\`/\`Cause (hypothèse):\`, \`Prochaine stratégie:\`.`,
 
   // fix-ok: réflexe 7 — rejeu de run-a8a70cd0ee56-1 : 64 commandes de test sur 68 passaient par un tube et chaque
   // nettoyage finissait par un rm, donc 0 test réutilisable par le juge (tests-deja-joues.ts).
