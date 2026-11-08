@@ -7,6 +7,7 @@ import { sourceProcessPrincipal } from '../app/source-process-principal.test-hel
 import {
   assertRuntimeBindingAvailable,
   assertRuntimeTopologyAvailable,
+  runtimeFanOutSlots,
   runtimeRoleBinding,
   runtimeRoleSlots,
   topologyWithRuntimeRole
@@ -38,6 +39,60 @@ describe('bindings runtime issus d’Agent Studio', () => {
     topology.panels.judge = []
 
     expect(runtimeRoleSlots(topology).judge).toEqual(topology.orchestrator)
+  })
+
+  it('plusieurs sous-agents : chaque étape à plusieurs modèles tourne sur TOUS', () => {
+    const topology = createDefaultTopology(TEST_MODEL_CATALOG)
+    const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
+    const claude = TEST_MODEL_CATALOG.find((model) => model.provider === 'claude')!
+    topology.subagents = [
+      bindingForModel('subagent-1', codex),
+      bindingForModel('subagent-2', claude)
+    ]
+    topology.panels = { scout: [], frame: [], terrain: [], judge: [] }
+
+    const fanOut = runtimeFanOutSlots(topology)
+
+    expect(fanOut.scout).toEqual(topology.subagents)
+    expect(fanOut.frame).toEqual(topology.subagents)
+    expect(fanOut.terrain).toEqual(topology.subagents)
+    expect(fanOut.judge).toEqual(topology.subagents)
+    // Le code, lui, reste écrit par UN seul modèle : le premier.
+    expect(runtimeRoleSlots(topology).subagent).toEqual(topology.subagents[0])
+  })
+
+  it('un seul sous-agent ne change rien : les étapes gardent leur chemin à un modèle', () => {
+    const topology = createDefaultTopology(TEST_MODEL_CATALOG)
+    const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
+    topology.subagents = [bindingForModel('subagent-1', codex)]
+    topology.panels = { scout: [], frame: [], terrain: [], judge: [] }
+
+    expect(runtimeFanOutSlots(topology)).toEqual({ scout: [], frame: [], terrain: [], judge: [] })
+  })
+
+  it('un panneau d’étape déjà réglé garde la main sur la liste des sous-agents', () => {
+    const topology = createDefaultTopology(TEST_MODEL_CATALOG)
+    const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
+    const claude = TEST_MODEL_CATALOG.find((model) => model.provider === 'claude')!
+    topology.subagents = [
+      bindingForModel('subagent-1', codex),
+      bindingForModel('subagent-2', claude)
+    ]
+    topology.panels = {
+      scout: [],
+      frame: [],
+      terrain: [],
+      judge: [bindingForModel('judge-1', claude)]
+    }
+
+    const fanOut = runtimeFanOutSlots(topology)
+
+    expect(fanOut.judge).toEqual(topology.panels.judge)
+    expect(fanOut.scout).toEqual(topology.subagents)
+  })
+
+  it('le processus principal nourrit les étapes à plusieurs modèles par runtimeFanOutSlots', () => {
+    expect(indexSource()).toContain('const fanOutSlots = runtimeFanOutSlots(topology)')
   })
 
   it('bloque un modèle concret absent du catalogue au lieu de le transmettre au provider', () => {

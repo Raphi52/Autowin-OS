@@ -2,39 +2,10 @@
    Themes clairs : tout gris ecrit en dur sous 4.5:1 sur blanc retombe sur --text-dim. */
 
 /* components/AgentsTopologyView.css */
-:root[data-base='clair'] .agents-topology,
-:root[data-base='clair'] .topology-eyebrow,
-:root[data-base='clair'] .topology-panel > header span,
-:root[data-base='clair'] .topology-parallel-heading span,
-:root[data-base='clair'] .topology-toolbar p,
-:root[data-base='clair'] .topology-profiles select,
-:root[data-base='clair'] .topology-library > p,
-:root[data-base='clair'] .topology-model,
-:root[data-base='clair'] .topology-model small,
-:root[data-base='clair'] .topology-panel > header p,
-:root[data-base='clair'] .topology-panel > header b,
-:root[data-base='clair'] .topology-slot-copy span,
-:root[data-base='clair'] .topology-slot label,
-:root[data-base='clair'] .topology-slot select,
-:root[data-base='clair'] .topology-parallel-heading small,
 :root[data-base='clair'] .agents-topology-loading,
-:root[data-base='clair'] .theme-serious .agents-topology,
-:root[data-base='clair'] .theme-serious .topology-model,
-:root[data-base='clair'] .theme-serious .topology-slot,
-:root[data-base='clair'] .theme-serious .topology-panel > header b,
 :root[data-base='clair'] .theme-serious .topology-profiles,
-:root[data-base='clair'] .theme-serious .topology-slot select,
-:root[data-base='clair'] .theme-serious .topology-empty,
 :root[data-base='clair'] .theme-serious .topology-assign-button,
-:root[data-base='clair'] .theme-serious .topology-eyebrow,
-:root[data-base='clair'] .theme-serious .topology-panel > header span,
-:root[data-base='clair'] .theme-serious .topology-parallel-heading span,
-:root[data-base='clair'] .theme-serious .topology-model small,
-:root[data-base='clair'] .theme-serious .topology-slot-copy span,
-:root[data-base='clair'] .theme-serious .topology-slot-copy small,
-:root[data-base='clair'] .theme-serious .topology-slot label,
-:root[data-base='clair'] .theme-serious .topology-toolbar p,
-:root[data-base='clair'] .theme-serious .topology-panel > header p {
+:root[data-base='clair'] .theme-serious .topology-toolbar p {
   color: var(--text-dim);
 }
 

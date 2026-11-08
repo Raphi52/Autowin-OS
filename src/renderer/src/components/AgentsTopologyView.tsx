@@ -5,9 +5,15 @@ import { langueCourante } from '../langue'
 import { riche } from '../textes'
 import { traduireAgentStudio, useTextesAgentStudio } from '../textes-ecrans/agent-studio'
 import { libraryModels } from './model-library'
-import { shortModelLabel } from './model-display-label'
 import { Spinner } from './Spinner'
 import { CeQueCaCouvre } from './CeQueCaCouvre'
+import {
+  OrchestratorModelSelector,
+  type OrchestratorProviderStatus
+} from './OrchestratorModelSelector'
+import type { OrchestratorModelOption } from './chat-view-model'
+// Même bloc que « Modèle des petites tâches » : mêmes classes (`.router-default`, `.router-hint`).
+import './RouterView.css'
 
 type ImportedModel = {
   id: string
@@ -42,7 +48,7 @@ type AgentTopology = {
  * Les seuls panneaux montrés. Scouts, Frame, Judges et Terrain n'en ont plus : les skills lancent
  * elles-mêmes leurs sous-agents, et un workflow place les siens sur une étape. Leurs listes restent
  * dans la topologie enregistrée — le processus principal les lit encore (`runtimeRoleSlots`) —,
- * l'écran ne propose simplement plus d'y déposer un modèle.
+ * l'écran ne propose simplement plus d'y mettre un modèle.
  */
 type Target = 'orchestrator' | 'subagents'
 
@@ -51,8 +57,9 @@ type CleAgentStudio = Parameters<ReturnType<typeof useTextesAgentStudio>['t']>[0
 /**
  * Ce que couvre chaque panneau : une paire (intitulé, explication) par ligne. Chaque fait est lu
  * dans le processus principal, pas supposé — sans panel scout ni judge, ces rôles se replient sur
- * `subagents[0]`, lui-même sur l'orchestrateur (`runtimeRoleSlots`) ; toute autre étape tombe sur
- * les sous-agents (`bindingDeRepliPourPhase`) ; les agents qu'un workflow pose sur un nœud priment
+ * `subagents[0]`, lui-même sur l'orchestrateur (`runtimeRoleSlots`) ; avec plusieurs sous-agents,
+ * scout, frame, terrain et judge tournent sur TOUS (`runtimeFanOutSlots`) ; toute autre étape tombe
+ * sur le premier sous-agent (`bindingDeRepliPourPhase`) ; les agents qu'un workflow pose sur un nœud priment
  * (`resolvePhaseFanOut`) ; et les sous-agents qu'une skill lance d'elle-même ne reçoivent que le
  * `--model` de l'agent qui la joue (`appendClaudeSelectionArgs`). Changer l'un de ces
  * comportements, c'est changer ce texte.
@@ -75,11 +82,56 @@ const COUVERTURE: Readonly<
 }
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
 
-const DRAG_TYPE = 'application/x-autowin-model'
-
-function ModelMark({ provider }: { provider: string }): React.JSX.Element {
+/**
+ * Le menu de modèle d'un rôle : le même que « Modèle des petites tâches » (et que l'en-tête du chat).
+ * Composant à part, hors de la vue : défini dedans, il serait recréé à chaque rendu et refermerait
+ * le menu ouvert.
+ */
+function MenuDeRole({
+  idBase,
+  binding,
+  models,
+  modelsById,
+  statuses,
+  pending,
+  libelle,
+  aide,
+  onSelect
+}: {
+  idBase: string
+  binding: SlotBinding | null
+  models: ImportedModel[]
+  modelsById: Map<string, ImportedModel>
+  statuses: OrchestratorProviderStatus[] | undefined
+  pending: boolean
+  libelle: string
+  aide: string
+  onSelect: (option: OrchestratorModelOption) => void
+}): React.JSX.Element {
+  const model = binding ? modelsById.get(binding.modelId) : undefined
   return (
-    <i className={`topology-model-mark is-${provider}`}>{provider.slice(0, 1).toUpperCase()}</i>
+    <OrchestratorModelSelector
+      busy={false}
+      catalogLoaded
+      models={models}
+      statuses={statuses}
+      binding={
+        binding
+          ? {
+              provider: binding.provider,
+              model: model?.model ?? binding.modelId,
+              reasoningEffort: binding.reasoningEffort
+            }
+          : null
+      }
+      pending={pending}
+      // Les échecs d'écriture ont leur badge en tête de vue : pas de second message par menu.
+      error={null}
+      onSelect={onSelect}
+      idBase={idBase}
+      libelle={libelle}
+      aide={aide}
+    />
   )
 }
 
@@ -98,8 +150,12 @@ export function AgentsTopologyView({
   const { t } = useTextesAgentStudio()
   const [models, setModels] = useState<ImportedModel[]>([])
   const [topology, setTopology] = useState<AgentTopology | null>(null)
-  const [selectedModelId, setSelectedModelId] = useState('')
-  const [dropTarget, setDropTarget] = useState('')
+  /** États de connexion des providers : le menu refuse un modèle qu'on ne peut pas joindre. */
+  const [statuses, setStatuses] = useState<OrchestratorProviderStatus[] | undefined>(undefined)
+  /** Ligne « nouveau sous-agent » ouverte : son menu attend un choix, rien n'est encore écrit. */
+  const [ajoutOuvert, setAjoutOuvert] = useState(false)
+  /** Le menu dont le choix est en cours d'écriture : lui seul tourne, les autres restent libres. */
+  const [slotEnCours, setSlotEnCours] = useState('')
   const [state, setState] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading')
   const [error, setError] = useState('')
   const [profiles, setProfiles] = useState<Profile[]>([])
@@ -138,13 +194,19 @@ export function AgentsTopologyView({
       .then(([catalog, current]) => {
         setModels(catalog)
         replaceTopology(current)
-        setSelectedModelId(catalog.find((model) => model.dynamicallyLoaded)?.id ?? '')
         setState('ready')
       })
       .catch((reason) => {
         setError(reason instanceof Error ? reason.message : String(reason))
         setState('error')
       })
+    // À part : un statut illisible laisse simplement tous les modèles choisissables, comme avant —
+    // il ne doit pas empêcher la topologie de s'afficher.
+    void Promise.resolve(window.api.providerStatus?.())
+      .then((liste) => {
+        if (Array.isArray(liste)) setStatuses(liste as OrchestratorProviderStatus[])
+      })
+      .catch(() => setStatuses(undefined))
   }, [reloadKey])
   /**
    * LA VUE RESTE MONTÉE QUAND ON LA QUITTE (App.tsx, `visitedTabs`) et n'écoute les changements de
@@ -238,7 +300,6 @@ export function AgentsTopologyView({
   // Même dérivation que Routage, désormais définie une seule fois (`model-library`) : c'est cette
   // vue qui faisait référence, elle garde donc exactement son comportement.
   const sortedModels = useMemo(() => libraryModels(models), [models])
-  const selectedModel = modelsById.get(selectedModelId)
   /**
    * Un slot dont le `modelId` n'existe plus au catalogue (modèle désimporté, id périmé) s'affichait
    * comme un modèle valide — `model?.label ?? slot.modelId` rend l'identifiant brut, indiscernable
@@ -259,9 +320,10 @@ export function AgentsTopologyView({
   }, [topology, models, modelsById])
   const topologyDirty = appliedFingerprint !== '' && JSON.stringify(topology) !== appliedFingerprint
 
-  async function persist(next: AgentTopology): Promise<void> {
+  async function persist(next: AgentTopology, slotId = ''): Promise<void> {
     const version = ++persistVersionRef.current
     replaceTopology(next)
+    setSlotEnCours(slotId)
     setState('saving')
     setError('')
     const request = persistQueueRef.current.then(() => window.api.setTopology(next))
@@ -273,73 +335,86 @@ export function AgentsTopologyView({
       const saved = await request
       if (version === persistVersionRef.current) {
         replaceTopology(saved)
+        setSlotEnCours('')
         setState('ready')
       }
     } catch (reason) {
       if (version === persistVersionRef.current) {
+        setSlotEnCours('')
         setError(reason instanceof Error ? reason.message : String(reason))
         setState('error')
       }
     }
   }
 
-  function bindingFor(model: ImportedModel, slotId: string): SlotBinding {
-    return {
-      slotId,
-      provider: model.provider,
-      modelId: model.id,
-      reasoningEffort: model.defaultReasoningEffort
-    }
+  /**
+   * Le choix du menu (provider + modèle + effort) devient un emplacement de la topologie. Le menu
+   * rend le nom de TRANSPORT du modèle (`option.model`) ; la topologie, elle, range l'identifiant du
+   * catalogue (`model.id`). Un effort que le modèle ne propose pas retombe sur son effort par défaut.
+   */
+  function bindingFromOption(option: OrchestratorModelOption, slotId: string): SlotBinding | null {
+    const model =
+      sortedModels.find((m) => m.provider === option.provider && m.model === option.model) ??
+      models.find((m) => m.provider === option.provider && m.model === option.model)
+    if (!model) return null
+    const effort =
+      option.reasoningEffort && model.reasoningEfforts.includes(option.reasoningEffort)
+        ? option.reasoningEffort
+        : model.defaultReasoningEffort
+    return { slotId, provider: model.provider, modelId: model.id, reasoningEffort: effort }
   }
 
-  function modelFromDrop(event: React.DragEvent): ImportedModel | undefined {
-    const modelId = event.dataTransfer.getData(DRAG_TYPE)
-    return modelsById.get(modelId)
+  /** Le même modèle au même effort ferait deux fois le même passage : refusé, et DIT. */
+  function estDoublon(slots: SlotBinding[], binding: SlotBinding): boolean {
+    return slots.some(
+      (slot) =>
+        slot.slotId !== binding.slotId &&
+        slot.modelId === binding.modelId &&
+        slot.reasoningEffort === binding.reasoningEffort
+    )
   }
 
-  function assign(model: ImportedModel | undefined, target: Target, slotId?: string): void {
+  /** Remplace le modèle d'un emplacement existant (orchestrateur ou un sous-agent). */
+  function choisir(target: Target, slotId: string, option: OrchestratorModelOption): void {
     const current = topologyRef.current
-    if (!model || !current) return
-    // Le fan-out des sous-agents n'est pas branché : un 2e slot était persisté puis étiqueté « non
-    // actif ». On refuse le dépôt inerte plutôt que d'enregistrer une configuration sans effet.
-    if (target === 'subagents' && !slotId && current.subagents.length >= 1) {
-      // Canal PROPRE : un refus de validation n'est pas un échec d'écriture. En passant par
-      // `state = 'error'`, il maquillait le badge de persistance en panne jusqu'au prochain
-      // enregistrement, alors que la topologie persistée était intacte.
-      setValidationError(t('topo.erreur.fanout'))
+    if (!current) return
+    const binding = bindingFromOption(option, slotId)
+    if (!binding) return
+    if (target === 'subagents' && estDoublon(current.subagents, binding)) {
+      setValidationError(t('topo.sousAgents.doublon'))
       return
     }
     setValidationError('')
-    const id = target === 'orchestrator' ? 'orchestrator' : (slotId ?? nextSubagentSlotId(current))
-    const binding = bindingFor(model, id)
     const next =
       target === 'orchestrator'
         ? { ...current, orchestrator: binding }
-        : { ...current, subagents: replaceOrAppend(current.subagents, binding) }
-    void persist(next)
+        : {
+            ...current,
+            subagents: current.subagents.map((slot) => (slot.slotId === slotId ? binding : slot))
+          }
+    void persist(next, slotId)
   }
 
-  function replaceOrAppend(slots: SlotBinding[], binding: SlotBinding): SlotBinding[] {
-    return slots.some((slot) => slot.slotId === binding.slotId)
-      ? slots.map((slot) => (slot.slotId === binding.slotId ? binding : slot))
-      : [...slots, binding]
-  }
-
-  function updateSlot(target: Target, slotId: string, patch: Partial<SlotBinding>): void {
+  /** Ajoute un sous-agent : la ligne « nouveau » n'écrit rien tant qu'aucun modèle n'est choisi. */
+  function ajouter(option: OrchestratorModelOption): void {
     const current = topologyRef.current
     if (!current) return
-    const update = (slot: SlotBinding): SlotBinding =>
-      slot.slotId === slotId ? { ...slot, ...patch } : slot
-    const next =
-      target === 'orchestrator'
-        ? { ...current, orchestrator: update(current.orchestrator) }
-        : { ...current, subagents: current.subagents.map(update) }
-    void persist(next)
+    const slotId = nextSubagentSlotId(current)
+    const binding = bindingFromOption(option, slotId)
+    if (!binding) return
+    if (estDoublon(current.subagents, binding)) {
+      setValidationError(t('topo.sousAgents.doublon'))
+      return
+    }
+    setValidationError('')
+    setAjoutOuvert(false)
+    void persist({ ...current, subagents: [...current.subagents, binding] }, slotId)
   }
 
   function removeSubagent(slotId: string): void {
     const current = topologyRef.current
     if (!current) return
+    setValidationError('')
     void persist({
       ...current,
       subagents: current.subagents.filter((slot) => slot.slotId !== slotId)
@@ -354,40 +429,22 @@ export function AgentsTopologyView({
   function renderTargetPanel({
     target,
     title,
-    description,
-    accent
+    description
   }: {
     target: Target
     title: string
     description: string
-    accent: string
   }): React.JSX.Element {
     const slots = slotsFor(target)
-    const panelId = `panel:${target}`
     return (
       <section
-        className={`topology-panel is-${accent}${dropTarget === panelId ? ' is-drop-target' : ''}`}
+        className="router-default topology-panel"
         data-target={target}
-        onDragOver={(event) => {
-          event.preventDefault()
-          setDropTarget(panelId)
-        }}
-        onDragLeave={() => setDropTarget('')}
-        onDrop={(event) => {
-          event.preventDefault()
-          setDropTarget('')
-          assign(modelFromDrop(event), target)
-        }}
+        data-testid={`topology-panel-${target}`}
       >
         <header>
-          <div>
-            <span>
-              {target === 'orchestrator' ? t('topo.rang.orchestrateur') : t('topo.rang.sousAgents')}
-            </span>
-            <h3>{title}</h3>
-            <p>{description}</p>
-          </div>
-          <b>{slots.length}</b>
+          <h3>{title}</h3>
+          <small>{description}</small>
         </header>
         <CeQueCaCouvre
           id={`topologie-${target}`}
@@ -398,100 +455,114 @@ export function AgentsTopologyView({
             explication: t(explication)
           }))}
         />
-        <div className="topology-slots">
+        <div className="topology-lignes">
           {slots.map((slot, index) => {
             const model = modelsById.get(slot.modelId)
+            const introuvable = !model && models.length > 0
             return (
               <article
-                className={`topology-slot${!model && models.length > 0 ? ' is-unresolved' : ''}`}
+                className={`topology-ligne${introuvable ? ' is-unresolved' : ''}`}
                 key={slot.slotId}
                 data-slot-id={slot.slotId}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  assign(modelFromDrop(event), target, slot.slotId)
-                }}
               >
-                <ModelMark provider={slot.provider} />
-                <div className="topology-slot-copy">
-                  <small>{slot.slotId}</small>
-                  <strong>
-                    {model ? shortModelLabel(model.label, model.provider) : slot.modelId}
-                  </strong>
-                  <span>
-                    {slot.provider} · {model?.model ?? slot.modelId}
-                  </span>
-                  {!model && models.length > 0 && (
-                    <b
-                      className="slot-unresolved"
-                      data-testid={`slot-unresolved-${slot.slotId}`}
-                      title={t('topo.slot.introuvableTitre', { modele: slot.modelId })}
-                    >
-                      {t('topo.slot.introuvable')}
-                    </b>
-                  )}
-                </div>
-                <label>
-                  {/* « Effort » : le même mot en anglais. */}
-                  Effort
-                  <select
-                    value={slot.reasoningEffort}
-                    onChange={(event) =>
-                      updateSlot(target, slot.slotId, { reasoningEffort: event.target.value })
-                    }
+                <MenuDeRole
+                  idBase={`topology-modele-${slot.slotId}`}
+                  binding={slot}
+                  models={sortedModels}
+                  modelsById={modelsById}
+                  statuses={statuses}
+                  pending={state === 'saving' && slotEnCours === slot.slotId}
+                  libelle={
+                    target === 'orchestrator'
+                      ? t('topo.orchestrateur.titre')
+                      : t('topo.sousAgents.libelle', { n: index + 1 })
+                  }
+                  aide={
+                    target === 'orchestrator'
+                      ? t('topo.orchestrateur.aide')
+                      : t('topo.sousAgents.aide')
+                  }
+                  onSelect={(option) => choisir(target, slot.slotId, option)}
+                />
+                {introuvable && (
+                  <b
+                    className="slot-unresolved"
+                    data-testid={`slot-unresolved-${slot.slotId}`}
+                    title={t('topo.slot.introuvableTitre', { modele: slot.modelId })}
                   >
-                    {(model?.reasoningEfforts ?? [slot.reasoningEffort]).map((effort) => (
-                      <option key={effort}>{effort}</option>
-                    ))}
-                  </select>
-                </label>
-                {target !== 'orchestrator' && (
+                    {t('topo.slot.introuvable')}
+                  </b>
+                )}
+                {/* Avec plusieurs sous-agents, seul le premier écrit le code (runtimeFanOutSlots). */}
+                {target === 'subagents' && index === 0 && slots.length > 1 && (
+                  <em
+                    className="topology-ligne-role"
+                    title={t('topo.sousAgents.premierTitre')}
+                    data-testid="topology-premier-sous-agent"
+                  >
+                    {t('topo.sousAgents.premier')}
+                  </em>
+                )}
+                {target === 'subagents' && (
                   <button
                     type="button"
+                    className="topology-ligne-retirer"
                     title={t('topo.slot.retirer')}
+                    aria-label={t('topo.slot.retirer')}
+                    data-testid={`topology-retirer-${slot.slotId}`}
                     onClick={() => removeSubagent(slot.slotId)}
                   >
                     ×
                   </button>
                 )}
-                {index === 0 && (
-                  <em>
-                    {target === 'orchestrator' ? t('topo.slot.actif') : t('topo.slot.roleRuntime')}
-                  </em>
-                )}
-                {/* Le fan-out des sous-agents n'est pas branché : seul le 1er slot alimente les
-                    phases d'exécution ; un slot de plus (topologie ancienne) est marqué non actif. */}
-                {index > 0 && (
-                  <em className="slot-inactive" title={t('topo.slot.inactifTitre')}>
-                    {t('topo.slot.inactif')}
-                  </em>
-                )}
               </article>
             )
           })}
-          {slots.length === 0 && <div className="topology-empty">{t('topo.vide')}</div>}
+          {target === 'subagents' && ajoutOuvert && (
+            <article className="topology-ligne is-nouveau" data-slot-id="nouveau">
+              <MenuDeRole
+                idBase="topology-modele-nouveau"
+                binding={null}
+                models={sortedModels}
+                modelsById={modelsById}
+                statuses={statuses}
+                pending={false}
+                libelle={t('topo.sousAgents.libelle', { n: slots.length + 1 })}
+                aide={t('topo.sousAgents.aide')}
+                onSelect={(option) => ajouter(option)}
+              />
+              <button
+                type="button"
+                className="topology-ligne-retirer"
+                title={t('topo.profil.annuler')}
+                aria-label={t('topo.profil.annuler')}
+                data-testid="topology-ajout-annuler"
+                onClick={() => {
+                  setAjoutOuvert(false)
+                  setValidationError('')
+                }}
+              >
+                ×
+              </button>
+            </article>
+          )}
+          {target === 'subagents' && slots.length === 0 && !ajoutOuvert && (
+            <p className="router-hint" data-testid="topology-sous-agents-vide">
+              {t('topo.sousAgents.vide')}
+            </p>
+          )}
         </div>
-        <button
-          type="button"
-          className="topology-assign-button"
-          data-testid={`topology-add-${target}`}
-          disabled={
-            !selectedModel ||
-            (target === 'orchestrator' && slots.length > 0) ||
-            (target === 'subagents' && slots.length > 0)
-          }
-          title={
-            target === 'subagents' && slots.length > 0 ? t('topo.ajouter.fanoutTitre') : undefined
-          }
-          onClick={() => assign(selectedModel, target)}
-        >
-          {target === 'orchestrator'
-            ? t('topo.ajouter.remplacer')
-            : target === 'subagents' && slots.length > 0
-              ? t('topo.ajouter.fanout')
-              : t('topo.ajouter.ajouter')}
-        </button>
+        {target === 'subagents' && !ajoutOuvert && (
+          <button
+            type="button"
+            className="router-petites-taches-reset topology-ajouter"
+            data-testid="topology-add-subagents"
+            disabled={sortedModels.length === 0}
+            onClick={() => setAjoutOuvert(true)}
+          >
+            {t('topo.sousAgents.ajouter')}
+          </button>
+        )}
       </section>
     )
   }
@@ -688,84 +759,19 @@ export function AgentsTopologyView({
         </p>
       )}
 
-      <aside className="topology-library">
-        <span className="topology-eyebrow">{t('topo.biblio.eyebrow')}</span>
-        <p>{t('topo.biblio.aide')}</p>
-        {sortedModels.some((model) => model.provider === 'gemini') && (
-          <button
-            type="button"
-            className="topology-provider-login"
-            onClick={() =>
-              // Sans ce retour, un échec de lancement du login (spawn du terminal OAuth impossible)
-              // était totalement silencieux : l'utilisateur attend une fenêtre qui ne viendra pas.
-              void window.api.providerLogin('gemini').catch((reason: unknown) => {
-                // Même défaut que le rafraîchissement : sans `state = 'error'`, le message posé
-                // n'était jamais rendu et le bouton semblait sans effet.
-                setError(
-                  t('topo.gemini.erreur', {
-                    raison: reason instanceof Error ? reason.message : String(reason)
-                  })
-                )
-                setState('error')
-              })
-            }
-          >
-            {t('topo.gemini.connecter')}
-          </button>
-        )}
-        <div className="topology-models">
-          {sortedModels.map((model) => (
-            <button
-              type="button"
-              draggable
-              key={model.id}
-              className={`topology-model${selectedModelId === model.id ? ' is-selected' : ''}`}
-              onClick={() => setSelectedModelId(model.id)}
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = 'copy'
-                event.dataTransfer.setData(DRAG_TYPE, model.id)
-                setSelectedModelId(model.id)
-              }}
-            >
-              <ModelMark provider={model.provider} />
-              <span>
-                <strong>{shortModelLabel(model.label, model.provider)}</strong>
-                <small>
-                  {model.provider}
-                  {(() => {
-                    // 'none' n'est pas un niveau : on ne l'affiche jamais comme effort.
-                    const efforts = model.reasoningEfforts.filter((effort) => effort !== 'none')
-                    return efforts.length > 0
-                      ? t('topo.modele.efforts', { liste: efforts.join(', ') })
-                      : ''
-                  })()}
-                </small>
-              </span>
-            </button>
-          ))}
-        </div>
-        <div className="topology-authority-note">
-          <b>{t('topo.autorite.titre')}</b>
-          <span>{t('topo.autorite.main')}</span>
-          <span>{t('topo.autorite.fanout')}</span>
-        </div>
-      </aside>
-
+      {/* Chaque rôle se règle par son menu de modèle, le même que « Modèle des petites tâches » :
+          un seul geste à connaître dans tout Agent Studio. */}
       <main className="topology-workspace">
-        <div className="topology-primary">
-          {renderTargetPanel({
-            target: 'orchestrator',
-            title: t('topo.orchestrateur.titre'),
-            description: t('topo.orchestrateur.description'),
-            accent: 'gold'
-          })}
-          {renderTargetPanel({
-            target: 'subagents',
-            title: t('topo.sousAgents.titre'),
-            description: t('topo.sousAgents.description'),
-            accent: 'cyan'
-          })}
-        </div>
+        {renderTargetPanel({
+          target: 'orchestrator',
+          title: t('topo.orchestrateur.titre'),
+          description: t('topo.orchestrateur.description')
+        })}
+        {renderTargetPanel({
+          target: 'subagents',
+          title: t('topo.sousAgents.titre'),
+          description: t('topo.sousAgents.description')
+        })}
         <div className="topology-runtime-limit">
           <b>{t('topo.runtime.titre')}</b>
           <span>

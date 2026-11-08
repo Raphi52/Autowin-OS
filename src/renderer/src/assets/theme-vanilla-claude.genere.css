@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs vanilla-claude -- ne pas modifier a la main.
    Theme « Vanilla Claude » : les regles de la base claire qui ecrivent une couleur en dur, transposees
    vers Claude clair (or et rose -> terracotta, bleus, cyans, violets et gris bleutes -> gris chauds).
-   55 regles, 104 declarations. Voir genererVanillaClaude. */
+   54 regles, 103 declarations. Voir genererVanillaClaude. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='vanilla-claude'][data-base='clair'] .topology-runtime-limit {
@@ -11,9 +11,6 @@
 }
 :root[data-theme='vanilla-claude'][data-base='clair'] .topology-runtime-limit b {
     color: rgb(184, 182, 172)
-}
-:root[data-theme='vanilla-claude'][data-base='clair'] .topology-panel > header > b {
-    background: rgba(27, 26, 23, 0.05)
 }
 :root[data-theme='vanilla-claude'][data-base='clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
     border-color: rgba(139, 58, 31, 0.6)

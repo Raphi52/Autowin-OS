@@ -18,6 +18,28 @@ export function runtimeRoleSlots(topology: AgentTopology): Record<Role, SlotBind
 }
 
 /**
+ * Les modèles des étapes qui savent tourner sur PLUSIEURS modèles à la fois (scout, frame, terrain :
+ * un passage par modèle puis une synthèse ; judge : un vote par modèle).
+ *
+ * Agent Studio laisse mettre plusieurs modèles dans le bloc Sous-agents. Seul le premier écrit le
+ * code (build, clean) : deux modèles qui modifient les mêmes fichiers en même temps se marchent
+ * dessus. Les autres étapes, elles, tournent sur tous. Un seul sous-agent ne change rien : il garde
+ * le chemin à un modèle (chaîne de session comprise). Un panneau d'étape déjà réglé garde la main.
+ */
+export function runtimeFanOutSlots(
+  topology: AgentTopology
+): Record<'scout' | 'frame' | 'terrain' | 'judge', SlotBinding[]> {
+  const sousAgents = topology.subagents.length >= 2 ? topology.subagents : []
+  const ou = (panel: SlotBinding[]): SlotBinding[] => (panel.length > 0 ? panel : sousAgents)
+  return {
+    scout: ou(topology.panels.scout),
+    frame: ou(topology.panels.frame),
+    terrain: ou(topology.panels.terrain),
+    judge: ou(topology.panels.judge)
+  }
+}
+
+/**
  * Résout un slot en binding runtime sans perdre la sélection si le catalogue dynamique est hors
  * ligne. Les ids canoniques locaux sont `${provider}/${transport}` : le suffixe persistant est donc
  * une preuve plus fidèle que l'ancien roles.json, qui peut viser un tout autre provider.

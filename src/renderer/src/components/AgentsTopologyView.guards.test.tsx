@@ -7,7 +7,7 @@ import { AgentsTopologyView } from './AgentsTopologyView'
 /**
  * Les garde-fous de la vue Models : ce qui empêche d'enregistrer, d'appliquer ou de rester bloqué
  * sur une configuration qui ne veut rien dire. Chaque test part d'un défaut réel constaté à la
- * lecture du code (slot fantôme, fan-out inerte, écrasement muet, vue morte).
+ * lecture du code (slot fantôme, doublon, écrasement muet, vue morte).
  */
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -20,7 +20,17 @@ const models = [
     model: 'gpt',
     label: 'GPT',
     reasoningEfforts: ['low', 'medium', 'high'],
-    defaultReasoningEffort: 'medium'
+    defaultReasoningEffort: 'medium',
+    dynamicallyLoaded: true
+  },
+  {
+    id: 'gpt-mini',
+    provider: 'openai',
+    model: 'gpt-mini',
+    label: 'GPT mini',
+    reasoningEfforts: ['low', 'medium', 'high'],
+    defaultReasoningEffort: 'medium',
+    dynamicallyLoaded: true
   }
 ]
 
@@ -60,6 +70,24 @@ function api(over: Record<string, unknown>): void {
 
 const monter = async (): Promise<void> => {
   await act(async () => root.render(createElement(AgentsTopologyView)))
+  await flush()
+}
+
+/** Le geste réel : ouvrir le menu de modèle d'un rôle, puis cliquer un point modèle × effort. */
+async function choisirDansLeMenu(idBase: string, ligne: string, effort: string): Promise<void> {
+  const menu = container.querySelector<HTMLDetailsElement>(`details[data-testid="${idBase}"]`)
+  expect(menu).not.toBeNull()
+  await act(async () => {
+    menu!.open = true
+    menu!.dispatchEvent(new Event('toggle'))
+  })
+  const cran = document.body.querySelector<HTMLButtonElement>(
+    `[data-testid="effort-matrix"] [data-row="${ligne}"] [data-effort="${effort}"]`
+  )
+  expect(cran).not.toBeNull()
+  await act(async () => cran!.click())
+  // Le clic referme le menu : on rejoue l'événement que le navigateur émet alors.
+  await act(async () => menu!.dispatchEvent(new Event('toggle')))
   await flush()
 }
 
@@ -132,20 +160,70 @@ describe('slot pointant un modèle absent du catalogue', () => {
   })
 })
 
-describe('fan-out des sous-agents', () => {
-  it('refuse le dépôt inerte au lieu de le persister puis de l’étiqueter « non actif »', async () => {
-    // Défaut : un 2e sous-agent était ENREGISTRÉ puis marqué « non actif ». On écrivait donc une
-    // configuration sans effet au runtime — la persistance mentait sur ce qui allait tourner.
+describe('plusieurs modèles de sous-agents', () => {
+  it('ajoute un second modèle par le menu, sans glisser-déposer, et l’enregistre', async () => {
     const setTopology = vi.fn(async (next: unknown) => next)
     api({ setTopology })
     await monter()
 
-    const ajouter = container.querySelector<HTMLButtonElement>(
-      '[data-testid="topology-add-subagents"]'
-    )!
-    expect(ajouter.disabled).toBe(true)
-    expect(ajouter.textContent).toContain('Fan-out non branché')
+    // Aucune bibliothèque à gauche ni zone de dépôt : le rôle se règle par son menu.
+    expect(container.querySelector('.topology-library')).toBeNull()
+    expect(container.querySelector('[draggable="true"]')).toBeNull()
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-add-subagents"]')!.click()
+    )
+    // Ouvrir la ligne n'écrit rien tant qu'aucun modèle n'est choisi.
     expect(setTopology).not.toHaveBeenCalled()
+    await choisirDansLeMenu('topology-modele-nouveau', 'openai:gpt-mini', 'high')
+
+    expect(setTopology).toHaveBeenCalledTimes(1)
+    const enregistre = setTopology.mock.calls[0][0] as {
+      subagents: Array<{ slotId: string; modelId: string; reasoningEffort: string }>
+    }
+    expect(enregistre.subagents).toEqual([
+      { slotId: 'subagent-1', provider: 'openai', modelId: 'gpt', reasoningEffort: 'low' },
+      { slotId: 'subagent-2', provider: 'openai', modelId: 'gpt-mini', reasoningEffort: 'high' }
+    ])
+    // Avec deux sous-agents, l'écran dit lequel écrit le code.
+    expect(
+      container.querySelector('[data-testid="topology-premier-sous-agent"]')?.textContent
+    ).toBe('écrit le code')
+    expect(container.querySelector('[data-testid="topology-modele-subagent-2"]')).not.toBeNull()
+  })
+
+  it('retire un sous-agent par sa croix', async () => {
+    const setTopology = vi.fn(async (next: unknown) => next)
+    api({
+      setTopology,
+      topology: async () =>
+        topologie({
+          subagents: [
+            { slotId: 'subagent-1', provider: 'openai', modelId: 'gpt', reasoningEffort: 'low' },
+            {
+              slotId: 'subagent-2',
+              provider: 'openai',
+              modelId: 'gpt-mini',
+              reasoningEffort: 'high'
+            }
+          ]
+        })
+    })
+    await monter()
+
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="topology-retirer-subagent-1"]')!
+        .click()
+    )
+    await flush()
+
+    expect(setTopology).toHaveBeenCalledTimes(1)
+    expect(
+      (setTopology.mock.calls[0][0] as { subagents: Array<{ slotId: string }> }).subagents.map(
+        (slot) => slot.slotId
+      )
+    ).toEqual(['subagent-2'])
   })
 })
 
@@ -241,36 +319,6 @@ describe('échecs qui doivent être VUS', () => {
     expect(alertes.join(' | ')).toContain('topologie illisible')
   })
 
-  it('affiche l’échec du lancement du login Gemini', async () => {
-    api({
-      models: async () => [
-        ...models,
-        {
-          id: 'gemini-pro',
-          provider: 'gemini',
-          model: 'gemini-pro',
-          label: 'Gemini Pro',
-          reasoningEfforts: ['medium'],
-          defaultReasoningEffort: 'medium',
-          dynamicallyLoaded: true
-        }
-      ],
-      providerLogin: vi.fn(async () => {
-        throw new Error('terminal indisponible')
-      })
-    })
-    await monter()
-
-    const bouton = container.querySelector<HTMLButtonElement>('.topology-provider-login')!
-    await act(async () => bouton.click())
-    await flush()
-
-    const alertes = Array.from(container.querySelectorAll('[role="alert"]')).map(
-      (node) => node.textContent ?? ''
-    )
-    expect(alertes.join(' | ')).toContain('terminal indisponible')
-  })
-
   it('dit que la liste des profils n’a pas pu être lue, et offre de réessayer', async () => {
     // Défaut : `.catch(() => undefined)` laissait un sélecteur vide, indiscernable d'un « aucun
     // profil enregistré ».
@@ -302,31 +350,25 @@ describe('échecs qui doivent être VUS', () => {
     ).toContain('Profil A')
   })
 
-  it('un dépôt REFUSÉ ne laisse pas le badge de persistance en erreur', async () => {
-    // Défaut : le refus de validation (fan-out sous-agents non branché) posait `state = 'error'`,
-    // polluant le badge de PERSISTANCE jusqu'au prochain enregistrement — alors que rien n'avait
-    // échoué à l'écriture.
-    api({})
+  it('un doublon REFUSÉ ne laisse pas le badge de persistance en erreur', async () => {
+    // Le même modèle au même effort ferait deux fois le même passage. Ce refus de validation ne
+    // doit pas maquiller le badge de PERSISTANCE en panne : rien n'a échoué à l'écriture.
+    const setTopology = vi.fn(async (next: unknown) => next)
+    api({ setTopology })
     await monter()
 
-    const panneau = container.querySelector<HTMLElement>(
-      '.topology-panel[data-target="subagents"]'
-    )!
-    const drop = new Event('drop', { bubbles: true, cancelable: true })
-    Object.defineProperty(drop, 'dataTransfer', {
-      value: { getData: () => 'gpt', setData: () => undefined }
-    })
-    await act(async () => {
-      panneau.dispatchEvent(drop)
-    })
-    await flush()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-add-subagents"]')!.click()
+    )
+    await choisirDansLeMenu('topology-modele-nouveau', 'openai:gpt', 'low')
 
+    expect(setTopology).not.toHaveBeenCalled()
     const badge = container.querySelector('.topology-state')!
     expect(badge.textContent).toBe('Enregistré dans le profil Autowin')
     // Le refus est dit, mais dans son PROPRE canal.
     expect(
       container.querySelector('[data-testid="topology-validation-error"]')?.textContent
-    ).toContain('fan-out des sous-agents')
+    ).toContain('déjà dans les sous-agents')
   })
 })
 

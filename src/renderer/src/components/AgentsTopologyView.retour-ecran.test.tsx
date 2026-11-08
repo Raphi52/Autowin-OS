@@ -23,7 +23,8 @@ const models = [
     model: 'claude-opus-5-5',
     label: 'Opus 5.5',
     reasoningEfforts: ['low', 'medium', 'high', 'xhigh'],
-    defaultReasoningEffort: 'high'
+    defaultReasoningEffort: 'high',
+    dynamicallyLoaded: true
   }
 ]
 
@@ -55,8 +56,24 @@ const rendre = async (active: boolean): Promise<void> => {
   await flush()
 }
 
-const valeursAffichees = (): string[] =>
-  Array.from(container.querySelectorAll('select')).map((select) => select.value)
+/** L'effort que montre le menu de l'orchestrateur : le point coché de sa grille modèle × effort. */
+const effortDeLOrchestrateur = async (): Promise<string | null | undefined> => {
+  const menu = container.querySelector<HTMLDetailsElement>(
+    'details[data-testid="topology-modele-orchestrator"]'
+  )!
+  await act(async () => {
+    menu.open = true
+    menu.dispatchEvent(new Event('toggle'))
+  })
+  const coche = document.body
+    .querySelector('[data-testid="effort-matrix"] [aria-checked="true"]')
+    ?.getAttribute('data-effort')
+  await act(async () => {
+    menu.open = false
+    menu.dispatchEvent(new Event('toggle'))
+  })
+  return coche
+}
 
 beforeEach(() => {
   container = document.createElement('div')
@@ -84,14 +101,13 @@ describe('Agents Studio — retour à l’écran', () => {
     }
 
     await rendre(true)
-    expect(valeursAffichees()).toContain('xhigh')
+    expect(await effortDeLOrchestrateur()).toBe('xhigh')
 
     await rendre(false)
     effortCourant = 'high' // posé depuis l'en-tête d'un chat pendant que la vue est cachée
     await rendre(true)
 
-    expect(valeursAffichees()).toContain('high')
-    expect(valeursAffichees()).not.toContain('xhigh')
+    expect(await effortDeLOrchestrateur()).toBe('high')
   })
 
   it('le premier montage ne lit la topologie qu’une fois', async () => {

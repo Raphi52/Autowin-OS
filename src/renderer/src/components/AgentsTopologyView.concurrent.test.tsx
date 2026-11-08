@@ -43,7 +43,8 @@ const models = [
     model: 'gpt',
     label: 'GPT',
     reasoningEfforts: ['low', 'medium', 'high'],
-    defaultReasoningEffort: 'medium'
+    defaultReasoningEffort: 'medium',
+    dynamicallyLoaded: true
   }
 ]
 
@@ -65,6 +66,28 @@ const flush = (): Promise<void> =>
     await Promise.resolve()
     await Promise.resolve()
   })
+
+/** Ouvre le menu de modèle d'un rôle (même menu que « Modèle des petites tâches »). */
+async function ouvrirMenu(idBase: string): Promise<HTMLDetailsElement> {
+  const menu = container.querySelector<HTMLDetailsElement>(`details[data-testid="${idBase}"]`)
+  expect(menu).not.toBeNull()
+  await act(async () => {
+    menu!.open = true
+    menu!.dispatchEvent(new Event('toggle'))
+  })
+  return menu!
+}
+
+/** Le geste réel : un point de la grille modèle × effort, puis le menu se referme. */
+async function choisirDansLeMenu(idBase: string, ligne: string, effort: string): Promise<void> {
+  const menu = await ouvrirMenu(idBase)
+  const cran = document.body.querySelector<HTMLButtonElement>(
+    `[data-testid="effort-matrix"] [data-row="${ligne}"] [data-effort="${effort}"]`
+  )
+  expect(cran).not.toBeNull()
+  await act(async () => cran!.click())
+  await act(async () => menu.dispatchEvent(new Event('toggle')))
+}
 
 beforeEach(() => {
   container = document.createElement('div')
@@ -92,17 +115,8 @@ describe('AgentsTopologyView orchestrator persistence', () => {
     await act(async () => root.render(createElement(AgentsTopologyView)))
     await flush()
 
-    const effort = container.querySelector<HTMLSelectElement>(
-      '[data-target="orchestrator"] .topology-slot select'
-    )
-    expect(effort).not.toBeNull()
-
-    await act(async () => {
-      effort!.value = 'high'
-      effort!.dispatchEvent(new Event('change', { bubbles: true }))
-      effort!.value = 'low'
-      effort!.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    await choisirDansLeMenu('topology-modele-orchestrator', 'openai:gpt', 'high')
+    await choisirDansLeMenu('topology-modele-orchestrator', 'openai:gpt', 'low')
 
     expect(setTopology).toHaveBeenCalledTimes(1)
     topologySaves[0].resolve(setTopology.mock.calls[0][0])
@@ -112,7 +126,13 @@ describe('AgentsTopologyView orchestrator persistence', () => {
     expect(setTopology.mock.calls[1][0].orchestrator.reasoningEffort).toBe('low')
     topologySaves[1].resolve(setTopology.mock.calls[1][0])
     await flush()
-    expect(effort!.value).toBe('low')
+    // Le menu montre le dernier choix enregistré.
+    await ouvrirMenu('topology-modele-orchestrator')
+    expect(
+      document.body
+        .querySelector('[data-testid="effort-matrix"] [aria-checked="true"]')
+        ?.getAttribute('data-effort')
+    ).toBe('low')
   })
 })
 
@@ -148,7 +168,7 @@ describe('AgentsTopologyView concurrent persistence', () => {
     }
   })
 
-  it('shows only dynamically loaded models in the Agent Studio library', async () => {
+  it('le menu de modèle ne propose que les modèles découverts', async () => {
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
       models: async () => [
         {
@@ -163,7 +183,8 @@ describe('AgentsTopologyView concurrent persistence', () => {
           id: 'declared-gemini',
           provider: 'gemini',
           model: 'declared-gemini',
-          label: 'Declared Gemini'
+          label: 'Declared Gemini',
+          dynamicallyLoaded: false
         },
         {
           ...models[0],
@@ -183,53 +204,11 @@ describe('AgentsTopologyView concurrent persistence', () => {
     await act(async () => root.render(createElement(AgentsTopologyView)))
     await flush()
 
-    const labels = [...container.querySelectorAll('.topology-models .topology-model strong')].map(
-      (element) => element.textContent
-    )
-    expect(labels).toEqual(['Dynamic GPT'])
-  })
-
-  it('trie la bibliothèque alphabétiquement par nom affiché', async () => {
-    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
-      models: async () => [
-        {
-          ...models[0],
-          id: 'codex/gpt-5.6',
-          provider: 'codex',
-          model: 'gpt-5.6',
-          label: 'Zulu 10',
-          dynamicallyLoaded: true
-        },
-        {
-          ...models[0],
-          id: 'claude/fable-5',
-          provider: 'claude',
-          model: 'claude-fable-5',
-          label: 'alpha 2',
-          dynamicallyLoaded: true
-        },
-        {
-          ...models[0],
-          id: 'ollama/eclair-3',
-          provider: 'ollama',
-          model: 'eclair-3',
-          label: 'Éclair 3',
-          dynamicallyLoaded: true
-        }
-      ],
-      topology: async () => topology,
-      roles: async () => ({ orchestrator: { provider: 'codex', model: 'gpt-5.6' } }),
-      profiles: async () => [],
-      onAppEvent: () => () => undefined
-    }
-
-    await act(async () => root.render(createElement(AgentsTopologyView)))
-    await flush()
-
-    const labels = [...container.querySelectorAll('.topology-models .topology-model strong')].map(
-      (element) => element.textContent
-    )
-    expect(labels).toEqual(['alpha 2', 'Éclair 3', 'Zulu 10'])
+    await ouvrirMenu('topology-modele-orchestrator')
+    const lignes = [
+      ...document.body.querySelectorAll('[data-testid="effort-matrix"] .effort-matrix-row')
+    ].map((ligne) => ligne.getAttribute('data-row'))
+    expect(lignes).toEqual(['openai:dynamic-gpt'])
   })
 
   it('affiche le rejet de saveProfile dans l’alerte, sans rejet non géré', async () => {
@@ -335,17 +314,8 @@ describe('AgentsTopologyView concurrent persistence', () => {
     await act(async () => root.render(createElement(AgentsTopologyView)))
     await flush()
 
-    const efforts = container.querySelectorAll<HTMLSelectElement>(
-      '[data-target="subagents"] .topology-slot select'
-    )
-    expect(efforts).toHaveLength(2)
-
-    await act(async () => {
-      efforts[0].value = 'high'
-      efforts[0].dispatchEvent(new Event('change', { bubbles: true }))
-      efforts[1].value = 'low'
-      efforts[1].dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    await choisirDansLeMenu('topology-modele-subagent-1', 'openai:gpt', 'medium')
+    await choisirDansLeMenu('topology-modele-subagent-2', 'openai:gpt', 'low')
 
     expect(setTopology).toHaveBeenCalledTimes(1)
     saves[0].resolve(setTopology.mock.calls[0][0])
@@ -353,7 +323,7 @@ describe('AgentsTopologyView concurrent persistence', () => {
 
     expect(setTopology).toHaveBeenCalledTimes(2)
     expect(setTopology.mock.calls[1][0].subagents.map((slot) => slot.reasoningEffort)).toEqual([
-      'high',
+      'medium',
       'low'
     ])
 

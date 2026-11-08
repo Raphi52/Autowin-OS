@@ -2,69 +2,22 @@
    Plancher de 13px pour tout texte ecrit sous 12px, et texte plein pour tout gris ecrit en dur, themes malvoyants seulement. */
 
 /* components/AgentsTopologyView.css — tailles */
-:root[data-theme^='malvoyant-'] .topology-eyebrow,
-:root[data-theme^='malvoyant-'] .topology-panel > header span,
-:root[data-theme^='malvoyant-'] .topology-parallel-heading span,
 :root[data-theme^='malvoyant-'] .topology-toolbar p,
 :root[data-theme^='malvoyant-'] .topology-profiles select,
 :root[data-theme^='malvoyant-'] .topology-state,
-:root[data-theme^='malvoyant-'] .topology-library > p,
-:root[data-theme^='malvoyant-'] .topology-model strong,
-:root[data-theme^='malvoyant-'] .topology-model small,
-:root[data-theme^='malvoyant-'] .topology-authority-note,
-:root[data-theme^='malvoyant-'] .topology-authority-note b,
-:root[data-theme^='malvoyant-'] .topology-panel > header p,
-:root[data-theme^='malvoyant-'] .topology-panel > header b,
-:root[data-theme^='malvoyant-'] .topology-slot-copy small,
-:root[data-theme^='malvoyant-'] .topology-slot-copy strong,
-:root[data-theme^='malvoyant-'] .topology-slot-copy span,
-:root[data-theme^='malvoyant-'] .topology-slot label,
-:root[data-theme^='malvoyant-'] .topology-slot select,
-:root[data-theme^='malvoyant-'] .topology-slot > em,
-:root[data-theme^='malvoyant-'] .topology-empty,
-:root[data-theme^='malvoyant-'] .slot-inactive,
+:root[data-theme^='malvoyant-'] .topology-ligne-role,
 :root[data-theme^='malvoyant-'] .slot-unresolved,
 :root[data-theme^='malvoyant-'] .topology-profile-badge,
 :root[data-theme^='malvoyant-'] .topology-assign-button,
-:root[data-theme^='malvoyant-'] .topology-parallel-heading small,
 :root[data-theme^='malvoyant-'] .topology-runtime-limit {
   font-size: 13px;
 }
 
 /* components/AgentsTopologyView.css — gris en dur */
-:root[data-theme^='malvoyant-'] .agents-topology,
-:root[data-theme^='malvoyant-'] .topology-eyebrow,
-:root[data-theme^='malvoyant-'] .topology-panel > header span,
-:root[data-theme^='malvoyant-'] .topology-parallel-heading span,
-:root[data-theme^='malvoyant-'] .topology-toolbar p,
-:root[data-theme^='malvoyant-'] .topology-profiles select,
-:root[data-theme^='malvoyant-'] .topology-library > p,
-:root[data-theme^='malvoyant-'] .topology-model,
-:root[data-theme^='malvoyant-'] .topology-model small,
-:root[data-theme^='malvoyant-'] .topology-panel > header p,
-:root[data-theme^='malvoyant-'] .topology-panel > header b,
-:root[data-theme^='malvoyant-'] .topology-slot-copy span,
-:root[data-theme^='malvoyant-'] .topology-slot label,
-:root[data-theme^='malvoyant-'] .topology-slot select,
-:root[data-theme^='malvoyant-'] .topology-parallel-heading small,
 :root[data-theme^='malvoyant-'] .agents-topology-loading,
-:root[data-theme^='malvoyant-'] .theme-serious .agents-topology,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-model,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-slot,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-panel > header b,
 :root[data-theme^='malvoyant-'] .theme-serious .topology-profiles,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-slot select,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-empty,
 :root[data-theme^='malvoyant-'] .theme-serious .topology-assign-button,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-eyebrow,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-panel > header span,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-parallel-heading span,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-model small,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-slot-copy span,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-slot-copy small,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-slot label,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-toolbar p,
-:root[data-theme^='malvoyant-'] .theme-serious .topology-panel > header p {
+:root[data-theme^='malvoyant-'] .theme-serious .topology-toolbar p {
   color: var(--text);
 }
 
@@ -230,6 +183,13 @@
 
 /* components/CarteDesBesoinsView.css — tailles */
 :root[data-theme^='malvoyant-'] .besoins-section {
+  font-size: 13px;
+}
+
+/* components/CeQueCaCouvre.css — tailles */
+:root[data-theme^='malvoyant-'] .ce-que-ca-couvre > .ce-que-ca-couvre-titre,
+:root[data-theme^='malvoyant-'] .ce-que-ca-couvre dt,
+:root[data-theme^='malvoyant-'] .ce-que-ca-couvre dd {
   font-size: 13px;
 }
 

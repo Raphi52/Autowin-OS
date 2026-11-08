@@ -87,7 +87,7 @@ describe('theme Nebuleuse de verre', () => {
     expect(vertsHorsTheme).toEqual([])
     // Preuve que les verts des composants SONT transposes — une couche sans aucune sortie verte
     // passerait le controle ci-dessus : un vert franc (#34d399), un turquoise (#4fc8b8) et un vert
-    // de texte (#5bb68f) ressortent tous au vert du theme.
+    // de texte (#6be0aa, badge « Enregistré » d'Agent Studio) ressortent tous au vert du theme.
     const valeurs = new Map<string, string>()
     postcss.parse(genere).walkDecls((decl) => {
       for (const selecteur of (decl.parent as postcss.Rule).selectors ?? []) {
@@ -98,7 +98,7 @@ describe('theme Nebuleuse de verre', () => {
     expect(valeurs.get(`${PREFIXE} .observatory-event.is-tool-call > i | color`)).toBe(
       'rgb(0, 255, 85)'
     )
-    expect(valeurs.get(`${PREFIXE} .topology-slot > em | color`)).toBe('rgb(0, 255, 85)')
+    expect(valeurs.get(`${PREFIXE} .topology-state | color`)).toBe('rgb(0, 255, 85)')
     // Les jetons d'etat ecrits a la main suivent le meme vert.
     const main = lire('./theme-nebuleuse-verre.css')
     expect(main).toContain('--ok: #00ff55;')
@@ -465,9 +465,7 @@ describe('theme Nebuleuse de verre', () => {
   // du menu garde son dégradé, sans lueur autour. Depuis le 2026-10-27 (capture du rond
   // « Chat » : « a mettre aussi sur ces boutons »), ce dégradé coule en lampe à lave.
   it('ne met aucun halo autour de l onglet ouvert du menu', () => {
-    for (const [fichier, theme] of [
-      ['./theme-nebuleuse-verre.css', 'nebuleuse-verre']
-    ] as const) {
+    for (const [fichier, theme] of [['./theme-nebuleuse-verre.css', 'nebuleuse-verre']] as const) {
       const actif: Record<string, string> = {}
       postcss.parse(lire(fichier)).walkRules((regle) => {
         if (
@@ -681,7 +679,9 @@ describe('Icones de la saisie nues (Lineaire B)', () => {
       `${PREFIXE} .composer-input-row > :is(.composer-auto, .attachment-button, .composer-trois-facons, .composer-question-a-cote, .composer-dictee)`
     )
     expect(jetons['--nv-pastille-gris']).toBe('color-mix(in srgb, var(--text) 14%, var(--bg-0))')
-    expect(jetons['--nv-pastille-gris-clair']).toBe('color-mix(in srgb, var(--text) 21%, var(--bg-0))')
+    expect(jetons['--nv-pastille-gris-clair']).toBe(
+      'color-mix(in srgb, var(--text) 21%, var(--bg-0))'
+    )
     expect(aplati(jetons['--nv-pastille-nacre'] ?? '')).toBe(
       'linear-gradient(100deg, #3c6eeb 0%, #e63ca0 30%, #d9d9d9 55%, #ff8cc8 78%, #3c6eeb 100%)'
     )
@@ -706,11 +706,7 @@ describe('Boutons a chanfrein Platine', () => {
     'nouveau fil': `${PREFIXE} .cosmic-outline .conv-new-row`
   }
   const aplati = (s: string): string =>
-    s
-      .replace(/\s+/g, ' ')
-      .replace(/\(\s+/g, '(')
-      .replace(/\s+\)/g, ')')
-      .trim()
+    s.replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim()
   const derniere = (selecteur: string): Record<string, string> => {
     const valeurs: Record<string, string> = {}
     postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
@@ -834,7 +830,8 @@ describe('Reprendre en gel vert', () => {
     const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p)
     return (x + 0.05) / (y + 0.05)
   }
-  const reflet = (fond: string | undefined): number => Number((fond ?? '').match(GEL_VERT)?.[1] ?? NaN)
+  const reflet = (fond: string | undefined): number =>
+    Number((fond ?? '').match(GEL_VERT)?.[1] ?? NaN)
 
   it('peint un gel vert opaque, fleche blanche lisible, ombre noire sans lueur', () => {
     const repos = derniere(REPRENDRE)
@@ -908,7 +905,6 @@ describe('Stop en perle', () => {
   it('ne met aucune lueur : seules des ombres noires', () => {
     expect(derniere(STOP)['box-shadow']).toBe('0 2px 3px rgba(0, 0, 0, 0.6)')
   })
-
 })
 
 /**
@@ -1056,7 +1052,6 @@ describe('Cadre chanfrein platine, coins seuls', () => {
     expect(accueil['backdrop-filter']).toBe('none')
     expect(accueil.background).toMatch(/^var\(--nv-chanfrein-trait-fond\), radial-gradient\(/)
   })
-
 })
 
 /**
@@ -1185,7 +1180,6 @@ describe('bandeaux du haut du chat en perle d or', () => {
       )['border-color']
     ).toBe('transparent')
   })
-
 })
 
 /**
@@ -1222,7 +1216,6 @@ describe('Onglets du panneau de droite : un liseré au lieu de la capsule', () =
   it('retire le filet rose sous la barre d onglets', () => {
     expect(dansLeBloc(`${ONGLETS} .workflow-panel-head`)['border-image']).toBe('none')
   })
-
 })
 
 /**
@@ -1275,7 +1268,6 @@ describe('Pied de liste sous le cadre coupe : un seul trait en haut', () => {
     const bloc = lire('./theme-nebuleuse-verre.css').match(BLOC_CHANFREIN)?.[0] ?? ''
     expect(bloc).not.toContain('--nv-pied-coupe')
   })
-
 })
 
 /**
@@ -1370,7 +1362,8 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
       regle.walkDecls((d) => {
         decls[d.prop] = d.value.replace(/\s+/g, ' ').trim()
       })
-      for (const s of regle.selectors) liste.push({ selecteur: s.replace(/\s+/g, ' ').trim(), decls })
+      for (const s of regle.selectors)
+        liste.push({ selecteur: s.replace(/\s+/g, ' ').trim(), decls })
     })
     return liste
   }
@@ -1405,10 +1398,14 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     // `scrollbar-color` non auto ferait dessiner l ascenseur du systeme, fleches comprises : la
     // fleche du bas tombait dans le coin coupe de la palette /.
     expect(derniere(CADRE)['scrollbar-color']).toBe('auto')
-    expect(derniere(`${CADRE}::-webkit-scrollbar-track`)['margin-bottom']).toBe('var(--nv-chanfrein)')
+    expect(derniere(`${CADRE}::-webkit-scrollbar-track`)['margin-bottom']).toBe(
+      'var(--nv-chanfrein)'
+    )
     // Curseur par le jeton du fil : assombri dans Holographique blanc (un blanc ecrit en dur y
     // restait blanc, invisible sur la nacre).
-    expect(derniere(`${CADRE}::-webkit-scrollbar-thumb`).background).toBe('var(--chat-ascenseur) padding-box')
+    expect(derniere(`${CADRE}::-webkit-scrollbar-thumb`).background).toBe(
+      'var(--chat-ascenseur) padding-box'
+    )
   })
 
   it('raccorde l en-tete colle des reglages du graphe au fond de la fenetre', () => {
@@ -1426,13 +1423,21 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
       /graph-settings-popover[^{]*\{[^}]*--nv-holo-lisere/
     )
     // La diagonale du coin repeinte sur l en-tete, decalee d 1 px (il commence dans le bord).
-    expect(tete.background).toContain('-1px -1px / var(--nv-chanfrein) var(--nv-chanfrein) no-repeat')
+    expect(tete.background).toContain(
+      '-1px -1px / var(--nv-chanfrein) var(--nv-chanfrein) no-repeat'
+    )
     // L en-tete du poste « Savoir » partage la classe : aucune regle ne le vise sans le `>`.
     const tetesLarges = regles()
       .map((r) => r.selecteur)
-      .filter((sel) => /graph-settings-popover__heading/.test(sel) && !/> \.graph-settings-popover__heading/.test(sel))
+      .filter(
+        (sel) =>
+          /graph-settings-popover__heading/.test(sel) &&
+          !/> \.graph-settings-popover__heading/.test(sel)
+      )
     expect(tetesLarges).toEqual([])
-    expect(derniere(`${PREFIXE} .graph-settings-popover .settings-section`).background).toBe('transparent')
+    expect(derniere(`${PREFIXE} .graph-settings-popover .settings-section`).background).toBe(
+      'transparent'
+    )
   })
 
   it('met l element choisi dans le cadre bleu -> rose : puce retenue et ligne du modele actif', () => {
@@ -1495,13 +1500,16 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
   })
 
   it('passe les points argent et blanc par des jetons que le blanc assombrit', () => {
-    expect(derniere(`${PREFIXE} .model-select-menu .effort-cran.is-memorized.is-selected i`).background).toBe(
-      'var(--nv-pop-texte-argent)'
-    )
+    expect(
+      derniere(`${PREFIXE} .model-select-menu .effort-cran.is-memorized.is-selected i`).background
+    ).toBe('var(--nv-pop-texte-argent)')
     const blanc = lire('./theme-holographique-clair.css')
     const argent = /--nv-pop-texte-argent:\s*#([0-9a-f]{6})/i.exec(blanc)?.[1]
     expect(argent, 'jeton derive dans Holographique blanc').toBeDefined()
-    const luminosite = parseInt(argent!.slice(0, 2), 16) + parseInt(argent!.slice(2, 4), 16) + parseInt(argent!.slice(4, 6), 16)
+    const luminosite =
+      parseInt(argent!.slice(0, 2), 16) +
+      parseInt(argent!.slice(2, 4), 16) +
+      parseInt(argent!.slice(4, 6), 16)
     // Sombre sur la nacre : bien sous la moitie de la luminosite maximale (3 x 255).
     expect(luminosite).toBeLessThan(3 * 128)
   })
@@ -1510,7 +1518,9 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     expect(derniere(`${PREFIXE} .model-quota-popover .quota-context-gauge-fill`).background).toBe(
       'var(--nv-pop-cadre)'
     )
-    expect(derniere(`${PREFIXE} .model-quota-popover .model-quota-window > strong`).color).toBe('#ffffff')
+    expect(derniere(`${PREFIXE} .model-quota-popover .model-quota-window > strong`).color).toBe(
+      '#ffffff'
+    )
   })
 
   // « met le theme holo dans cette popup » : la carte « Supprimer la conversation ? »
@@ -1759,7 +1769,8 @@ describe('Selection dans la barre de prompt', () => {
   it('peint le texte selectionne du champ en bleu plein, texte blanc', () => {
     const decls: Record<string, string> = {}
     postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
-      if (!regle.selectors.some((s) => /\.composer-field textarea::selection$/.test(s.trim()))) return
+      if (!regle.selectors.some((s) => /\.composer-field textarea::selection$/.test(s.trim())))
+        return
       regle.walkDecls((d) => {
         decls[d.prop] = d.value.trim()
       })
@@ -1917,16 +1928,29 @@ describe('Entree des cadres a chanfrein (Elan, 1 s)', () => {
     expect(entree['--ch-cotes']).toBe(
       'color-mix(in srgb, var(--nv-chanfrein-cotes) calc(var(--ch-contour) * 100%), transparent)'
     )
-    expect(entree['--ch-trait-haut']).toContain('var(--nv-chanfrein-haut) calc(var(--ch-trait-a) * 100%)')
-    expect(entree['--ch-trait-bas']).toContain('var(--nv-chanfrein-bas) calc(var(--ch-trait-a) * 100%)')
+    expect(entree['--ch-trait-haut']).toContain(
+      'var(--nv-chanfrein-haut) calc(var(--ch-trait-a) * 100%)'
+    )
+    expect(entree['--ch-trait-bas']).toContain(
+      'var(--nv-chanfrein-bas) calc(var(--ch-trait-a) * 100%)'
+    )
   })
 
   it('pose le satin en fondu avec ses teintes de repos, dans le meme ordre', () => {
     const teintes = (v: string): string[] =>
-      [...v.matchAll(/var\(--nv-satin-([a-d])\)(?: calc\(var\(--ch-fond\) \* 100%\), transparent\))? (\d+%)/g)].map(
-        (m) => `${m[1]} ${m[2]}`
-      )
-    expect(teintes(repos['--nv-satin-reflets'])).toEqual(['a 0%', 'b 18%', 'c 42%', 'c 48%', 'd 64%', 'c 80%'])
+      [
+        ...v.matchAll(
+          /var\(--nv-satin-([a-d])\)(?: calc\(var\(--ch-fond\) \* 100%\), transparent\))? (\d+%)/g
+        )
+      ].map((m) => `${m[1]} ${m[2]}`)
+    expect(teintes(repos['--nv-satin-reflets'])).toEqual([
+      'a 0%',
+      'b 18%',
+      'c 42%',
+      'c 48%',
+      'd 64%',
+      'c 80%'
+    ])
     expect(teintes(entree['--nv-satin'])).toEqual(teintes(repos['--nv-satin-reflets']))
     // Les enfants DIRECTS reprennent le satin de repos (la saisie n'a pas sa propre lumiere).
     expect(derniere(`${CADRES} > *`)['--nv-satin']).toBe(repos['--nv-satin'])

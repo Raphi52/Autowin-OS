@@ -252,6 +252,7 @@ import { loadAgentTopology, type IncidentTopologie } from './topologie/topology-
 import type { AgentTopology, SlotBinding } from './topologie/topology'
 import {
   assertRuntimeTopologyAvailable,
+  runtimeFanOutSlots,
   runtimeRoleBinding,
   runtimeRoleSlots,
   UnresolvedRuntimeModelError
@@ -1463,11 +1464,13 @@ function syncRuntimeTopology(topology: AgentTopology): void {
       }
       return [{ provider: b.provider, model: model.model, reasoningEffort: b.reasoningEffort }]
     })
+  // Plusieurs sous-agents dans Agent Studio nourrissent aussi ces étapes (`runtimeFanOutSlots`).
+  const fanOutSlots = runtimeFanOutSlots(topology)
   os.setFanOut({
-    scout: toMembers(topology.panels.scout),
-    frame: toMembers(topology.panels.frame),
-    terrain: toMembers(topology.panels.terrain),
-    judge: toMembers(topology.panels.judge)
+    scout: toMembers(fanOutSlots.scout),
+    frame: toMembers(fanOutSlots.frame),
+    terrain: toMembers(fanOutSlots.terrain),
+    judge: toMembers(fanOutSlots.judge)
   })
 }
 

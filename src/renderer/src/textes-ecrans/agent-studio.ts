@@ -34,25 +34,10 @@ export const TEXTES_FR = {
 
   // — Modèles & topologie (AgentsTopologyView) —
   'topo.erreur.rafraichissement': 'Rafraîchissement de la topologie impossible : {raison}',
-  'topo.erreur.fanout':
-    'Le fan-out des sous-agents n’est pas branché : un second sous-agent ne serait pas exécuté. Remplacez le slot existant.',
-  'topo.rang.orchestrateur': '01 · Autorité unique',
-  'topo.rang.sousAgents': '02 · Exécution bornée',
   'topo.slot.introuvableTitre':
-    'Aucun modèle « {modele} » au catalogue : déposez-en un pour résoudre ce slot',
+    'Aucun modèle « {modele} » au catalogue : choisissez-en un autre dans le menu',
   'topo.slot.introuvable': 'modèle introuvable',
-  'topo.slot.retirer': 'Retirer ce slot',
-  'topo.slot.actif': 'actif',
-  'topo.slot.roleRuntime': 'rôle runtime',
-  'topo.slot.inactifTitre':
-    "Le fan-out des sous-agents n'est pas encore branché — ce slot n'est pas utilisé au runtime",
-  'topo.slot.inactif': 'non actif',
-  'topo.vide': 'Glissez un modèle ici',
-  'topo.ajouter.fanoutTitre':
-    'Fan-out des sous-agents non branché : un second slot ne serait pas exécuté',
-  'topo.ajouter.remplacer': 'Remplacer avec le modèle sélectionné',
-  'topo.ajouter.fanout': 'Fan-out non branché — remplacez le slot existant',
-  'topo.ajouter.ajouter': '+ Ajouter le modèle sélectionné',
+  'topo.slot.retirer': 'Retirer ce modèle',
   'topo.chargement': 'Chargement de la topologie…',
   'topo.reessayer': 'Réessayer',
   'topo.eyebrow': 'Configuration des agents',
@@ -77,21 +62,24 @@ export const TEXTES_FR = {
   'topo.profils.illisible': 'Liste des profils illisible : {erreur}',
   'topo.slotsIntrouvables':
     '{n} slot(s) pointent un modèle introuvable au catalogue ({slots}) : profils et application gelés tant qu’ils ne sont pas résolus.',
-  'topo.biblio.eyebrow': 'Modèles importés',
-  'topo.biblio.aide': 'Glissez un modèle sur un slot ou sélectionnez-le puis utilisez Ajouter.',
-  'topo.gemini.erreur': "Le login Gemini n'a pas pu être lancé : {raison}",
-  'topo.gemini.connecter': 'Connecter Gemini avec Google',
-  'topo.modele.efforts': ' · efforts {liste}',
-  'topo.autorite.titre': 'Autorité',
-  'topo.autorite.main': 'La configuration est validée et persistée par le main process.',
-  'topo.autorite.fanout': 'Orchestrateur et Sous-agents : seul le premier modèle déposé sert.',
   'topo.orchestrateur.titre': 'Orchestrateur',
   'topo.orchestrateur.description': 'Un seul modèle pilote et consolide.',
+  'topo.orchestrateur.aide':
+    'Modèle des fils qui n’ont pas choisi le leur, dès leur prochain message.',
   'topo.sousAgents.titre': 'Sous-agents',
-  'topo.sousAgents.description': 'Zéro à plusieurs exécutants bornés.',
+  'topo.sousAgents.description': 'Un ou plusieurs modèles qui font le travail.',
+  'topo.sousAgents.libelle': 'Sous-agent {n}',
+  'topo.sousAgents.aide': 'S’applique aux travaux lancés ensuite.',
+  'topo.sousAgents.ajouter': '+ Ajouter un modèle',
+  'topo.sousAgents.vide': 'Aucun sous-agent : l’orchestrateur fait le travail lui-même.',
+  'topo.sousAgents.doublon':
+    'Ce modèle est déjà dans les sous-agents avec cet effort : choisissez un autre modèle ou un autre effort.',
+  'topo.sousAgents.premier': 'écrit le code',
+  'topo.sousAgents.premierTitre':
+    'Le premier sous-agent écrit le code (build, clean). Tous explorent, cadrent et votent au contrôle final.',
   'topo.runtime.titre': 'Runtime actuel',
   'topo.runtime.detail':
-    '**Orchestrateur et Sous-agents** : seul le premier modèle déposé sert (plusieurs sous-agents en parallèle : pas encore branché). **Plusieurs modèles sur une étape** : passe par un workflow, ou par une skill qui lance ses propres sous-agents (liste dans le bloc Sous-agents).',
+    '**Orchestrateur** : un seul modèle. **Sous-agents** : avec plusieurs modèles, le premier écrit le code (build, clean) ; **tous** explorent (scout) et cadrent (frame) en parallèle, puis l’orchestrateur fusionne leurs propositions ; au contrôle final (judge), **chacun vote** et la majorité tranche.',
   'topo.runtime.workflow':
     '**Workflows** : un workflow (onglet Workflows) qui place ses propres agents sur une étape passe avant ces blocs, pour cette étape seulement.',
 
@@ -107,12 +95,13 @@ export const TEXTES_FR = {
   'topo.couvre.orchestrateur.couvre':
     'Le modèle qui **te répond dans le Chat**, dans chaque fil qui n’a pas choisi le sien. Changer de modèle dans l’en-tête d’un chat change aussi ce bloc.',
   'topo.couvre.orchestrateur.pendant':
-    'Il **découpe** un gros chantier en morceaux menés en parallèle, et il **fusionne** les propositions quand un workflow met plusieurs modèles sur une même étape.',
+    'Il **découpe** un gros chantier en morceaux menés en parallèle, et il **fusionne** les propositions quand plusieurs modèles travaillent sur une même étape (plusieurs sous-agents, ou un workflow).',
   'topo.couvre.orchestrateur.horsChamp':
     'Les **petites tâches** (bloc en haut de page) et l’exécution des étapes (**Sous-agents**).',
   'topo.couvre.sousAgents.couvre':
-    'Le modèle qui **fait le travail** lancé depuis le chat, **à toutes les étapes** : scout, frame, build, clean et le contrôle final (judge). Pour ce contrôle, il **juge son propre travail**, sauf si un **workflow** place un autre modèle sur l’étape judge.',
-  'topo.couvre.sousAgents.plusieurs': '**Pas encore** : seul le premier emplacement travaille.',
+    'Le modèle qui **fait le travail** lancé depuis le chat, **à toutes les étapes** : scout, frame, build, clean et le contrôle final (judge). Seul, il **juge son propre travail**, sauf si un **workflow** place un autre modèle sur l’étape judge.',
+  'topo.couvre.sousAgents.plusieurs':
+    '**Oui** : le premier écrit le code (build, clean) ; **tous** explorent et cadrent en parallèle, puis l’orchestrateur fusionne ; au contrôle final, **chacun vote** et la majorité tranche.',
   'topo.couvre.sousAgents.vide': 'L’**orchestrateur** fait le travail lui-même.',
   'topo.couvre.sousAgents.skills':
     '**/arena** (un par bras du banc) · **/scout** (un par angle) · **/steal** (un par couche de recherche) · **/frame** et **/draft** (pistes et variantes générées en parallèle) · **/remake** (angles en parallèle, puis travaux enfants) · **/kaizen** (6 à 9 angles, dans un run seulement) · **/judge** (juges en parallèle hors de l’app ; dans l’app, l’un après l’autre).',
@@ -240,22 +229,9 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'barre.sections': '{titre} sections',
 
   'topo.erreur.rafraichissement': 'Could not refresh the topology: {raison}',
-  'topo.erreur.fanout':
-    'Sub-agent fan-out is not wired: a second sub-agent would not run. Replace the existing slot.',
-  'topo.rang.orchestrateur': '01 · Single authority',
-  'topo.rang.sousAgents': '02 · Bounded execution',
-  'topo.slot.introuvableTitre': 'No model “{modele}” in the catalog: drop one to resolve this slot',
+  'topo.slot.introuvableTitre': 'No model “{modele}” in the catalog: pick another one in the menu',
   'topo.slot.introuvable': 'model not found',
-  'topo.slot.retirer': 'Remove this slot',
-  'topo.slot.actif': 'active',
-  'topo.slot.roleRuntime': 'runtime role',
-  'topo.slot.inactifTitre': 'Sub-agent fan-out is not wired yet — this slot is not used at runtime',
-  'topo.slot.inactif': 'inactive',
-  'topo.vide': 'Drop a model here',
-  'topo.ajouter.fanoutTitre': 'Sub-agent fan-out not wired: a second slot would not run',
-  'topo.ajouter.remplacer': 'Replace with the selected model',
-  'topo.ajouter.fanout': 'Fan-out not wired — replace the existing slot',
-  'topo.ajouter.ajouter': '+ Add the selected model',
+  'topo.slot.retirer': 'Remove this model',
   'topo.chargement': 'Loading the topology…',
   'topo.reessayer': 'Retry',
   'topo.eyebrow': 'Agent configuration',
@@ -279,21 +255,24 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.profils.illisible': 'Profile list unreadable: {erreur}',
   'topo.slotsIntrouvables':
     '{n} slot(s) point to a model missing from the catalog ({slots}): profiles and applying are frozen until they are resolved.',
-  'topo.biblio.eyebrow': 'Imported models',
-  'topo.biblio.aide': 'Drag a model onto a slot, or select it and use Add.',
-  'topo.gemini.erreur': 'The Gemini login could not be started: {raison}',
-  'topo.gemini.connecter': 'Connect Gemini with Google',
-  'topo.modele.efforts': ' · effort levels {liste}',
-  'topo.autorite.titre': 'Authority',
-  'topo.autorite.main': 'The configuration is validated and persisted by the main process.',
-  'topo.autorite.fanout': 'Orchestrator and Sub-agents: only the first model dropped is used.',
   'topo.orchestrateur.titre': 'Orchestrator',
   'topo.orchestrateur.description': 'A single model drives and consolidates.',
+  'topo.orchestrateur.aide':
+    'Model of the threads that have not picked their own, from their next message.',
   'topo.sousAgents.titre': 'Sub-agents',
-  'topo.sousAgents.description': 'Zero to several bounded executors.',
+  'topo.sousAgents.description': 'One or more models that do the work.',
+  'topo.sousAgents.libelle': 'Sub-agent {n}',
+  'topo.sousAgents.aide': 'Applies to the jobs started next.',
+  'topo.sousAgents.ajouter': '+ Add a model',
+  'topo.sousAgents.vide': 'No sub-agent: the orchestrator does the work itself.',
+  'topo.sousAgents.doublon':
+    'This model is already a sub-agent with this effort: pick another model or another effort.',
+  'topo.sousAgents.premier': 'writes the code',
+  'topo.sousAgents.premierTitre':
+    'The first sub-agent writes the code (build, clean). All of them explore, frame and vote at the final check.',
   'topo.runtime.titre': 'Current runtime',
   'topo.runtime.detail':
-    '**Orchestrator and Sub-agents**: only the first model dropped is used (several sub-agents in parallel: not wired yet). **Several models on one step**: use a workflow, or a skill that launches its own sub-agents (listed in the Sub-agents block).',
+    '**Orchestrator**: a single model. **Sub-agents**: with several models, the first one writes the code (build, clean); **all of them** explore (scout) and frame in parallel, then the orchestrator merges their proposals; at the final check (judge), **each one votes** and the majority decides.',
   'topo.runtime.workflow':
     '**Workflows**: a workflow (Workflows tab) that places its own agents on a step takes precedence over these blocks, for that step only.',
 
@@ -308,12 +287,13 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.couvre.orchestrateur.couvre':
     'The model that **answers you in the Chat**, in every thread that has not picked its own. Changing the model in a chat header changes this block too.',
   'topo.couvre.orchestrateur.pendant':
-    'It **splits** a large job into pieces run in parallel, and it **merges** the proposals when a workflow puts several models on the same step.',
+    'It **splits** a large job into pieces run in parallel, and it **merges** the proposals when several models work on the same step (several sub-agents, or a workflow).',
   'topo.couvre.orchestrateur.horsChamp':
     'The **small tasks** (block at the top of the page) and running the steps (**Sub-agents**).',
   'topo.couvre.sousAgents.couvre':
-    'The model that **does the work** started from the chat, **at every step**: scout, frame, build, clean and the final check (judge). For that check it **judges its own work**, unless a **workflow** puts another model on the judge step.',
-  'topo.couvre.sousAgents.plusieurs': '**Not yet**: only the first slot works.',
+    'The model that **does the work** started from the chat, **at every step**: scout, frame, build, clean and the final check (judge). On its own, it **judges its own work**, unless a **workflow** puts another model on the judge step.',
+  'topo.couvre.sousAgents.plusieurs':
+    '**Yes**: the first one writes the code (build, clean); **all of them** explore and frame in parallel, then the orchestrator merges; at the final check, **each one votes** and the majority decides.',
   'topo.couvre.sousAgents.vide': 'The **orchestrator** does the work itself.',
   'topo.couvre.sousAgents.skills':
     '**/arena** (one per bench arm) · **/scout** (one per angle) · **/steal** (one per research layer) · **/frame** and **/draft** (leads and variants generated in parallel) · **/remake** (angles in parallel, then child jobs) · **/kaizen** (6 to 9 angles, in a run only) · **/judge** (judges in parallel outside the app; inside the app, one after the other).',

@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   575 regles, 866 declarations. Voir genererCoucheClaire. */
+   558 regles, 842 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -16,57 +16,6 @@
 :root[data-theme='holographique-clair'] .topology-state.is-error {
     background: #fdfdff;
     color: #970c24
-}
-:root[data-theme='holographique-clair'] .topology-model {
-    color: #0e31aa
-}
-:root[data-theme='holographique-clair'] .topology-model:hover, :root[data-theme='holographique-clair'] .topology-model.is-selected {
-    border-color: #0e31aa
-}
-:root[data-theme='holographique-clair'] .topology-model-mark {
-    background: #fdfdff;
-    color: #0e31aa
-}
-:root[data-theme='holographique-clair'] .topology-model-mark.is-claude {
-    background: #fdfdff;
-    color: #aa0e5f
-}
-:root[data-theme='holographique-clair'] .topology-authority-note {
-    border: 1px solid rgba(20, 15, 40, 0.2);
-    background: #fdfdff
-}
-:root[data-theme='holographique-clair'] .topology-authority-note b {
-    color: #aa0e5f
-}
-:root[data-theme='holographique-clair'] .topology-panel.is-gold {
-    border-top-color: #aa0e5f
-}
-:root[data-theme='holographique-clair'] .topology-panel.is-cyan {
-    border-top-color: #0e31aa
-}
-:root[data-theme='holographique-clair'] .topology-panel.is-pink {
-    border-top-color: #aa0e5f
-}
-:root[data-theme='holographique-clair'] .topology-panel.is-drop-target {
-    border-color: #0e31aa;
-    background: rgba(253, 253, 255, 0.84)
-}
-:root[data-theme='holographique-clair'] .topology-panel > header {
-    border-bottom: 1px solid rgba(20, 15, 40, 0.2)
-}
-:root[data-theme='holographique-clair'] .topology-slot {
-    border: 1px solid rgba(20, 15, 40, 0.2)
-}
-:root[data-theme='holographique-clair'] .topology-slot > button {
-    border: 1px solid rgba(20, 15, 40, 0.2);
-    background: #fdfdff;
-    color: #7e2533
-}
-:root[data-theme='holographique-clair'] .topology-slot > em {
-    color: #09712c
-}
-:root[data-theme='holographique-clair'] .topology-empty {
-    border: 1px dashed rgba(20, 15, 40, 0.2)
 }
 :root[data-theme='holographique-clair'] .topology-assign-button:hover:not(:disabled) {
     border-color: #0e31aa;
@@ -84,16 +33,9 @@
     background: #fdfdff;
     color: #1c172b
 }
-:root[data-theme='holographique-clair'] .theme-serious .topology-model.is-selected {
-    border-color: rgba(170, 14, 95, 0.88)
-}
 :root[data-theme='holographique-clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
     border-color: rgba(170, 14, 95, 0.7);
     color: #aa0e5f
-}
-:root[data-theme='holographique-clair'] .theme-serious .topology-panel.is-drop-target {
-    border-color: rgba(170, 14, 95, 0.82);
-    background: rgba(253, 253, 255, 0.86)
 }
 
 /* ---- src/renderer/src/components/ArtifactPreview.css ---- */

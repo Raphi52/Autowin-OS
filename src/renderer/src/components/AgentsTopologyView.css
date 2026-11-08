@@ -1,41 +1,41 @@
-.agents-topology {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  /* 3 rangees auto pour les bandeaux conditionnels : vides, elles se reduisent a 0 px. Avant, un bandeau prenait la rangee 1fr du contenu (ecrasee a 0 par les rangees implicites) et son texte debordait hors de sa bande (constat 2026-09-09). */
-  grid-template-rows: 72px repeat(3, auto) minmax(0, 1fr);
-  width: 100%;
+/*
+ * MODÈLES & TOPOLOGIE — trois blocs empilés, pareils : « Modèle des petites tâches »
+ * (PetitesTachesReglage), « Orchestrateur » et « Sous-agents ». Chaque rôle se règle par le même
+ * menu de modèle (OrchestratorModelSelector) et le même cadre (`.router-default`, RouterView.css).
+ */
+
+/* La section défile EN ENTIER : `.domain-content` coupe tout débordement, et les trois blocs
+   empilés dépassent souvent la hauteur de la fenêtre. */
+.studio-modeles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   height: 100%;
-  /* Aligne le titre a la meme hauteur que les autres vues (~52px du haut). */
-  padding-top: 9px;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.agents-topology {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
   /* GABARIT DES VUES (ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
-     ni rayon de page, ni reflet, ni flou. Elle recopiait le cadre de `.view-page` et apparaissait
-     comme une page dans la page. Le cadre est peint une fois, par `.view-page`. */
-  color: #e7edf5;
+     ni rayon de page, ni reflet, ni flou. Le cadre est peint une fois, par `.view-page`. */
+  color: var(--text);
 }
 
 .topology-toolbar {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   min-width: 0;
   /* Texte du titre au meme retrait que celui de la page : `--view-head-retrait` (ViewPage.css). */
-  padding: 0 var(--view-head-retrait);
+  padding: 6px var(--view-head-retrait);
   border-bottom: 1px solid var(--container-border);
-  /* Pose a meme le cadre de page (gabarit des vues) : une bande peinte y refaisait un
-     cadre dans le cadre. */
   background: transparent;
-}
-
-.topology-eyebrow,
-.topology-panel > header span,
-.topology-parallel-heading span {
-  color: #6f8499;
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .topology-toolbar h2 {
@@ -48,23 +48,17 @@
   min-width: 0;
   overflow: hidden;
   margin: 0;
-  color: #74879a;
+  color: var(--text-dim);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.topology-toolbar > .topology-assign-button {
-  width: auto;
-  margin: 0;
-  white-space: nowrap;
-}
 .topology-profiles {
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 5px 7px;
-  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
   border: 0;
   border-radius: var(--container-radius-card);
   background: var(--surface-card);
@@ -81,7 +75,7 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #c9d9e8;
+  color: var(--text);
   font-size: 10px;
 }
 
@@ -108,374 +102,63 @@
   color: #ff8ea1;
 }
 
-.topology-library {
-  /* Rangee de contenu explicite (la 5e), apres les 3 rangees a bandeaux. */
-  grid-row: 5;
-  grid-column: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 18px 26px 18px 18px;
-  /* Un PANNEAU du gabarit (rayon de panneau), comme les colonnes de Task Manager. */
-  margin-top: 12px;
-  border-radius: var(--container-radius-panel);
-  background: var(--surface-panel);
-  scrollbar-color: #3b4a59 #090d12;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-}
-
-.topology-provider-login {
-  width: 100%;
-  margin: 8px 0 12px;
-  padding: 9px 12px;
-  color: #fff;
-  border: 1px solid rgba(126, 164, 255, 0.55);
-  border-radius: 10px;
-  background: rgba(88, 105, 214, 0.22);
-  cursor: pointer;
-}
-
-.topology-provider-login:hover {
-  background: rgba(88, 105, 214, 0.36);
-}
-
-.topology-library > p {
-  margin: 7px 0 15px;
-  color: #66798c;
-  font-size: 10px;
-  line-height: 1.5;
-}
-
-.topology-models {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.topology-model {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-width: 0;
-  padding: 10px;
-  overflow: hidden;
-  box-sizing: border-box;
-  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
-  border: 0;
-  border-radius: var(--container-radius-card);
-  background: var(--surface-card);
-  color: #dfeaf5;
-  cursor: grab;
-  text-align: left;
-  transition:
-    border-color 120ms ease,
-    transform 120ms ease,
-    background 120ms ease;
-}
-
-/* ----------------------------------------------------------------------------
-   MODE CLAIR — Agent Studio peint TOUT en couleurs de nuit écrites en dur :
-   `#e7edf5` pour le corps (l.17), `#dfeaf5` pour les modèles (l.162), `#c9d9e8`
-   pour les champs (l.83), `#6f8499` / `#74879a` / `#66798c` pour les libellés
-   secondaires (l.34, 50, 138), `#fff` pour le titre de la bibliothèque (l.125).
-   Aucune variable de thème : le mode clair ne les atteignait pas, d'où les titres
-   de rôle et les noms de modèles quasi invisibles signalés le 2026-09-03.
-   ---------------------------------------------------------------------------- */
-:root[data-base='clair'] .topology-panel,
-:root[data-base='clair'] .topology-model,
-:root[data-base='clair'] .topology-library > h3 {
-  color: var(--text);
-}
-:root[data-base='clair'] .topology-panel > header span,
-:root[data-base='clair'] .topology-parallel-heading span,
-:root[data-base='clair'] .topology-library > p {
-  color: var(--text-dim);
-}
-:root[data-base='clair'] .topology-panel > header p {
-  color: var(--text-dim);
-}
-:root[data-base='clair'] .topology-slot select,
-:root[data-base='clair'] .topology-slot input,
-:root[data-base='clair'] .topology-panel select,
-:root[data-base='clair'] .topology-panel input {
-  color: var(--text);
-  background: #ffffff;
-  border-color: var(--line);
-}
-
-.topology-model:hover,
-.topology-model.is-selected {
-  border-color: #4da6d2;
-  background: var(--surface-selected);
-  transform: translateY(-1px);
-}
-
-.topology-model > span {
-  min-width: 0;
-}
-
-.topology-model strong,
-.topology-model small {
-  display: block;
-}
-
-.topology-model strong {
-  overflow: hidden;
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.topology-model small {
-  margin-top: 4px;
-  color: #698095;
-  font-size: 9px;
-  line-height: 1.35;
-}
-
-.topology-model-mark {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: none;
-  place-items: center;
-  border: 1px solid #315d76;
-  border-radius: 9px;
-  background: #102a3b;
-  color: #65cdfb;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.topology-model-mark.is-claude {
-  border-color: #734966;
-  background: #2c1727;
-  color: #ff91c7;
-}
-
-.topology-authority-note {
-  display: grid;
-  gap: 5px;
-  margin-top: 20px;
-  padding: 11px;
-  border: 1px solid #493d22;
-  border-radius: 9px;
-  background: #151108;
-  color: #9a8a65;
-  font-size: 9px;
-  line-height: 1.45;
-}
-
-.topology-authority-note b {
-  color: #e6c369;
-  font-size: 10px;
-}
-
 .topology-workspace {
-  grid-row: 5;
-  grid-column: 2;
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 18px;
-  scrollbar-color: #42556a #080d12;
-  scrollbar-width: thin;
-}
-
-.topology-primary,
-.topology-parallel {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.topology-panel {
-  min-width: 0;
-  padding: 14px;
-  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
-  border: 0;
-  border-radius: var(--container-radius-panel);
-  background: var(--surface-panel);
-  transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    background 120ms ease;
-}
-
-.topology-panel.is-gold {
-  border-top-color: #c6a54c;
-}
-
-.topology-panel.is-cyan {
-  border-top-color: #3eb8e9;
-}
-
-.topology-panel.is-pink {
-  border-top-color: #e45eaa;
-}
-
-.topology-panel.is-violet {
-  border-top-color: #9d79ed;
-}
-
-.topology-panel.is-amber {
-  border-top-color: #e0a13c;
-}
-
-.topology-panel.is-drop-target {
-  border-color: #65d4ff;
-  background: rgba(15, 45, 64, 0.84);
-  box-shadow: 0 0 26px rgba(76, 190, 239, 0.18);
-}
-
-.topology-panel > header {
   display: flex;
+  flex-direction: column;
   gap: 12px;
-  align-items: start;
-  min-height: 68px;
-  padding-bottom: 11px;
-  border-bottom: 1px solid #1d2a38;
-}
-
-.topology-panel > header > div {
   min-width: 0;
 }
 
-.topology-panel > header h3 {
-  margin: 4px 0 0;
-  font-size: 14px;
-}
-
-.topology-panel > header p {
-  margin: 5px 0 0;
-  color: #687d91;
-  font-size: 10px;
-  line-height: 1.4;
-}
-
-.topology-panel > header b {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  margin-left: auto;
-  place-items: center;
-  border: 1px solid #34485b;
-  border-radius: 8px;
-  color: #93a8bb;
-  font-size: 11px;
-}
-
-.topology-slots {
-  display: grid;
+/* Les deux rôles reprennent le cadre du bloc « petites tâches » ; on n'ajoute que la liste. */
+.topology-lignes {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  min-height: 78px;
-  padding-top: 11px;
 }
 
-.topology-slot {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+.topology-ligne {
+  display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   min-width: 0;
-  padding: 10px;
-  border: 1px solid #26394a;
-  border-radius: 9px;
-  background: var(--surface-card);
 }
 
-.topology-slot-copy {
-  min-width: 0;
+.topology-ligne.is-unresolved .model-select {
+  outline: 1px solid var(--err);
+  border-radius: 8px;
 }
 
-.topology-slot-copy small,
-.topology-slot-copy strong,
-.topology-slot-copy span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Le premier sous-agent écrit le code quand ils sont plusieurs (runtimeFanOutSlots). */
+.topology-ligne-role {
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 11px;
+  font-style: normal;
   white-space: nowrap;
 }
 
-.topology-slot-copy small {
-  color: #557087;
-  font-size: 8px;
-  text-transform: uppercase;
-}
-
-.topology-slot-copy strong {
-  margin-top: 2px;
-  font-size: 11px;
-}
-
-.topology-slot-copy span {
-  margin-top: 3px;
-  color: #6d8296;
-  font-size: 9px;
-}
-
-.topology-slot label {
-  display: grid;
-  gap: 3px;
-  color: #65798d;
-  font-size: 8px;
-  text-transform: uppercase;
-}
-
-.topology-slot select {
-  min-width: 76px;
-  padding: 5px 7px;
-  border: 1px solid #30465a;
-  border-radius: 6px;
-  background: var(--surface-inset);
-  color: #d5e3ef;
-  font-size: 9px;
-}
-
-.topology-slot > button {
-  grid-column: 5;
-  align-self: end;
-  margin-bottom: 4px;
+.topology-ligne-retirer {
   width: 24px;
   height: 24px;
-  border: 1px solid #4b2c36;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #1c0d12;
-  color: #d87b8a;
+  background: transparent;
+  color: var(--text-dim);
   cursor: pointer;
+  line-height: 1;
 }
 
-.topology-slot > em {
-  position: absolute;
-  top: 5px;
-  right: 6px;
-  color: #5bb68f;
-  font-size: 7px;
-  font-style: normal;
-  text-transform: uppercase;
+.topology-ligne-retirer:hover {
+  border-color: color-mix(in srgb, var(--err) 60%, transparent);
+  color: var(--err);
 }
 
-.topology-empty {
-  display: grid;
-  min-height: 70px;
-  place-items: center;
-  border: 1px dashed #2c4357;
-  border-radius: 9px;
-  color: #536b80;
-  font-size: 10px;
-}
-
-/* #8 — badge "non actif" sur un slot parallèle >1 (fan-out non branché au runtime). */
-.slot-inactive {
-  font-style: normal;
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 6px;
-  border: 1px solid #7a5a2c;
-  background: rgba(180, 120, 40, 0.14);
-  color: #c8912f;
+.topology-ajouter:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /*
@@ -491,16 +174,8 @@
   color: #d97b76;
 }
 
-.topology-slot.is-unresolved {
-  border-color: #8a3a3a;
-}
-
 .topology-unresolved-banner {
-  /* Enfant direct de la grille 2 colonnes de .agents-topology : sans cette etendue,
-     le bandeau prenait la case de 280 px et decalait bibliotheque et plateau d'une
-     colonne — page entiere ecrasee des qu'un slot etait irresolu (constat 2026-09-09). */
-  grid-column: 1 / -1;
-  margin: 0 0 10px;
+  margin: 0;
   padding: 7px 11px;
   border: 1px solid #8a3a3a;
   border-radius: var(--container-radius-card);
@@ -547,29 +222,10 @@
   cursor: not-allowed;
 }
 
-.topology-parallel-heading {
-  display: flex;
-  align-items: end;
-  gap: 16px;
-  margin: 24px 0 10px;
-}
-
-.topology-parallel-heading h3 {
-  margin: 3px 0 0;
-  font-size: 14px;
-}
-
-.topology-parallel-heading small {
-  margin-left: auto;
-  color: #687b8d;
-  font-size: 9px;
-}
-
 .topology-runtime-limit {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
-  margin-top: 14px;
   padding: 10px 12px;
   border: 1px solid #574821;
   border-radius: 9px;
@@ -586,9 +242,7 @@
 
 /* MODE CLAIR — choix de l'utilisateur du 2026-09-03 : « conserve un fond foncé,
    juste changer la police, bleue me semble bien ». Le bandeau reste donc un encart
-   sombre assumé au bas d'une page claire, accordé aux vignettes de modèles ; seule
-   sa gamme passe du doré au bleu. Fond légèrement bleuté pour que le cadre suive,
-   texte et titres en bleu clair — le contraste sur fond sombre est préservé. */
+   sombre assumé au bas d'une page claire ; seule sa gamme passe du doré au bleu. */
 :root[data-base='clair'] .topology-runtime-limit {
   border-color: #2f4a63;
   background: rgba(10, 20, 30, 0.82);
@@ -609,81 +263,26 @@
   color: #8498aa;
 }
 
-/* Mode Noir · Black Glass: surfaces neutres et translucides, accents réservés aux rôles. */
-.theme-serious .agents-topology {
-  /* Aucun fond : le cadre de page le porte (gabarit des vues). */
-  color: #f2f3f5;
-}
-
+/* Mode Noir · Black Glass : surfaces neutres et translucides. */
 .theme-serious .topology-toolbar {
   border-bottom-color: rgba(255, 255, 255, 0.14);
-  /* Transparente : laisse voir le cadre de page, evite une double-couche qui rendrait la top bar
-     plus sombre que le corps. */
   background: transparent;
 }
 
-.theme-serious .topology-library {
-  border-right-color: rgba(255, 255, 255, 0.14);
-  background: var(--surface-panel);
-  scrollbar-color: #555 transparent;
-}
-
-.theme-serious .topology-workspace {
-  background: transparent;
-  scrollbar-color: #555 transparent;
-}
-
-.theme-serious .topology-model,
-.theme-serious .topology-slot {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: var(--surface-card);
-  color: #f0f1f3;
-}
-
-.theme-serious .topology-model:hover {
-  border-color: rgba(255, 255, 255, 0.34);
-  background: var(--surface-hover);
-  transform: translateY(-1px);
-}
-
-.theme-serious .topology-model.is-selected {
-  border-color: rgba(225, 193, 103, 0.88);
-  background: var(--surface-selected);
-  transform: none;
-}
-
-.theme-serious .topology-panel {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: var(--surface-panel);
-  box-shadow: none;
-}
-
-.theme-serious .topology-panel > header {
-  border-bottom-color: rgba(255, 255, 255, 0.13);
-}
-
-.theme-serious .topology-panel > header b,
-.theme-serious .topology-profiles,
-.theme-serious .topology-slot select {
+.theme-serious .topology-profiles {
   border-color: rgba(255, 255, 255, 0.22);
   background: var(--surface-inset);
   color: #e7e8eb;
 }
 
-/* MODE CLAIR — le COMPTEUR de slots (la pastille « 0 » / « 1 » dans l'en-tête de
-   chaque panneau) est peint en `#e7e8eb`, un blanc cassé, sur un fond devenu très
-   clair : blanc sur blanc. Sa bordure blanche translucide disparaît aussi. Même
-   règle à deux niveaux que les liens d'action — il faut la même forme ici.
-   Signalé le 2026-09-03 : « il reste le numéro ». */
-:root[data-base='clair'] .theme-serious .topology-panel > header b,
-:root[data-base='clair'] .theme-serious .topology-profiles,
-:root[data-base='clair'] .theme-serious .topology-slot select {
+/* MODE CLAIR — même règle à deux niveaux que `.theme-serious` ci-dessus : une règle simple
+   ne l'atteint pas (blanc sur blanc signalé le 2026-09-03). */
+:root[data-base='clair'] .theme-serious .topology-profiles {
   border-color: var(--line);
   background: #ffffff;
   color: var(--text);
 }
 
-.theme-serious .topology-empty,
 .theme-serious .topology-assign-button {
   border-color: rgba(255, 255, 255, 0.24);
   color: #95999f;
@@ -694,82 +293,18 @@
   color: #ead18b;
 }
 
-/* MODE CLAIR — les liens d'action (« Glissez un modèle ici », « Remplacer avec le
-   modèle sélectionné », « + Ajouter le modèle sélectionné ») sont peints en
-   `#95999f` avec une bordure BLANCHE translucide par la règle `.theme-serious`
-   ci-dessus (l.649-653). Deux niveaux de spécificité : une règle simple ne les
-   atteint pas. Le survol doré reste doré, mais assombri pour rester lisible. */
-:root[data-base='clair'] .theme-serious .topology-empty,
 :root[data-base='clair'] .theme-serious .topology-assign-button {
   border-color: var(--line);
   color: var(--text-dim);
-}
-
-/* Le COMPTEUR de slots est un `<b>` NU dans l'en-tête du panneau
-   (AgentsTopologyView.tsx l.367) : aucune classe, donc aucune couleur propre —
-   il héritait du sombre et disparaissait sur fond clair. Signalé le 2026-09-03
-   (« il reste le numéro »). On le cible par sa position dans l'en-tête. */
-:root[data-base='clair'] .topology-panel > header > b {
-  color: var(--text);
-  background: rgba(15, 20, 35, 0.05);
-  border-color: var(--line);
 }
 :root[data-base='clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
   border-color: rgba(154, 111, 16, 0.6);
   color: #7a5a10;
 }
 
-.theme-serious .topology-panel.is-drop-target {
-  border-color: rgba(225, 193, 103, 0.82);
-  background: rgba(18, 16, 10, 0.86);
-  box-shadow: none;
-}
-
-.theme-serious .topology-eyebrow,
-.theme-serious .topology-panel > header span,
-.theme-serious .topology-parallel-heading span,
-.theme-serious .topology-model small,
-.theme-serious .topology-slot-copy span,
-.theme-serious .topology-slot-copy small,
-.theme-serious .topology-slot label,
-.theme-serious .topology-toolbar p,
-.theme-serious .topology-panel > header p {
+.theme-serious .topology-toolbar p {
   color: #8b8f96;
 }
-
-/* MODE CLAIR — le bloc `.theme-serious` juste au-dessus impose `#8b8f96` à toute
-   une famille de libellés (eyebrow, nom du modèle assigné, étiquettes de slot,
-   liens d'action). Sa spécificité à deux niveaux bat une règle simple : il faut
-   donc la même forme ici. S'y ajoutent le titre de section, qui n'a aucune
-   couleur propre et héritait du sombre, et le compteur en petit. Signalé le
-   2026-09-03 : « Exploration et vérification parallèles », « Opus 5 · CLI » et
-   les liens « Glissez un modèle ici » restaient trop clairs. */
-:root[data-base='clair'] .theme-serious .topology-eyebrow,
-:root[data-base='clair'] .theme-serious .topology-panel > header span,
-:root[data-base='clair'] .theme-serious .topology-parallel-heading span,
-:root[data-base='clair'] .theme-serious .topology-model small,
-:root[data-base='clair'] .theme-serious .topology-slot-copy span,
-:root[data-base='clair'] .theme-serious .topology-slot-copy small,
-:root[data-base='clair'] .theme-serious .topology-slot label,
-:root[data-base='clair'] .theme-serious .topology-toolbar p,
-:root[data-base='clair'] .theme-serious .topology-panel > header p {
+:root[data-base='clair'] .theme-serious .topology-toolbar p {
   color: var(--text-dim);
-}
-:root[data-base='clair'] .topology-parallel-heading h3,
-:root[data-base='clair'] .topology-slot-copy strong {
-  color: var(--text);
-}
-:root[data-base='clair'] .topology-parallel-heading small {
-  color: var(--text-dim);
-}
-
-@media (max-width: 1100px) {
-  .agents-topology {
-    grid-template-columns: 230px minmax(0, 1fr);
-  }
-
-  .topology-primary,
-  .topology-parallel {
-    grid-template-columns: 1fr;
-  }
 }

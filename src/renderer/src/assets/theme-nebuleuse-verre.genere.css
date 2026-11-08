@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   580 regles, 798 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   566 regles, 782 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -12,43 +12,6 @@
 :root[data-theme='nebuleuse-verre'] .topology-state.is-saving {
     background: rgb(10, 10, 10);
     color: rgb(255, 144, 200)
-}
-:root[data-theme='nebuleuse-verre'] .topology-model {
-    color: rgb(205, 198, 241)
-}
-:root[data-theme='nebuleuse-verre'] .topology-model:hover, :root[data-theme='nebuleuse-verre'] .topology-model.is-selected {
-    border-color: rgb(113, 93, 214)
-}
-:root[data-theme='nebuleuse-verre'] .topology-model-mark {
-    color: rgb(143, 121, 252)
-}
-:root[data-theme='nebuleuse-verre'] .topology-model-mark.is-claude {
-    color: rgb(255, 145, 200)
-}
-:root[data-theme='nebuleuse-verre'] .topology-authority-note {
-    background: rgb(10, 10, 10)
-}
-:root[data-theme='nebuleuse-verre'] .topology-authority-note b {
-    color: rgb(255, 131, 193)
-}
-:root[data-theme='nebuleuse-verre'] .topology-panel.is-gold {
-    border-top-color: rgb(243, 82, 163)
-}
-:root[data-theme='nebuleuse-verre'] .topology-panel.is-cyan {
-    border-top-color: rgb(106, 80, 235)
-}
-:root[data-theme='nebuleuse-verre'] .topology-panel.is-pink {
-    border-top-color: rgb(255, 67, 161)
-}
-:root[data-theme='nebuleuse-verre'] .topology-panel.is-drop-target {
-    border-color: rgb(144, 121, 255);
-    box-shadow: 0 0 26px rgba(119, 95, 241, 0.18)
-}
-:root[data-theme='nebuleuse-verre'] .topology-slot > button {
-    background: rgb(10, 10, 10)
-}
-:root[data-theme='nebuleuse-verre'] .topology-slot > em {
-    color: rgb(0, 255, 85)
 }
 :root[data-theme='nebuleuse-verre'] .topology-assign-button:hover:not(:disabled) {
     border-color: rgb(136, 114, 246);
@@ -63,16 +26,9 @@
 :root[data-theme='nebuleuse-verre'] .agents-topology-loading {
     background: rgb(10, 10, 10)
 }
-:root[data-theme='nebuleuse-verre'] .theme-serious .topology-model.is-selected {
-    border-color: rgba(255, 124, 190, 0.88)
-}
 :root[data-theme='nebuleuse-verre'] .theme-serious .topology-assign-button:hover:not(:disabled) {
     border-color: rgba(255, 124, 190, 0.7);
     color: rgb(255, 169, 212)
-}
-:root[data-theme='nebuleuse-verre'] .theme-serious .topology-panel.is-drop-target {
-    border-color: rgba(255, 124, 190, 0.82);
-    background: rgba(10, 10, 10, 0.86)
 }
 
 /* ---- src/renderer/src/components/ArtifactPreview.css ---- */

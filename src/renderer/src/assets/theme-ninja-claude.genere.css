@@ -1,24 +1,12 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   1024 regles, 1421 declarations. Voir genererNinjaClaude.
+   990 regles, 1381 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
-:root[data-theme='ninja-claude'] .agents-topology {
-    color: rgb(239, 239, 237)
-}
-:root[data-theme='ninja-claude'] .topology-eyebrow, :root[data-theme='ninja-claude'] .topology-panel > header span, :root[data-theme='ninja-claude'] .topology-parallel-heading span {
-    color: rgb(139, 136, 125)
-}
-:root[data-theme='ninja-claude'] .topology-toolbar p {
-    color: rgb(142, 139, 128)
-}
-:root[data-theme='ninja-claude'] .topology-profiles select {
-    color: rgb(219, 218, 214)
-}
 :root[data-theme='ninja-claude'] .topology-state {
     background: rgb(38, 38, 36)
 }
@@ -29,80 +17,6 @@
 :root[data-theme='ninja-claude'] .topology-state.is-error {
     background: rgb(38, 38, 36)
 }
-:root[data-theme='ninja-claude'] .topology-library > p {
-    color: rgb(128, 125, 114)
-}
-:root[data-theme='ninja-claude'] .topology-model {
-    color: rgb(235, 235, 233)
-}
-:root[data-theme='ninja-claude'] .topology-model:hover, :root[data-theme='ninja-claude'] .topology-model.is-selected {
-    border-color: rgb(150, 148, 137)
-}
-:root[data-theme='ninja-claude'] .topology-model small {
-    color: rgb(135, 132, 119)
-}
-:root[data-theme='ninja-claude'] .topology-model-mark {
-    border: 1px solid rgb(89, 87, 78);
-    color: rgb(181, 179, 171)
-}
-:root[data-theme='ninja-claude'] .topology-model-mark.is-claude {
-    color: rgb(234, 181, 163)
-}
-:root[data-theme='ninja-claude'] .topology-authority-note {
-    background: rgb(38, 38, 36)
-}
-:root[data-theme='ninja-claude'] .topology-authority-note b {
-    color: rgb(223, 139, 112)
-}
-:root[data-theme='ninja-claude'] .topology-panel.is-gold {
-    border-top-color: rgb(211, 99, 63)
-}
-:root[data-theme='ninja-claude'] .topology-panel.is-cyan {
-    border-top-color: rgb(154, 151, 141)
-}
-:root[data-theme='ninja-claude'] .topology-panel.is-pink {
-    border-top-color: rgb(220, 131, 102)
-}
-:root[data-theme='ninja-claude'] .topology-panel.is-violet {
-    border-top-color: rgb(184, 182, 174)
-}
-:root[data-theme='ninja-claude'] .topology-panel.is-drop-target {
-    border-color: rgb(183, 181, 173);
-    box-shadow: 0 0 26px rgba(163, 161, 152, 0.18)
-}
-:root[data-theme='ninja-claude'] .topology-panel > header {
-    border-bottom: 1px solid rgb(45, 44, 40)
-}
-:root[data-theme='ninja-claude'] .topology-panel > header p {
-    color: rgb(132, 129, 117)
-}
-:root[data-theme='ninja-claude'] .topology-panel > header b {
-    border: 1px solid rgb(76, 74, 67);
-    color: rgb(172, 170, 162)
-}
-:root[data-theme='ninja-claude'] .topology-slot {
-    border: 1px solid rgb(59, 58, 53)
-}
-:root[data-theme='ninja-claude'] .topology-slot-copy small {
-    color: rgb(117, 114, 103)
-}
-:root[data-theme='ninja-claude'] .topology-slot-copy span {
-    color: rgb(137, 134, 122)
-}
-:root[data-theme='ninja-claude'] .topology-slot label {
-    color: rgb(128, 125, 114)
-}
-:root[data-theme='ninja-claude'] .topology-slot select {
-    border: 1px solid rgb(73, 71, 65);
-    color: rgb(228, 227, 224)
-}
-:root[data-theme='ninja-claude'] .topology-slot > button {
-    background: rgb(38, 38, 36)
-}
-:root[data-theme='ninja-claude'] .topology-empty {
-    border: 1px dashed rgb(69, 68, 62);
-    color: rgb(112, 109, 99)
-}
 :root[data-theme='ninja-claude'] .topology-assign-button {
     border: 1px dashed rgb(86, 84, 77);
     color: rgb(150, 147, 136)
@@ -110,9 +24,6 @@
 :root[data-theme='ninja-claude'] .topology-assign-button:hover:not(:disabled) {
     border-color: rgb(175, 173, 165);
     color: rgb(215, 214, 209)
-}
-:root[data-theme='ninja-claude'] .topology-parallel-heading small {
-    color: rgb(130, 127, 115)
 }
 :root[data-theme='ninja-claude'] .topology-runtime-limit {
     background: rgba(38, 38, 36, 0.78)
@@ -125,36 +36,17 @@
     background: rgb(31, 30, 29);
     color: rgb(157, 155, 145)
 }
-:root[data-theme='ninja-claude'] .theme-serious .agents-topology {
-    color: rgb(244, 244, 243)
-}
-:root[data-theme='ninja-claude'] .theme-serious .topology-model, :root[data-theme='ninja-claude'] .theme-serious .topology-slot {
-    color: rgb(242, 242, 241)
-}
-:root[data-theme='ninja-claude'] .theme-serious .topology-model:hover {
-    border-color: rgba(255, 255, 255, 0.34)
-}
-:root[data-theme='ninja-claude'] .theme-serious .topology-model.is-selected {
-    border-color: rgba(221, 135, 107, 0.88)
-}
-:root[data-theme='ninja-claude'] .theme-serious .topology-panel > header b, :root[data-theme='ninja-claude'] .theme-serious .topology-profiles, :root[data-theme='ninja-claude'] .theme-serious .topology-slot select {
+:root[data-theme='ninja-claude'] .theme-serious .topology-profiles {
     color: rgb(234, 234, 232)
 }
-:root[data-theme='ninja-claude'] .theme-serious .topology-empty, :root[data-theme='ninja-claude'] .theme-serious .topology-assign-button {
+:root[data-theme='ninja-claude'] .theme-serious .topology-assign-button {
     color: rgb(159, 157, 149)
 }
 :root[data-theme='ninja-claude'] .theme-serious .topology-assign-button:hover:not(:disabled) {
     border-color: rgba(221, 135, 107, 0.7);
     color: rgb(230, 165, 143)
 }
-:root[data-theme='ninja-claude'] .theme-serious .topology-panel.is-drop-target {
-    border-color: rgba(221, 135, 107, 0.82);
-    background: rgba(38, 38, 36, 0.86)
-}
-:root[data-theme='ninja-claude'] .theme-serious .topology-panel.is-drop-target {
-    box-shadow: none
-}
-:root[data-theme='ninja-claude'] .theme-serious .topology-eyebrow, :root[data-theme='ninja-claude'] .theme-serious .topology-panel > header span, :root[data-theme='ninja-claude'] .theme-serious .topology-parallel-heading span, :root[data-theme='ninja-claude'] .theme-serious .topology-model small, :root[data-theme='ninja-claude'] .theme-serious .topology-slot-copy span, :root[data-theme='ninja-claude'] .theme-serious .topology-slot-copy small, :root[data-theme='ninja-claude'] .theme-serious .topology-slot label, :root[data-theme='ninja-claude'] .theme-serious .topology-toolbar p, :root[data-theme='ninja-claude'] .theme-serious .topology-panel > header p {
+:root[data-theme='ninja-claude'] .theme-serious .topology-toolbar p {
     color: rgb(150, 148, 139)
 }
 
