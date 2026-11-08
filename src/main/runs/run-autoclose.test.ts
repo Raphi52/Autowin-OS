@@ -69,8 +69,16 @@ describe('defaultGitRunner — processus invisible', () => {
   })
 })
 
-/** Dépôt de travail + un « distant » local (bare) pour observer un vrai push. */
-async function repoWithRemote(): Promise<{ repo: string; remote: string }> {
+type Depot = { repo: string; remote: string }
+
+/**
+ * Dépôt de travail + un « distant » local (bare) pour observer un vrai push. `autowin` (vrai par
+ * défaut) : le dépôt porte le `package.json` d'Autowin (nom `autowin-os`), comme le vrai dépôt ;
+ * `false` = un dépôt tiers, que la garde d'envoi ne laisse jamais partir.
+ * fix-ok: cause mesurée — avant la garde, les 3 tests « dépôt tiers » rendaient `pushed` (rouge
+ * mesuré : 3 échecs, puis 54/54 verts après la garde) ; le témoin Autowin par défaut garde les autres.
+ */
+async function repoWithRemote({ autowin = true }: { autowin?: boolean } = {}): Promise<Depot> {
   const root = mkdtempSync(join(tmpdir(), 'autowin-autoclose-'))
   dirs.push(root)
   const repo = join(root, 'work')
@@ -81,6 +89,7 @@ async function repoWithRemote(): Promise<{ repo: string; remote: string }> {
   await run('git', ['config', 'user.email', 't@t.t'], { cwd: repo })
   await run('git', ['config', 'user.name', 'T'], { cwd: repo })
   writeFileSync(join(repo, 'base.txt'), 'base\n')
+  if (autowin) writeFileSync(join(repo, 'package.json'), '{"name":"autowin-os"}\n')
   await run('git', ['add', '-A'], { cwd: repo })
   await run('git', ['commit', '-m', 'base'], { cwd: repo })
   await run('git', ['remote', 'add', 'origin', remote], { cwd: repo })
@@ -834,6 +843,84 @@ describe('enchaînement générique : push direct si le dépôt l’accepte, sin
     const local = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout.trim()
     const distant = (await run('git', ['rev-parse', 'travail'], { cwd: remote })).stdout.trim()
     expect(distant).toBe(local)
+  })
+})
+
+/*
+ * GARDE D'ENVOI (2026-11-08). Une fin de tour ou de run ne part JAMAIS vers le serveur d'un dépôt autre
+ * qu'Autowin : NéoRIG a son origin sur Azure, et l'enchaînement auto y pousserait sinon. Le commit local,
+ * lui, reste. ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un push direct, un repli sur branche dédiée, une PR.
+ * Le jumeau (même dépôt avec le package.json d'Autowin) doit, lui, partir comme avant.
+ */
+describe("garde d'envoi : un dépôt autre qu'Autowin ne part jamais vers son serveur", () => {
+  it('mode direct : rien n’arrive sur le distant, aucune PR, le commit reste local', async () => {
+    const { repo, remote } = await repoWithRemote({ autowin: false })
+    writeFileSync(join(repo, 'tiers.ts'), 'tiers\n')
+    const openPr = vi.fn(async () => 'PR interdite')
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/tiers-direct',
+      message: 'travail tiers',
+      runGit: realGit,
+      direct: true,
+      openPr
+    })
+    expect(res).toMatchObject({ status: 'skipped', reason: 'depot-tiers' })
+    expect((await realGit(['ls-remote', remote], repo)).trim()).toBe('')
+    expect(openPr).not.toHaveBeenCalled()
+    expect((await realGit(['log', '-1', '--format=%s'], repo)).trim()).toBe('travail tiers')
+  })
+
+  it('mode direct refusé par le distant : ni rejeu, ni branche dédiée, ni PR', async () => {
+    const { repo, remote } = await repoWithRemote({ autowin: false })
+    // Le distant refuse le push direct : sans la garde, le repli sur la branche dédiée + PR aurait lieu.
+    writeFileSync(
+      join(remote, 'hooks', 'pre-receive'),
+      '#!/bin/sh\nwhile read o n r; do [ "$r" = refs/heads/travail ] && { echo "PR requise"; exit 1; }; done\nexit 0\n',
+      { mode: 0o755 }
+    )
+    writeFileSync(join(repo, 'repli.ts'), 'repli\n')
+    const openPr = vi.fn(async () => 'PR interdite')
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/tiers-repli',
+      message: 'repli tiers',
+      runGit: realGit,
+      direct: true,
+      openPr
+    })
+    expect(res).toMatchObject({ status: 'skipped', reason: 'depot-tiers' })
+    expect((await realGit(['ls-remote', remote], repo)).trim()).toBe('')
+    expect(openPr).not.toHaveBeenCalled()
+  })
+
+  it('mode branche : la branche dédiée n’est pas poussée non plus', async () => {
+    const { repo, remote } = await repoWithRemote({ autowin: false })
+    writeFileSync(join(repo, 'branche.ts'), 'branche\n')
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/tiers-branche',
+      message: 'branche tiers',
+      runGit: realGit
+    })
+    expect(res).toMatchObject({ status: 'skipped', reason: 'depot-tiers' })
+    expect((await realGit(['ls-remote', remote], repo)).trim()).toBe('')
+  })
+
+  it('jumeau : le même dépôt avec le package.json d’Autowin part comme avant', async () => {
+    const { repo, remote } = await repoWithRemote()
+    writeFileSync(join(repo, 'jumeau.ts'), 'jumeau\n')
+    const openPr = vi.fn(async () => 'PR jumelle')
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/jumeau',
+      message: 'jumeau',
+      runGit: realGit,
+      direct: true,
+      openPr
+    })
+    expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
+    expect((await realGit(['ls-remote', remote], repo)).trim()).toContain('refs/heads/travail')
   })
 })
 
