@@ -1342,7 +1342,12 @@ export async function runInner(
     // redemande pas » — le juge aurait jugé à l'aveugle. Il reçoit donc le contexte complet.
     // Même règle pour une brique skill sur son propre agent : son fournisseur peut
     // différer de celui qui a ouvert la session.
-    const sansSessionReprise = jugeDedie || Boolean(agentPropreDuNoeudSkill)
+    // Et pour TOUTE étape skill (learn, git…) : elle reçoit ses outils natifs et les serveurs du
+    // poste, qu'une phase du pipeline n'a pas, et sa consigne dans le système. Liste d'outils et
+    // système diffèrent donc de la session reprise, et le modèle relisait toute la conversation au
+    // prix plein : 4 reprises sur 4 le 2026-11-08 (1,10 $), sans jamais servir la mémoire de relecture.
+    const etapeSkill = !isPipelinePhase(phase)
+    const sansSessionReprise = jugeDedie || etapeSkill || Boolean(agentPropreDuNoeudSkill)
     const resuming = Boolean(prevSessionId) && !sansSessionReprise
     // Le CADRAGE (phase frame) est le socle du prompt remis aux sous-agents : on le ré-injecte
     // TOUJOURS explicitement, même en resume. Se fier à l'historique de session (opaque, variable
@@ -1775,14 +1780,18 @@ export async function runInner(
     supervision.dispose()
     // La brique skill sur son propre agent COUPE la chaîne, comme un panel : sa session est peut-être
     // chez un autre fournisseur, et la phase suivante reçoit alors le contexte complet.
-    prevSessionId = jugeDedie
-      ? prevSessionId
-      : agentPropreDuNoeudSkill
-        ? undefined
-        : registry.honoursSessionResume(providerDeLaPhase)
-          ? (phaseRes.sessionId ?? prevSessionId)
-          : undefined
-    prevSessionSandbox = prevSessionId ? phaseSandbox : undefined
+    // Une étape skill sur l'agent du run laisse la chaîne de l'exécution intacte, session ET droits :
+    // sa session n'a ni les outils ni le système d'une phase du pipeline, la suivante n'y gagnerait rien.
+    const chaineIntacte = etapeSkill && !agentPropreDuNoeudSkill
+    prevSessionId =
+      jugeDedie || chaineIntacte
+        ? prevSessionId
+        : agentPropreDuNoeudSkill
+          ? undefined
+          : registry.honoursSessionResume(providerDeLaPhase)
+            ? (phaseRes.sessionId ?? prevSessionId)
+            : undefined
+    if (!chaineIntacte) prevSessionSandbox = prevSessionId ? phaseSandbox : undefined
     if (
       phase === 'build' &&
       phaseRes.sessionId &&
