@@ -25,7 +25,8 @@
  * POURQUOI L'OUTIL N'EST PAS CHARGÉ À CHAQUE TOUR. Sa définition pèse 8 242 jetons par appel (12 112
  * sans, 20 354 avec, mesuré deux fois), bien plus que les quelques centaines admises. Et ajouter un
  * outil change le début du prompt, donc le tour où il apparaît relit toute la conversation hors
- * cache. Il n'est donc chargé que si l'utilisateur le demande (`demandeUnChantier`).
+ * cache. Il n'est donc chargé que si l'utilisateur le demande (`demandeUnChantier`), puis gardé par
+ * la session qui l'a reçu (`workflowDuTour`) : le retirer coûterait la même relecture une seconde fois.
  *
  * Sources : https://code.claude.com/docs/en/workflows.md (seuils d'un gros chantier : plus de 25
  * agents ou 1,5 million de jetons ; en `-p`, un run ne patiente pas jusqu'au retour du quota).
@@ -100,6 +101,15 @@ export function demandeUnChantier(prompt: string): boolean {
     .replace(/[’`]/g, "'")
     .toLowerCase()
   return DEMANDES_DE_CHANTIER.some((motif) => motif.test(mots))
+}
+
+/**
+ * `Workflow` est-il dans la liste d'outils de CE tour ? Sur demande de chantier, et ensuite à chaque
+ * tour de la même session : le retirer au tour suivant changerait le début du prompt, donc ferait
+ * relire toute la conversation hors cache (voir `sessions-avec-workflow.ts`).
+ */
+export function workflowDuTour(demande: string, sessionRepriseAvecWorkflow: boolean): boolean {
+  return sessionRepriseAvecWorkflow || demandeUnChantier(demande)
 }
 
 /*

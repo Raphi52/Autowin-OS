@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   CONSIGNE_LIGNE_BESOIN,
+  blocVisuelDuTour,
   blocsSystemeEcran,
   buildChatPilotagePrompt
 } from '../consignes/chat-pilotage-prompt'
@@ -152,6 +153,15 @@ const ABSENTS_VOULUS: Record<string, { chemins: string[]; raison: string }> = {
  * Chaque texte, sous toutes ses formes envoyées : la consigne du chat change selon que les outils
  * directs sont servis ou non (`fichiersParOutils`, chat-pilotage-prompt.ts) ; on rejoue les deux.
  */
+// Le bloc visuel tel qu'il part dans le message d'un tour (image jointe : servi EN ENTIER, bureau
+// caché du fil compris).
+const BLOC_VISUEL = blocVisuelDuTour({
+  dernierMessage: '',
+  imageJointe: true,
+  conversationId: 'conv-test',
+  dejaDansLaSession: false
+}).entier
+
 const TEXTES: Array<[string, string]> = [
   ['constitution', CONSTITUTION],
   ['consigne du chat (sans outils directs)', buildChatPilotagePrompt(CATALOG)],
@@ -159,12 +169,13 @@ const TEXTES: Array<[string, string]> = [
     'consigne du chat (outils directs servis)',
     buildChatPilotagePrompt(CATALOG, { outilsDirects: CATALOG.map((c) => c.name) })
   ],
-  // Les blocs écran tels qu'`agent-pilot.ts` les envoie (`blocsSystemeEcran`), image jointe pour
-  // servir le bloc visuel EN ENTIER, bureau caché du fil compris.
-  ...blocsSystemeEcran('', true, 'conv-test').map((b): [string, string] => [
+  // Les blocs écran tels qu'`agent-pilot.ts` les envoie (`blocsSystemeEcran`), puis le bloc visuel
+  // du message (`blocVisuelDuTour`).
+  ...blocsSystemeEcran().map((b): [string, string] => [
     `consigne du chat : bloc ${b.name}`,
     b.text
   ]),
+  ['consigne du chat : règles visuelles du message', BLOC_VISUEL],
   ['consigne du chat : ligne de besoin', CONSIGNE_LIGNE_BESOIN],
   // Injectée au système de chaque étape d'un run (orchestrator-parcours-*.ts) ; elle cite
   // `scripts/hdesk-lancer.ps1`, `scripts/hdesk-observe.ps1` et `scripts/ui-capture.mjs`.
@@ -186,7 +197,7 @@ describe('textes envoyés aux agents — leurs chemins et scripts cités existen
   })
 
   // Le bloc visuel part en ENTIER, `REGLES_VISUELLES + consigneBureauCacheChat(...)`
-  // (`blocsSystemeEcran`) : n'en vérifier que le début laissait sans contrôle tout chemin écrit un
+  // (`blocVisuelDuTour`) : n'en vérifier que le début laissait sans contrôle tout chemin écrit un
   // jour dans sa fin (mesuré le 05/11 : `consigneBureauCacheChat` n'en cite encore aucun). Les scripts
   // hdesk sont cités par le bloc `ecranUtilisateur` et par `consigneBureauCache` des étapes
   // (objection du juge).
@@ -195,7 +206,8 @@ describe('textes envoyés aux agents — leurs chemins et scripts cités existen
   it('les blocs écran du chat sont vérifiés tels qu’ils partent, bureau caché compris', () => {
     const verifies = new Set(TEXTES.map(([, texte]) => texte))
     const envoyes = [
-      ...blocsSystemeEcran('', true, 'conv-test').map((b) => b.text),
+      ...blocsSystemeEcran().map((b) => b.text),
+      BLOC_VISUEL,
       consigneBureauCache('run-test')
     ].filter((texte) => texte.trim())
     expect(envoyes.length).toBe(3)

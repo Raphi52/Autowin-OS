@@ -9,7 +9,7 @@ import { CONSTITUTION } from '../consignes/constitution'
 import { blocLangueDeReponse } from '../profil/langue-reglage'
 import { blocMemoireDeTete } from '../brain/memoire-de-tete'
 import { blocProfilUtilisateur } from '../profil/profil-utilisateur'
-import type { Message, SendOptions } from '../providers/types'
+import type { SendOptions } from '../providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from '../consignes/response-style'
 
 export type SystemeAssemble = {
@@ -31,20 +31,10 @@ export function systemeDuTour(entree: {
     (Pick<SendOptions, 'maxBudgetUsd'> & { systemProfile?: 'watchdog-read-only' }) | undefined
   conversationId: string | undefined
   catalog: CommandSpec[]
-  latestUserMessage: string | undefined
-  history: Message[]
   executionWorkspace: (conversationId?: string) => string
   projectContext: (conversationId?: string) => string
 }): SystemeDuTour {
-  const {
-    sendLimits,
-    conversationId,
-    catalog,
-    latestUserMessage,
-    history,
-    executionWorkspace,
-    projectContext
-  } = entree
+  const { sendLimits, conversationId, catalog, executionWorkspace, projectContext } = entree
   // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
   // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
   const watchdogReadOnly = sendLimits?.systemProfile === 'watchdog-read-only'
@@ -157,20 +147,17 @@ export function systemeDuTour(entree: {
                 blocLangueDeReponse()
             },
             /**
-             * DERNIERS blocs (`blocsSystemeEcran`, chat-pilotage-prompt.ts) : l'ecran de l'utilisateur,
+             * DERNIER bloc (`blocsSystemeEcran`, chat-pilotage-prompt.ts) : l'ecran de l'utilisateur,
              * TOUJOURS servi et identique pour tous les fils (kaizen, tour
              * ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 : « envoi un message teams… » n'avait aucun mot
-             * visuel, le chat n'a donc pas recu la regle et a ouvert Teams sur l'ecran reel), puis les
-             * regles de travail visuel, conditionnelles — image jointe comprise.
+             * visuel, le chat n'a donc pas recu la regle et a ouvert Teams sur l'ecran reel).
              *
-             * En DERNIER a dessein : le cache du provider vaut par son PREFIXE. Seule la queue
-             * visuelle apparait ou disparait d'un tour a l'autre.
+             * RIEN ICI NE DEPEND DU MESSAGE : le systeme precede tout l'historique d'une session
+             * reprise, et le moindre changement fait relire la conversation entiere hors cache. Les
+             * regles de travail visuel, conditionnelles, partent donc dans le message du tour
+             * (`blocVisuelDuTour`, message-du-tour.ts).
              */
-            ...blocsSystemeEcran(
-              latestUserMessage ?? '',
-              (history.at(-1)?.attachments ?? []).some((piece) => piece.kind === 'image'),
-              conversationId ?? ''
-            )
+            ...blocsSystemeEcran()
           ]
   const assemblerSysteme = (
     texte: string

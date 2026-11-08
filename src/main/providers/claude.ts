@@ -15,7 +15,7 @@ import { verifyTimeoutMs } from '../commands/verify-command'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
-import { closeSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import {
   copyFile as copyFileAsync,
   mkdtemp as mkdtempAsync,
@@ -98,9 +98,10 @@ import {
   avisDeChantierPrecedent,
   avisDeFinDeChantier,
   cumulerUsage,
-  demandeUnChantier,
-  silenceMaxChantierMs
+  silenceMaxChantierMs,
+  workflowDuTour
 } from './claude-workflow'
+import { retenirSessionAvecWorkflow, sessionAvecWorkflow } from './sessions-avec-workflow'
 import { abortFailure } from './abort-diagnostic'
 import { advisorAccepte } from './claude-advisor'
 import { cheminRegistreReservations } from '../fichiers/reservation-fichiers-app'
@@ -653,12 +654,55 @@ export function nomDeFichierPourPieceJointe(nom: string, mimeType: string): stri
   return (propre || 'fichier') + ext
 }
 
+/**
+ * LE DOSSIER DES PIÈCES JOINTES D'UN FIL GARDE SON NOM D'UN TOUR À L'AUTRE.
+ *
+ * Le CLI recopie chaque `--add-dir` dans la section « Environment » de son prompt système (sonde du
+ * 2026-11-08 sur le CLI réel : le dossier ajouté y est listé). Un nom tiré au hasard à chaque appel
+ * changeait donc le système de chaque tour avec pièce jointe, et faisait relire toute la conversation
+ * hors cache. Or un fil qui a reçu une pièce jointe la rejoint à ses tours suivants (provenance
+ * `message-precedent`) : chacun de ces tours la payait (session 5595d443, le 2026-11-08 : deux tours
+ * consécutifs, deux noms de dossier).
+ * Le nom dérive du fil ; deux appels du même fil en même temps (question à côté) ne se marchent pas
+ * dessus, chacun préfixe ses fichiers et ne retire qu'eux. Le dossier vide reste : le retirer ouvrirait
+ * une course avec l'appel voisin qui y écrit, et le balayage des orphelins le prend après 24 h.
+ */
+export function dossierDesPiecesJointesDuFil(fil: string): string {
+  const empreinte = createHash('sha256').update(fil).digest('hex').slice(0, 16)
+  return join(tmpdir(), `autowin-os-attachments-fil-${empreinte}`)
+}
+
+/**
+ * Le `--add-dir` des pièces jointes d'un TOUR DE CHAT : celui du fil, déclaré à CHAQUE tour, même
+ * sans pièce jointe. Sinon le dossier apparaît dans le prompt système au premier tour qui en porte une
+ * et fait relire toute la conversation hors cache. Sans fil
+ * connu, le dossier de l'appel seul, comme avant. Un dossier impossible à créer n'est pas déclaré.
+ */
+export function dossierDesPiecesJointesDuTourDeChat(
+  materialized: Pick<MaterializedAttachments, 'dir'> | undefined,
+  fil: string | undefined
+): string[] {
+  if (!fil) return materialized ? ['--add-dir', materialized.dir] : []
+  const dossier = dossierDesPiecesJointesDuFil(fil)
+  try {
+    mkdirSync(dossier, { recursive: true })
+  } catch {
+    return materialized ? ['--add-dir', materialized.dir] : []
+  }
+  return ['--add-dir', dossier]
+}
+
 export function materializeClaudeAttachments(
   attachments: Attachment[],
   /** La consigne de fin de liste : elle nomme l'outil de lecture, qui dépend du moteur. */
-  consigneDeLecture = 'Utilise Read uniquement pour consulter ces fichiers si nécessaire.'
+  consigneDeLecture = 'Utilise Read uniquement pour consulter ces fichiers si nécessaire.',
+  /** Le fil de l'appel : son dossier garde le même nom à chaque tour (voir ci-dessus). */
+  fil?: string
 ): MaterializedAttachments {
-  const dir = mkdtempSync(join(tmpdir(), 'autowin-os-attachments-'))
+  const dossierDuFil = fil ? dossierDesPiecesJointesDuFil(fil) : undefined
+  if (dossierDuFil) mkdirSync(dossierDuFil, { recursive: true })
+  const dir = dossierDuFil ?? mkdtempSync(join(tmpdir(), 'autowin-os-attachments-'))
+  const prefixeDeLAppel = dossierDuFil ? `${randomUUID().slice(0, 8)}-` : ''
   const paths = attachments.map((attachment, index) => {
     const safeName =
       Array.from(attachment.name.replace(/[\\/:*?"<>|]/g, '_'), (character) =>
@@ -669,7 +713,7 @@ export function materializeClaudeAttachments(
     const prefixe = attachment.provenance === 'message-precedent' ? 'tour-precedent-' : ''
     const path = join(
       dir,
-      `${index + 1}-${prefixe}${nomDeFichierPourPieceJointe(safeName, attachment.mimeType ?? '')}`
+      `${prefixeDeLAppel}${index + 1}-${prefixe}${nomDeFichierPourPieceJointe(safeName, attachment.mimeType ?? '')}`
     )
     const data =
       attachment.kind === 'text' ? attachment.content : Buffer.from(attachment.content, 'base64')
@@ -706,7 +750,10 @@ export function materializeClaudeAttachments(
       blocAncien +
       `\n${consigneDeLecture}`,
     cleanup: () =>
-      rmAsync(dir, { recursive: true, force: true }).catch(() => {
+      (dossierDuFil
+        ? Promise.all(paths.map((p) => rmAsync(p, { force: true }))).then(() => undefined)
+        : rmAsync(dir, { recursive: true, force: true })
+      ).catch(() => {
         /* hygiene best-effort : un temporaire deja parti ne doit pas casser la fin d'appel */
       })
   }
@@ -1627,7 +1674,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     if (opts.signal?.aborted) throw abortFailure('claude CLI', opts.signal)
     const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')
     const materialized = lastUserMessage?.attachments?.length
-      ? materializeClaudeAttachments(lastUserMessage.attachments)
+      ? materializeClaudeAttachments(lastUserMessage.attachments, undefined, filDeLAppel(opts))
       : undefined
     const lastUser = `${lastUserMessage?.content ?? ''}${materialized?.promptSuffix ?? ''}`
     const system = opts.system
@@ -1911,7 +1958,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             'bypassPermissions',
             '--add-dir',
             readOnlyWorkspace,
-            ...(materialized ? ['--add-dir', materialized.dir] : []),
+            ...dossierDesPiecesJointesDuTourDeChat(materialized, filDeLAppel(opts)),
             // ÉTAPES DU TOUR (2026-10-17) : la liste de tâches de claude.exe, relayée
             // dans le fil par `claude-etapes.ts`. Coût mesuré : +2 850 jetons de prompt par appel.
             '--tools',
@@ -1935,10 +1982,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             ...outilsMcpAutorises
           )
           // GROS CHANTIERS : `Workflow` s'ajoute à la liste du tour
-          // quand l'utilisateur le demande, et seulement là : sa définition pèse 8 242 jetons par
+          // quand l'utilisateur le demande : sa définition pèse 8 242 jetons par
           // appel (`claude-workflow.ts`). `OUTILS_TOUR_DE_CHAT` reste sans lui, pour que les tours
           // ordinaires et la question à côté gardent le même début de prompt, donc le même cache.
-          if (demandeUnChantier(lastUser)) {
+          // Une session qui l'a reçu le GARDE : le retirer ferait relire la conversation entière.
+          if (workflowDuTour(lastUser, sessionAvecWorkflow(opts.resumeSessionId))) {
             args[args.lastIndexOf('--tools') + 1] += `,${OUTIL_WORKFLOW}`
             args.push(OUTIL_WORKFLOW) // Suite de `--allowedTools`, le dernier drapeau posé.
           }
@@ -2592,8 +2640,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const chantiersSignales = new Set<string>()
     const handleEvent = (o: Record<string, unknown>): void => {
       const t = o['type']
-      if (t === 'system' && o['subtype'] === 'init' && typeof o['session_id'] === 'string')
+      if (t === 'system' && o['subtype'] === 'init' && typeof o['session_id'] === 'string') {
         sessionDesEtapes = o['session_id'] as string
+        // La session garde `Workflow` aux tours suivants (`workflowDuTour`, claude-workflow.ts).
+        if (args.includes(OUTIL_WORKFLOW)) retenirSessionAvecWorkflow(sessionDesEtapes)
+      }
       // GROS CHANTIER : relayé au fil par les mêmes lignes de statut que les étapes du tour. Sa tâche
       // et celles de ses agents ne passent pas par le suivi des tâches de fond plus bas, qui les
       // annoncerait perdues à la fin du tour.

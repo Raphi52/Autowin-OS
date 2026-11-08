@@ -56,17 +56,21 @@ export function signatureDeCommande(commande: {
 }
 
 /**
- * REGLES DE TRAVAIL VISUEL — bloc CONDITIONNEL, servi en SUFFIXE du prompt systeme.
+ * REGLES DE TRAVAIL VISUEL — bloc CONDITIONNEL, servi dans le MESSAGE du tour, jamais dans le
+ * prompt systeme (`blocVisuelDuTour`, injecte par `agent-pilot/message-du-tour.ts`).
+ *
+ * POURQUOI PLUS DANS LE SYSTEME (mesure du 2026-11-08, `scripts/poids-du-contexte.mjs`, rubrique
+ * « Fils repris », croisee avec `prompt-observability/systems/`) : place en DERNIER bloc systeme, il
+ * apparaissait ou disparaissait selon les mots du message. Mais le systeme precede TOUT l'historique
+ * d'une session reprise : changer sa queue fait relire hors cache la conversation entiere, pas
+ * seulement la queue. 9 reprises sur 17 dont la memoire de relecture avait casse ce jour-la ne
+ * differaient QUE par ce bloc (2 856 caracteres) : 8,41 $ reecrits, contre ~700 tokens economises
+ * par tour non visuel. Dans le message du tour, il arrive APRES ce qui est deja en cache.
  *
  * Mesure du 2026-09-16 (trace prompt-observability) : le prompt systeme du chat pesait
  * 16 982 tokens a CHAQUE tour, dont 3 966 caracteres (~1 000 tokens) de regles de TRAVAIL visuel
  * qui ne servent QUE sur un tour touchant a l'interface ou capturant un ecran. Ailleurs, elles
  * occupaient la fenetre pour rien.
- *
- * POURQUOI UN SUFFIXE, ET PAS UNE COUPE DANS LE CORPS : le prompt systeme est mis en cache par le
- * provider, et un cache ne vaut que par son PREFIXE. Un bloc retire au MILIEU ferait diverger tout
- * ce qui suit et forcerait la reecriture complete du cache a chaque bascule — plus cher que ce
- * qu on economise. Place en DERNIER bloc systeme (voir agent-pilot.ts), seule la queue diverge.
  *
  * Ce qui RESTE inconditionnel a dessein : le DECLENCHEUR des formats de reponse (EXPRESSION
  * VISUELLE : quel bloc, direction, classes, LARGEUR de base) regit la FORME de TOUTE reponse, pas
@@ -148,8 +152,8 @@ export const REGLES_VISUELLES: string =
  *  - DANS LE CHAT, cette variable n'est pas posee : le mod laisse passer le lancement. La regle n'y
  *    tient que par du texte — ce bloc, et la phrase `REGLE_BUREAU_CACHE` que le mod ajoute a la
  *    description de l'outil shell. Ce bloc doit donc arriver a CHAQUE tour.
- * `chat-pilotage-prompt.ecran-porteurs.test.ts` lie ce paragraphe a ces faits. Le bloc se place
- * avant le bloc visuel : prefixe stable, relu depuis le cache.
+ * `chat-pilotage-prompt.ecran-porteurs.test.ts` lie ce paragraphe a ces faits. Dernier bloc du
+ * systeme, identique a chaque tour : relu depuis le cache.
  */
 export const REGLES_ECRAN_UTILISATEUR: string =
   // NON INVASIF PAR DEFAUT (kaizen, tour c14c2d28-f864-4ca5-ba3f-3dfe24e41d47,
@@ -221,25 +225,40 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   ''
 
 /**
- * Les deux derniers blocs du prompt systeme du chat, dans l'ordre. Pure : `agent-pilot.ts` l'appelle
- * telle quelle, ce qui fait de son test une preuve sur le chemin reel et non sur une copie.
- * L'ecran de l'utilisateur est TOUJOURS servi, identique pour tous les fils ; les regles de travail
- * visuel restent conditionnelles et portent, comme avant, l'identifiant explicite du fil.
+ * Le dernier bloc du prompt systeme du chat. Pure : `agent-pilot.ts` l'appelle telle quelle, ce qui
+ * fait de son test une preuve sur le chemin reel et non sur une copie. TOUJOURS servi, identique
+ * pour tous les fils et d'un tour a l'autre : le systeme ne depend plus du message.
  */
-export function blocsSystemeEcran(
-  dernierMessage: string,
-  imageJointe: boolean,
+export function blocsSystemeEcran(): Array<{ name: string; text: string }> {
+  return [{ name: 'ecranUtilisateur', text: REGLES_ECRAN_UTILISATEUR }]
+}
+
+/** En-tete du bloc visuel du message : dit au modele d'ou vient la consigne et ce qu'elle couvre. */
+export const ENTETE_REGLES_VISUELLES =
+  'RÈGLES DE TRAVAIL VISUEL — consigne de l’app pour ce tour, qui touche à l’interface, à une capture ' +
+  'ou à une image (ce n’est pas une demande de l’utilisateur). Elle vaut pour toute la suite de cette session.\n'
+
+/** Rappel d'une ligne quand la session reprise porte deja le bloc entier. */
+export const RAPPEL_REGLES_VISUELLES =
+  'RÈGLES DE TRAVAIL VISUEL — le bloc « RÈGLES DE TRAVAIL VISUEL » remis plus haut dans cette session s’applique aussi à ce tour.'
+
+/**
+ * Les regles de travail visuel du tour, a joindre au MESSAGE (voir `REGLES_VISUELLES`) : vide si le
+ * tour ne touche ni a l'interface ni a une image ; entieres une fois par session, puis un rappel
+ * d'une ligne. Elles portent l'identifiant explicite du fil (`consigneBureauCacheChat`).
+ */
+export function blocVisuelDuTour(p: {
+  dernierMessage: string
+  imageJointe: boolean
   conversationId: string
-): Array<{ name: string; text: string }> {
-  return [
-    { name: 'ecranUtilisateur', text: REGLES_ECRAN_UTILISATEUR },
-    {
-      name: 'visuel',
-      text: tourTouchantAuVisuel(dernierMessage, imageJointe)
-        ? REGLES_VISUELLES + consigneBureauCacheChat(conversationId)
-        : ''
-    }
-  ]
+  dejaDansLaSession: boolean
+}): { texte: string; entier: string; complet: boolean } {
+  if (!tourTouchantAuVisuel(p.dernierMessage, p.imageJointe))
+    return { texte: '', entier: '', complet: false }
+  const entier =
+    ENTETE_REGLES_VISUELLES + REGLES_VISUELLES + consigneBureauCacheChat(p.conversationId)
+  if (p.dejaDansLaSession) return { texte: RAPPEL_REGLES_VISUELLES, entier, complet: false }
+  return { texte: entier, entier, complet: true }
 }
 
 /**

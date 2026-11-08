@@ -67,6 +67,14 @@ export interface TurnMessageParts {
    * ensuite. Vide pour une question, un avis ou une analyse.
    */
   growAuDebut?: string
+  /**
+   * Règles de travail visuel du tour (`blocVisuelDuTour`, consignes/chat-pilotage-prompt.ts) : dans
+   * le message et non dans le système, qui doit rester identique d'un tour à l'autre. En reprise, le
+   * texte choisi (entier ou rappel) ; sans reprise, toujours le bloc entier, que la nouvelle session
+   * n'a jamais reçu.
+   */
+  reglesVisuelles?: string
+  reglesVisuellesEntieres?: string
   /** Le fil complet, utilisé quand aucune session CLI n'est reprise. */
   history: ReadonlyArray<{
     role: string
@@ -493,6 +501,7 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
         { name: 'messagesDesFils', text: parts.messagesDesFils ?? '' },
         { name: 'skillBody', text: parts.skillBody ?? '' },
         { name: 'growAuDebut', text: parts.growAuDebut ?? '' },
+        { name: 'reglesVisuelles', text: parts.reglesVisuelles ?? '' },
         {
           name: nonVu ? 'repriseSessionAvecTourManquant' : 'repriseSession',
           text: nonVu
@@ -515,6 +524,10 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
         { name: 'messagesDesFils', text: parts.messagesDesFils ?? '' },
         { name: 'skillBody', text: parts.skillBody ?? '' },
         { name: 'growAuDebut', text: parts.growAuDebut ?? '' },
+        {
+          name: 'reglesVisuelles',
+          text: parts.reglesVisuellesEntieres ?? parts.reglesVisuelles ?? ''
+        },
         // Une page `html-render` de l'agent y revient en texte VISIBLE, pas en code : sinon ses
         // balises et son `<style>` repartaient a chaque tour. Les mots de l'utilisateur,
         // eux, restent intacts.

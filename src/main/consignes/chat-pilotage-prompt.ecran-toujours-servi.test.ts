@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from '../agent-pilot/agent-pilot'
 import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
-import { blocsSystemeEcran, tourTouchantAuVisuel } from './chat-pilotage-prompt'
+import { blocVisuelDuTour, blocsSystemeEcran, tourTouchantAuVisuel } from './chat-pilotage-prompt'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
@@ -25,24 +25,31 @@ describe("regles de l'ecran de l'utilisateur servies a chaque tour (conv-835)", 
   // Le nom du bureau (« chat-<id du fil> ») a quitté ce bloc (revue 2026-11-06, doublon) : les
   // outils `bureau_cache_*` le fixent eux-mêmes, et un tour visuel reçoit l'identifiant réel du fil.
   it('sert quand meme le bloc ecran, et dit que les outils fixent le bureau du fil', () => {
-    const [ecran, visuel] = blocsSystemeEcran(MESSAGE_DU_TOUR, false, 'conv-835')
+    const blocs = blocsSystemeEcran()
+    const [ecran] = blocs
     expect(ecran.name).toBe('ecranUtilisateur')
     expect(ecran.text).toContain("ECRAN DE L'UTILISATEUR = SON ESPACE")
     expect(ecran.text).toContain("ORDRE : d'abord le bureau cache")
     expect(ecran.text).toContain('le fil et ton identifiant de bureau sont fixes pour toi')
-    expect(visuel).toEqual({ name: 'visuel', text: '' })
+    // Plus de bloc visuel dans le système : il dépendait du message (voir blocVisuelDuTour).
+    expect(blocs).toHaveLength(1)
   })
 
   it('reste identique pour tous les fils : le prefixe systeme reste cachable', () => {
-    const [a] = blocsSystemeEcran(MESSAGE_DU_TOUR, false, 'conv-835')
-    const [b] = blocsSystemeEcran(MESSAGE_DU_TOUR, false, 'conv-1')
+    const [a] = blocsSystemeEcran()
+    const [b] = blocsSystemeEcran()
     expect(a.text).toBe(b.text)
-    const [, visuel] = blocsSystemeEcran('regarde la fenêtre', false, 'conv-835')
-    expect(visuel.text).toContain('-Id chat-conv-835')
+    const visuel = blocVisuelDuTour({
+      dernierMessage: 'regarde la fenêtre',
+      imageJointe: false,
+      conversationId: 'conv-835',
+      dejaDansLaSession: false
+    })
+    expect(visuel.texte).toContain('-Id chat-conv-835')
   })
 
   it("dit qu'un lien de protocole ou une app deja ouverte agit sur SON ecran, et qu'il faut demander", () => {
-    const [ecran] = blocsSystemeEcran(MESSAGE_DU_TOUR, false, 'conv-835')
+    const [ecran] = blocsSystemeEcran()
     expect(ecran.text).toContain('msteams:')
     expect(ecran.text).toContain('Start-Process')
     expect(ecran.text).toContain('--user-data-dir')
@@ -55,20 +62,26 @@ describe("regles de l'ecran de l'utilisateur servies a chaque tour (conv-835)", 
     // Juge de la reparation 5 : « Ce profil n'est PAS connecte a son compte » devient
     // faux des que l'utilisateur s'y connecte, et le profil edge-teams n'etait pas nomme.
     // fix-ok: REGLES_ECRAN_UTILISATEUR (chat-pilotage-prompt.ts, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8) figeait « n'est PAS connecte » sans nommer edge-teams ; ce test rejoue sur bc9b13d9^ le 2026-09-26 = rouge (1/8, « to contain 'autowin-hdesk\\edge-teams' »), sur bc9b13d9 = vert
-    const [ecran] = blocsSystemeEcran(MESSAGE_DU_TOUR, false, 'conv-835')
+    const [ecran] = blocsSystemeEcran()
     expect(ecran.text).toContain('autowin-hdesk\\edge-teams')
     expect(ecran.text).not.toContain("n'est PAS connecte")
   })
 
   it('garde les regles de travail visuel conditionnelles', () => {
-    const [, visuel] = blocsSystemeEcran(
-      'le bouton de la sidebar est mal aligné',
-      false,
-      'conv-835'
-    )
-    expect(visuel.text).toContain('PREUVE VISUELLE FRONT')
-    const [, avecImage] = blocsSystemeEcran('et ça ?', true, 'conv-835')
-    expect(avecImage.text).toContain('skills/look/SKILL.md')
+    const visuel = blocVisuelDuTour({
+      dernierMessage: 'le bouton de la sidebar est mal aligné',
+      imageJointe: false,
+      conversationId: 'conv-835',
+      dejaDansLaSession: false
+    })
+    expect(visuel.texte).toContain('PREUVE VISUELLE FRONT')
+    const avecImage = blocVisuelDuTour({
+      dernierMessage: 'et ça ?',
+      imageJointe: true,
+      conversationId: 'conv-835',
+      dejaDansLaSession: false
+    })
+    expect(avecImage.texte).toContain('skills/look/SKILL.md')
   })
 
   /**
@@ -110,8 +123,9 @@ describe("regles de l'ecran de l'utilisateur servies a chaque tour (conv-835)", 
   it("est bien la fonction qu'agent-pilot.ts appelle pour construire le prompt systeme", () => {
     // agent-pilot.ts et ses modules agent-pilot/*.ts : le prompt systeme vit dans systeme-du-tour.ts.
     const source = sourceDuPilote()
-    expect(source).toContain('...blocsSystemeEcran(')
-    // Plus aucun chemin parallele qui re-servirait les regles visuelles sous condition a part.
+    expect(source).toContain('...blocsSystemeEcran()')
+    // Les regles visuelles ne passent que par blocVisuelDuTour, dans le message du tour.
+    expect(source).toContain('blocVisuelDuTour(')
     expect(source).not.toContain('REGLES_VISUELLES')
   })
 })

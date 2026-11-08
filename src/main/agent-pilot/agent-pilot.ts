@@ -229,6 +229,9 @@ export class AgentPilot {
    */
   private readonly growDejaEnvoye = new Set<string>()
 
+  /** Même règle pour les règles de travail visuel (`blocVisuelDuTour`, chat-pilotage-prompt.ts). */
+  private readonly visuelDejaEnvoye = new Set<string>()
+
   /**
    * L'index memoire ci-dessus est HYDRATE une fois depuis le disque, puis maintenu en miroir.
    *
@@ -423,8 +426,6 @@ export class AgentPilot {
       sendLimits,
       conversationId,
       catalog,
-      latestUserMessage,
-      history,
       executionWorkspace: (id) => this.executionWorkspace(id),
       projectContext: (id) => this.projectContext(id)
     })
@@ -453,6 +454,7 @@ export class AgentPilot {
       lectureRetenue: lectureRetenueDuTour(),
       bus: this.bus,
       growDejaEnvoye: this.growDejaEnvoye,
+      visuelDejaEnvoye: this.visuelDejaEnvoye,
       rappelDejaEnvoye: this.rappelDejaEnvoye,
       dernierEtatPousse: this.dernierEtatPousse,
       consommerCompteRendu: (id) => this.consommerCompteRendu(id)

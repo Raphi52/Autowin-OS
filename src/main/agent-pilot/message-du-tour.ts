@@ -2,6 +2,7 @@
 // non vu, rappel de conversations, messages des autres fils, blocs nommés. Sorti tel quel de
 // AgentPilot.chat() (lot 2).
 import { blocGrowDuTour } from '../chat/grow-au-debut'
+import { blocVisuelDuTour } from '../consignes/chat-pilotage-prompt'
 import {
   buildTurnMessageBlocks,
   type TurnMessageBlock,
@@ -49,6 +50,8 @@ export function messageDuTour(entree: {
   lectureRetenue: LectureRetenue | undefined
   bus: Pick<AppCommandBus, 'rappelPourDemande' | 'messagesDesFilsPourTour'>
   growDejaEnvoye: Set<string>
+  /** Sessions qui portent déjà les règles de travail visuel entières (absent : aucune). */
+  visuelDejaEnvoye?: Set<string>
   rappelDejaEnvoye: Map<string, Set<string>>
   dernierEtatPousse: Map<string, unknown>
   consommerCompteRendu: (conversationId: string) => string | undefined
@@ -64,6 +67,7 @@ export function messageDuTour(entree: {
     lectureRetenue,
     bus,
     growDejaEnvoye,
+    visuelDejaEnvoye = new Set<string>(),
     rappelDejaEnvoye,
     dernierEtatPousse,
     consommerCompteRendu
@@ -130,6 +134,20 @@ export function messageDuTour(entree: {
     active: () => nativeSkills().find((s) => s.id === 'grow')?.enabled !== false
   })
   if (grow.complet) growDejaEnvoye.add(cleGrow)
+  /*
+   * RÈGLES DE TRAVAIL VISUEL : jointes au MESSAGE, jamais au système. Le système précède tout
+   * l'historique d'une session reprise : un bloc qui y apparaît ou disparaît selon les mots du
+   * message fait relire la conversation entière hors cache (mesure dans chat-pilotage-prompt.ts). Même cycle
+   * que grow : entières une fois par session, puis un rappel d'une ligne.
+   */
+  if (!resumeSessionId) visuelDejaEnvoye.delete(cleGrow)
+  const visuel = blocVisuelDuTour({
+    dernierMessage: lastUserMessage?.content ?? '',
+    imageJointe: (lastUserMessage?.attachments ?? []).some((piece) => piece.kind === 'image'),
+    conversationId: conversationId ?? '',
+    dejaDansLaSession: visuelDejaEnvoye.has(cleGrow)
+  })
+  if (visuel.complet) visuelDejaEnvoye.add(cleGrow)
   /**
    * Le compte-rendu d'un tour execute sans le modele est CONSOMME ici — une seule fois.
    *
@@ -198,6 +216,8 @@ export function messageDuTour(entree: {
     messagesDesFils,
     skillBody,
     growAuDebut: grow.texte,
+    reglesVisuelles: visuel.texte,
+    reglesVisuellesEntieres: visuel.entier,
     history,
     resumeSessionId,
     lastUserMessage: lastUserMessage?.content,
