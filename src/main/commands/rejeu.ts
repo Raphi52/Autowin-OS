@@ -7,7 +7,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { redactTrace } from '../activity/trace-redact'
+import { redactTrace } from '../../shared/trace-redact'
 
 function canonicalValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalValue)

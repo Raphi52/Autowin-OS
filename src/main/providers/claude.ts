@@ -2,7 +2,7 @@
 import { joinThinking } from './thinking'
 import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 import { ligneDErreurDAction } from '../../shared/erreur-d-action'
-import { redactTrace } from '../activity/trace-redact'
+import { redactTrace } from '../../shared/trace-redact'
 import { enregistrerTarifsCli } from '../activity/cli-usage-recovery'
 import {
   assertArgvWithinLimit,

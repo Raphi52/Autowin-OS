@@ -115,10 +115,10 @@ exiger la preuve. Corrige à la cause et couvre par un test.`,
   secret: {
     libelle: 'mot de passe collé après une adresse mail recopié en clair (ee4ee257)',
     correctif: 'ee4ee257',
-    oracle: ['src/main/activity/trace-redact.test.ts'],
+    oracle: ['src/shared/trace-redact.test.ts'],
     enonce: `Défaut signalé : un utilisateur a tapé dans le chat son adresse mail suivie de son mot de passe, par
 exemple \`user@corp365.onmicrosoft.com Secr3t2026! je suis a l hopital\`. Le texte a été recopié TEL QUEL
-dans un dossier d'analyse, alors que les traces passent par \`redactTrace\` (src/main/activity/trace-redact.ts),
+dans un dossier d'analyse, alors que les traces passent par \`redactTrace\` (src/shared/trace-redact.ts),
 qui doit masquer les secrets. Attendu : le mot de passe est masqué comme les autres secrets du fichier ;
 l'adresse mail, qui n'est pas un secret, reste lisible ; une phrase ordinaire qui cite une adresse mail
 (\`écris à user@corp.com merci\`) n'est pas modifiée. Corrige à la cause et couvre par un test.`

@@ -11,7 +11,7 @@ import { appendFile, mkdir, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { ensureAutowinAppData } from '../app/app-data'
-import { redactTrace } from './trace-redact'
+import { redactTrace } from '../../shared/trace-redact'
 import type { BrainNavigation, BrainUnavailableReason } from '../brain/brain-retrieval'
 
 /**

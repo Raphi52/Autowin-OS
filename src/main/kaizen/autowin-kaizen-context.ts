@@ -9,7 +9,7 @@ import { readConversationTurnJournals, type TurnJournalEvent } from '../runs/tur
 import type { TraceEventV1 } from '../activity/trace-event'
 import type { Conversation } from '../store/conversations'
 import { lireSaisies, type SaisieJournalisee } from '../store/journal-saisie'
-import { redactTrace } from '../activity/trace-redact'
+import { redactTrace } from '../../shared/trace-redact'
 import { dossiersDeSkills } from '../skills/skill-pipeline'
 import { sansPrecisionDeLecture } from '../chat/deux-lectures'
 

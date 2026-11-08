@@ -21,7 +21,7 @@
  * Ce module est PUR côté décision (validation, forme du candidat) ; l'appel réseau est injectable.
  */
 
-import { SECRET_SHAPES_SOURCE } from '../activity/trace-redact'
+import { SECRET_SHAPES_SOURCE } from '../../shared/trace-redact'
 import { readFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { deposerFichier, relireFichier } from '../gel/ecriture-hors-fil'

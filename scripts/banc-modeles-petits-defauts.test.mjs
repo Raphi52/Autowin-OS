@@ -38,7 +38,7 @@ describe('banc-modeles-petits-defauts (conv-1097)', () => {
     expect(prompt('poids')).toContain('src/main/chat/chat-session-poids.ts')
     expect(prompt('poids')).not.toContain('chat-usage')
     expect(prompt('animation')).not.toContain('ANIMATION_DECLAREE')
-    expect(prompt('secret')).toContain('src/main/activity/trace-redact.ts')
+    expect(prompt('secret')).toContain('src/shared/trace-redact.ts')
     expect(prompt('secret')).not.toContain('EMAIL_CREDENTIAL')
     expect(prompt('veille')).toContain('src/main/veille/passe.ts')
     expect(prompt('veille')).not.toContain('matchAll')

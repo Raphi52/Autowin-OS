@@ -1,6 +1,6 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { redactTrace, recordOf } from './trace-redact'
+import { redactTrace, recordOf } from '../../shared/trace-redact'
 import {
   NATIVE_PREFLIGHT_SCHEMA,
   NATIVE_TRACE_BOUNDARY,

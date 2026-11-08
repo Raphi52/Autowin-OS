@@ -3,7 +3,7 @@ import { demandeHumaineEntiere } from '../../shared/balise-message-utilisateur'
 import { motsUtilisateur } from '../chat/chat-turn-messages'
 import { evidencePayloads } from './evidence-payloads'
 import { assertTraceEvent, type TraceEventV1, type TracePayload } from './trace-event'
-import { redactTrace } from './trace-redact'
+import { redactTrace } from '../../shared/trace-redact'
 
 /**
  * DEUX FAITS D'UN TOUR DE CHAT QUE LA TRACE NE GARDAIT PAS — pour l'arbre du panneau Détails.
