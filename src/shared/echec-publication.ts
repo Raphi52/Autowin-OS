@@ -45,6 +45,11 @@ const MOTIFS_SKIPPED: Record<string, Omit<RefusDePublication, 'titre'>> = {
     raison:
       "la copie de ce fil n'a pas pu entrer dans main (conflit avec la base, base absente ou erreur git)",
     action: 'Règle la cause (fichiers en conflit, base du fil), puis relance /git.'
+  },
+  // Dépôt qui n'est pas celui d'Autowin : la clôture n'envoie rien ; le commit local reste.
+  'depot-tiers': {
+    raison: "ce dépôt n'est pas celui d'Autowin, donc rien n'a été envoyé vers son serveur",
+    action: "Le commit reste sur ce poste. Tu l'envoies toi-même si tu le veux."
   }
 }
 

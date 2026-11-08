@@ -55,6 +55,8 @@ async function depot(): Promise<{ repo: string; remote: string }> {
   await run('git', ['config', 'user.name', 'T'], { cwd: repo })
   writeFileSync(join(repo, 'base.txt'), 'base\n')
   writeFileSync(join(repo, 'partage.ts'), 'export const partage = 0\n')
+  // Dépôt d'Autowin : la garde d'envoi ne laisse partir que celui-là.
+  writeFileSync(join(repo, 'package.json'), '{"name":"autowin-os"}\n')
   await run('git', ['add', '-A'], { cwd: repo })
   await run('git', ['commit', '-m', 'base'], { cwd: repo })
   await run('git', ['remote', 'add', 'origin', remote], { cwd: repo })
@@ -210,7 +212,11 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
     // quelle conversation finir ou commiter pour débloquer la publication.
     expect(report?.exclus?.[0].fils).toEqual(['conv-B'])
     expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
-    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['base.txt', 'partage.ts'])
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual([
+      'base.txt',
+      'package.json',
+      'partage.ts'
+    ])
     expect(await enAttente(repo)).toContain('partage.ts')
   })
 
@@ -250,7 +256,11 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
       exclus: [{ path: 'mine.ts', motif: 'import-hors-commit', importsHorsCommit: ['aide.ts'] }]
     })
     expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
-    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['base.txt', 'partage.ts'])
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual([
+      'base.txt',
+      'package.json',
+      'partage.ts'
+    ])
   })
 
   it('publie ensemble un fichier et le module qu’il importe quand le tour a écrit les deux', async () => {
@@ -702,7 +712,11 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
       verification: { statut: 'echec' }
     })
     expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
-    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['base.txt', 'partage.ts'])
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual([
+      'base.txt',
+      'package.json',
+      'partage.ts'
+    ])
     expect(await enAttente(repo)).toContain('mine.ts')
   })
 
@@ -831,7 +845,11 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
       typage: { statut: 'echec' }
     })
     expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
-    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['base.txt', 'partage.ts'])
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual([
+      'base.txt',
+      'package.json',
+      'partage.ts'
+    ])
     expect(await enAttente(repo)).toContain('mine.ts')
   })
 

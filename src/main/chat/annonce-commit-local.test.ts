@@ -92,6 +92,22 @@ describe('annonceCommitLocal', () => {
     expect((ligne ?? '').split('⛔').length - 1).toBe(1)
   })
 
+  it('un dépôt qui n’est pas Autowin : la réponse dit en clair que rien n’a été envoyé, et pourquoi', () => {
+    const refus = refusDePublication({ status: 'skipped', reason: 'depot-tiers' })
+    const ligne = annonceCommitLocal(
+      { outcome: 'merged', committed: true, publishedSha: 'abcdef1234567890' },
+      'run-1',
+      'Travail tiers',
+      undefined,
+      refus
+    )
+    expect(ligne).toContain('non poussé')
+    expect(ligne).toContain('⛔ Envoi refusé')
+    expect(ligne).toContain("ce dépôt n'est pas celui d'Autowin")
+    expect(ligne).toContain("rien n'a été envoyé")
+    expect((ligne ?? '').split('⛔').length - 1).toBe(1)
+  })
+
   it('sans refus, la phrase « non poussé » reste celle d’avant : rien d’ajouté', () => {
     const ligne = annonceCommitLocal(
       { outcome: 'merged', committed: true, publishedSha: 'abcdef1234567890' },

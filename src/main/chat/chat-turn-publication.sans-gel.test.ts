@@ -39,6 +39,8 @@ async function depot(): Promise<string> {
   await run('git', ['config', 'user.email', 't@t.t'], { cwd: repo })
   await run('git', ['config', 'user.name', 'T'], { cwd: repo })
   writeFileSync(join(repo, 'base.txt'), 'base\n')
+  // Dépôt d'Autowin : la garde d'envoi ne laisse partir que celui-là.
+  writeFileSync(join(repo, 'package.json'), '{"name":"autowin-os"}\n')
   await run('git', ['add', '-A'], { cwd: repo })
   await run('git', ['commit', '-m', 'base'], { cwd: repo })
   await run('git', ['remote', 'add', 'origin', remote], { cwd: repo })

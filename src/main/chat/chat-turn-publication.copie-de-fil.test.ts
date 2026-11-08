@@ -62,6 +62,8 @@ async function depotAvecCopie(): Promise<{
   await run('git', ['config', 'user.name', 'T'], { cwd: repo })
   writeFileSync(join(repo, '.gitignore'), '.autowin-data\n')
   writeFileSync(join(repo, 'partage.ts'), 'export const partage = 0\n')
+  // Dépôt d'Autowin : la garde d'envoi ne laisse partir que celui-là.
+  writeFileSync(join(repo, 'package.json'), '{"name":"autowin-os"}\n')
   await run('git', ['add', '-A'], { cwd: repo })
   await run('git', ['commit', '-m', 'base'], { cwd: repo })
   await run('git', ['remote', 'add', 'origin', remote], { cwd: repo })
