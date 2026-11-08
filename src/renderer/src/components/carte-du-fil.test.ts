@@ -153,6 +153,57 @@ describe('carteDuFil — la couleur suit la PREUVE', () => {
     expect(etapes[0].constat).toContain('arrêté au contrôle final — aucun test rouge')
   })
 
+  /**
+   * Une orchestration coupée par la limite d'usage du compte ou par un arrêt voulu n'est pas un
+   * refus : rien n'a été jugé ni n'a échoué, le travail n'a pas eu lieu. Textes recopiés des journaux
+   * de tour des dix demandes notées « refusé » du 05 au 07/11/2026.
+   */
+  describe('une orchestration interrompue sans défaut', () => {
+    const tete = "Fan-out build (rôle subagent) : aucun modèle n'a produit de sortie"
+    const QUOTA = `${tete}\n• claude (claude-opus-5-5) : Claude a interrompu l'appel : You've hit your 5-hour limit · resets 12:50pm (Europe/Paris)`
+    const ARRET = `${tete}\n• claude (claude-opus-5-5) : arret demande par conv-1667 (arreter_un_fil) : Lot 5 parti sans le pont IPC du lot 1 : il le referait en double et serait bloqué pareil.`
+    const PANNE = `${tete}\n• codex (gpt-5.6) : codex non authentifié — lance \`codex login\``
+    const orchestration = (error: string): unknown => ({
+      kind: 'action',
+      name: 'orchestrate',
+      ok: true,
+      data: { error }
+    })
+    const etapeDe = (parts: unknown[]): EtapeCarte =>
+      carteDuFil({ fil: [user('construis', 1), asst(2, parts)] }).etapes[0]
+
+    it('la limite d’usage : sans preuve, et le constat le dit', () => {
+      expect(etapeDe([orchestration(QUOTA)])).toMatchObject({
+        statut: 'sans-preuve',
+        constat: 'interrompu par la limite d’usage du modèle — pas un refus'
+      })
+    })
+
+    it('un arrêt voulu (un autre fil, ou le bouton Stop) : sans preuve, et le constat le dit', () => {
+      expect(etapeDe([orchestration(ARRET)])).toMatchObject({
+        statut: 'sans-preuve',
+        constat: 'arrêté volontairement — pas un refus'
+      })
+    })
+
+    it('une vraie panne reste refusée — discriminant', () => {
+      expect(etapeDe([orchestration(PANNE)]).statut).toBe('refuse')
+    })
+
+    it('interrompue APRÈS un test vert : pas prouvé, le travail demandé n’a pas eu lieu', () => {
+      expect(etapeDe([verify('npm test', 0), orchestration(QUOTA)]).statut).toBe('sans-preuve')
+    })
+
+    it('interrompue puis relancée jusqu’au vert : prouvé', () => {
+      const relancee = { kind: 'action', name: 'orchestrate', ok: true, data: { status: 'green' } }
+      expect(etapeDe([orchestration(QUOTA), relancee]).statut).toBe('prouve')
+    })
+
+    it('une vraie panne à côté d’une interruption reste refusée', () => {
+      expect(etapeDe([orchestration(QUOTA), verify('npm run typecheck', 1)]).statut).toBe('refuse')
+    })
+  })
+
   it('un tour fini sans aucune vérification n’est JAMAIS vert', () => {
     const { etapes, prouvees } = carteDuFil({
       fil: [user('explique', 1), asst(2, [texte('voilà')])]

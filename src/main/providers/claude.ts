@@ -1624,7 +1624,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     messages: Message[],
     opts: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
-    opts.signal?.throwIfAborted()
+    if (opts.signal?.aborted) throw abortFailure('claude CLI', opts.signal)
     const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')
     const materialized = lastUserMessage?.attachments?.length
       ? materializeClaudeAttachments(lastUserMessage.attachments)
@@ -1640,7 +1640,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         execution?.causallyIsolated && execution.sandbox !== 'read-only'
           ? await captureWorkspaceMutationSnapshot(execution.cwd, execution.causalWatchPaths)
           : undefined
-      opts.signal?.throwIfAborted()
+      if (opts.signal?.aborted) throw abortFailure('claude CLI', opts.signal)
     } catch (error) {
       // Une annulation peut arriver pendant la capture asynchrone du workspace, avant que le
       // process CLI (et donc son handler `close`) n'existe. Nettoyer ici les pièces jointes déjà

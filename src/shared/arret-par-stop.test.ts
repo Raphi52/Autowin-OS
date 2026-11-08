@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { MOTIF_STOP_DU_CHAT, estArretParStop } from './arret-par-stop'
+import {
+  MOTIF_STOP_DU_CHAT,
+  estArretParStop,
+  interruptionSansDefaut,
+  motifArreterUnFil
+} from './arret-par-stop'
 
 describe('estArretParStop — un appel coupé par le bouton Stop du chat', () => {
   it('reconnaît l’erreur d’abort réelle de conv-955, même enveloppée par la phase', () => {
@@ -45,5 +50,98 @@ describe('estArretParStop — un appel coupé par le bouton Stop du chat', () =>
     expect(estArretParStop(`• codex : quota\n• claude : ${MOTIF_STOP_DU_CHAT}`)).toBe(false)
     expect(estArretParStop(undefined)).toBe(false)
     expect(estArretParStop('')).toBe(false)
+  })
+})
+
+/**
+ * UN RUN COUPÉ PAR UNE LIMITE D'USAGE OU PAR UN ARRÊT VOULU N'A RIEN DE DÉFECTUEUX.
+ *
+ * Relevé du 05 au 07/11/2026 : dix demandes notées « refusé — échec : Fan-out build (rôle subagent) :
+ * aucun modèle n'a produit de sortie ». Aucune n'était une panne : huit butaient sur la limite de
+ * 5 heures du compte Claude, deux avaient été coupées par un autre fil (`arreter_un_fil`). Les textes
+ * ci-dessous sont recopiés des journaux de tour de ces demandes.
+ */
+describe('interruptionSansDefaut — limite d’usage ou arrêt voulu, pas une panne', () => {
+  const tete = "Fan-out build (rôle subagent) : aucun modèle n'a produit de sortie"
+  const QUOTA_REEL = `${tete}\n• claude (claude-opus-5-5) : Claude a interrompu l'appel : You've hit your 5-hour limit · resets 12:50pm (Europe/Paris)`
+  const ARRET_PAR_UN_FIL_HISTORIQUE = `${tete}\n• claude (claude-opus-5-5) : arret demande par conv-1667 (arreter_un_fil) : Lot 2 parti sans le code du lot 1 (resté dans sa copie, bloqué par le contrôle final) : il le referait en double et serait bloqué pareil.`
+
+  it('la limite d’usage réelle d’un fan-out', () => {
+    expect(interruptionSansDefaut(QUOTA_REEL)).toBe('limite-d-usage')
+  })
+
+  it('l’arrêt d’un fil par un autre, sous sa forme historique sans signature', () => {
+    expect(interruptionSansDefaut(ARRET_PAR_UN_FIL_HISTORIQUE)).toBe('arret-voulu')
+  })
+
+  it('l’arrêt d’un fil par un autre, signé par l’émetteur d’abort, même enveloppé par la phase', () => {
+    const motif = motifArreterUnFil('conv-1667', 'Lot 5 parti sans le pont IPC du lot 1')
+    expect(
+      interruptionSansDefaut(`[abort] appel provider interrompu : ${motif}\nlast-event=none`)
+    ).toBe('arret-voulu')
+    expect(
+      interruptionSansDefaut(
+        `Phase build — appel du rôle subagent INTERROMPU avant sa fin : [abort] claude CLI interrompu : ${motif}\nlast-event=none\nstderr=none.`
+      )
+    ).toBe('arret-voulu')
+    expect(
+      interruptionSansDefaut(
+        `${tete}\n• claude (claude-opus-5-5) : [abort] appel provider interrompu : ${motif}`
+      )
+    ).toBe('arret-voulu')
+  })
+
+  it('le bouton Stop du chat est aussi un arrêt voulu', () => {
+    expect(
+      interruptionSansDefaut(
+        `${tete}\n• claude (opus) : [abort] claude CLI interrompu : ${MOTIF_STOP_DU_CHAT}`
+      )
+    ).toBe('arret-voulu')
+  })
+
+  it('un modèle sur sa limite et l’autre coupé par Stop : rien de défectueux', () => {
+    expect(
+      interruptionSansDefaut(
+        `${QUOTA_REEL}\n• codex (gpt-5.6) : [abort] codex exec interrompu : ${MOTIF_STOP_DU_CHAT}`
+      )
+    ).toBe('limite-d-usage')
+  })
+
+  it('une vraie panne reste une panne — discriminants', () => {
+    expect(
+      interruptionSansDefaut(
+        `${tete}\n• codex (gpt-5.6) : codex non authentifié — lance \`codex login\``
+      )
+    ).toBeUndefined()
+    expect(
+      interruptionSansDefaut(
+        `${tete}\n• claude (claude-opus-5-5) : Claude a interrompu l'appel : error_during_execution · 0.0000 USD`
+      )
+    ).toBeUndefined()
+    // Un modèle en panne à côté d'un modèle sur sa limite : la panne ne se cache pas.
+    expect(
+      interruptionSansDefaut(`${QUOTA_REEL}\n• codex (gpt-5.6) : codex CLI exit 1`)
+    ).toBeUndefined()
+    // Un abort pour une autre raison (relance, filet de crash) n'est pas un arrêt voulu.
+    expect(
+      interruptionSansDefaut(
+        `${tete}\n• claude (opus) : [abort] claude CLI interrompu : remplacee par un nouveau lancement sur la meme conversation`
+      )
+    ).toBeUndefined()
+    expect(interruptionSansDefaut(undefined)).toBeUndefined()
+    expect(interruptionSansDefaut('')).toBeUndefined()
+  })
+
+  it('une CITATION du motif d’arrêt n’est pas un arrêt — il faut l’émetteur', () => {
+    expect(
+      interruptionSansDefaut(
+        `${tete}\n• claude (opus) : le test cherche « arret demande par conv-1 (arreter_un_fil) : x » et échoue`
+      )
+    ).toBeUndefined()
+    expect(
+      interruptionSansDefaut(
+        'Le grep trouve « arret demande par conv-1 (arreter_un_fil) : x » dans un fichier'
+      )
+    ).toBeUndefined()
   })
 })

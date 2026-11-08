@@ -63,6 +63,10 @@ function deferredSnapshot(): {
   return { promise, resolve: () => resolvePromise(emptySnapshot()) }
 }
 
+/**
+ * L'arrêt porte la signature `[abort]` d'`abortFailure` (`abort-diagnostic.ts`), comme partout ailleurs :
+ * `throwIfAborted()` jetait la raison nue, et un fil coupé par un autre se lisait en panne.
+ */
 describe('providers CLI — annulation avant lancement', () => {
   it('Claude refuse avant tout spawn', async () => {
     const stream = new ClaudeCliAdapter({ bin: 'claude-test' }).send(
@@ -70,7 +74,7 @@ describe('providers CLI — annulation avant lancement', () => {
       { signal: abortedSignal() }
     )
 
-    await expect(stream.next()).rejects.toMatchObject({ name: 'AbortError' })
+    await expect(stream.next()).rejects.toThrow(/^\[abort\] claude CLI interrompu : /)
     expect(spawns).toEqual({ direct: 0, survivable: 0 })
   })
 
@@ -81,7 +85,7 @@ describe('providers CLI — annulation avant lancement', () => {
       execution: { cwd: process.cwd(), sandbox: 'workspace-write' }
     })
 
-    await expect(stream.next()).rejects.toMatchObject({ name: 'AbortError' })
+    await expect(stream.next()).rejects.toThrow(/^\[abort\] codex exec interrompu : /)
     expect(spawns).toEqual({ direct: 0, survivable: 0 })
   })
 
@@ -132,7 +136,7 @@ describe('providers CLI — annulation avant lancement', () => {
     controller.abort()
     deferred.resolve()
 
-    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    await expect(pending).rejects.toThrow(/^\[abort\] claude CLI interrompu : /)
     expect(spawns).toEqual({ direct: 0, survivable: 0 })
     expect(materializedDirs.every((path) => !existsSync(path))).toBe(true)
   })
@@ -156,7 +160,7 @@ describe('providers CLI — annulation avant lancement', () => {
     controller.abort()
     deferred.resolve()
 
-    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    await expect(pending).rejects.toThrow(/^\[abort\] codex exec interrompu : /)
     expect(spawns).toEqual({ direct: 0, survivable: 0 })
   })
 })

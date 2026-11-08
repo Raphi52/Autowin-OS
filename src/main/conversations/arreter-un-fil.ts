@@ -12,6 +12,7 @@
  * le run coupé ne rende son rouge. Rien n'est supprimé : la copie de travail du run reste.
  */
 import type { ActiveChatTurns } from '../chat/active-chat-turns'
+import { motifArreterUnFil } from '../../shared/arret-par-stop'
 
 /** Borne du motif : il finit dans la trace de l'arrêt, pas dans un rapport. */
 export const MOTIF_MAX_ARRET_FIL = 300
@@ -63,7 +64,7 @@ export function arreterUnFil(
 
   // Le motif dit QUI a coupé : sans cela, la trace du fil arrêté attribuerait le geste à
   // l'utilisateur de ce fil-là, qui n'a rien cliqué.
-  const motif = `arret demande par ${appelant} (arreter_un_fil) : ${motifBrut}`
+  const motif = motifArreterUnFil(appelant, motifBrut)
   const tourCoupe = deps.tours?.abort(fil, motif) ?? false
   const runCoupe = deps.couperLeRun(fil, motif)
 

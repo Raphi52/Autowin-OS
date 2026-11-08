@@ -26,6 +26,7 @@ import { compactageDuFil, questionOuverte } from './carnet-du-fil'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { commandeJouee } from '../../../shared/chat-turn'
 import { constatsRetenus } from '../../../shared/preuve-du-tour'
+import { interruptionSansDefaut, type InterruptionSansDefaut } from '../../../shared/arret-par-stop'
 
 export type StatutEtape = 'prouve' | 'refuse' | 'en-cours' | 'sans-preuve' | 'a-venir'
 
@@ -177,6 +178,32 @@ const libelleDUnTest = (commande: string, codeDeSortie: number): string =>
  * Une commande a la MÊME clé d'où qu'elle vienne : `npm test` rouge par `verify` puis vert au
  * terminal est la même boucle.
  */
+/**
+ * Ce qui a coupé une orchestration en erreur quand rien n'est défectueux : la limite d'usage du
+ * compte, ou un arrêt voulu (bouton Stop, `arreter_un_fil`). L'erreur est lue là où
+ * `orchestrateOutcomeSummary` la lit ; un contrôle final qui refuse reste un refus.
+ */
+function interruptionDeLOrchestration(part: {
+  name?: string
+  ok?: boolean
+  data?: unknown
+}): InterruptionSansDefaut | undefined {
+  if (part.name !== 'orchestrate') return undefined
+  if (typeof part.data === 'string')
+    return part.ok === false ? interruptionSansDefaut(part.data) : undefined
+  const data = part.data as { error?: unknown; gateBlocked?: unknown } | undefined
+  if (!data || data.gateBlocked === true || typeof data.error !== 'string') return undefined
+  return interruptionSansDefaut(data.error)
+}
+
+/** L'état sous lequel `constatsRetenus` garde une interruption : ni vert, ni rouge, jamais couvert. */
+const INTERROMPU = 'interrompu'
+
+const CONSTAT_D_INTERRUPTION: Record<InterruptionSansDefaut, string> = {
+  'limite-d-usage': 'interrompu par la limite d’usage du modèle — pas un refus',
+  'arret-voulu': 'arrêté volontairement — pas un refus'
+}
+
 function constatsDeLaReponse(reponse: AsstMsg): Constat[] {
   const constats: Constat[] = []
   for (const part of reponse.parts ?? []) {
@@ -186,10 +213,16 @@ function constatsDeLaReponse(reponse: AsstMsg): Constat[] {
     if (!issue || issue.state === 'refused') continue
     const commande = (part.data as { command?: unknown } | undefined)?.command
     const cle = part.name === 'verify' ? `commande:${String(commande ?? '')}` : part.name
+    // Une orchestration coupée par la limite d'usage ou par un arrêt voulu n'a rien refusé (relevé
+    // du 05 au 07/11/2026 : dix demandes « refusé », aucune panne). Elle garde sa place de dernière
+    // orchestration : relancée jusqu'au vert, elle est rachetée ; laissée là, l'étape reste sans preuve.
+    const interruption = issue.state === 'failed' ? interruptionDeLOrchestration(part) : undefined
     constats.push({
       cle,
-      issue,
-      etat: issue.state,
+      issue: interruption
+        ? { label: CONSTAT_D_INTERRUPTION[interruption], state: 'refused' }
+        : issue,
+      etat: interruption ? INTERROMPU : issue.state,
       ...(part.name === 'verify' && typeof commande === 'string' ? { commande } : {}),
       ...(part.at === undefined ? {} : { at: part.at })
     })
@@ -223,8 +256,8 @@ function constatsDeLaReponse(reponse: AsstMsg): Constat[] {
  * pas ne se rachètent pas (`typecheck exit 1` puis `npm test exit 0` ne prouvent PAS
  * l'étape) : la règle est `vertCouvreRouge`, la même que celle de la relance de fin de tour.
  */
-function issuesDuSegment(reponses: readonly AsstMsg[]): OutcomeSummary[] {
-  return constatsRetenus(reponses.flatMap(constatsDeLaReponse)).map(({ issue }) => issue)
+function issuesDuSegment(reponses: readonly AsstMsg[]): Constat[] {
+  return constatsRetenus(reponses.flatMap(constatsDeLaReponse))
 }
 
 const BLOCAGE_DECLARE = /^.*(?:⛔\s*Bloqué|⚠️\s*Non résolu).*$/mu
@@ -247,7 +280,8 @@ function statutDuSegment(
     }
   if (derniere.status === 'cancelled' || derniere.status === 'interrupted')
     return { statut: 'refuse', constat: 'tour arrêté avant la fin' }
-  const issues = issuesDuSegment(reponses)
+  const retenus = issuesDuSegment(reponses)
+  const issues = retenus.map(({ issue }) => issue)
   const echec = issues.find((issue) => issue.state === 'failed')
   if (echec) return { statut: 'refuse', constat: echec.label }
   // Les deux emoji d'abord : l'expression essaie chaque ligne de chaque réponse, ~95 ms
@@ -256,6 +290,11 @@ function statutDuSegment(
   const blocage =
     texte.includes('⛔') || texte.includes('⚠') ? BLOCAGE_DECLARE.exec(texte)?.[0] : undefined
   if (blocage) return { statut: 'refuse', constat: nettoyer(blocage) }
+  // La DERNIÈRE vérification décide : une orchestration interrompue après un test vert laisse le
+  // travail demandé non fait, donc l'étape sans preuve.
+  const derniereIssue = retenus.at(-1)
+  if (derniereIssue?.etat === INTERROMPU)
+    return { statut: 'sans-preuve', constat: derniereIssue.issue.label }
   const preuve = issues.at(-1)
   if (preuve) return { statut: 'prouve', constat: preuve.label }
   return { statut: 'sans-preuve', constat: 'fini sans vérification' }

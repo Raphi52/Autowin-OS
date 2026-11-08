@@ -589,7 +589,7 @@ async function runCodexExec(
   // rendait la main qu'a la fin : la carte du fil restait muette pendant TOUT l'appel (2026-08-22).
   onProgress?: (chunk: StreamChunk) => void
 ): Promise<SendResult> {
-  opts.signal?.throwIfAborted()
+  if (opts.signal?.aborted) throw abortFailure('codex exec', opts.signal)
   const execution = opts.execution
   if (!execution) throw new Error('Contrat d’exécution Codex absent')
   // Les pièces jointes du dernier message, comme chez Claude : les images partent par `--image`, le
@@ -650,7 +650,7 @@ async function executerCodex(
     execution.causallyIsolated && execution.sandbox !== 'read-only'
       ? await captureWorkspaceMutationSnapshot(spec.cwd, execution.causalWatchPaths)
       : undefined
-  opts.signal?.throwIfAborted()
+  if (opts.signal?.aborted) throw abortFailure('codex exec', opts.signal)
   // Seulement pour un lancement qui a vraiment lieu : un tour annulé avant n'a rien à signaler.
   if (controles.avertissement)
     onProgress?.({ delta: '', reasoning: `⚠️ ${controles.avertissement}` })

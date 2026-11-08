@@ -5,6 +5,7 @@ import type { ExecutionQuote } from './execution-quote'
 import { splitInputTokens } from '../../shared/cost-estimate'
 import { refusAvecIssue } from '../chat/issue-de-refus'
 import { attendreLeReglageDesAppels, type OptionsAttenteDeReglage } from '../app/attente-de-reglage'
+import { abortFailure } from '../providers/abort-diagnostic'
 
 export type TokenCoverage = 'complete' | 'partial'
 
@@ -324,7 +325,9 @@ export class ExecutionSupervisor {
   ): ProviderReservation | undefined {
     const runtime = this.storage.getStore()
     if (!runtime) return undefined
-    runtime.signal.throwIfAborted()
+    // Pas `throwIfAborted()` : il jette la raison telle quelle, souvent une simple chaîne, et le
+    // diagnostic perdait la signature `[abort]` — un run coupé par un autre fil se lisait en panne.
+    if (runtime.signal.aborted) throw abortFailure('appel provider', runtime.signal)
     const limits = runtime.quote.limits
     const deny = (reason: string, abortRun = true): never => {
       runtime.stoppedReason = reason
