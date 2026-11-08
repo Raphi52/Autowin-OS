@@ -28,8 +28,6 @@ export type WorktreeOperationRequest =
         expectedAgentSha?: string
         task?: string
         conflictStrategy?: 'ours' | 'theirs'
-        /** Barreau 2 de `finalize`, autorisé par le coordinateur. */
-        preserverEditionLocale?: boolean
       }
     }
   | {

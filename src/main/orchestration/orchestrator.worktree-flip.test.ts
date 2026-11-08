@@ -138,8 +138,7 @@ describe('Orchestrator — flip live worktree', () => {
                     kind: 'verification',
                     status: 'completed',
                     ok: true,
-                    command:
-                      `${this.prefix}git -C "${this.target}" rev-parse main; git -C "${this.target}" rev-parse origin/main`,
+                    command: `${this.prefix}git -C "${this.target}" rev-parse main; git -C "${this.target}" rev-parse origin/main`,
                     summary: 'main = origin/main'
                   }
                 ]
@@ -226,10 +225,7 @@ describe('Orchestrator — flip live worktree', () => {
     expect(wrongTargetResult.gateBlocked).toBe(true)
     expect(wrongTargetResult.gateReasons).toContain('intégration locale non terminée')
 
-    const mixedTargetProvider = new ExternalGitProvider(
-      'C:\\other',
-      'git -C "C:\\base" status; '
-    )
+    const mixedTargetProvider = new ExternalGitProvider('C:\\other', 'git -C "C:\\base" status; ')
     let mixedTargetRunId = ''
     const mixedTargetOrch = new Orchestrator({
       registry: new ProviderRegistry().register(mixedTargetProvider),
@@ -732,16 +728,12 @@ describe('Orchestrator — flip live worktree', () => {
       end: () => ({ outcome: 'merged' as const, agentId: 'run-sans-sha', committed: true })
     })
 
-    const result = await runWithLifecycle(
-      orch,
-      'modifie le projet et publie un commit',
-      (event) => lifecycle.push(event)
+    const result = await runWithLifecycle(orch, 'modifie le projet et publie un commit', (event) =>
+      lifecycle.push(event)
     )
 
     expect(result.gateBlocked).toBe(true)
-    expect(result.gateReasons).toContain(
-      'Commit demande sans identite Git publiee verifiable'
-    )
+    expect(result.gateReasons).toContain('Commit demande sans identite Git publiee verifiable')
     expect(lifecycle.at(-1)).toMatchObject({
       stage: 'closure',
       closure: { status: 'red' }
@@ -912,28 +904,6 @@ describe('Orchestrator — flip live worktree', () => {
 
       expect(result.gateBlocked).toBe(false)
       expect(end.mock.calls[0][1]).toMatchObject({ merge: true })
-    })
-
-    it('run VERT publié mais édition locale non remise → le compte rendu le DIT (cas du 24/10, conv-1139)', async () => {
-      const end = vi.fn(() => ({
-        outcome: 'merged' as const,
-        agentId: 'run-1',
-        committed: true,
-        editionLocaleNonRemise: {
-          fichiers: ['src/main/providers/claude.ts'],
-          sauvegarde: 'refs/autowin/safety/run-1',
-          remise: '9e0a93be44df101858879779ab7a407f1e0d599f',
-          cause: 'src/main/providers/claude.ts : modifié depuis la publication, rien écrasé'
-        }
-      }))
-      const { orch } = makeOrchestrator({ begin: () => 'C:\\wt\\run-1', end })
-
-      const result = await orch.run('modifie le projet')
-
-      expect(result.result).toContain(
-        "⚠️ Ta modification non commitée de `src/main/providers/claude.ts` n'a PAS été remise"
-      )
-      expect(result.result).toContain('`refs/autowin/safety/run-1`')
     })
 
     it('run VERT retenu par un tournoi → aucune fusion et résultat encore vert', async () => {

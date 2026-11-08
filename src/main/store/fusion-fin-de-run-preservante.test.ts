@@ -18,20 +18,14 @@ afterEach(nettoyerRacines)
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
 
 /**
- * LA FUSION A 3 BRANCHES N'ETAIT JAMAIS DEMANDEE EN VRAI.
+ * LA FIN DE RUN NE TOUCHE JAMAIS L'ARBRE DE L'UTILISATEUR POUR PUBLIER.
  *
- * Vecu le 2026-10-22 (run-edcf9630aaf1-1) : run vert, juge a 88, et pourtant refuse en
- * `base-dirty`. Sa copie etait partie d'`origin/main` (main local DIVERGE : `describeForLaunch`),
- * donc la fin de run apporte aussi l'avance de GitHub — 9 fichiers reecrits chez l'utilisateur,
- * dont 7 que le run n'avait pas touches, 7 sur 9 portant du travail non commite d'autres fils.
- *
- * Le barreau 2 (`preserverEditionLocale`, commit 2fb89e16, « l'echelle complete » du 2026-08-27)
- * sait faire atterrir ce travail en gardant l'edition non commitee. Mais aucun appelant de
- * production ne le demandait : il n'etait joue que par ses tests. Le refus etait donc la regle.
- *
- * Ce que ces tests ne demandent PAS : retirer de la garde les fichiers de l'avance de GitHub. Ils
- * sont reellement reecrits par la fusion (le `main` local est avance jusqu'a elle) ; les ignorer,
- * c'est ecraser le travail non commite de l'utilisateur ou faire echouer la publication plus loin.
+ * Sa copie est partie d'`origin/main` alors que le main local a divergé : la fin de run apporte donc
+ * aussi l'avance de GitHub, qui réécrit des fichiers que l'utilisateur peut éditer sans commiter. Quand
+ * ces éditions touchent les fichiers publiés, la publication est refusée (`base-dirty`), et rien n'est
+ * écrit chez lui. Ce que ces tests ne demandent PAS : retirer de la garde les fichiers de l'avance de
+ * GitHub. Ils sont réellement réécrits par la fusion ; les ignorer, c'est écraser le travail non commité
+ * de l'utilisateur ou faire échouer la publication plus loin.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,19 +56,23 @@ function gestionnaireSimule(over: Record<string, any> = {}): any {
   }
 }
 
-describe('la fin de run demande la fusion a 3 branches', () => {
-  it('fin de run synchrone : `finalize` recoit preserverEditionLocale', () => {
+/**
+ * Le site d'appel ne transmet plus de drapeau d'écriture dans l'arbre : si un appelant le
+ * réintroduit, ces tests passent au rouge au lieu de laisser la fin de run écrire chez l'utilisateur.
+ */
+describe('la fin de run ne demande plus d’écriture dans l’arbre partagé', () => {
+  it('fin de run synchrone : `finalize` ne reçoit aucun drapeau d’écriture', () => {
     const gestionnaire = gestionnaireSimule()
     const co = new RunWorktreeCoordinator({ manager: gestionnaire, nowFn: () => 1 })
     co.begin('run-sync', 'Builder', true)
     co.end('run-sync')
-    expect(gestionnaire.finalize).toHaveBeenCalledWith(
-      'run-sync',
-      expect.objectContaining({ preserverEditionLocale: true })
+    expect(gestionnaire.finalize).toHaveBeenCalledWith('run-sync', expect.anything())
+    expect(gestionnaire.finalize.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'preserverEditionLocale'
     )
   })
 
-  it('fin de run de production (asynchrone) : `finalizeAsync` la recoit aussi', async () => {
+  it('fin de run de production (asynchrone) : `finalizeAsync` ne reçoit aucun drapeau d’écriture', async () => {
     const finalizeAsync = vi.fn(async (id: string): Promise<FinalizeResult> => ({
       outcome: 'merged',
       agentId: id,
@@ -84,13 +82,12 @@ describe('la fin de run demande la fusion a 3 branches', () => {
     const co = new RunWorktreeCoordinator({ manager: gestionnaire, nowFn: () => 1 })
     co.begin('run-async', 'Builder', true)
     await co.endAsync('run-async')
-    expect(finalizeAsync).toHaveBeenCalledWith(
-      'run-async',
-      expect.objectContaining({ preserverEditionLocale: true })
-    )
+    expect(finalizeAsync).toHaveBeenCalledWith('run-async', expect.anything())
+    const options = (finalizeAsync.mock.calls.at(-1) as unknown[] | undefined)?.[1]
+    expect(options).not.toHaveProperty('preserverEditionLocale')
   })
 
-  it('publication reprise apres la fin des processus : la reprise la recoit aussi', () => {
+  it('publication reprise après la fin des processus : la reprise non plus', () => {
     let actif = true
     const gestionnaire = gestionnaireSimule({ hasActiveProcesses: vi.fn(() => actif) })
     const co = new RunWorktreeCoordinator({ manager: gestionnaire, nowFn: () => 1 })
@@ -98,9 +95,9 @@ describe('la fin de run demande la fusion a 3 branches', () => {
     expect(co.end('run-differe')).toMatchObject({ outcome: 'deferred' })
     actif = false
     co.retryRecovery()
-    expect(gestionnaire.finalize).toHaveBeenCalledWith(
-      'run-differe',
-      expect.objectContaining({ preserverEditionLocale: true })
+    expect(gestionnaire.finalize).toHaveBeenCalledWith('run-differe', expect.anything())
+    expect(gestionnaire.finalize.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'preserverEditionLocale'
     )
   })
 })
@@ -170,8 +167,8 @@ function scenarioDiverge(): {
   return { repo, co, copie, avanceGithub, long, longLocal, amont }
 }
 
-describe('e2e isole — le cas de run-edcf9630aaf1-1 : copie partie de GitHub, main divergé', () => {
-  it('le run atterrit, et les editions non commitees survivent, meme sur un fichier de l avance GitHub', () => {
+describe('e2e isolé — le cas de run-edcf9630aaf1-1 : copie partie de GitHub, main divergé', () => {
+  it('éditions non commitées sur les fichiers de l’avance GitHub : refusé, rien n’est écrit chez lui', () => {
     const { repo, co, copie, avanceGithub, longLocal, amont } = scenarioDiverge()
     // La copie est bien partie de l'avance de GitHub, sans le commit local (`describeForLaunch`).
     expect(git(copie, 'rev-parse', 'HEAD~1')).toBe(avanceGithub)
@@ -180,26 +177,23 @@ describe('e2e isole — le cas de run-edcf9630aaf1-1 : copie partie de GitHub, m
     // amont.txt, que seule l'avance de GitHub touche, et long.txt, juste a cote du commit local.
     ecrire(join(repo, 'amont.txt'), avec(amont, 1, 'EDITION NON COMMITEE AMONT'))
     ecrire(join(repo, 'long.txt'), avec(longLocal, 10, 'EDITION NON COMMITEE LONG'))
+    const octetsAmont = readFileSync(join(repo, 'amont.txt'))
+    const octetsLong = readFileSync(join(repo, 'long.txt'))
+    const headAvant = git(repo, 'rev-parse', 'HEAD')
 
     const res = co.end('run-diverge')
 
-    expect(res).toMatchObject({ outcome: 'merged' })
-    const longFinal = readFileSync(join(repo, 'long.txt'), 'utf8')
-    const amontFinal = readFileSync(join(repo, 'amont.txt'), 'utf8')
-    // Le travail du run, le commit local et l'avance de GitHub sont dans l'historique...
-    expect(git(repo, 'show', 'HEAD:long.txt')).toContain('TRAVAIL DU RUN')
-    expect(git(repo, 'show', 'HEAD:long.txt')).toContain('COMMIT LOCAL')
-    expect(git(repo, 'show', 'HEAD:amont.txt')).toContain('AVANCE GITHUB')
-    expect(longFinal).toContain('TRAVAIL DU RUN')
-    expect(amontFinal).toContain('AVANCE GITHUB')
-    // ...et les editions de l'autre fil sont intactes, et toujours NON commitees.
-    expect(longFinal).toContain('EDITION NON COMMITEE LONG')
-    expect(amontFinal).toContain('EDITION NON COMMITEE AMONT')
-    expect(git(repo, 'show', 'HEAD:long.txt')).not.toContain('EDITION NON COMMITEE')
-    expect(git(repo, 'show', 'HEAD:amont.txt')).not.toContain('EDITION NON COMMITEE')
-    const sale = git(repo, 'status', '--porcelain=v1')
-    expect(sale).toContain('long.txt')
-    expect(sale).toContain('amont.txt')
+    expect(res).toMatchObject({ outcome: 'blocked', reason: 'base-dirty' })
+    expect((res as { files: string[] }).files).toEqual(
+      expect.arrayContaining(['amont.txt', 'long.txt'])
+    )
+    // Rien n'est publié, rien n'est écrit chez lui : ses éditions sont intactes, octet pour octet.
+    expect(git(repo, 'rev-parse', 'HEAD')).toBe(headAvant)
+    expect(readFileSync(join(repo, 'amont.txt')).equals(octetsAmont)).toBe(true)
+    expect(readFileSync(join(repo, 'long.txt')).equals(octetsLong)).toBe(true)
+    expect(git(repo, 'stash', 'list')).toBe('')
+    // Le travail du run reste atteignable par l'adresse d'attente.
+    expect((res as { stagedRef?: string }).stagedRef).toBe('refs/autowin/integration/run-diverge')
   })
 
   it('un VRAI conflit (meme ligne que le run) reste refuse, et son fichier ne bouge pas d un octet', () => {
@@ -211,7 +205,7 @@ describe('e2e isole — le cas de run-edcf9630aaf1-1 : copie partie de GitHub, m
 
     const res = co.end('run-diverge')
 
-    // Refus, avec l'adresse d'attente du barreau 1 : rien n'est perdu, rien n'est ecrit chez lui.
+    // Refus, avec l'adresse d'attente : rien n'est perdu, rien n'est écrit chez lui.
     expect(res).toMatchObject({ outcome: 'blocked', reason: 'base-dirty', files: ['long.txt'] })
     expect((res as { stagedRef?: string }).stagedRef).toBe('refs/autowin/integration/run-diverge')
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(headAvant)

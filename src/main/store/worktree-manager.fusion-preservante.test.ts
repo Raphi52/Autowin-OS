@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { git, manager, nettoyerRacines, tempRepo } from './worktree-manager.test-helpers'
 
@@ -13,84 +13,79 @@ afterEach(nettoyerRacines)
  */
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
 
+/**
+ * L'ANCIEN DRAPEAU, transmis a l'execution. Un appelant pas encore mis a jour, ou un message du
+ * worker reste sur l'ancienne forme, peut encore l'envoyer : il ne doit rien ouvrir.
+ */
+const ancienDrapeau = { preserverEditionLocale: true } as unknown as Parameters<
+  ReturnType<typeof manager>['finalize']
+>[1]
 
 /**
- * BARREAU 2 DE L'ECHELLE — publier SANS ecraser l'edition non committee de l'utilisateur.
- *
- * Barreau 1 met le travail en attente ; il n'atterrit toujours pas. Ce barreau-ci le fait atterrir
- * TOUT DE SUITE, en fusionnant a trois branches le fichier en collision : base commune, version de
- * l'utilisateur, version de la copie. L'utilisateur l'a autorise explicitement (QCM du 2026-08-27,
- * option « l'echelle complete »), et c'est la seule raison pour laquelle ecrire dans son arbre est
- * permis ici : par defaut, ca ne l'est pas.
- *
- * La contrepartie n'est pas negociable et c'est elle que cette suite verifie : son travail non
- * committe SURVIT, octet pour octet quand il n'y a pas de chevauchement de lignes, et quand la fusion
- * est REELLEMENT conflictuelle on ne laisse RIEN d'abime — on restaure son etat exact et on retombe
- * sur l'attente. Un arbre a moitie fusionne, avec des marqueurs de conflit dans un fichier qu'il
- * n'a pas demande a arbitrer, serait pire que le refus d'origine.
+ * La copie ne publie jamais en ecrivant dans l'arbre partage. Un fichier que l'utilisateur a modifie
+ * sans l'avoir committe reste a lui, octet pour octet : la publication est refusee, la copie reste,
+ * et son travail reste atteignable par l'adresse d'attente. Aucune remise de cote (stash), aucune
+ * fusion a trois branches ecrite chez lui.
  *
  * Ces tests tournent sur de VRAIS depots git temporaires : c'est un environnement ISOLE, ou aucune
- * autre session n'ecrit — la condition que l'arbre partage ne permettait pas (mesure du 2026-08-27,
- * un acteur concurrent a rendu une mesure e2e ininterpretable).
+ * autre session n'ecrit.
  */
-describe('WorktreeManager — fusion preservante (barreau 2)', () => {
+describe("WorktreeManager — l'arbre partage n'est jamais ecrit par la copie", () => {
   /**
    * Base : `a.txt` vaut « ligne1/ligne2/ligne3 » au commit initial (voir `tempRepo`).
-   * L'utilisateur edite une extremite, la copie l'autre : la fusion a 3 branches doit tenir les deux.
+   * L'utilisateur edite une extremite, la copie l'autre : une fusion automatique tiendrait les deux,
+   * ce qui est justement ce qu'on ne doit pas faire chez lui.
    */
   const collisionSansChevauchement = (): {
     repo: string
     wm: ReturnType<typeof manager>
+    path: string
   } => {
     const repo = tempRepo()
     const wm = manager(repo)
     const path = wm.acquire('builder')
     writeFileSync(join(repo, 'a.txt'), 'ligne1\nligne2\nligne3\nAJOUT UTILISATEUR\n')
     writeFileSync(join(path, 'a.txt'), 'ENTETE COPIE\nligne1\nligne2\nligne3\n')
-    return { repo, wm }
+    return { repo, wm, path }
   }
 
-  it('sans autorisation, RIEN ne change : on reste sur l attente du barreau 1', () => {
+  it('sans drapeau, RIEN ne change : on reste sur l attente', () => {
     const { repo, wm } = collisionSansChevauchement()
 
     const res = wm.finalize('builder')
 
     expect(res).toMatchObject({ outcome: 'blocked', reason: 'base-dirty' })
-    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('ligne1\nligne2\nligne3\nAJOUT UTILISATEUR\n')
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe(
+      'ligne1\nligne2\nligne3\nAJOUT UTILISATEUR\n'
+    )
     expect(git(repo, 'rev-parse', '--verify', 'refs/autowin/integration/builder')).toBeTruthy()
   })
 
-  it('autorisee : le travail ATTERRIT et l edition de l utilisateur survit', () => {
-    const { repo, wm } = collisionSansChevauchement()
+  it("l'ancien drapeau n'ecrit pas dans l'arbre : le fichier modifie reste identique, la copie reste", () => {
+    const { repo, wm, path } = collisionSansChevauchement()
+    const avant = readFileSync(join(repo, 'a.txt'))
     const teteAvant = git(repo, 'rev-parse', 'HEAD')
 
-    const res = wm.finalize('builder', { preserverEditionLocale: true })
+    const res = wm.finalize('builder', ancienDrapeau)
 
-    // Le travail est publie : la branche a avance.
-    expect(res.outcome).toBe('merged')
-    expect(git(repo, 'rev-parse', 'HEAD')).not.toBe(teteAvant)
-    const contenu = readFileSync(join(repo, 'a.txt'), 'utf8')
-    // LES DEUX apports sont la — c'est tout l'objet du barreau.
-    expect(contenu).toContain('ENTETE COPIE')
-    expect(contenu).toContain('AJOUT UTILISATEUR')
-    // Et son apport reste NON COMMITTE : on publie le travail de la copie, on ne s'approprie pas le sien.
-    expect(git(repo, 'status', '--porcelain=v1')).toContain('a.txt')
-    expect(git(repo, 'show', 'HEAD:a.txt')).not.toContain('AJOUT UTILISATEUR')
+    // Ni fusion, ni ligne ajoutee : le fichier de l'utilisateur n'a pas bouge d'un octet.
+    expect(readFileSync(join(repo, 'a.txt')).equals(avant)).toBe(true)
+    // Rien n'est publie : la branche ne bouge pas, et la copie reste sur le disque.
+    expect(git(repo, 'rev-parse', 'HEAD')).toBe(teteAvant)
+    expect(existsSync(path)).toBe(true)
+    expect(res).toMatchObject({ outcome: 'blocked', reason: 'base-dirty' })
   })
 
-  it('une sauvegarde de son travail existe AVANT toute ecriture', () => {
+  it("l'ancien drapeau ne cree ni remise de cote (stash) ni sauvegarde de l'arbre", () => {
     const { repo, wm } = collisionSansChevauchement()
 
-    wm.finalize('builder', { preserverEditionLocale: true })
+    wm.finalize('builder', ancienDrapeau)
 
-    // L'adresse de secours doit rendre exactement son etat d'origine : c'est le filet qui autorise
-    // le reste. Sans elle, une fusion ratee laisserait son travail sans recours.
-    const sauvegarde = git(repo, 'rev-parse', '--verify', 'refs/autowin/safety/builder')
-    expect(sauvegarde).toBeTruthy()
-    expect(git(repo, 'show', `${sauvegarde}:a.txt`)).toContain('AJOUT UTILISATEUR')
+    expect(git(repo, 'stash', 'list')).toBe('')
+    expect(() => git(repo, 'rev-parse', '--verify', 'refs/autowin/safety/builder')).toThrow()
   })
 
-  it('fusion REELLEMENT conflictuelle : son fichier est restaure a l identique, rien n est abime', () => {
+  it('fusion REELLEMENT conflictuelle : son fichier reste a l identique, aucun marqueur de conflit', () => {
     const repo = tempRepo()
     const wm = manager(repo)
     const path = wm.acquire('builder')
@@ -98,7 +93,7 @@ describe('WorktreeManager — fusion preservante (barreau 2)', () => {
     writeFileSync(join(repo, 'a.txt'), 'ligne1\nVERSION UTILISATEUR\nligne3\n')
     writeFileSync(join(path, 'a.txt'), 'ligne1\nVERSION COPIE\nligne3\n')
 
-    const res = wm.finalize('builder', { preserverEditionLocale: true })
+    const res = wm.finalize('builder', ancienDrapeau)
 
     // On ne publie pas, et surtout on ne laisse aucun marqueur de conflit dans son arbre.
     expect(res.outcome).toBe('blocked')
@@ -106,19 +101,18 @@ describe('WorktreeManager — fusion preservante (barreau 2)', () => {
     expect(contenu).toBe('ligne1\nVERSION UTILISATEUR\nligne3\n')
     expect(contenu).not.toContain('<<<<<<<')
     expect(contenu).not.toContain('VERSION COPIE')
-    // Et le travail de la copie reste atteignable : on retombe sur l'attente, pas sur la perte.
+    // Le travail de la copie reste atteignable : on retombe sur l'attente, pas sur la perte.
     expect((res as { stagedRef?: string }).stagedRef).toBe('refs/autowin/integration/builder')
-    // Aucun stash orphelin laisse derriere : son travail est dans son arbre, pas ranger ailleurs.
     expect(git(repo, 'stash', 'list')).toBe('')
   })
 
-  it('base PROPRE : l autorisation ne change rien au chemin normal', () => {
+  it('base PROPRE : le chemin normal publie, l ancien drapeau n y change rien', () => {
     const repo = tempRepo()
     const wm = manager(repo)
     const path = wm.acquire('builder')
     writeFileSync(join(path, 'livrable.txt'), 'travail de l agent\n')
 
-    const res = wm.finalize('builder', { preserverEditionLocale: true })
+    const res = wm.finalize('builder', ancienDrapeau)
 
     expect(res.outcome).toBe('merged')
     expect(readFileSync(join(repo, 'livrable.txt'), 'utf8')).toContain('travail de l agent')

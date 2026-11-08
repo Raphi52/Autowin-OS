@@ -34,7 +34,10 @@ describe('formatOrchestrationOutcome — attente active plutot qu echec terminal
   })
 
   it('base sale : plus de panneau d interdiction, plus de statut echoue', () => {
-    const texte = formatOrchestrationOutcome(true, issue('base-dirty', ['src/main/agent-pilot/agent-pilot.ts']))
+    const texte = formatOrchestrationOutcome(
+      true,
+      issue('base-dirty', ['src/main/agent-pilot/agent-pilot.ts'])
+    )
 
     expect(texte).not.toContain('⛔')
     expect(texte).not.toContain('Travail NON intégré')
@@ -47,6 +50,47 @@ describe('formatOrchestrationOutcome — attente active plutot qu echec terminal
     expect(texte).toContain('src/main/agent-pilot/agent-pilot.ts')
     // Et surtout : jamais present comme livre.
     expect(texte).not.toMatch(/✅|Workflow terminé/)
+  })
+
+  it('base sale : la copie reste « pour l’instant », l’adresse d’attente est nommée sous condition, tes fichiers ne bougent pas', () => {
+    const texte = formatOrchestrationOutcome(
+      true,
+      issue('base-dirty', ['src/main/agent-pilot/agent-pilot.ts'])
+    )
+
+    // Le ménage des copies peut retirer la copie plus tard : « en place » seul serait faux après coup.
+    expect(texte).toContain('Ta copie reste en place pour l’instant.')
+    expect(texte).not.toContain('reste en place et')
+    // L'adresse n'est promise que si elle a pu être posée (la pose peut échouer, sans bruit).
+    expect(texte).toContain('refs/autowin/integration/')
+    expect(texte).toContain('Si son adresse d’attente a pu être posée')
+    expect(texte).toContain('Tes fichiers modifiés n’ont pas été touchés.')
+  })
+
+  it('reprise armée : la rubrique « Recommandé » garde sa place mais ne redemande pas de relancer', () => {
+    for (const cause of [
+      'base-dirty',
+      'base-in-progress',
+      'merge-failed',
+      'ignored-deliverables'
+    ]) {
+      const texte = formatOrchestrationOutcome(true, issue(cause, ['src/x.ts']))
+      expect(texte, cause).toContain('👉 Recommandé')
+      expect(texte, cause).not.toContain('relancer la même demande')
+    }
+  })
+
+  it('jumeau sans reprise armée : la demande de relancer reste, rien ne relance le travail seul', () => {
+    for (const cause of ['conflict', 'commit-refused']) {
+      const texte = formatOrchestrationOutcome(true, issue(cause))
+      expect(texte, cause).toContain('relancer la même demande')
+    }
+  })
+
+  it('jumeau : une autre cause ne reçoit pas cette phrase, rien n’est promis hors du refus de base sale', () => {
+    const texte = formatOrchestrationOutcome(true, issue('base-in-progress'))
+
+    expect(texte).not.toContain('Ta copie reste en place')
   })
 
   it('les autres causes reparables suivent la meme regle', () => {

@@ -2,25 +2,6 @@
  * Types publics et internes de WorktreeManager (résultat de finalisation, contextes, options,
  * plans de compensation). Extraits tels quels de worktree-manager.ts, qui les ré-exporte.
  */
-/**
- * L'EDITION NON COMMITEE DE L'UTILISATEUR N'A PAS PU ETRE REMISE DANS SES FICHIERS (barreau 2).
- *
- * Vecu le 2026-10-24 (run run-58bfc90f8f7b-1) : la publication a atterri, deux fichiers
- * modifies par l'utilisateur et touches par un commit entrant sont restes dans `stash@{0}`, revenus
- * a la version commitee, et le compte rendu disait seulement « integre ». Ce champ porte le constat
- * jusqu'au compte rendu (`annonce-edition-locale.ts`) : les fichiers, et ou leur version se trouve.
- */
-export interface EditionLocaleNonRemise {
-  /** Fichiers dont la version de l'utilisateur n'est PAS dans l'arbre de travail. Vide = tous remis. */
-  fichiers: string[]
-  /** Adresse durable de son etat d'avant (`refs/autowin/safety/<agent>`), ecrite avant tout geste. */
-  sauvegarde: string
-  /** Sha de la remise de cote encore presente dans `git stash list`, si elle n'a pas pu etre retiree. */
-  remise?: string
-  /** Ce que git a repondu, en clair. */
-  cause: string
-}
-
 export type FinalizeResult =
   | {
       outcome: 'merged'
@@ -30,8 +11,6 @@ export type FinalizeResult =
       baseSha?: string
       /** Commit exact publié dans la branche cible (peut être un commit de merge). */
       publishedSha?: string
-      /** Barreau 2 seulement : publication faite, mais l'edition locale n'a pas ete toute remise. */
-      editionLocaleNonRemise?: EditionLocaleNonRemise
     }
   | { outcome: 'nothing'; agentId: string }
   /**
@@ -112,8 +91,6 @@ export type FinalizeResult =
        */
       stagedRef?: string
       detail?: string
-      /** Barreau 2 seulement : publication refusee, et l'edition locale n'a pas ete toute remise. */
-      editionLocaleNonRemise?: EditionLocaleNonRemise
     }
 
 export interface WorktreeRunContext {

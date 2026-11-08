@@ -30,18 +30,6 @@ import {
 import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
 
 /**
- * L'AUTORISATION DU BARREAU 2, portee par l'appelant comme `worktree-manager.ts` l'exige : faire
- * atterrir le travail d'un run malgre le travail non commite de la base, en le gardant par une
- * fusion a 3 branches (pre-vol a blanc, sauvegarde, restauration au moindre doute).
- *
- * Accordee par l'utilisateur le 2026-08-27 (« l'echelle complete ») et redemandee le 2026-10-22
- * Sans elle, aucun appel de production ne jouait ce barreau, et run-edcf9630aaf1-1,
- * vert et juge a 88, a ete refuse en `base-dirty` sur des fichiers que la fusion savait garder.
- * Chaque fin de run qui publie la porte : fin normale, fin en production, reprise et repechage.
- */
-const FUSION_PRESERVANTE = { preserverEditionLocale: true } as const
-
-/**
  * Coordinateur worktree AU NIVEAU RUN (le "flip live" du volet B).
  *
  * L'orchestrateur appelle `begin(runId, agentName, isMutation)` avant d'exécuter un run et
@@ -1129,7 +1117,6 @@ export class RunWorktreeCoordinator {
     const res = this.manager.finalize(runId, {
       baseBranch: tracked.baseBranch,
       ...(tracked.task ? { task: tracked.task } : {}),
-      ...FUSION_PRESERVANTE,
       onPrepared: (agentSha, baseSha) => {
         tracked.publicationAgentSha = agentSha
         tracked.publicationBaseSha = baseSha
@@ -1312,7 +1299,6 @@ export class RunWorktreeCoordinator {
       const res = await this.enFilePublication(() =>
         this.manager.finalizeAsync!(runId, {
           baseBranch: tracked.baseBranch,
-          ...FUSION_PRESERVANTE,
           onPrepared: (agentSha, baseSha) => {
             tracked.publicationAgentSha = agentSha
             tracked.publicationBaseSha = baseSha
@@ -3158,7 +3144,6 @@ export class RunWorktreeCoordinator {
               ...((record?.baseBranch ?? tracked.baseBranch)
                 ? { baseBranch: record?.baseBranch ?? tracked.baseBranch }
                 : {}),
-              ...FUSION_PRESERVANTE,
               ...((record?.publicationAgentSha ?? tracked.publicationAgentSha)
                 ? {
                     expectedAgentSha: record?.publicationAgentSha ?? tracked.publicationAgentSha
@@ -3307,7 +3292,6 @@ export class RunWorktreeCoordinator {
             ? await this.manager.finalizeAsync(runId, {
                 ...(tracked.task ? { task: tracked.task } : {}),
                 ...(baseBranch ? { baseBranch } : {}),
-                ...FUSION_PRESERVANTE,
                 ...((record?.publicationAgentSha ?? tracked.publicationAgentSha)
                   ? {
                       expectedAgentSha: record?.publicationAgentSha ?? tracked.publicationAgentSha
@@ -3331,8 +3315,7 @@ export class RunWorktreeCoordinator {
             : this.manager.finalize(runId, {
                 ...(tracked.task ? { task: tracked.task } : {}),
                 ...(baseBranch ? { baseBranch } : {}),
-                ...(publishedSha ? { expectedAgentSha: publishedSha } : {}),
-                ...FUSION_PRESERVANTE
+                ...(publishedSha ? { expectedAgentSha: publishedSha } : {})
               })
       this.applyFinalize(tracked, result)
       this.persistFinalize(tracked, result)

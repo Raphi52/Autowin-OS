@@ -7,8 +7,15 @@ import { WorktreeOperationClient } from './worktree-operation-client'
 import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
 import type { LiaisonDependances } from './dependances-copie-agent'
 import { supprimerArbre, supprimerArbreAsync } from '../fichiers/fs-supprimer'
-import { defaultProcessIdentity, prechargerEmpreintesProcessus } from './worktree-manager-empreintes'
-import type { FinalizeResult, WorktreeRecoveryContext, WorktreeRunContext } from './worktree-manager-types'
+import {
+  defaultProcessIdentity,
+  prechargerEmpreintesProcessus
+} from './worktree-manager-empreintes'
+import type {
+  FinalizeResult,
+  WorktreeRecoveryContext,
+  WorktreeRunContext
+} from './worktree-manager-types'
 export {
   autoriserSondageBloquant,
   defaultProcessIdentity,
@@ -17,7 +24,6 @@ export {
   prechargerEmpreintesProcessus
 } from './worktree-manager-empreintes'
 export type {
-  EditionLocaleNonRemise,
   FinalizeResult,
   WorktreeRecoveryContext,
   WorktreeRunContext
@@ -49,11 +55,7 @@ export {
   resoudreCheminWorker,
   cheminDeStatutPorcelain
 } from './worktree-manager-outils'
-export type {
-  GitRunner,
-  VerdictRetention,
-  WorktreeManagerOptions
-} from './worktree-manager-outils'
+export type { GitRunner, VerdictRetention, WorktreeManagerOptions } from './worktree-manager-outils'
 
 /** La sonde d'appartenance d'une copie : `--git-common-dir` et `--show-toplevel` en UN lancement. */
 const ARGS_SONDE_APPARTENANCE = ['rev-parse', '--git-common-dir', '--show-toplevel']
@@ -126,7 +128,6 @@ function verdictAppartenance(
  * S'appuie sur les worktrees détachés partageant le même object-store que le repo de base : un commit
  * fait dans la copie est atteignable par SHA depuis la base, qui peut alors le merger.
  */
-
 
 export class WorktreeManager {
   /**
@@ -248,8 +249,6 @@ export class WorktreeManager {
       task?: string
       /** Résolution humaine d'un conflit : garder la base (`ours`) ou l'agent (`theirs`). */
       conflictStrategy?: 'ours' | 'theirs'
-      /** Barreau 2, autorisé par l'appelant : voir `finalize`. Traverse le worker tel quel. */
-      preserverEditionLocale?: boolean
       onPrepared?: (agentSha: string, baseSha: string) => void
       onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
     } = {}
@@ -656,7 +655,9 @@ export class WorktreeManager {
   declare apercuTravauxNonPublies: OmitThisParameter<typeof travaux.apercuTravauxNonPublies>
   declare patchTravailNonPublie: OmitThisParameter<typeof travaux.patchTravailNonPublie>
   declare restaurerCopieDepuisSecours: OmitThisParameter<typeof travaux.restaurerCopieDepuisSecours>
-  declare restaurerCopieDepuisSecoursAsync: OmitThisParameter<typeof travaux.restaurerCopieDepuisSecoursAsync>
+  declare restaurerCopieDepuisSecoursAsync: OmitThisParameter<
+    typeof travaux.restaurerCopieDepuisSecoursAsync
+  >
   declare listAgentIds: OmitThisParameter<typeof copies.listAgentIds>
   declare reconcileResiduesAsync: OmitThisParameter<typeof copies.reconcileResiduesAsync>
   declare preserverEtLiberer: OmitThisParameter<typeof copies.preserverEtLiberer>
@@ -683,7 +684,9 @@ export class WorktreeManager {
   declare commitsDejaReferencesAsync: OmitThisParameter<typeof copies.commitsDejaReferencesAsync>
   declare commitDejaReference: OmitThisParameter<typeof copies.commitDejaReference>
   declare sweepAbandonedAgentCopies: typeof copies.sweepAbandonedAgentCopies
-  declare sweepAbandonedAgentCopiesAsync: OmitThisParameter<typeof copies.sweepAbandonedAgentCopiesAsync>
+  declare sweepAbandonedAgentCopiesAsync: OmitThisParameter<
+    typeof copies.sweepAbandonedAgentCopiesAsync
+  >
   declare noterSuppressionCommencee: typeof copies.noterSuppressionCommencee
   declare oublierSuppressionCommencee: typeof copies.oublierSuppressionCommencee
   declare reprendreSuppressionsCommencees: typeof copies.reprendreSuppressionsCommencees
@@ -771,12 +774,6 @@ export class WorktreeManager {
   declare fichiersDuTravailDeLaCopie: OmitThisParameter<typeof cycle.fichiersDuTravailDeLaCopie>
   declare readConflictDiff: OmitThisParameter<typeof cycle.readConflictDiff>
   declare finalize: OmitThisParameter<typeof finalisation.finalize>
-  declare fusionEstPropreABlanc: typeof finalisation.fusionEstPropreABlanc
-  declare fusionEnPreservantLEditionLocale: typeof finalisation.fusionEnPreservantLEditionLocale
-  declare rangDeLaRemise: typeof finalisation.rangDeLaRemise
-  declare contenuA: typeof finalisation.contenuA
-  declare empreinteGit: typeof finalisation.empreinteGit
-  declare remettreEditionLocale: typeof finalisation.remettreEditionLocale
   declare poserAttenteDIntegration: typeof finalisation.poserAttenteDIntegration
   declare finalizeSansSecours: typeof finalisation.finalizeSansSecours
   declare isPublished: typeof finalisation.isPublished

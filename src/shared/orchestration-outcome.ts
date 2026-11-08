@@ -765,7 +765,11 @@ export function faitsDuRapport(report: string | undefined, max = 8): string[] {
     .replace(/^✅\s*Fait\s*(?:[:：—–-]\s*)?/u, '')
     .trim()
   return [inline, ...lines.slice(start + 1, now)]
-    .map((line) => sansDecorationDeCloture(line).replace(/^\[[ xX]\]\s+/u, '').trim())
+    .map((line) =>
+      sansDecorationDeCloture(line)
+        .replace(/^\[[ xX]\]\s+/u, '')
+        .trim()
+    )
     .filter((line) => line.length > 0 && line !== '---')
     .map((line) => (line.length > 220 ? `${line.slice(0, 219).trimEnd()}…` : line))
     .slice(0, max)
@@ -1264,7 +1268,10 @@ export function phasesAbouties(outcome: OrchestrationOutcome | undefined): strin
             .reverse()
             .find((l) => /^\s*SUITE\s*:/i.test(l))
         : undefined
-    const cible = suite?.replace(/^\s*SUITE\s*:/i, '').trim().toLowerCase()
+    const cible = suite
+      ?.replace(/^\s*SUITE\s*:/i, '')
+      .trim()
+      .toLowerCase()
     return cible === phase.trim().toLowerCase() ? [] : [phase]
   })
 }
@@ -1409,7 +1416,8 @@ function authoritativeDeliveredClosingBlockSpan(
    * le RETIRAIT au rechargement, faisant disparaitre la cloture corrigee. C'est la regression que
    * le correctif du gabarit portait sans le dire : un bloc qu'on ecrit doit aussi etre relu.
    */
-  const formeAnalyse = /^\d+\. Le livrable de la phase .+ a été produit et validé( — sujet : .+)?\.$/u
+  const formeAnalyse =
+    /^\d+\. Le livrable de la phase .+ a été produit et validé( — sujet : .+)?\.$/u
   /*
    * Le SUJET du travail est desormais suffixe a cette premiere ligne (« … validé — sujet : « X ». »),
    * parce qu'un pied identique pour tout travail ne disait pas de QUOI il parlait (23/08).
@@ -1497,13 +1505,18 @@ interface LectureDuBlocage {
   action: string
   /** VRAI seulement si une boucle automatique reprend réellement cette cause. */
   repriseArmee: boolean
+  /** Ce que le refus a laissé intact, dit à part : c'est ce qui rassure avant l'action. */
+  copie?: string
 }
 
 const BLOCAGES: Record<string, LectureDuBlocage> = {
+  // fix-ok: src/shared/orchestration-outcome.ts — cause mesurée : le ménage des copies (balayerUneCopie, worktree-manager-copies.ts) retire une copie dont le commit est référencé ; « en place » ne vaut donc que pour l’instant.
   'base-dirty': {
     cause: 'ton arbre principal a une base sale (des fichiers non committés)',
     action: 'committe-les ou range-les',
-    repriseArmee: true
+    repriseArmee: true,
+    copie:
+      'Ta copie reste en place pour l’instant. Si son adresse d’attente a pu être posée (refs/autowin/integration/…, lisible avec git show), son travail y est gardé. Tes fichiers modifiés n’ont pas été touchés.'
   },
   'base-in-progress': {
     cause: 'une opération git est en cours dans ton arbre principal',
@@ -1534,9 +1547,11 @@ const BLOCAGES: Record<string, LectureDuBlocage> = {
 }
 
 /** La cause du blocage telle que l'orchestrateur l'a écrite, et les fichiers qu'il a nommés. */
-function lireLeBlocage(
-  gateReasons: unknown
-): { lecture?: LectureDuBlocage; brut?: string; fichiers: string[] } {
+function lireLeBlocage(gateReasons: unknown): {
+  lecture?: LectureDuBlocage
+  brut?: string
+  fichiers: string[]
+} {
   const motifs = Array.isArray(gateReasons)
     ? gateReasons.filter((motif): motif is string => typeof motif === 'string')
     : []
@@ -1699,7 +1714,8 @@ function composerLIssue(
   const facts = [
     // « statut echoue » sur une cause reparable est le mot qui a fait dire « ce panneau me rend
     // fou » : le run n'a pas echoue, sa publication attend. On dit l'attente, pas l'echec.
-    status && (attenteReparable ? 'statut en attente d’intégration' : `statut ${statutLisible(status)}`),
+    status &&
+      (attenteReparable ? 'statut en attente d’intégration' : `statut ${statutLisible(status)}`),
     cost && (cost.startsWith('coût ') ? cost : `coût ${cost}`),
     run && `run « ${run} »`
   ].filter((fact): fact is string => Boolean(fact))
@@ -1712,6 +1728,7 @@ function composerLIssue(
   if (blocage.fichiers.length > 0) {
     lines.push(`Fichiers en cause : ${blocage.fichiers.join(', ')}`)
   }
+  if (blocage.lecture?.copie) lines.push(blocage.lecture.copie)
   if (blocage.lecture) {
     // L'action d'abord, la promesse de reprise ensuite — et seulement quand elle est vraie.
     lines.push(
@@ -1794,14 +1811,13 @@ function composerLIssue(
    */
   else if (gateBlocked || invalid) {
     const action = blocage.lecture?.action
-    lines.push(
-      '',
-      `👉 Recommandé : reprendre le travail arrêté — ${
-        action
-          ? `${action}, puis relancer la même demande`
-          : 'corriger la cause nommée ci-dessus, puis relancer la même demande'
-      }.`
-    )
+    // Reprise armée : la boucle relance seule ; demander de relancer doublerait la reprise.
+    const suite = !action
+      ? 'corriger la cause nommée ci-dessus, puis relancer la même demande'
+      : attenteReparable
+        ? action
+        : `${action}, puis relancer la même demande`
+    lines.push('', `👉 Recommandé : reprendre le travail arrêté — ${suite}.`)
   }
   return lines.join('\n')
 }

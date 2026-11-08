@@ -8,7 +8,11 @@ import { rootExecutionRequirements, programmeSansEcriture } from '../gardes/root
 import { isMutationTask } from './task-mutation-classifier'
 import { routeSkillRequest } from '../skills/skill-routing'
 import { refusEtapeDesactivee } from './etapes-desactivees'
-import { allocationFromGraph, recoveriesFromGraph, worstCaseNodeExecutions } from '../workflow/workflow-graph'
+import {
+  allocationFromGraph,
+  recoveriesFromGraph,
+  worstCaseNodeExecutions
+} from '../workflow/workflow-graph'
 import { resumeConsigne } from '../runs/plan-en-vagues'
 import type { ExecutionEvidence } from '../providers/types'
 import { preparedCommitMutationEvidence } from '../providers/workspace-mutation-evidence'
@@ -23,13 +27,28 @@ import {
   refusDePublication,
   type RefusDePublication
 } from '../../shared/echec-publication'
-import { annonceEditionLocaleNonRemise } from '../chat/annonce-edition-locale'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
 import type { WorktreeAgentActivity } from '../../shared/worktree-activity-model'
 import { allocateExecutionTopology } from './execution-quote'
 import { protegerRappel } from '../gel/observabilite-non-bloquante'
 import { attendSaPublication, causeDInterruption } from './classe-terminale-echec'
-import { BrainRetrievalEvent, GreedyTaskNode, OrchestrationPhase, OrchestrationResult, OrchestrationRunOptions, OrchestrationRuntimeSnapshot, OrchestrationStep, appelsRequisParWorkflow, hasVerifiedExternalGitMutation, instantaneAssaini, jetonDeReservation, limitGreedyPlan, murDeQuotaDuRun, raisonsDArretDuRun, watchdogClaimsFromEvidence } from './orchestrator-contrats'
+import {
+  BrainRetrievalEvent,
+  GreedyTaskNode,
+  OrchestrationPhase,
+  OrchestrationResult,
+  OrchestrationRunOptions,
+  OrchestrationRuntimeSnapshot,
+  OrchestrationStep,
+  appelsRequisParWorkflow,
+  hasVerifiedExternalGitMutation,
+  instantaneAssaini,
+  jetonDeReservation,
+  limitGreedyPlan,
+  murDeQuotaDuRun,
+  raisonsDArretDuRun,
+  watchdogClaimsFromEvidence
+} from './orchestrator-contrats'
 import type { Orchestrator } from './orchestrator'
 
 /**
@@ -131,9 +150,7 @@ export async function run(
           }
         }
       : undefined
-  const appelsWorkflow = workflowGraph
-    ? appelsRequisParWorkflow(workflowGraph, impose)
-    : undefined
+  const appelsWorkflow = workflowGraph ? appelsRequisParWorkflow(workflowGraph, impose) : undefined
   if (executionQuote && workflow?.explicit && workflowGraph) {
     // Une sélection manuelle engage le graphe affiché. Le devis doit donc refléter ses phases et
     // la borne de reprise qu'il porte, puis lui réserver les places nécessaires sans dépasser le
@@ -475,8 +492,7 @@ export async function run(
     },
     journal: (token, journalPath, assignment) =>
       this.rememberAgent(runId, token, { ...assignment, active: true, journalPath }, 'required'),
-    reservationSettled: (reservationId) =>
-      this.settleAgentReservationInMemory(runId, reservationId)
+    reservationSettled: (reservationId) => this.settleAgentReservationInMemory(runId, reservationId)
   })
   try {
     // Fonctionnement NORMAL : on tente TOUJOURS de décomposer (le modèle orchestrateur juge s'il
@@ -857,14 +873,6 @@ export async function run(
       )
       produced.result = aligned.result
       produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
-    }
-    // Sa modification non commitée restée hors de ses fichiers après la publication est DITE :
-    // le 2026-10-24, elle dormait dans `stash@{0}` sous un compte rendu « intégré ».
-    const annonceEdition = produced ? annonceEditionLocaleNonRemise(finalized) : undefined
-    if (produced && annonceEdition && !produced.result.includes(annonceEdition)) {
-      produced.result = `${produced.result.trimEnd()}
-
-${annonceEdition}`
     }
     const publishedCommitSha =
       projectPublication?.publishedSha ??

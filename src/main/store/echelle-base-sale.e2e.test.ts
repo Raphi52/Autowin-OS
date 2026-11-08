@@ -14,7 +14,6 @@ afterEach(nettoyerRacines)
  */
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
 
-
 /**
  * PARCOURS COMPLET, EN ENVIRONNEMENT ISOLE — le bout en bout que l'arbre partage interdisait.
  *
@@ -79,7 +78,7 @@ describe('e2e isole — une base sale n aboutit plus jamais a un echec', () => {
     return { repo, wm, coordinateur, runId }
   }
 
-  it('la chaine entiere : refus, attente, collision levee, atterrissage automatique', () => {
+  it('la chaine entiere : refus, attente, collision levee par l utilisateur, publication', () => {
     const { repo, wm, coordinateur, runId } = scenario()
 
     // 1. REFUS — la publication est refusee, et elle ne perd rien.
@@ -110,24 +109,28 @@ describe('e2e isole — une base sale n aboutit plus jamais a un echec', () => {
     void coordinateur
   })
 
-  it('barreau 2 en isolement : le travail atterrit SANS attendre, et son edition survit', () => {
+  it('fusion qui AURAIT tenu : refusee quand meme, rien n est ecrit dans son fichier', () => {
     const { repo, wm, runId } = scenario()
-    // Son edition est au DEBUT, celle de la copie a la ligne 18 : la fusion a 3 branches doit tenir
-    // les deux. C'est le scenario que le barreau 2 est fait pour resoudre sans rien perdre.
+    // Son edition est au DEBUT, celle de la copie plus loin : une fusion a 3 branches tiendrait les
+    // deux. C'est le cas exact ou une ecriture dans son arbre aurait semble sans risque : elle reste refusee.
     const sonDebut = Array.from({ length: 20 }, (_, i) => `ligne ${i + 1}`)
     sonDebut[1] = 'AVANT UTILISATEUR'
     writeFileSync(join(repo, 'long.txt'), sonDebut.join('\n') + '\n')
+    const avant = readFileSync(join(repo, 'long.txt'))
+    const teteAvant = git(repo, 'rev-parse', 'HEAD')
 
-    const res = wm.finalize(runId, { preserverEditionLocale: true })
+    // L'ancienne forme d'appel (drapeau d'écriture) est passée par une variable : elle ne doit plus rien écrire.
+    const ancienneForme = { task: 'livrer', preserverEditionLocale: true }
+    const res = wm.finalize(runId, ancienneForme)
 
-    expect(res.outcome).toBe('merged')
-    const contenu = readFileSync(join(repo, 'long.txt'), 'utf8')
-    expect(contenu).toContain('MILIEU MODIFIE PAR LA COPIE')
-    expect(contenu).toContain('AVANT UTILISATEUR')
-    // Son travail reste NON COMMITTE — on publie celui de la copie, on ne s'approprie pas le sien.
+    expect(res).toMatchObject({ outcome: 'blocked', reason: 'base-dirty' })
+    expect(readFileSync(join(repo, 'long.txt')).equals(avant)).toBe(true)
+    expect(git(repo, 'rev-parse', 'HEAD')).toBe(teteAvant)
+    // Son edition reste NON COMMITTEE, et aucune sauvegarde ni remise de cote n'a ete ecrite.
     expect(git(repo, 'status', '--porcelain=v1')).toContain('long.txt')
-    expect(git(repo, 'show', 'HEAD:long.txt')).not.toContain('AVANT UTILISATEUR')
-    // Et la sauvegarde de son etat d'origine existe, comme filet.
-    expect(git(repo, 'rev-parse', '--verify', `refs/autowin/safety/${runId}`)).toBeTruthy()
+    expect(git(repo, 'stash', 'list')).toBe('')
+    expect(() => git(repo, 'rev-parse', '--verify', `refs/autowin/safety/${runId}`)).toThrow()
+    // Le travail de la copie reste atteignable par l'adresse d'attente.
+    expect((res as { stagedRef?: string }).stagedRef).toBe(`refs/autowin/integration/${runId}`)
   })
 })
