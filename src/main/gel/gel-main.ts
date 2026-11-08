@@ -17,7 +17,7 @@ import {
   type Gel,
   type ResumeGels
 } from '../../shared/gel-detector'
-import { demarrerProfilPendantGel } from './profil-pendant-gel'
+import { demarrerProfilPendantGel, lireNomDuGelProfile } from './profil-pendant-gel'
 
 /**
  * BATTEMENT du process main — l'instrument qui attrape « ce programme ne repond pas ».
@@ -331,7 +331,15 @@ export function demarrerDetecteurDeGel(
    *
    * L'injecter pose l'hypothese au lieu de l'esperer. L'assertion, elle, ne bouge pas.
    */
-  cpuMsInjecte?: () => number
+  cpuMsInjecte?: () => number,
+  /**
+   * NOM DE LA FONCTION QUI TENAIT LE GEL, lu à chaque réveil — injectable comme les deux témoins
+   * ci-dessus (défaut : le profileur réel, muet hors processus principal).
+   *
+   * Le profileur publie ce nom PENDANT le gel ; le détecteur ne le lit qu'après. Un gel déjà nommé
+   * par son opération déclarée garde ce nom : le profil ne nomme que « inconnu ».
+   */
+  lireNomProfil: () => string | undefined = lireNomDuGelProfile
 ): () => void {
   dossier = dir
   puits = ecrire
@@ -395,6 +403,8 @@ export function demarrerDetecteurDeGel(
     // PRELEVE A CHAQUE REVEIL, gel ou pas : un cumul qui traine d'une fenetre a l'autre attribuerait
     // a un gel des appels qui l'ont precede — l'erreur d'alibi, deja payee sur `indice`.
     const cumules = preleverAccesCumules()
+    // LU A CHAQUE REVEIL, comme les cumuls : un nom publié pendant un gel ne sert qu'à CE gel.
+    const nomDuProfil = lireNomProfil()
     if (blocageMs > 0) {
       const operationBrute = operationDeclaree()
       /*
@@ -416,7 +426,18 @@ export function demarrerDetecteurDeGel(
        * seul illisible de la vue. Le champ `indice` et l'appelant continuent de se lire sur
        * l'operation DECLAREE (`operationBrute`) : eux disent « faute de mieux », pas « au lieu de ».
        */
-      const operation = nommerOperationDuGel(operationBrute, accumulation)
+      const operationSansProfil = nommerOperationDuGel(operationBrute, accumulation)
+      /*
+       * LE PROFIL NOMME LE GEL FAUTE DE MIEUX — seulement quand rien n'est déclaré ni mesuré.
+       * Même prudence que pour l'indice : un gel déjà nommé par une mesure ne reçoit pas un second
+       * nom venu d'une pile.
+       * fix-ok: cause mesurée — nommerOperationDuGel ne lisait jamais le profil, donc les 10 gels
+       * profilés du 06/11 sortaient « inconnu » dans gels.jsonl (10:57:00.222Z et suivants).
+       */
+      const operation =
+        operationSansProfil === 'inconnu' && nomDuProfil
+          ? `profil: ${nomDuProfil}`
+          : operationSansProfil
       /*
        * L'APPELANT REMONTE AU PREMIER PLAN QUAND RIEN N'EST DECLARE.
        *
