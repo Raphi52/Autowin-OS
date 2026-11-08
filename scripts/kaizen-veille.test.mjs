@@ -1,6 +1,11 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import {
+  chargerLeClasseur,
   estRecadrage,
+  lecteurDErreurs,
   jourParis,
   normaliserCause,
   refusDeLaFiche,
@@ -87,8 +92,12 @@ describe('relevé des ratés de la veille', () => {
       'Résultat (2026-11-07 08:00 UTC) : refusé — arrêté au contrôle final — x · 7,31 $'
     ].join('\n')
     expect(refusDeLaFiche(fiche)).toEqual([
-      { jour: '2026-11-06', cause: 'tour arrêté avant la fin' },
-      { jour: '2026-11-07', cause: 'arrêté au contrôle final — x' }
+      { jour: '2026-11-06', instant: T('2026-11-06T22:30:00Z'), cause: 'tour arrêté avant la fin' },
+      {
+        jour: '2026-11-07',
+        instant: T('2026-11-07T08:00:00Z'),
+        cause: 'arrêté au contrôle final — x'
+      }
     ])
   })
 
@@ -146,5 +155,106 @@ describe('relevé des ratés de la veille', () => {
     expect(seul.causes).toEqual([
       { cause: 'raison non écrite dans la fiche', fois: 1, fils: ['conv-2'] }
     ])
+  })
+
+  describe('interruptions : la fiche coupe la raison avant la vraie cause', () => {
+    const ERREUR_LIMITE =
+      "Fan-out build (rôle subagent) : aucun modèle n'a produit de sortie\n• claude (claude-opus-5-5) : Claude a interrompu l'appel : You've hit your 5-hour limit · resets 12:50pm (Europe/Paris)"
+    const ERREUR_PANNE =
+      "Fan-out build (rôle subagent) : aucun modèle n'a produit de sortie\n• claude (claude-opus-5-5) : spawn claude ENOENT"
+    const COUPEE =
+      "échec : Fan-out build (rôle subagent) : aucun modèle n'a produit de sortie\n• claude (claude-opus-5-5) : Claude a interrompu l…"
+    const ligne = (h) => `Résultat (2026-11-05 ${h} UTC) : refusé — ${COUPEE.replace(/\n/g, ' ')}`
+    const demande = (messageId, conversationId, fiche) => ({
+      ts: 1,
+      demandeLe: T('2026-11-05T08:00:00Z'),
+      messageId,
+      conversationId,
+      etat: 'refuse',
+      constat: COUPEE,
+      fiche
+    })
+    const traces = (demandes) => ({ saisies: [], demandes, verdicts: [], couts: [], gels: [] })
+    const fiches = { 'a/RUN.md': ligne('07:59'), 'b/RUN.md': ligne('09:26') }
+    // Faux classeur : ce test vérifie le RELEVÉ ; la vraie fonction est éprouvée plus bas.
+    const classer = (e) => (e.includes('5-hour limit') ? 'limite-d-usage' : undefined)
+    const erreurs = { 'conv-1': ERREUR_LIMITE, 'conv-2': ERREUR_PANNE }
+    const lireErreur = ({ conversationId }) => erreurs[conversationId]
+
+    it('sort la limite d’usage des causes de refus, et garde la vraie panne', () => {
+      const demandes = [demande('m1', 'conv-1', 'a/RUN.md'), demande('m2', 'conv-2', 'b/RUN.md')]
+      const r = releverLaPeriode(
+        { du: '2026-11-05', au: '2026-11-05' },
+        traces(demandes),
+        (f) => fiches[f],
+        { lireErreur, classer }
+      )
+      expect(r.interruptions).toEqual([{ motif: 'limite-d-usage', fois: 1, fils: ['conv-1'] }])
+      expect(r.causes.map((c) => [c.cause.slice(0, 20), c.fils])).toEqual([
+        ['échec : Fan-out buil', ['conv-2']]
+      ])
+      expect(r.totaux.interruptions).toBe(1)
+      // La demande interrompue ne pèse plus dans le fil ; la vraie panne, oui.
+      expect(r.fils.map((f) => f.conversationId)).toEqual(['conv-2'])
+      expect(r.totaux.refus).toBe(1)
+    })
+
+    it('sans lecteur d’erreur, tout reste une cause de refus (comme avant)', () => {
+      const r = releverLaPeriode(
+        { du: '2026-11-05', au: '2026-11-05' },
+        traces([demande('m1', 'conv-1', 'a/RUN.md'), demande('m2', 'conv-2', 'b/RUN.md')]),
+        (f) => fiches[f]
+      )
+      expect(r.interruptions).toEqual([])
+      expect(r.causes[0].fois).toBe(2)
+    })
+
+    it('relit l’erreur complète dans le journal de tour, même notée des heures après', () => {
+      const dossier = mkdtempSync(join(tmpdir(), 'kaizen-veille-'))
+      mkdirSync(join(dossier, 'turn-journals', 'conv-1'), { recursive: true })
+      const at = T('2026-11-05T07:59:50Z')
+      writeFileSync(
+        join(dossier, 'turn-journals', 'conv-1', 't.jsonl'),
+        [
+          JSON.stringify({ kind: 'result', ok: true, data: 'autre', at }),
+          JSON.stringify({
+            kind: 'result',
+            ok: false,
+            name: 'orchestrate',
+            data: ERREUR_PANNE,
+            at
+          }),
+          JSON.stringify({
+            kind: 'result',
+            ok: false,
+            name: 'orchestrate',
+            data: ERREUR_LIMITE,
+            at
+          })
+        ].join('\n')
+      )
+      const debut =
+        "Fan-out build (rôle subagent) : aucun modèle n'a produit de sortie • claude (claude-opus-5-5) : Claude a interrompu l"
+      const lire = lecteurDErreurs(dossier)
+      expect(lire({ conversationId: 'conv-1', instant: T('2026-11-05T09:26:00Z'), debut })).toBe(
+        ERREUR_LIMITE
+      )
+      expect(lire({ conversationId: 'conv-9', instant: at, debut })).toBeUndefined()
+    })
+
+    it('reconnaît avec la vraie interruptionSansDefaut, sans recopier ses motifs', async () => {
+      const vraie = await chargerLeClasseur()
+      expect(vraie).toBeTypeOf('function')
+      expect(vraie(ERREUR_LIMITE)).toBe('limite-d-usage')
+      expect(vraie(ERREUR_PANNE)).toBeUndefined()
+      const r = releverLaPeriode(
+        { du: '2026-11-05', au: '2026-11-05' },
+        traces([demande('m1', 'conv-1', 'a/RUN.md'), demande('m2', 'conv-2', 'b/RUN.md')]),
+        (f) => fiches[f],
+        { lireErreur, classer: vraie }
+      )
+      expect(r.interruptions.map((i) => i.motif)).toEqual(['limite-d-usage'])
+      expect(r.causes).toHaveLength(1)
+    })
   })
 })

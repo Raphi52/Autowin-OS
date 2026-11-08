@@ -20,9 +20,15 @@
  *   rouge      [2] un verdict rouge du juge (trust.jsonl)
  *   sansPreuve [1] une demande close sans preuve (etat « sans-preuve »)
  *   cout       [1] coût du fil au-dessus de 3× la médiane de la période (cost.jsonl)
+ *   interruptions  PAS un signal : un refus « échec : Fan-out … aucun modèle n'a produit de sortie » dont
+ *                  l'erreur COMPLÈTE est une limite d'usage ou un arrêt voulu (Stop, arreter_un_fil)
+ *                  n'a aucun défaut à corriger. La fiche coupe la raison avant la vraie cause : on
+ *                  relit l'erreur entière dans le journal de tour (turn-journals/<conv>/*.jsonl,
+ *                  événement « outcome ») et on la juge avec `interruptionSansDefaut()` de
+ *                  src/shared/arret-par-stop.ts, chargée telle quelle (voir chargerLeClasseur).
  * Les gels de l'app (gels.jsonl, ≥ 2 s) n'ont pas de fil : ils sont comptés à part.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -88,7 +94,8 @@ const LIGNE_DE_REFUS = /^Résultat \((\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) UTC\) : r
 export function refusDeLaFiche(texte) {
   const sortie = []
   for (const m of String(texte ?? '').matchAll(LIGNE_DE_REFUS)) {
-    sortie.push({ jour: jourParis(`${m[1]}T${m[2]}:00Z`), cause: normaliserCause(m[3]) })
+    const instant = Date.parse(`${m[1]}T${m[2]}:00Z`)
+    sortie.push({ jour: jourParis(instant), instant, cause: normaliserCause(m[3]) })
   }
   return sortie
 }
@@ -114,14 +121,28 @@ function mediane(valeurs) {
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2
 }
 
+/** Seule la raison d'un « Fan-out … aucun modèle » est coupée avant la vraie cause. */
+const REFUS_SANS_SORTIE = /aucun modèle n['’]a produit de sortie/
+
+function motifDInterruption(refus, conversationId, { lireErreur, classer } = {}) {
+  if (!lireErreur || !classer || !REFUS_SANS_SORTIE.test(refus.cause)) return undefined
+  const debut = espaces(refus.cause.replace(/^échec : /, ''))
+  const erreur = lireErreur({ conversationId, instant: refus.instant, debut })
+  return erreur ? classer(erreur) : undefined
+}
+
 /**
  * Calcule le relevé d'une période (bornes incluses, AAAA-MM-JJ de Paris) à partir des lignes déjà
  * lues. Pur, pour être testé sans disque : `lireFiche(chemin relatif)` rend le texte d'un RUN.md.
  * @param {{du:string, au:string}} periode
  * @param {{saisies:any[], demandes:any[], verdicts:any[], couts:any[], gels:any[]}} traces
  * @param {(fiche:string) => string | undefined} [lireFiche]
+ * @param {{lireErreur?:(refus:{conversationId:string, instant:number}) => string | undefined,
+ *          classer?:(erreur:string) => string | undefined}} [interruptions]
+ *   `lireErreur` rend l'erreur COMPLÈTE d'un refus (la fiche la coupe) ; `classer` dit si c'est une
+ *   interruption sans défaut (`interruptionSansDefaut`). Sans eux, aucun refus n'est reclassé.
  */
-export function releverLaPeriode(periode, traces, lireFiche = () => undefined) {
+export function releverLaPeriode(periode, traces, lireFiche = () => undefined, interruptions = {}) {
   const { du, au } = periode
   const dans = (instant) => {
     const j = jourParis(instant)
@@ -158,26 +179,48 @@ export function releverLaPeriode(periode, traces, lireFiche = () => undefined) {
     const avant = dernierEtat.get(d.messageId)
     if (!avant || (d.ts ?? 0) >= (avant.ts ?? 0)) dernierEtat.set(d.messageId, d)
   }
+  // fix-ok: la fiche RUN.md coupe la raison à ~140 signes, avant « You've hit your 5-hour limit » ;
+  // la cause réelle n'est lisible que dans l'événement « outcome » du journal de tour.
   const fichesRefusees = new Map()
   for (const d of dernierEtat.values()) {
-    if (d.etat === 'refuse') {
-      fil(d.conversationId).refus.push(String(d.constat ?? '').slice(0, 140))
-      if (d.fiche) fichesRefusees.set(d.fiche, d.conversationId)
-    } else if (d.etat === 'sans-preuve') fil(d.conversationId).sansPreuve++
+    if (d.etat === 'refuse' && d.fiche) fichesRefusees.set(d.fiche, d.conversationId)
   }
 
   // Une fiche porte TOUTE la vie d'une demande : on n'y compte que les refus datés de la période.
-  const causes = new Map()
-  const compter = (cause, conversationId) => {
-    const c = causes.get(cause) ?? { cause, fois: 0, fils: new Set() }
-    c.fois++
-    c.fils.add(conversationId)
-    causes.set(cause, c)
-  }
+  // Un refus dont l'erreur complète est une interruption sans défaut n'est pas une cause de refus.
+  const analyses = new Map()
   for (const [fiche, conversationId] of fichesRefusees) {
     const lus = refusDeLaFiche(lireFiche(fiche)).filter((r) => r.jour >= du && r.jour <= au)
-    if (!lus.length) compter('raison non écrite dans la fiche', conversationId)
-    for (const r of lus) compter(r.cause, conversationId)
+    analyses.set(
+      fiche,
+      lus.map((r) => ({ ...r, motif: motifDInterruption(r, conversationId, interruptions) }))
+    )
+  }
+
+  for (const d of dernierEtat.values()) {
+    if (d.etat === 'refuse') {
+      const lignes = d.fiche ? analyses.get(d.fiche) : undefined
+      // Rien à compter si TOUS les refus de la fiche sont des interruptions.
+      if (lignes?.length && lignes.every((r) => r.motif)) continue
+      fil(d.conversationId).refus.push(String(d.constat ?? '').slice(0, 140))
+    } else if (d.etat === 'sans-preuve') fil(d.conversationId).sansPreuve++
+  }
+
+  const causes = new Map()
+  const interrompus = new Map()
+  const compter = (cause, conversationId, dans = causes) => {
+    const c = dans.get(cause) ?? { cause, fois: 0, fils: new Set() }
+    c.fois++
+    c.fils.add(conversationId)
+    dans.set(cause, c)
+  }
+  for (const [fiche, conversationId] of fichesRefusees) {
+    const lignes = analyses.get(fiche)
+    if (!lignes.length) compter('raison non écrite dans la fiche', conversationId)
+    for (const r of lignes) {
+      if (r.motif) compter(r.motif, conversationId, interrompus)
+      else compter(r.cause, conversationId)
+    }
   }
 
   for (const v of traces.verdicts) {
@@ -224,6 +267,7 @@ export function releverLaPeriode(periode, traces, lireFiche = () => undefined) {
       refus: classes.reduce((n, f) => n + f.refus.length, 0),
       rouges: classes.reduce((n, f) => n + f.rouge, 0),
       sansPreuve: classes.reduce((n, f) => n + f.sansPreuve, 0),
+      interruptions: [...interrompus.values()].reduce((n, c) => n + c.fois, 0),
       gels: gels.length,
       gelMaxMs: gels.reduce((m, g) => Math.max(m, g.blocageMs ?? 0), 0)
     },
@@ -231,6 +275,10 @@ export function releverLaPeriode(periode, traces, lireFiche = () => undefined) {
     causes: [...causes.values()]
       .map((c) => ({ cause: c.cause, fois: c.fois, fils: [...c.fils] }))
       .sort((a, b) => b.fils.length - a.fils.length || b.fois - a.fois),
+    // Hors des causes de refus : ni limite d'usage ni arrêt voulu ne laisse un défaut à corriger.
+    interruptions: [...interrompus.values()]
+      .map((c) => ({ motif: c.cause, fois: c.fois, fils: [...c.fils] }))
+      .sort((a, b) => b.fois - a.fois),
     fils: classes
   }
 }
@@ -256,11 +304,75 @@ export function lecteurDeFiches(dossier) {
   }
 }
 
+const espaces = (t) => String(t).replace(/\s+/g, ' ').trim()
+
+/**
+ * L'erreur complète d'un refus : le journal de tour du fil (`turn-journals/<conv>/<tour>.jsonl`)
+ * l'écrit en entier, dans son événement « outcome » (`error`) ou dans le résultat en échec de
+ * l'orchestration (`data`). La fiche, elle, la tronque, avant la cause réelle.
+ *
+ * L'heure ne suffit pas à retrouver le bon événement (une reprise note le refus des heures après
+ * l'erreur) : on garde ceux qui COMMENCENT comme la raison de la fiche (`debut`), puis le plus
+ * proche de l'instant du refus.
+ */
+export function lecteurDErreurs(dossier) {
+  return ({ conversationId, instant, debut }) => {
+    const rep = join(dossier, 'turn-journals', conversationId)
+    if (!existsSync(rep) || !debut) return undefined
+    let meilleur
+    for (const nom of readdirSync(rep)) {
+      if (!nom.endsWith('.jsonl')) continue
+      for (const l of readFileSync(join(rep, nom), 'utf8').split('\n')) {
+        const sortie = l.includes('"kind":"outcome"')
+        if (!sortie && !(l.includes('"ok":false') && l.includes('"kind":"result"'))) continue
+        try {
+          const e = JSON.parse(l)
+          const texte = sortie ? e.error : e.data
+          if (typeof texte !== 'string' || !espaces(texte).startsWith(debut)) continue
+          const ecart = Math.abs((e.at ?? 0) - instant)
+          if (!meilleur || ecart < meilleur.ecart) meilleur = { ecart, texte }
+        } catch {
+          // une ligne coupée par une écriture en cours : les autres restent lisibles
+        }
+      }
+    }
+    return meilleur?.texte
+  }
+}
+
+/**
+ * `interruptionSansDefaut` vit en TypeScript (src/shared/arret-par-stop.ts) et `node` seul ne lit
+ * ni ce format ni ses imports sans extension. Plutôt que de recopier ses motifs (la copie
+ * dériverait), on COMPILE le vrai fichier avec esbuild, déjà dans le dépôt, et on l'importe.
+ * Rend `undefined` si la compilation échoue : le relevé marche, sans reclasser.
+ */
+export async function chargerLeClasseur(
+  racine = join(dirname(fileURLToPath(import.meta.url)), '..')
+) {
+  try {
+    const { build } = await import('esbuild')
+    const { outputFiles } = await build({
+      entryPoints: [join(racine, 'src', 'shared', 'arret-par-stop.ts')],
+      bundle: true,
+      write: false,
+      format: 'esm',
+      platform: 'node',
+      logLevel: 'silent'
+    })
+    const code = Buffer.from(outputFiles[0].text).toString('base64')
+    const module = await import(`data:text/javascript;base64,${code}`)
+    return module.interruptionSansDefaut
+  } catch (e) {
+    console.error(`Interruptions non reclassées (arret-par-stop.ts non chargé) : ${e.message}`)
+    return undefined
+  }
+}
+
 function lisible(r, top) {
   const t = r.totaux
   const l = [
     `Ratés ${r.du === r.au ? `du ${r.du}` : `du ${r.du} au ${r.au}`} — ${r.filsActifs} fils actifs`,
-    `recadrages ${t.recadrages} · refus ${t.refus} · juge rouge ${t.rouges} · sans preuve ${t.sansPreuve} · gels ≥2 s ${t.gels}${t.gels ? ` (max ${(t.gelMaxMs / 1000).toFixed(1)} s)` : ''}`,
+    `recadrages ${t.recadrages} · refus ${t.refus} · juge rouge ${t.rouges} · sans preuve ${t.sansPreuve} · interruptions ${t.interruptions} · gels ≥2 s ${t.gels}${t.gels ? ` (max ${(t.gelMaxMs / 1000).toFixed(1)} s)` : ''}`,
     ''
   ]
   if (r.causes.length) {
@@ -269,6 +381,12 @@ function lisible(r, top) {
       l.push(
         `  ${c.fois}× dans ${c.fils.length} fil(s) — ${c.cause}  (${c.fils.slice(0, 4).join(', ')})`
       )
+    l.push('')
+  }
+  if (r.interruptions.length) {
+    l.push('Interruptions (limite d’usage, arrêt voulu : rien à corriger, hors des causes) :')
+    for (const c of r.interruptions)
+      l.push(`  ${c.fois}× dans ${c.fils.length} fil(s) — ${c.motif}  (${c.fils.join(', ')})`)
     l.push('')
   }
   for (const f of r.fils.slice(0, top)) {
@@ -285,7 +403,7 @@ function lisible(r, top) {
   return l.join('\n')
 }
 
-function principal(argv) {
+async function principal(argv) {
   const arg = (nom) => {
     const i = argv.indexOf(nom)
     return i >= 0 ? argv[i + 1] : undefined
@@ -308,7 +426,11 @@ function principal(argv) {
     return 2
   }
   const top = Number(arg('--top') ?? 10)
-  const r = releverLaPeriode({ du, au }, lireTraces(dossier), lecteurDeFiches(dossier))
+  const classer = await chargerLeClasseur()
+  const r = releverLaPeriode({ du, au }, lireTraces(dossier), lecteurDeFiches(dossier), {
+    lireErreur: lecteurDErreurs(dossier),
+    classer
+  })
   console.log(
     argv.includes('--json')
       ? JSON.stringify({ ...r, fils: r.fils.slice(0, top) }, null, 2)
@@ -318,5 +440,5 @@ function principal(argv) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = principal(process.argv.slice(2))
+  process.exitCode = await principal(process.argv.slice(2))
 }
