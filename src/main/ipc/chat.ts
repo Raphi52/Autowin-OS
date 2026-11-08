@@ -200,6 +200,7 @@ import {
 } from '../chat/chat-turn-publication'
 import { publierSansTour, redacteurDeCommit } from '../git/git-apres-fil-sans-tour'
 import { lireProprietairesDeFichiers } from '../fichiers/proprietaire-fichier'
+import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 import {
   blocDuTour,
   commitsPublies,
@@ -1484,10 +1485,6 @@ Le fil reprend ensuite normalement.`
   // Le dossier du demarrage sert de reference : le serveur Brain et la vue du graphe le gardent
   // jusqu'au redemarrage (`SHARED_BRAIN_ROOT` est lu a l'import de viz/fs-brains.ts).
   const racineBrainAuDemarrage = sharedBrainRoot()
-  const memeDossier = (a: string, b: string): boolean => {
-    const n = (v: string): string => v.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()
-    return n(a) === n(b)
-  }
   const brainReglageState = async (erreur?: string): Promise<BrainReglageState> => {
     const reglage = lireBrainReglage()
     const effectif = sharedBrainRoot()
@@ -1498,9 +1495,10 @@ Le fil reprend ensuite normalement.`
       effectif,
       choisi: reglage.chemin || reglage.depot ? reglage : null,
       estUnDepot: Boolean(reglage.depot),
-      redemarrageNecessaire: !memeDossier(effectif, racineBrainAuDemarrage),
+      redemarrageNecessaire: !memeCheminSurDisque(effectif, racineBrainAuDemarrage),
       serveurRacine,
-      serveurSurUnAutreDossier: serveurRacine !== null && !memeDossier(serveurRacine, effectif),
+      serveurSurUnAutreDossier:
+        serveurRacine !== null && !memeCheminSurDisque(serveurRacine, effectif),
       // Une adresse de depot peut porter un identifiant (`https://nom:jeton@…`) : jamais affiche.
       ...(erreur ? { erreur: erreur.replace(/\/\/[^@/\s]*@/g, '//***@') } : {})
     }
@@ -1623,7 +1621,7 @@ Le fil reprend ensuite normalement.`
       serveurJoignable: racine ? await pingBrainPerso() : false,
       serveurRacine,
       serveurSurUnAutreDossier:
-        racine !== null && serveurRacine !== null && !memeDossier(serveurRacine, racine),
+        racine !== null && serveurRacine !== null && !memeCheminSurDisque(serveurRacine, racine),
       ...(erreur ? { erreur: erreur.replace(/\/\/[^@/\s]*@/g, '//***@') } : {})
     }
   }
@@ -2293,7 +2291,7 @@ Le fil reprend ensuite normalement.`
       // Le dépôt de sa copie : le fil y travaille déjà, par elle. Le ranger dans le dépôt lui-même
       // le sortirait de sa copie pour l'y faire revenir au tour suivant.
       ranger: (chemin) => {
-        if (saCopie && memeDossier(chemin, saCopie.depot)) return undefined
+        if (saCopie && memeCheminSurDisque(chemin, saCopie.depot)) return undefined
         return os.conversations.rangerDansDossier(conversationId, chemin)
       },
       // Le tour est deja parti : l'annonce passe AU-DESSUS de sa reponse, vierge, en cours OU finie.

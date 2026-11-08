@@ -30,6 +30,7 @@ import {
 import { MARQUE_DEMANDE_DESSAI, nomDeCopieDEssai } from '../../shared/essai-trois-facons'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import type { FinalizeResult } from '../store/worktree-manager'
+import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 
 /** L'auteur du commit de la façon : jamais l'identité de l'utilisateur, qui n'a rien commité. */
 const AUTEUR = {
@@ -47,21 +48,13 @@ export interface EssaiNomme {
   ref: string
 }
 
-function memeChemin(a: string, b: string): boolean {
-  const forme = (chemin: string): string => {
-    const nu = resolve(chemin).replace(/[\\/]+$/u, '')
-    return process.platform === 'win32' ? nu.toLowerCase() : nu
-  }
-  return forme(a) === forme(b)
-}
-
 /**
  * Une copie d'essai n'est reconnue que DIRECTEMENT dans le dossier des essais, sous le nom que pose
  * `ouvrirCopiesDEssai`. Sans cette garde, le canal publierait l'écart de n'importe quel dossier.
  */
 export function lireNomDEssai(copie: string, dossierDesRetours: string): EssaiNomme | null {
   if (!copie.trim() || !isAbsolute(copie)) return null
-  if (!memeChemin(dirname(resolve(copie)), dossierDesRetours)) return null
+  if (!memeCheminSurDisque(dirname(resolve(copie)), dossierDesRetours)) return null
   // Le nom que pose `ouvrirCopiesDEssai`, lu par la même fonction que l'interface.
   const nom = nomDeCopieDEssai(basename(resolve(copie)))
   if (!nom) return null

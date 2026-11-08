@@ -1,13 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, resolve } from 'node:path'
-
-function memeDossier(a: string, b: string): boolean {
-  const normaliser = (chemin: string): string =>
-    resolve(chemin)
-      .replace(/[\\/]+$/, '')
-      .toLowerCase()
-  return normaliser(a) === normaliser(b)
-}
+import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 
 /**
  * POURQUOI un rangement ne pilote PAS le dossier de travail (regle du 2026-09-08).
@@ -50,7 +43,7 @@ export function diagnostiqueDossierConversation(
   if (!isAbsolute(range)) return 'libelle-non-absolu'
   const cible = dossierRangeUtilisable(projectPath, dossierExiste)
   if (!cible) return 'dossier-absent'
-  if (memeDossier(cible, workspaceActif)) return 'deja-aligne'
+  if (memeCheminSurDisque(cible, workspaceActif)) return 'deja-aligne'
   return 'bascule-requise'
 }
 
@@ -201,7 +194,7 @@ export function copieOuTravailleLeFil(
 ): CopieDuFilNotee | null {
   const copie = copieNotee(fil)
   const range = fil?.projectPath?.trim()
-  return copie && range && memeDossier(range, copie.chemin) ? copie : null
+  return copie && range && memeCheminSurDisque(range, copie.chemin) ? copie : null
 }
 
 /**
@@ -256,9 +249,9 @@ export async function preparerLeDossierDuTour(entree: {
   }
   if (dansSaCopie) return 'rien'
   const range = fil.projectPath?.trim()
-  if (range && !(isAbsolute(range) && memeDossier(range, depotPartage))) return 'rien'
+  if (range && !(isAbsolute(range) && memeCheminSurDisque(range, depotPartage))) return 'rien'
   const notee = copieNotee(fil)
-  if (notee && memeDossier(notee.depot, depotPartage) && existe(notee.chemin)) {
+  if (notee && memeCheminSurDisque(notee.depot, depotPartage) && existe(notee.chemin)) {
     entree.passer({ chemin: notee.chemin, depot: depotPartage })
     entree.annoncer(
       `📂 Ce fil reprend sa copie de travail : ${notee.chemin}. Son travail entre dans ${depotPartage} par la porte en fin de tour.`

@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path'
 import { estUneRepriseAutomatique } from '../chat/relance-taches-de-fond'
 import { estUnPromptDOrdre } from '../conversations/messages-entre-fils-app'
 import { estUneConsigneDeRedemarrage } from '../app/redemarrage-reprise'
+import { formeDuChemin, memeCheminSurDisque } from '../fichiers/meme-chemin'
 
 /**
  * LE DEPOT CITE PAR LA DEMANDE — pour aligner le dossier de travail sur ce dont l'utilisateur PARLE.
@@ -44,19 +45,10 @@ function racineDepot(depart: string, existe: (chemin: string) => boolean): strin
   }
 }
 
-const normaliser = (chemin: string): string =>
-  resolve(chemin)
-    .replace(/[\\/]+$/, '')
-    .toLowerCase()
-
-function memeDossier(a: string, b: string): boolean {
-  return normaliser(a) === normaliser(b)
-}
-
 /** `enfant` est STRICTEMENT sous `parent` — `D:\AutoWinOS2` n'est pas sous `D:\AutoWinOS`. */
 function estDedans(enfant: string, parent: string): boolean {
-  const e = normaliser(enfant)
-  const p = normaliser(parent)
+  const e = formeDuChemin(enfant)
+  const p = formeDuChemin(parent)
   return e.length > p.length && e.startsWith(p) && /[\\/]/.test(e.charAt(p.length))
 }
 
@@ -86,7 +78,7 @@ export function depotCiteDansLeMessage(
     if (!chemin || !existe(chemin)) continue
     const racine = racineDepot(chemin, existe)
     if (!racine) continue
-    if (dossierActif.trim() && memeDossier(racine, dossierActif)) continue
+    if (dossierActif.trim() && memeCheminSurDisque(racine, dossierActif)) continue
     // Un depot IMBRIQUE dans le depot de travail (depot jetable, copie de travail d'un agent sous
     // .autowin-data) fait partie de CE depot : ce n'est pas l'autre projet que l'utilisateur aurait
     // oublie de ranger. Un dossier parent SANS depot (D:\GIT) continue, lui, de basculer vers ses projets.

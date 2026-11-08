@@ -31,6 +31,7 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 
 export const FICHIER_GARDE_NPM_GROK = 'garde-npm.json'
 export const FICHIER_GARDE_ECRITURE_GROK = 'garde-ecriture.json'
@@ -172,14 +173,9 @@ function controlesDe(groupe: GroupeCodex): ControleCodex[] {
   return Array.isArray(groupe?.hooks) ? (groupe.hooks as ControleCodex[]) : []
 }
 
-const memeChemin = (a: string, b: string): boolean =>
-  process.platform === 'win32'
-    ? resolve(a).toLowerCase() === resolve(b).toLowerCase()
-    : resolve(a) === resolve(b)
-
 function estGardeNpm(controle: ControleCodex, script: string): boolean {
   const m = typeof controle.command === 'string' ? /^node "([^"]+)"$/.exec(controle.command) : null
-  return controle.type === 'command' && m !== null && memeChemin(m[1]!, script)
+  return controle.type === 'command' && m !== null && memeCheminSurDisque(m[1]!, script)
 }
 
 /** La garde d'écriture du même dépôt que la garde npm `scriptNpm`, et d'aucun autre. */
@@ -384,7 +380,7 @@ function controlesDeProjet(
   let d = cwd ? resolve(cwd) : undefined
   for (let i = 0; d && i < 40; i++) {
     const dossier = join(d, '.codex')
-    if (!memeChemin(dossier, dossierCodexPersonnel)) {
+    if (!memeCheminSurDisque(dossier, dossierCodexPersonnel)) {
       for (const nom of ['hooks.json', 'config.toml']) {
         if (existe(join(dossier, nom))) return join(dossier, nom)
       }

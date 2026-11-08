@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { basename, isAbsolute, resolve } from 'node:path'
+import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 
 /**
  * LE RANGEMENT D'UNE CONVERSATION DEDUIT DE SON PREMIER MESSAGE.
@@ -42,14 +43,6 @@ function score(nomDossier: string, messageNormalise: string): number {
   return 0
 }
 
-function memeDossier(a: string, b: string): boolean {
-  const propre = (chemin: string): string =>
-    resolve(chemin)
-      .replace(/[\\/]+$/, '')
-      .toLowerCase()
-  return propre(a) === propre(b)
-}
-
 /**
  * Rend le dossier a ranger sur la conversation, ou `null` quand rien n'est sur.
  *
@@ -76,12 +69,12 @@ export function dossierDeduitDuPremierMessage(
     if (!meilleur || points > meilleur.points) {
       meilleur = { chemin, points }
       exAequo = false
-    } else if (points === meilleur.points && !memeDossier(chemin, meilleur.chemin)) {
+    } else if (points === meilleur.points && !memeCheminSurDisque(chemin, meilleur.chemin)) {
       exAequo = true
     }
   }
   if (!meilleur || exAequo) return null
-  if (dossierActif.trim() && memeDossier(meilleur.chemin, dossierActif)) return null
+  if (dossierActif.trim() && memeCheminSurDisque(meilleur.chemin, dossierActif)) return null
   return meilleur.chemin
 }
 
@@ -162,7 +155,8 @@ export async function rangerConversationSurLePremierMessage(
         deps.existe ?? existsSync
       )
   if (!deduit) return null
-  const deplaceLeTravail = isAbsolute(deduit) && !memeDossier(deduit, deps.dossierActif || deduit)
+  const deplaceLeTravail =
+    isAbsolute(deduit) && !memeCheminSurDisque(deduit, deps.dossierActif || deduit)
   const differe = deplaceLeTravail && deps.finDuTour !== undefined
   if (differe) await Promise.resolve(deps.finDuTour).catch(() => undefined)
   if (deps.toujoursNonRangee && !deps.toujoursNonRangee()) return null
@@ -283,7 +277,7 @@ export async function dossierDeduitParModele(
   if (!choisi || !Number.isFinite(confiance) || confiance < RANGEMENT_CONFIANCE_MIN) return null
   const libelle = libelles.find((c) => c.toLowerCase() === choisi.toLowerCase())
   if (libelle) return libelle
-  const retenu = candidats.find((c) => memeDossier(c, choisi))
+  const retenu = candidats.find((c) => memeCheminSurDisque(c, choisi))
   if (!retenu) return null
   // LA CATEGORIE PASSE AVANT LE DOSSIER, et pas seulement dans la consigne du modele : celui-ci a
   // choisi D:\AutoWinOS alors que la categorie « Autowin OS » existait et designait la meme chose
