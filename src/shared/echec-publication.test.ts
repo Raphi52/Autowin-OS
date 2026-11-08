@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { PublicationARejouer, phraseDuRefus, refusDePublication } from './echec-publication'
+import {
+  avertissementDePublication,
+  estUnRefusDePublication,
+  PublicationARejouer,
+  phraseDuRefus,
+  refusDePublication
+} from './echec-publication'
 
 /** Le texte que `git push` rend quand le garde-fou de noms internes refuse (`scripts/separation-avant-push.mjs`). */
 const REFUS_DU_GARDE_FOU =
@@ -129,6 +135,78 @@ describe('porte d’un fil en copie (tour de chat)', () => {
   it('une porte qui attend (fichier non commité ailleurs) n’est pas un refus', () => {
     expect(
       refusDePublication({ status: 'skipped', reason: 'porte-en-attente', detail: 'a.ts' })
+    ).toBeUndefined()
+  })
+})
+
+// fix-ok: cause mesurée — un refus de rejeu ordinaire (distant qui refuse le push, PR impossible) doit garder son repli sur la branche dédiée (choix d'enchaînement générique, deux tests de run-autoclose.test.ts) : il n'a donc pas de phrase de refus ici, seul le contrôle des noms en a une.
+describe('refus du contrôle des noms sur un commit de fin de run, avertissements', () => {
+  it('un commit de fin de run refusé par le contrôle des noms est un refus, sans le terme ni le chemin', () => {
+    const refus = refusDePublication({
+      status: 'skipped',
+      reason: 'separation-entreprise',
+      detail: 'commit'
+    })
+    expect(refus?.titre).toBe('Envoi refusé')
+    const phrase = phraseDuRefus(refus!)
+    expect(phrase).toContain('élément réservé')
+    expect(phrase).toContain('/git')
+    // Le détail ne dit que le genre de refus : un terme ou un chemin injecté n'entre jamais dans la phrase.
+    const fuite = refusDePublication({
+      status: 'skipped',
+      reason: 'separation-entreprise',
+      detail: 'zorglub-fictif dans src/x.ts'
+    })
+    expect(phraseDuRefus(fuite!)).not.toContain('zorglub-fictif')
+    expect(phraseDuRefus(fuite!)).not.toContain('src/x.ts')
+  })
+
+  it('le texte d’un refus se reconnaît à son préfixe, un avertissement non', () => {
+    const refus = refusDePublication({ status: 'skipped', reason: 'tests-rouges' })!
+    expect(estUnRefusDePublication(phraseDuRefus(refus))).toBe(true)
+    expect(estUnRefusDePublication('Bonjour, on continue.')).toBe(false)
+    const avertissement = avertissementDePublication({
+      status: 'pushed',
+      branch: 'travail',
+      files: 1,
+      rejoue: { distantAvant: 'a', sha: 'b', brancheLocaleRattachee: true, controleNonFait: true }
+    })
+    expect(estUnRefusDePublication(avertissement ?? '')).toBe(false)
+  })
+
+  it('un envoi parti avec un contrôle non fait ou une branche locale non rattachée est un avertissement, pas un refus', () => {
+    const controleNonFait = {
+      status: 'pushed',
+      branch: 'travail',
+      files: 1,
+      rejoue: { distantAvant: 'a', sha: 'b', brancheLocaleRattachee: true, controleNonFait: true }
+    }
+    expect(refusDePublication(controleNonFait)).toBeUndefined()
+    expect(avertissementDePublication(controleNonFait)).toContain('mal formé')
+
+    const rattachementRefuse = {
+      status: 'pushed',
+      branch: 'travail',
+      files: 1,
+      rejoue: {
+        distantAvant: 'a',
+        sha: 'b',
+        brancheLocaleRattachee: false,
+        rattachementRefuse: true
+      }
+    }
+    expect(refusDePublication(rattachementRefuse)).toBeUndefined()
+    expect(avertissementDePublication(rattachementRefuse)).toContain('/git')
+  })
+
+  it('un envoi sans réserve n’a pas d’avertissement', () => {
+    expect(
+      avertissementDePublication({
+        status: 'pushed',
+        branch: 'travail',
+        files: 1,
+        rejoue: { distantAvant: 'a', sha: 'b', brancheLocaleRattachee: true }
+      })
     ).toBeUndefined()
   })
 })

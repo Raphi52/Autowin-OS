@@ -1,6 +1,7 @@
 import { bandeauPublie } from '../git/git-apres-fil'
 import { messageCommitAgent } from '../store/worktree-manager'
 import {
+  avertissementDePublication,
   phraseDuRefus,
   refusDePublication,
   type RefusDePublication
@@ -115,9 +116,16 @@ export function annonceRefusAuFil(
   conversationId: string,
   refus: RefusDePublication
 ): boolean {
+  return annonceAuFil(fil, conversationId, phraseDuRefus(refus))
+}
+
+/**
+ * Pose une phrase de l'app dans le fil, une fois par tour : un refus et une réserve passent par la même
+ * règle de doublon, celle du tour courant.
+ */
+function annonceAuFil(fil: FilDuRefus, conversationId: string, phrase: string): boolean {
   const conversation = fil.get(conversationId)
   if (!conversation) return false
-  const phrase = phraseDuRefus(refus)
   if (dejaDitDansLeTourCourant(conversation.messages, phrase)) return false
   fil.append(conversationId, { role: 'assistant', content: phrase })
   return true
@@ -148,6 +156,10 @@ export function annonceRefusDuProjet(
   conversationId: string,
   projet: unknown
 ): boolean {
+  // fix-ok: cause mesurée — un envoi parti avec une réserve (profil mal formé, rattachement refusé) ne
+  // laissait aucune trace dans le fil : `refusDePublication` ne rend rien pour un envoi parti.
   const refus = refusDePublication(projet)
-  return refus ? annonceRefusAuFil(fil, conversationId, refus) : false
+  if (refus) return annonceRefusAuFil(fil, conversationId, refus)
+  const avertissement = avertissementDePublication(projet)
+  return avertissement ? annonceAuFil(fil, conversationId, avertissement) : false
 }

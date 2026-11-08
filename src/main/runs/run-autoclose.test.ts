@@ -18,6 +18,7 @@ import {
 } from './run-autoclose'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
+import { avertissementDePublication } from '../../shared/echec-publication'
 
 /** Vrais dépôts git en tmp : sous charge parallèle, le budget vitest par défaut (5 s) est trop court. */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
@@ -815,6 +816,39 @@ describe('enchaînement générique : push direct si le dépôt l’accepte, sin
     expect(res).toMatchObject({ status: 'pushed', branch: 'auto/r3', mode: 'pr', prError: 'gh absent' })
   })
 
+  // Choix utilisateur (24/09/2026) : la règle dépend du dépôt (certains dépôts exigent une PR), mais
+  // l'enchaînement reste générique. Un rejeu refusé pour une autre raison garde donc le repli sur la
+  // branche dédiée + PR. ENTRÉE QUI DOIT FAIRE ÉCHOUER : une coupure du repli après un rejeu refusé.
+  it('rejeu refusé pour une autre raison (distant encore à la base) : branche dédiée + PR, refus du rejeu tracé', async () => {
+    const { repo, remote } = await repoWithRemote()
+    writeFileSync(
+      join(remote, 'hooks', 'pre-receive'),
+      '#!/bin/sh\nwhile read o n r; do [ "$r" = refs/heads/travail ] && { echo "PR requise"; exit 1; }; done\nexit 0\n',
+      { mode: 0o755 }
+    )
+    writeFileSync(join(repo, 'rejeu.ts'), 'rejeu\n')
+    const openPr = vi.fn(async () => 'PR 11')
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/r5',
+      message: 'titre rejeu',
+      runGit: realGit,
+      direct: true,
+      openPr
+    })
+    expect(res).toMatchObject({
+      status: 'pushed',
+      branch: 'auto/r5',
+      mode: 'pr',
+      pr: 'PR 11',
+      directRefused: expect.stringContaining('rejeu sur le distant impossible')
+    })
+    expect(openPr).toHaveBeenCalledWith(
+      expect.objectContaining({ head: 'auto/r5', base: 'travail' })
+    )
+    expect((await run('git', ['branch'], { cwd: remote })).stdout).toContain('auto/r5')
+  })
+
   // (2026-10-11), choix utilisateur : « Interrupteur ON = mon accord : publie directement
   // sur main, sans PR ». Le garde-fou agent de .githooks/pre-push refusait CHAQUE push direct de
   // l'app (26 branches auto/… poussées, 0 PR ouverte faute de `gh`, main distant figé à 02:22).
@@ -1019,5 +1053,163 @@ describe('defaultGitRunner — gros changement', () => {
       direct: true
     })
     expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
+  })
+})
+
+/*
+ * UN COMMIT DE FIN DE RUN PASSE PAR LE CONTRÔLE DES NOMS AVANT D'ENTRER DANS L'HISTORIQUE. Le rejeu crée
+ * ses commits avec `commit-tree`, qui ne lance aucun crochet : sans ce contrôle, un élément réservé entre
+ * dans l'historique local, et le pré-envoi refuse ensuite chaque envoi. Le terme est FICTIF, injecté par
+ * le profil du dépôt de test.
+ * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un commit portant le terme créé et poussé ; un commit de rattachement
+ * qui entre dans la branche locale ; un profil mal formé qui passe sans rien dire ; le terme qui sort dans
+ * le compte rendu.
+ */
+describe('commit de fin de run : contrôle des noms avant commit-tree', () => {
+  const TERME = 'zorglubfictif'
+  const PROFIL = JSON.stringify({ termesInterdits: [{ motif: TERME }] })
+  const HOOK_TERME_FICTIF =
+    '#!/bin/sh\nz=0000000000000000000000000000000000000000\n' +
+    'while read l ls r rs; do\n' +
+    '  if [ "$rs" = "$z" ]; then plage="$ls --not --remotes=origin"; else plage="$rs..$ls"; fi\n' +
+    `  git log -p $plage | grep -q ${TERME} && { echo "terme refuse" >&2; exit 1; }\n` +
+    'done\nexit 0\n'
+
+  /** Dépôt de test avec un profil d'entreprise sur le poste, exclu du suivi comme sur un vrai poste. */
+  async function depotAvecProfil(profil: string) {
+    const depot = await repoWithRemote()
+    // fix-ok: cause mesurée — la mise en place ne poussait pas `travail` sur le distant : `git clone -b travail` échouait (fatal: Remote branch travail not found) et le test rendait « failed » au lieu de son verdict.
+    await realGit(['push', 'origin', 'travail'], depot.repo)
+    mkdirSync(join(depot.repo, 'entreprise', 'acme'), { recursive: true })
+    writeFileSync(join(depot.repo, 'entreprise', 'acme', 'identite.json'), profil)
+    writeFileSync(join(depot.repo, '.git', 'info', 'exclude'), 'entreprise/\n', { flag: 'a' })
+    return depot
+  }
+
+  /** Le distant reçoit un commit que le poste n'a pas : le push direct est refusé (non fast-forward). */
+  async function distantEnAvance(remote: string): Promise<void> {
+    const autre = mkdtempSync(join(tmpdir(), 'autre-fil-'))
+    dirs.push(autre)
+    await realGit(['clone', '-q', '-b', 'travail', remote, autre], tmpdir())
+    await realGit(['config', 'user.email', 't@t.t'], autre)
+    await realGit(['config', 'user.name', 'T'], autre)
+    writeFileSync(join(autre, 'distant.txt'), 'avance\n')
+    await realGit(['add', '-A'], autre)
+    await realGit(['commit', '-m', 'avance du distant'], autre)
+    await realGit(['push', 'origin', 'travail'], autre)
+  }
+
+  /** Un commit local non publié qui porte le terme ; le pré-envoi le refuse, donc le push direct aussi. */
+  async function commitLocalBloque(repo: string): Promise<void> {
+    writeFileSync(join(repo, '.git', 'hooks', 'pre-push'), HOOK_TERME_FICTIF, { mode: 0o755 })
+    writeFileSync(join(repo, 'bloque.ts'), `export const b = "${TERME}"\n`)
+    await realGit(['add', 'bloque.ts'], repo)
+    await realGit(['commit', '-m', 'run local bloqué'], repo)
+  }
+
+  it('un commit de fin de run qui porte le terme est refusé AVANT commit-tree : ni commit, ni envoi', async () => {
+    const { repo, remote } = await depotAvecProfil(PROFIL)
+    await distantEnAvance(remote)
+    const distantAvant = (await realGit(['rev-parse', 'travail'], remote)).trim()
+    writeFileSync(join(repo, 'tour.ts'), `export const t = "${TERME}"\n`)
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/r-separation',
+      message: 'travail du tour',
+      paths: ['tour.ts'],
+      runGit: await defaultGitRunner(),
+      direct: true,
+      openPr: vi.fn(async () => 'PR inutile')
+    })
+
+    expect(res).toMatchObject({ status: 'skipped', reason: 'separation-entreprise' })
+    expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(distantAvant)
+    expect(await realGit(['branch'], remote)).not.toContain('auto/r-separation')
+    expect(await realGit(['log', '-p', '--all'], remote)).not.toContain(TERME)
+    expect(JSON.stringify(res)).not.toContain(TERME)
+  })
+
+  it('un commit de rattachement qui porte le terme n’entre pas dans la branche locale ; l’envoi part, réserve dite', async () => {
+    const { repo, remote } = await depotAvecProfil(PROFIL)
+    await commitLocalBloque(repo)
+    writeFileSync(join(repo, 'tour.ts'), 'export const t = 1\n')
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/r-rattachement',
+      message: 'travail du tour',
+      paths: ['tour.ts'],
+      runGit: await defaultGitRunner(),
+      direct: true,
+      openPr: vi.fn(async () => 'PR inutile')
+    })
+
+    expect(res).toMatchObject({
+      status: 'pushed',
+      mode: 'direct',
+      rejoue: { rattachementRefuse: true, brancheLocaleRattachee: false }
+    })
+    const publie = (await realGit(['rev-parse', 'travail'], remote)).trim()
+    expect(await realGit(['ls-tree', '--name-only', publie], remote)).toContain('tour.ts')
+    expect(await realGit(['log', '-p', '--all'], remote)).not.toContain(TERME)
+    // La branche locale garde son historique : aucun commit de rattachement n'y est entré.
+    expect(await realGit(['log', '--format=%s', 'travail'], repo)).not.toContain('Merge origin/')
+  })
+
+  it('un profil d’entreprise mal formé : le commit passe, et le compte rendu porte la réserve', async () => {
+    const { repo, remote } = await depotAvecProfil('{ profil cassé')
+    await commitLocalBloque(repo)
+    writeFileSync(join(repo, 'tour.ts'), 'export const t = 1\n')
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/r-profil',
+      message: 'travail du tour',
+      paths: ['tour.ts'],
+      runGit: await defaultGitRunner(),
+      direct: true,
+      openPr: vi.fn(async () => 'PR inutile')
+    })
+
+    expect(res).toMatchObject({ status: 'pushed', rejoue: { controleNonFait: true } })
+    expect(await realGit(['ls-tree', '--name-only', 'travail'], remote)).toContain('tour.ts')
+  })
+
+  // fix-ok: src/main/runs/run-autoclose.ts — cause mesurée : `.catch(() => ({ ok: false }))` rendait un
+  // contrôle planté identique à un refus, et la réserve disait « n'a pas validé » un commit jamais contrôlé.
+  it('un contrôle qui plante au rattachement : pas de rattachement, et la réserve dit qu’il n’a pas tourné', async () => {
+    const { repo, remote } = await depotAvecProfil(PROFIL)
+    await commitLocalBloque(repo)
+    writeFileSync(join(repo, 'tour.ts'), 'export const t = 1\n')
+    const git = await defaultGitRunner()
+    // Le contrôle du rattachement lit l'arbre local entier (HEAD) : c'est cette lecture qui casse.
+    const gitQuiCasse: GitRunner = async (args, cwd, options) => {
+      if (args.includes('--diff-filter=AM')) {
+        const arbreLocal = (await realGit(['rev-parse', 'HEAD^{tree}'], repo)).trim()
+        if (args[args.length - 1] === arbreLocal) throw new Error('lecture impossible')
+      }
+      return git(args, cwd, options)
+    }
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/r-controle-casse',
+      message: 'travail du tour',
+      paths: ['tour.ts'],
+      runGit: gitQuiCasse,
+      direct: true,
+      openPr: vi.fn(async () => 'PR inutile')
+    })
+
+    expect(res).toMatchObject({
+      status: 'pushed',
+      rejoue: { rattachementSansControle: true, brancheLocaleRattachee: false }
+    })
+    expect(res).not.toMatchObject({ rejoue: { rattachementRefuse: true } })
+    expect(avertissementDePublication(res)).toMatch(/n’a pas pu tourner/u)
+    expect(avertissementDePublication(res)).not.toMatch(/n'a pas validé/u)
+    expect(await realGit(['log', '--format=%s', 'travail'], repo)).not.toContain('Merge origin/')
+    expect(await realGit(['log', '-p', '--all'], remote)).not.toContain(TERME)
   })
 })

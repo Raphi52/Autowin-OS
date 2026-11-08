@@ -45,6 +45,11 @@ export interface DemandeDeLaCarte {
   statut: StatutDemande
   /** Le constat qui justifie l'état : « npm test → exit 0 », « tour arrêté avant la fin »… */
   constat: string
+  /**
+   * Le refus d'un envoi posé dans le tour de cette demande : la phrase du fil (`echec-publication.ts`),
+   * raison et geste compris. Absent = aucun refus dans ce tour.
+   */
+  envoiRefuse?: string
   /** Heure du message de l'utilisateur (ms epoch), quand le fil la connaît. */
   debut?: number
   /** Qui a prompté ; absent quand git n'a rendu aucune identité. */

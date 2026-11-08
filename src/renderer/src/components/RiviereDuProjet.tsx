@@ -999,6 +999,12 @@ function FicheDeLaRiviere({
             <span className="riviere-fiche-texte" data-testid="riviere-fiche-texte">
               {texteDeLaCarte(d.texte ?? d.titre, langue)}
             </span>
+            {/* L'envoi de ce tour a été refusé : la phrase du fil, avec sa raison et son geste. */}
+            {d.envoiRefuse && (
+              <span className="riviere-fiche-refus" data-testid="riviere-fiche-refus">
+                {d.envoiRefuse}
+              </span>
+            )}
             {/* Une tâche peut courir sur plusieurs fils (un chantier et ses lots, une « façon N/3 »)
                 La demande venue d'un autre fil dit lequel, et l'ouvre. */}
             {!d.collegue && d.conversationId !== p.conversationId && (

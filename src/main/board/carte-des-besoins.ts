@@ -43,6 +43,7 @@ import {
   referencesDuPrompt,
   type EtatDesLiens
 } from '../tickets/liens-work-items'
+import { phraseDuRefusDans } from '../../shared/echec-publication'
 
 /** Le message tel qu'il est stocké — le strict nécessaire, pour rester testable sans le store. */
 export type MessageStockePourLaCarte = Partial<StoredAssistantMessage> & {
@@ -102,6 +103,25 @@ export function filPourLaCarte(messages: readonly MessageStockePourLaCarte[]): M
 }
 
 /**
+ * Le refus d'envoi posé dans le tour d'une demande. Le tour court de la demande jusqu'au message suivant
+ * de l'utilisateur : une phrase posée après ce message appartient à la demande suivante.
+ * fix-ok: cause mesurée — `demandesDuFil` ne lisait que la décision de la demande, jamais le refus d'envoi
+ * écrit dans son tour : la fiche ne pouvait pas le montrer.
+ */
+function envoiRefuseDuTour(
+  messages: readonly MessageStockePourLaCarte[],
+  rang: number
+): string | undefined {
+  let refus: string | undefined
+  for (let i = rang + 1; i < messages.length; i++) {
+    const message = messages[i]
+    if (message?.role === 'user') break
+    if (message?.role === 'assistant') refus = phraseDuRefusDans(message.content ?? '') ?? refus
+  }
+  return refus
+}
+
+/**
  * Les demandes RÉELLES d'un fil : ni le compactage, ni l'étape « à venir » proposée par l'agent.
  * `arrivee` dit si le travail d'un tour est arrivé sur main ; sans lui, l'état est celui du fil.
  */
@@ -127,6 +147,7 @@ export function demandesDuFil(
     // avec lui ; le lien lui-même est posé à l'assemblage, d'après `liens-work-items.jsonl`.
     const texte = conversation.messages[etape.rang]?.content
     const references = typeof texte === 'string' ? referencesDuPrompt(texte) : []
+    const envoiRefuse = envoiRefuseDuTour(conversation.messages, etape.rang)
     demandes.push({
       conversationId: conversation.id,
       conversationTitre: conversation.title,
@@ -137,7 +158,8 @@ export function demandesDuFil(
       statut: decision.statut,
       constat: borner(decision.constat, MAX_CONSTAT),
       ...(etape.debut === undefined ? {} : { debut: etape.debut }),
-      ...(references.length ? { references } : {})
+      ...(references.length ? { references } : {}),
+      ...(envoiRefuse ? { envoiRefuse } : {})
     })
   }
   return demandes

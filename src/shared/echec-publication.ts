@@ -114,6 +114,16 @@ export function refusDePublication(resultat: unknown): RefusDePublication | unde
         "Retire le secret, commite la correction, puis relance /git. Il reste dans l'historique : le réécrire demande ton accord."
     }
   }
+  // fix-ok: cause mesurée — le contrôle des noms sur un commit de fin de run n'avait aucune phrase : le
+  // refus restait muet dans le fil et sur le Board. Le détail (terme, chemin) ne sort jamais.
+  if (reason === 'separation-entreprise') {
+    return {
+      titre: 'Envoi refusé',
+      raison:
+        "un élément réservé à l'entreprise (nom, terme ou fichier privé) était dans un commit à créer : ce commit n'a pas été fait, rien n'est parti",
+      action: 'Retire-le du travail, puis relance /git.'
+    }
+  }
   const motif = MOTIFS_SKIPPED[reason]
   return motif ? { titre: 'Envoi refusé', ...motif } : undefined
 }
@@ -121,6 +131,51 @@ export function refusDePublication(resultat: unknown): RefusDePublication | unde
 /** La phrase d'un refus, pour le fil : ce qui s'est passé, puis ce qu'il faut faire. */
 export function phraseDuRefus(refus: RefusDePublication): string {
   return `⛔ ${refus.titre} : ${refus.raison}. ${refus.action}`
+}
+
+/**
+ * Reconnaît une phrase de refus (`phraseDuRefus`) à son préfixe : le Board la relit depuis le fil, sans
+ * la refaire. Le préfixe vit ici, à côté de la phrase qu'il désigne.
+ */
+const LIGNE_DU_REFUS = /^⛔ (?:Envoi refusé|Envoi échoué) : [^\r\n]*/mu
+
+/**
+ * La phrase d'un refus (`phraseDuRefus`) écrite dans un texte du fil, ligne entière. Le Board la relit
+ * ainsi sans la refaire : la réponse d'un run la porte après son bandeau de commit, pas en tête.
+ */
+export function phraseDuRefusDans(texte: string): string | undefined {
+  return LIGNE_DU_REFUS.exec(texte)?.[0]
+}
+
+/** Vrai si le texte porte une phrase de refus. Le préfixe vit à côté de la phrase qu'il désigne. */
+export function estUnRefusDePublication(texte: string): boolean {
+  return phraseDuRefusDans(texte) !== undefined
+}
+
+/**
+ * Un envoi parti, avec une réserve à lire : le contrôle des noms n'a pas pu tourner pour le profil,
+ * ou le commit de rattachement a été refusé et la branche locale n'a pas été rattachée. Ce n'est pas un
+ * refus : l'envoi est bien parti. `undefined` pour un envoi sans réserve.
+ */
+export function avertissementDePublication(resultat: unknown): string | undefined {
+  if (typeof resultat !== 'object' || resultat === null) return undefined
+  const { status, rejoue } = resultat as { status?: unknown; rejoue?: unknown }
+  if (status !== 'pushed' || typeof rejoue !== 'object' || rejoue === null) return undefined
+  const { controleNonFait, rattachementRefuse, rattachementSansControle } = rejoue as {
+    controleNonFait?: unknown
+    rattachementRefuse?: unknown
+    rattachementSansControle?: unknown
+  }
+  if (controleNonFait === true) {
+    return "⚠️ Publié sans contrôle des noms d'entreprise : un profil d'entreprise de ce poste est mal formé. Corrige-le : le pré-envoi refuse tant qu'il ne l'est pas."
+  }
+  if (rattachementRefuse === true) {
+    return "⚠️ Publié, mais la branche locale n'a pas été rattachée : le contrôle des noms d'entreprise n'a pas validé le commit de rattachement. Retire l'élément réservé s'il y en a un, puis relance /git."
+  }
+  if (rattachementSansControle === true) {
+    return '⚠️ Publié, mais la branche locale n’a pas été rattachée : le contrôle des noms d’entreprise n’a pas pu tourner sur le commit de rattachement. Relance /git.'
+  }
+  return undefined
 }
 
 /**

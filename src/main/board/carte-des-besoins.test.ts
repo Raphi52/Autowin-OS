@@ -10,6 +10,9 @@ import {
 } from './carte-des-besoins'
 import { COMPACT_REQUEST } from '../../shared/context-gauge'
 import type { DemandeDeLaCarte } from '../../shared/carte-des-besoins'
+// fix-ok: cause mesurée — la phrase d'un refus de run est écrite en fin de réponse (annonceCommitLocal :
+// « commit\n\nphrase »), pas en début : le repérage au préfixe la manquait. Le test du Board la rend rouge.
+import { phraseDuRefus } from '../../shared/echec-publication'
 import { cleDuJournal, type EntreeDuJournal } from './journal-des-besoins'
 
 /**
@@ -106,6 +109,54 @@ describe('demandesDuFil — l’état suit la PREUVE, lu depuis le fil stocké',
       constat: 'npm test → exit 0',
       debut: 1_000
     })
+  })
+
+  it('un refus d’envoi posé dans le tour d’une demande est porté par cette demande, pas par la suivante', () => {
+    const refus = phraseDuRefus({
+      titre: 'Envoi refusé',
+      raison: "un élément réservé à l'entreprise était dans un commit à créer",
+      action: 'Retire-le du travail, puis relance /git.'
+    })
+    const demandes = demandesDuFil(
+      conv('c1', [
+        user('corrige le bouton', 1_000),
+        asst(1_100, [texte('Fait.')]),
+        {
+          role: 'assistant',
+          content: refus,
+          status: 'completed',
+          ts: 1_150,
+          parts: []
+        } as MessageStockePourLaCarte,
+        user('ajoute un filtre', 2_000),
+        asst(2_100, [texte('Fait aussi.')])
+      ])
+    )
+    expect(demandes.map((d) => [d.titre, d.envoiRefuse])).toEqual([
+      ['corrige le bouton', refus],
+      ['ajoute un filtre', undefined]
+    ])
+  })
+
+  it('un refus écrit en fin de réponse du run, après le bandeau du commit, est porté par cette demande', () => {
+    const refus = phraseDuRefus({
+      titre: 'Envoi refusé',
+      raison: 'un élément réservé à l’entreprise était dans un commit à créer',
+      action: 'Retire-le du travail, puis relance /git.'
+    })
+    const demandes = demandesDuFil(
+      conv('c1', [
+        user('publie le correctif', 1_000),
+        {
+          role: 'assistant',
+          content: `Commit créé : correctif.\n\n${refus}`,
+          status: 'completed',
+          ts: 1_150,
+          parts: []
+        } as MessageStockePourLaCarte
+      ])
+    )
+    expect(demandes.map((d) => d.envoiRefuse)).toEqual([refus])
   })
 
   it('ni orientation, ni compactage, ni suite proposée ne sont des demandes', () => {

@@ -1,4 +1,5 @@
 import { estDepotAutowin } from '../git/git-apres-fil'
+import { controleDeSeparation } from '../git/controle-de-separation'
 import { titreDeCommitAuto } from '../git/titre-de-commit'
 import type { TypageAvantPublication } from '../verify/typage-avant-publication'
 
@@ -86,7 +87,17 @@ export type AutoCloseResult =
        * (voir `rejouerSurLeDistant`). `brancheLocaleRattachee` : la branche locale contient le commit
        * publié ; faux = elle a bougé entre-temps, le prochain `/git` la rattache.
        */
-      rejoue?: { distantAvant: string; sha: string; brancheLocaleRattachee: boolean }
+      rejoue?: {
+        distantAvant: string
+        sha: string
+        brancheLocaleRattachee: boolean
+        /** Le contrôle des noms n'a pas pu lire le profil : le commit est passé avec une réserve. */
+        controleNonFait?: true
+        /** Le commit de rattachement a été refusé par le contrôle : la branche locale n'a pas bougé. */
+        rattachementRefuse?: true
+        /** Le contrôle du commit de rattachement n'a pas pu tourner : la branche locale n'a pas bougé. */
+        rattachementSansControle?: true
+      }
       /** Lien ou numéro de la PR ouverte. */
       pr?: string
       /** PR non ouverte : motif (CLI absente, hébergeur inconnu…). La branche reste poussée. */
@@ -130,6 +141,11 @@ export type AutoCloseResult =
          * commit local, lui, reste ; l'annonce du fil le dit.
          */
         | 'depot-tiers'
+        /**
+         * Un élément réservé à l'entreprise (nom, terme, fichier privé) était dans un commit que le rejeu
+         * allait créer : ce commit n'a pas été fait, rien n'est parti. `detail` ne dit que « commit ».
+         */
+        | 'separation-entreprise'
       detail?: string
     }
   | { status: 'failed'; error: string }
@@ -302,7 +318,15 @@ async function rejouerSurLeDistant(input: {
   baseSha: string
   publishedSha: string
 }): Promise<
-  { distantAvant: string; sha: string; brancheLocaleRattachee: boolean } | { refus: string }
+  | {
+      distantAvant: string
+      sha: string
+      brancheLocaleRattachee: boolean
+      controleNonFait?: true
+      rattachementRefuse?: true
+      rattachementSansControle?: true
+    }
+  | { refus: string; separation?: true }
 > {
   const { repo, runGit, branche, baseSha, publishedSha } = input
   const texte = (erreur: unknown): string =>
@@ -328,6 +352,7 @@ async function rejouerSurLeDistant(input: {
   }
 
   let pointe = distantAvant
+  let controleNonFait = false
   for (const commit of lignesDe(
     await runGit(['rev-list', '--reverse', `${baseSha}..${publishedSha}`], repo)
   )) {
@@ -347,6 +372,18 @@ async function rejouerSurLeDistant(input: {
       return { refus: `conflit avec le distant : ${texte(erreur)}` }
     }
     const message = (await runGit(['log', '-1', '--format=%B', commit], repo)).trim()
+    // fix-ok: cause mesurée — `commit-tree` ne lance aucun crochet : le rejeu créait ce commit sans le
+    // contrôle des noms, et un élément réservé entrait dans l'historique local (test « commit de fin de
+    // run » : le distant recevait le terme). Le contrôle passe avant, et son refus ne sort qu'en genre.
+    const controle = await controleDeSeparation({
+      copie: repo,
+      base: pointe,
+      arbre,
+      message,
+      git: runGit
+    })
+    if (!controle.ok) return { refus: 'élément réservé dans un commit à créer', separation: true }
+    if (controle.avertissement) controleNonFait = true
     pointe = (await runGit(['commit-tree', arbre, '-p', pointe, '-m', message], repo)).trim()
   }
 
@@ -359,34 +396,64 @@ async function rejouerSurLeDistant(input: {
   }
 
   let brancheLocaleRattachee = false
+  let rattachementRefuse = false
+  let rattachementSansControle = false
   try {
     const arbreLocal = (await runGit(['rev-parse', `${publishedSha}^{tree}`], repo)).trim()
     const fusion = (await runGit(['merge-tree', '--write-tree', publishedSha, pointe], repo))
       .split(/\r?\n/u)[0]
       ?.trim()
     if (fusion === arbreLocal) {
-      const rattache = (
-        await runGit(
-          [
-            'commit-tree',
-            arbreLocal,
-            '-p',
-            publishedSha,
-            '-p',
-            pointe,
-            '-m',
-            `Merge origin/${branche} : travail publié seul, au-dessus du distant`
-          ],
-          repo
-        )
-      ).trim()
-      await runGit(['update-ref', `refs/heads/${branche}`, rattache, publishedSha], repo)
-      brancheLocaleRattachee = true
+      const messageDeRattachement = `Merge origin/${branche} : travail publié seul, au-dessus du distant`
+      // fix-ok: cause mesurée — le rattachement créait son commit (commit-tree) sans contrôle : le test
+      // « commit de rattachement » rendait `brancheLocaleRattachee: true` avec le terme dans l'arbre local.
+      // Le rattachement emporte tout l'arbre local, donc les commits non publiés aussi. Le push du rejeu
+      // est déjà parti à ce stade : un contrôle qui casse ferme le rattachement (le commit n'entre pas) et
+      // le rapport le dit, distinct d'un refus. Sa cause (git, lecture du profil) n'y figure pas : elle peut
+      // nommer le chemin réservé.
+      const controle = await controleDeSeparation({
+        copie: repo,
+        base: pointe,
+        arbre: arbreLocal,
+        message: messageDeRattachement,
+        git: runGit
+      }).catch(() => 'impossible' as const)
+      if (controle === 'impossible') {
+        rattachementSansControle = true
+      } else if (!controle.ok) {
+        rattachementRefuse = true
+      } else {
+        if (controle.avertissement) controleNonFait = true
+        const rattache = (
+          await runGit(
+            [
+              'commit-tree',
+              arbreLocal,
+              '-p',
+              publishedSha,
+              '-p',
+              pointe,
+              '-m',
+              messageDeRattachement
+            ],
+            repo
+          )
+        ).trim()
+        await runGit(['update-ref', `refs/heads/${branche}`, rattache, publishedSha], repo)
+        brancheLocaleRattachee = true
+      }
     }
   } catch {
     // Publié quand même : la branche locale a bougé entre-temps, le rapport le dit (faux).
   }
-  return { distantAvant, sha: pointe, brancheLocaleRattachee }
+  return {
+    distantAvant,
+    sha: pointe,
+    brancheLocaleRattachee,
+    ...(controleNonFait ? { controleNonFait: true as const } : {}),
+    ...(rattachementRefuse ? { rattachementRefuse: true as const } : {}),
+    ...(rattachementSansControle ? { rattachementSansControle: true as const } : {})
+  }
 }
 
 async function publishRunCommits(input: {
@@ -498,6 +565,9 @@ async function publishRunCommits(input: {
             rejoue: rejeu
           }
         }
+        // Un commit refusé par le contrôle des noms ne part ni ici ni sur la branche dédiée : arrêt net.
+        if (rejeu.separation)
+          return { status: 'skipped', reason: 'separation-entreprise', detail: 'commit' }
         directRefused = `${directRefused} ; rejeu sur le distant impossible : ${rejeu.refus}`.slice(
           0,
           600

@@ -87,4 +87,19 @@ describe('annonceRefusDuProjet (rapport d’une publication : fin de run reprise
     expect(annonceRefusDuProjet(fil, 'conv-1', { status: 'pushed', branch: 'main' })).toBe(false)
     expect(fil.ecrits).toEqual([])
   })
+
+  it('un envoi parti avec une réserve (contrôle non fait) : la réserve se dit une fois, sans être un refus', () => {
+    const fil = filFactice()
+    const projet = {
+      status: 'pushed',
+      branch: 'travail',
+      files: 1,
+      rejoue: { distantAvant: 'a', sha: 'b', brancheLocaleRattachee: true, controleNonFait: true }
+    }
+    expect(annonceRefusDuProjet(fil, 'conv-1', projet)).toBe(true)
+    expect(annonceRefusDuProjet(fil, 'conv-1', projet)).toBe(false)
+    expect(fil.ecrits).toHaveLength(1)
+    expect(fil.ecrits[0]?.content).toContain('mal formé')
+    expect(fil.ecrits[0]?.content.startsWith('⛔')).toBe(false)
+  })
 })

@@ -554,6 +554,15 @@
   overflow-wrap: anywhere;
 }
 
+/* Le refus d'un envoi reste lisible en entier : la phrase du fil, sans coupe. */
+.riviere-fiche-refus {
+  display: block;
+  min-width: 0;
+  color: var(--err);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* PAS le bouton de l'app (.btn) : chaque thème le peint pour SON fond, avec une règle plus forte
    (:root[data-theme] .btn), et sur le papier pastel il disparaissait (capture de l'app réelle).
    Encre du tableau, papier éclairci. */
