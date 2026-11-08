@@ -168,14 +168,29 @@ function lireNumstat(sortie: string): FichierDeLEcart[] {
  * fichiers modifiés sont relus.
  */
 export async function arbreDeLaCopie(copie: string, git: GitRunner): Promise<string> {
+  return avecUneCopieDeLIndex(copie, git, async ({ env }) => {
+    await git(['add', '-A', '--', '.'], copie, { env })
+    return (await git(['write-tree'], copie, { env })).trim()
+  })
+}
+
+/**
+ * Lance `faire` sur une COPIE de l'index de la copie (`GIT_INDEX_FILE` dans `env`), retirée ensuite.
+ * L'index réel n'est pas touché ; ses informations de fichiers déjà relus évitent de tout relire.
+ * `indexReel` : son chemin, pour qui doit l'écrire une fois le geste réussi.
+ */
+export async function avecUneCopieDeLIndex<T>(
+  copie: string,
+  git: GitRunner,
+  faire: (index: { env: { GIT_INDEX_FILE: string }; indexReel: string }) => Promise<T>
+): Promise<T> {
   const indexBrut = (await git(['rev-parse', '--git-path', 'index'], copie)).trim()
   const indexReel = isAbsolute(indexBrut) ? indexBrut : resolve(copie, indexBrut)
   const temporaire = mkdtempSync(join(tmpdir(), 'autowin-ecart-'))
   try {
     const env = { GIT_INDEX_FILE: join(temporaire, 'index') }
     if (existsSync(indexReel)) copyFileSync(indexReel, env.GIT_INDEX_FILE)
-    await git(['add', '-A', '--', '.'], copie, { env })
-    return (await git(['write-tree'], copie, { env })).trim()
+    return await faire({ env, indexReel })
   } finally {
     rmSync(temporaire, { recursive: true, force: true })
   }

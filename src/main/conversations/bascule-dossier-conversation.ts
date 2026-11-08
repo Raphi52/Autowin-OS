@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 
 /**
@@ -254,7 +254,7 @@ export async function preparerLeDossierDuTour(entree: {
   if (notee && memeCheminSurDisque(notee.depot, depotPartage) && existe(notee.chemin)) {
     entree.passer({ chemin: notee.chemin, depot: depotPartage })
     entree.annoncer(
-      `📂 Ce fil reprend sa copie de travail : ${notee.chemin}. Son travail entre dans ${depotPartage} par la porte en fin de tour.`
+      `📂 Ce fil reprend sa propre copie de ${basename(depotPartage)} (${notee.chemin}) : ses changements entrent dans ${basename(depotPartage)} à la fin de chaque tour.`
     )
     return 'reprise'
   }
@@ -266,8 +266,9 @@ export async function preparerLeDossierDuTour(entree: {
     return 'refusee'
   }
   entree.passer({ chemin: ouverte.chemin, depot: depotPartage })
+  // Changer de dossier fait repartir l'agent de l'historique du fil (`session-du-tour.ts`) : dit en clair.
   entree.annoncer(
-    `📂 Ce fil travaille désormais dans sa propre copie : ${ouverte.chemin}. Son travail entre dans ${depotPartage} par la porte en fin de tour ; ce tour repart avec l'historique du fil, sans la session interne de l'outil.`
+    `📂 Ce fil travaille maintenant dans sa propre copie de ${basename(depotPartage)} (${ouverte.chemin}) : ses changements entrent dans ${basename(depotPartage)} à la fin de chaque tour. L'agent repart de l'historique du fil.`
   )
   return 'ouverte'
 }

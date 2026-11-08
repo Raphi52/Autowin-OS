@@ -7,8 +7,9 @@
 # Le défaut naît de l'index PARTAGÉ du checkout principal : une copie de travail d'agent a son propre
 # index, et ses commits automatiques (worktree-manager, commitCopyIfDirty) ne doivent pas changer.
 # Les copies d'« Essaie 3 façons » (`essai__*`, photo-du-code.ts) aussi : chacune a son index (conv-1583).
+# De même la copie de travail de chaque fil (`copies-de-fil/<fil>`, photo-du-code.ts).
 case "$(git rev-parse --show-toplevel 2>/dev/null)" in
-  */agent__* | */integration__* | */essai__* | */.quarantine/*) exit 0 ;;
+  */agent__* | */integration__* | */essai__* | */copies-de-fil/* | */.quarantine/*) exit 0 ;;
 esac
 command -v node >/dev/null 2>&1 || exit 0
 garde="$(dirname "$0")/../scripts/garde-commit-module-supprime.mjs"

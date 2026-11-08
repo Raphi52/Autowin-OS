@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, renameSync } from 'node:fs'
+import { existsSync, readdirSync, renameSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { nomDeCopieDeFil } from '../../shared/copie-du-fil'
 import { nomDeCopieDEssai } from '../../shared/essai-trois-facons'
 import { supprimerArbreAsync } from '../fichiers/fs-supprimer'
 import { lireLaBaseDuFil } from '../git/photo-du-code'
@@ -10,8 +11,8 @@ import { delierLesDependances } from '../store/dependances-copie-agent'
 
 /*
  * LE MÉNAGE DES COPIES DE FIL. Chaque fil du dépôt d'Autowin reçoit sa copie
- * (`retours-de-tour/essai__<fil>-<instant>-1`, voir `bascule-dossier-conversation.ts`) et rien ne la
- * retirait : 11 copies complètes du dépôt sur le disque le 07/11, une par fil ouvert depuis la veille.
+ * (`copies-de-fil/<fil>` ; avant elle, `retours-de-tour/essai__<fil>-<instant>-1`, voir
+ * `bascule-dossier-conversation.ts`) et rien ne la retirait : 11 copies complètes du dépôt sur le disque le 07/11, une par fil ouvert depuis la veille.
  * L'utilisateur a demandé qu'elles soient supprimées quand leur fil est fini.
  *
  * UNE COPIE PART SEULEMENT SI RIEN N'Y SERAIT PERDU : son arbre (fichiers non suivis compris, ignorés
@@ -48,6 +49,16 @@ export interface FilDuMenage {
   updatedAt: number
 }
 
+/**
+ * Le fil d'une copie de fil et, quand son nom le porte, l'instant de son ouverture : `copies-de-fil/<fil>`,
+ * ou l'ancien nom `essai__<fil>-<instant>-<rang>`. `null` pour tout autre dossier.
+ */
+function identiteDeLaCopie(copie: string): { fil: string; quand?: number } | null {
+  const essai = nomDeCopieDEssai(copie)
+  if (essai) return { fil: essai.fil, quand: essai.quand }
+  return nomDeCopieDeFil(copie)
+}
+
 export type DecisionPourLaCopie =
   { supprimer: true; filDuNom: string; aDecrocher: string[] } | { supprimer: false; raison: string }
 
@@ -69,9 +80,12 @@ export function decisionPourLaCopie(entree: {
   tourEnCours: (id: string) => boolean
   maintenant: number
   calmeMs?: number
+  /** L'instant d'ouverture lu sur le disque, pour une copie dont le nom ne le porte pas. */
+  ouverteA?: number
 }): DecisionPourLaCopie {
-  const nom = nomDeCopieDEssai(entree.copie)
+  const nom = identiteDeLaCopie(entree.copie)
   if (!nom) return { supprimer: false, raison: 'ce n’est pas une copie de fil' }
+  const ouverteA = nom.quand ?? entree.ouverteA
   const calmeMs = entree.calmeMs ?? CALME_AVANT_MENAGE_MS
   const ici = cle(entree.copie)
   const utilisateurs = entree.fils.filter(
@@ -82,7 +96,7 @@ export function decisionPourLaCopie(entree: {
   // Sans fil (supprimé, ou archivé pas encore relu) : seule l'heure de la copie dit son âge. Une copie
   // toute neuve peut être celle qu'un tour est en train d'ouvrir, avant de la noter sur son fil.
   if (utilisateurs.length === 0)
-    return entree.maintenant - nom.quand >= calmeMs
+    return ouverteA !== undefined && entree.maintenant - ouverteA >= calmeMs
       ? { supprimer: true, filDuNom: nom.fil, aDecrocher: [] }
       : { supprimer: false, raison: 'copie récente sans fil : peut-être en cours d’ouverture' }
   const aDecrocher: string[] = []
@@ -122,13 +136,24 @@ async function retirerLaCopie(chemin: string): Promise<void> {
   await supprimerArbreAsync(chemin)
 }
 
+/** L'instant de création du dossier ; `undefined` si le disque ne le dit pas. */
+function ouvertureSurLeDisque(chemin: string): number | undefined {
+  try {
+    const info = statSync(chemin)
+    return info.birthtimeMs > 0 ? info.birthtimeMs : info.mtimeMs
+  } catch {
+    return undefined
+  }
+}
+
 /**
- * Une passe de ménage sur `dossierDesRetours`. `lireFils` est relu juste avant chaque suppression :
+ * Une passe de ménage sur `dossierDesCopiesDeFil` et sur `dossierDesRetours` (les copies d'avant). `lireFils` est relu juste avant chaque suppression :
  * entre la décision et le geste, la mesure de l'écart a pris du temps, et un fil a pu repartir.
  * Ne lève jamais : c'est un ménage de fond.
  */
 export async function menageDesCopiesDeFil(entree: {
   dossierDesRetours: string
+  dossierDesCopiesDeFil?: string
   depot: string
   lireFils: () => readonly FilDuMenage[]
   tourEnCours: (id: string) => boolean
@@ -139,20 +164,21 @@ export async function menageDesCopiesDeFil(entree: {
   retirer?: (chemin: string) => Promise<void>
 }): Promise<BilanDuMenage> {
   const bilan: BilanDuMenage = { supprimees: [], gardees: [], echecs: [] }
-  if (!existsSync(entree.dossierDesRetours)) return bilan
   const maintenant = entree.maintenant ?? Date.now
   const retirer = entree.retirer ?? retirerLaCopie
   let git: GitRunner | undefined = entree.runGit
-  let noms: string[]
-  try {
-    noms = readdirSync(entree.dossierDesRetours)
-  } catch (erreur) {
-    bilan.echecs.push({ chemin: entree.dossierDesRetours, raison: message(erreur) })
-    return bilan
+  const entrees: Array<{ dossier: string; nom: string }> = []
+  for (const dossier of [entree.dossierDesCopiesDeFil, entree.dossierDesRetours]) {
+    if (!dossier || !existsSync(dossier)) continue
+    try {
+      for (const nom of readdirSync(dossier)) entrees.push({ dossier, nom })
+    } catch (erreur) {
+      bilan.echecs.push({ chemin: dossier, raison: message(erreur) })
+    }
   }
   let aPrune = false
-  for (const nom of noms) {
-    const chemin = join(entree.dossierDesRetours, nom)
+  for (const { dossier, nom } of entrees) {
+    const chemin = join(dossier, nom)
     // Un ménage coupé (app fermée pendant la suppression) a laissé une copie déjà décrochée.
     if (nom.startsWith(PREFIXE_A_SUPPRIMER)) {
       try {
@@ -163,13 +189,15 @@ export async function menageDesCopiesDeFil(entree: {
       }
       continue
     }
-    if (!nomDeCopieDEssai(nom)) continue
+    if (!identiteDeLaCopie(chemin)) continue
+    const ouverteA = ouvertureSurLeDisque(chemin)
     const avant = decisionPourLaCopie({
       copie: chemin,
       fils: entree.lireFils(),
       tourEnCours: entree.tourEnCours,
       maintenant: maintenant(),
-      calmeMs: entree.calmeMs
+      calmeMs: entree.calmeMs,
+      ouverteA
     })
     if (!avant.supprimer) {
       bilan.gardees.push({ chemin, raison: avant.raison })
@@ -208,13 +236,14 @@ export async function menageDesCopiesDeFil(entree: {
       fils: entree.lireFils(),
       tourEnCours: entree.tourEnCours,
       maintenant: maintenant(),
-      calmeMs: entree.calmeMs
+      calmeMs: entree.calmeMs,
+      ouverteA
     })
     if (!juste.supprimer) {
       bilan.gardees.push({ chemin, raison: juste.raison })
       continue
     }
-    const decroche = join(entree.dossierDesRetours, `${PREFIXE_A_SUPPRIMER}${nom}`)
+    const decroche = join(dossier, `${PREFIXE_A_SUPPRIMER}${nom}`)
     try {
       renameSync(chemin, decroche)
     } catch (erreur) {

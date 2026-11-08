@@ -122,6 +122,13 @@ describe('.githooks/pre-commit : module supprimé encore importé', () => {
     expect(r.status, String(r.stderr)).toBe(0)
   })
 
+  it("ne s'applique pas dans la copie de travail d'un fil (`copies-de-fil/<fil>`)", () => {
+    const { git } = depot('copies-de-fil/conv-1710')
+    git('rm', '-q', 'src/main/routeur.ts')
+    const r = git('commit', '-q', '-m', 'travail du fil')
+    expect(r.status, String(r.stderr)).toBe(0)
+  })
+
   it('reste actif dans un dépôt dont le nom contient « essai__ » sans commencer par lui', () => {
     const { git } = depot('mon-essai__depot')
     git('rm', '-q', 'src/main/routeur.ts')

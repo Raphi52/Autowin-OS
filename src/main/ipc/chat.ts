@@ -242,6 +242,8 @@ import {
   styleAffiche
 } from '../mascotte/mascotte-reglage'
 import { ouvrirLaCopieDuFil, photographierLeCode } from '../git/photo-du-code'
+import { ligneDeMiseAJour, mettreLaCopieDuFilAJour } from '../git/copie-du-fil-a-jour'
+import { DOSSIER_DES_COPIES_DE_FIL } from '../../shared/copie-du-fil'
 import { messageLiaison } from '../store/dependances-copie-agent'
 import { materializeChatArtifact } from '../store/chat-artifact-store'
 import { filterNativePreflight, readNativePreflight } from '../activity/native-preflight'
@@ -1725,11 +1727,14 @@ Le fil reprend ensuite normalement.`
     }
     return rattacherLaBrancheAuxFiches(branche, source)
   }
-  /**
-   * Où s'ouvre la copie de chaque fil : le MÊME dossier que les essais et les retours à un tour
-   * (canal ci-dessous), parce que « Garder » ne reconnaît une copie que directement dedans.
-   */
+  /** Les copies des essais et des retours à un tour : « Garder » ne reconnaît une façon que dedans. */
   const dossierDesRetours = (): string => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour')
+  /**
+   * Où s'ouvre la copie de chaque fil : `copies-de-fil/<fil>`, un nom qui dit ce qu'elle est. La porte
+   * de fin de tour part de la copie notée sur le fil, jamais de son nom.
+   */
+  const dossierDesCopiesDeFil = (): string =>
+    join(ensureAutowinAppData(appDataRoot), DOSSIER_DES_COPIES_DE_FIL)
   // Les canaux des conversations vivent dans src/main/ipc/conversations.ts.
   registerConversationsIpc({
     os,
@@ -2330,7 +2335,7 @@ Le fil reprend ensuite normalement.`
         const copie = await ouvrirLaCopieDuFil({
           dossier: dossierDuTour(conversationId),
           conversationId,
-          dossierDesRetours: dossierDesRetours()
+          dossierDesCopies: dossierDesCopiesDeFil()
         }).catch((erreur: unknown) => ({
           ok: false as const,
           raison: erreur instanceof Error ? erreur.message : String(erreur)
@@ -2348,6 +2353,17 @@ Le fil reprend ensuite normalement.`
       annoncer
     })
     if (issue !== 'rien') broadcast({ type: 'refresh', scope: 'conversations' })
+    /*
+     * LA COPIE SUIT MAIN (`copie-du-fil-a-jour.ts`) : une copie déjà là reçoit, avant le tour, ce que
+     * les autres fils ont fait entrer dans main depuis — seulement si elle ne porte rien de non publié.
+     * Une copie qui vient de s'ouvrir part déjà de main. Ne dit rien quand main n'a pas bougé.
+     */
+    const copie = copieOuTravailleLeFil(os.conversations.get(conversationId))
+    if (!copie || issue === 'ouverte') return
+    const ligne = ligneDeMiseAJour(
+      await mettreLaCopieDuFilAJour({ copie: copie.chemin, conversationId, depot: copie.depot })
+    )
+    if (ligne) annoncer(ligne)
   }
 
   /*
@@ -2966,6 +2982,7 @@ Le fil reprend ensuite normalement.`
     void pendantOperation('timer:balayage:copiesDeFil', async () => {
       const bilan = await menageDesCopiesDeFil({
         dossierDesRetours: dossierDesRetours(),
+        dossierDesCopiesDeFil: dossierDesCopiesDeFil(),
         depot,
         lireFils: () => os.conversations.list(),
         tourEnCours: (id) => activeChatTurns.isInFlight(id),

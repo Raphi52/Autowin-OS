@@ -41,11 +41,18 @@ describe('une copie par fil — au début du tour', () => {
     const bloc = passage.slice(0, passage.indexOf('const tourCompteDesReception'))
     expect(bloc).toContain('actif: lireReglageCopieParFil(reglageCopieParFil())')
     expect(bloc).toContain('depotPartage: estDepotAutowin(depot) ? depot : null')
-    expect(bloc).toContain('dossierDesRetours: dossierDesRetours()')
-    // Le même dossier que les essais : « Garder » ne reconnaît une copie que directement dedans.
-    expect(source).toContain(
-      "const dossierDesRetours = (): string => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour')"
-    )
+    // La copie s'ouvre sous `copies-de-fil/<fil>`, plus parmi les essais (`retours-de-tour`).
+    expect(bloc).toContain('dossierDesCopies: dossierDesCopiesDeFil()')
+    expect(source).toContain('join(ensureAutowinAppData(appDataRoot), DOSSIER_DES_COPIES_DE_FIL)')
+  })
+
+  it('met une copie déjà là à jour avec main, après le passage et jamais une copie neuve', () => {
+    const passage = source.slice(source.indexOf('const passerLeFilDansSaCopie = async ('))
+    const bloc = passage.slice(0, passage.indexOf('const tourCompteDesReception'))
+    const miseAJour = bloc.indexOf('await mettreLaCopieDuFilAJour(')
+    expect(miseAJour).toBeGreaterThan(bloc.indexOf('await preparerLeDossierDuTour('))
+    expect(bloc).toContain("if (!copie || issue === 'ouverte') return")
+    expect(bloc.slice(miseAJour)).toContain('if (ligne) annoncer(ligne)')
   })
 })
 
@@ -69,6 +76,9 @@ describe('le ménage des copies de fil', () => {
     expect(bloc).toContain('if (!estDepotAutowin(depot)) return')
     expect(bloc).toContain('tourEnCours: (id) => activeChatTurns.isInFlight(id)')
     expect(bloc).toContain('os.conversations.revenirDeLaCopie(id)')
+    // Les copies d'aujourd'hui ET celles d'avant (`retours-de-tour/essai__…`).
+    expect(bloc).toContain('dossierDesCopiesDeFil: dossierDesCopiesDeFil()')
+    expect(bloc).toContain('dossierDesRetours: dossierDesRetours()')
     expect(source).toContain('setInterval(passeDuMenageDesCopies, 60 * 60 * 1_000).unref()')
   })
 })

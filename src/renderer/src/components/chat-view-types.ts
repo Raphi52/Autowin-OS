@@ -161,6 +161,8 @@ export type Conv = {
   repriseQuota?: EtatDeRepriseDuFil
   /** Le dossier de travail de la conversation — le répertoire où l'agent travaille. */
   projectPath?: string
+  /** La copie de travail du fil (voir `Conversation.copieDuFil`) : l'en-tête nomme son projet. */
+  copieDuFil?: { chemin?: string; depot?: string; dossierAvant?: string }
   /**
    * La catégorie de la barre latérale, quand elle ne correspond à aucun dossier de travail. Elle
    * GROUPE et rien d'autre ; présente, elle l'emporte sur `projectPath` pour le groupement.

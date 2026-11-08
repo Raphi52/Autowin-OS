@@ -214,7 +214,12 @@ describe('preparerCodeDev : une copie de travail d agent est reconstruite, puis 
         String.raw`D:\AutoWinOS\.autowin-data\autowin-os\retours-de-tour\essai__conv-1-17940-1`
       )
     ).toBe(true)
+    // La copie de travail d'un fil (`copies-de-fil/<fil>`, src/main/git/photo-du-code.ts).
+    expect(
+      estCopieDeTravail(String.raw`D:\AutoWinOS\.autowin-data\autowin-os\copies-de-fil\conv-1710`)
+    ).toBe(true)
     expect(estCopieDeTravail('D:/AutoWinOS')).toBe(false)
+    expect(estCopieDeTravail('D:/projets/copies-de-fil/AutoWinOS')).toBe(false)
     expect(estCopieDeTravail('D:/projets/worktrees/AutoWinOS')).toBe(false)
     expect(estCopieDeTravail('D:/projets/retours-de-tour/AutoWinOS')).toBe(false)
   })

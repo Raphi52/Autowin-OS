@@ -516,6 +516,10 @@ export const TEXTES_FR = {
   'entete.dossier.titre': '{titre}\nCliquer pour changer le dossier de travail.',
   'entete.branche.titre':
     'Branche git courante du depot : {branche}\nCliquer pour choisir une autre branche.',
+  'entete.dossierCopie': 'Ce fil travaille sur {projet}, dans sa propre copie : {copie}',
+  'entete.copieDuFil': 'copie du fil',
+  'entete.copieDuFil.titre':
+    'Ce fil travaille dans sa propre copie de {projet}, sans branche à lui.\nSes changements entrent dans {projet} à la fin de chaque tour, et la copie reçoit ceux des autres fils au début du tour suivant.',
   'entete.details.titre': 'Détails de l’exécution',
   'entete.details': 'Détails',
   'contexte.jauge':
@@ -1090,6 +1094,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'entete.dossier.titre': '{titre}\nClick to change the working folder.',
   'entete.branche.titre':
     'Current git branch of the repository: {branche}\nClick to choose another branch.',
+  'entete.dossierCopie': 'This thread works on {projet}, in its own copy: {copie}',
+  'entete.copieDuFil': 'thread copy',
+  'entete.copieDuFil.titre':
+    'This thread works in its own copy of {projet}, without a branch of its own.\nIts changes go into {projet} at the end of each turn, and the copy receives those of the other threads at the start of the next turn.',
   'entete.details.titre': 'Run details',
   'entete.details': 'Details',
   'contexte.jauge':

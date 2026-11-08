@@ -9,6 +9,7 @@ import {
 import { formaterNombre } from '../langue'
 import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { useBrancheCourante } from './branche-courante'
+import { brancheEstLaCopieDuFil, copieAfficheeDuFil } from './copie-du-fil-entete'
 import { presenceDepuisRunsVivants } from './run-presence'
 import { useClampDansFenetre } from './useClampDansFenetre'
 import { createPortal } from 'react-dom'
@@ -754,6 +755,8 @@ export function ChatView({
     pastille et le badge : `dossierProjetAffiche`.
   */
   const convAffichee = convs.find((c) => c.id === activeId)
+  // Mémorisée : le compilateur React tiendrait sinon le fil pour modifiable par cet appel.
+  const copieAffichee = useMemo(() => copieAfficheeDuFil(convAffichee), [convAffichee])
   const dossierProjetAffiche = convAffichee
     ? convAffichee.projectPath?.trim()
     : (dossierNouveauFil ?? undefined)
@@ -4985,20 +4988,25 @@ export function ChatView({
                     const dossierProjet = dossierProjetAffiche
                     const cheminEffectif = dossierProjet || defaultWorkspace
                     const surCetOrdinateur = estDossierPersonnel(cheminEffectif)
-                    const labelDossier = surCetOrdinateur
-                      ? 'This computer'
-                      : cheminEffectif
-                        ? nomDeDossier(cheminEffectif)
-                        : 'Autowin OS'
+                    // Un fil dans sa copie : la pastille nomme le projet, la copie passe dans l'info-bulle.
+                    const labelDossier = copieAffichee
+                      ? nomDeDossier(copieAffichee.projet)
+                      : surCetOrdinateur
+                        ? 'This computer'
+                        : cheminEffectif
+                          ? nomDeDossier(cheminEffectif)
+                          : 'Autowin OS'
                     // Même icône que sa ligne du menu (💻), pas le 📁 d'un projet.
                     const iconeDossier = surCetOrdinateur ? '💻' : '📁'
-                    const titreDossier = dossierProjet
-                      ? active
-                        ? texteFil('entete.dossierAssigne', { chemin: dossierProjet })
-                        : texteFil('entete.dossierProchainFil', { chemin: dossierProjet })
-                      : texteFil('entete.dossierRacine', {
-                          chemin: cheminEffectif ?? texteFil('entete.racineDepot')
-                        })
+                    const titreDossier = copieAffichee
+                      ? texteFil('entete.dossierCopie', { ...copieAffichee })
+                      : dossierProjet
+                        ? active
+                          ? texteFil('entete.dossierAssigne', { chemin: dossierProjet })
+                          : texteFil('entete.dossierProchainFil', { chemin: dossierProjet })
+                        : texteFil('entete.dossierRacine', {
+                            chemin: cheminEffectif ?? texteFil('entete.racineDepot')
+                          })
                     return (
                       <button
                         type="button"
@@ -5022,7 +5030,21 @@ export function ChatView({
                       </button>
                     )
                   })()}
-                  {gitBranch && (
+                  {gitBranch &&
+                    copieAffichee &&
+                    brancheEstLaCopieDuFil(gitBranch, copieAffichee) && (
+                      // Une copie n'a pas de branche à changer : la pastille explique, sans menu.
+                      <span
+                        className="chat-git-branch-btn"
+                        data-testid="chat-git-branch"
+                        title={texteFil('entete.copieDuFil.titre', {
+                          projet: copieAffichee.projet
+                        })}
+                      >
+                        <ForkIcon /> {texteFil('entete.copieDuFil')}
+                      </span>
+                    )}
+                  {gitBranch && !brancheEstLaCopieDuFil(gitBranch, copieAffichee) && (
                     <button
                       type="button"
                       className="chat-git-branch-btn"

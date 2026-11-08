@@ -137,6 +137,9 @@ describe('copies de travail des fils', () => {
 
   it('sont des chemins, mais pas des dossiers du Chat', () => {
     expect(estDossierDuChat(COPIE)).toBe(false)
+    expect(
+      estDossierDuChat('D:\\AutoWinOS\\.autowin-data\\autowin-os\\copies-de-fil\\conv-1710')
+    ).toBe(false)
     expect(estDossierDuChat('D:\\AutoWinOS')).toBe(true)
     expect(estDossierDuChat('Perso')).toBe(false)
     // Un nom qui contient « essai__ » sans être une copie reste un dossier.

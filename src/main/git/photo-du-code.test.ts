@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
-import { lireNomDEssai } from '../orchestration/garder-un-essai'
+import { nomDeCopieDeFil } from '../../shared/copie-du-fil'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import {
   avancerLaBaseDuFil,
@@ -928,24 +928,25 @@ describe('base du fil en copie — elle survit au ménage des photos et avance �
  *  - un chemin de 216 caractères : git pour Windows le refuse après coup, la photo déjà prise.
  */
 describe('ouvrirLaCopieDuFil — un fil d’AutoWinOS dans sa propre copie', () => {
-  it('ouvre une copie au nom que « Garder » reconnaît, pose sa première base et relie les dépendances', async () => {
+  it('ouvre la copie sous copies-de-fil/<fil>, pose sa première base et relie les dépendances', async () => {
     const repo = await depot()
     mkdirSync(join(repo, 'node_modules', 'paquet'), { recursive: true })
     writeFileSync(join(repo, 'node_modules', 'paquet', 'index.js'), 'module.exports = 1\n')
     writeFileSync(join(repo, '.gitignore'), 'ignore/\nnode_modules/\n')
     writeFileSync(join(repo, 'a.txt'), 'travail non commité d’un autre fil\n')
-    const retours = join(repo, '..', 'retours-de-tour')
+    const copies = join(repo, '..', 'copies-de-fil')
 
     const copie = await ouvrirLaCopieDuFil({
       dossier: repo,
       conversationId: 'conv-7',
-      dossierDesRetours: retours,
+      dossierDesCopies: copies,
       quand: 9_000
     })
 
     expect(copie).toMatchObject({ ok: true })
     const { chemin, base } = copie as { chemin: string; base: string }
-    expect(lireNomDEssai(chemin, retours)).toMatchObject({ fil: 'conv-7', quand: 9_000 })
+    expect(chemin).toBe(join(copies, 'conv-7'))
+    expect(nomDeCopieDeFil(chemin)).toEqual({ fil: 'conv-7' })
     expect(await lireLaBaseDuFil({ dossier: repo, conversationId: 'conv-7' })).toBe(base)
     expect((await git(chemin, 'rev-parse', 'HEAD')).trim()).toBe(base)
     expect(readFileSync(join(chemin, 'node_modules', 'paquet', 'index.js'), 'utf8')).toContain(
@@ -970,7 +971,7 @@ describe('ouvrirLaCopieDuFil — un fil d’AutoWinOS dans sa propre copie', () 
 
     const copie = await ouvrirLaCopieDuFil({
       ...fil,
-      dossierDesRetours: join(repo, '..', 'retours-de-tour'),
+      dossierDesCopies: join(repo, '..', 'copies-de-fil'),
       quand: 9_500
     })
 
@@ -981,18 +982,18 @@ describe('ouvrirLaCopieDuFil — un fil d’AutoWinOS dans sa propre copie', () 
 
   it('deux fils modifient le même fichier dans leurs copies : le dépôt partagé ne bouge pas', async () => {
     const repo = await depot()
-    const retours = join(repo, '..', 'retours-de-tour')
+    const copiesDeFil = join(repo, '..', 'copies-de-fil')
     const statut = await git(repo, 'status', '--porcelain')
     const neuf = await ouvrirLaCopieDuFil({
       dossier: repo,
       conversationId: 'conv-neuf',
-      dossierDesRetours: retours,
+      dossierDesCopies: copiesDeFil,
       quand: 10_000
     })
     const ancien = await ouvrirLaCopieDuFil({
       dossier: repo,
       conversationId: 'conv-ancien',
-      dossierDesRetours: retours,
+      dossierDesCopies: copiesDeFil,
       quand: 10_001
     })
     const copies = [neuf, ancien].map((copie) => (copie as { chemin: string }).chemin)
@@ -1009,15 +1010,15 @@ describe('ouvrirLaCopieDuFil — un fil d’AutoWinOS dans sa propre copie', () 
 
   it('chemin de copie au-delà de 215 caractères : refus clair, ni photo ni copie', async () => {
     const repo = await depot()
-    const longueurDuNom = 'essai__conv-9-9999-1'.length + 1
+    const longueurDuNom = 'conv-9'.length + 1
     const retours = join(repo, '..', 'r'.repeat(216 - longueurDuNom - join(repo, '..').length - 1))
-    const attendu = join(retours, 'essai__conv-9-9999-1')
+    const attendu = join(retours, 'conv-9')
     expect(attendu.length).toBe(216)
 
     const copie = await ouvrirLaCopieDuFil({
       dossier: repo,
       conversationId: 'conv-9',
-      dossierDesRetours: retours,
+      dossierDesCopies: retours,
       quand: 9_999
     })
 
@@ -1030,17 +1031,37 @@ describe('ouvrirLaCopieDuFil — un fil d’AutoWinOS dans sa propre copie', () 
 
   it('jumeau accepté : un chemin de 215 caractères tout juste s’ouvre', async () => {
     const repo = await depot()
-    const longueurDuNom = 'essai__conv-9-9999-1'.length + 1
+    const longueurDuNom = 'conv-9'.length + 1
     const retours = join(repo, '..', 'r'.repeat(215 - longueurDuNom - join(repo, '..').length - 1))
-    expect(join(retours, 'essai__conv-9-9999-1').length).toBe(215)
+    expect(join(retours, 'conv-9').length).toBe(215)
 
     const copie = await ouvrirLaCopieDuFil({
       dossier: repo,
       conversationId: 'conv-9',
-      dossierDesRetours: retours,
+      dossierDesCopies: retours,
       quand: 9_999
     })
 
     expect(copie).toMatchObject({ ok: true })
+  })
+})
+
+describe('ouvrirLaCopieDuFil — un dossier déjà là n’est jamais écrasé', () => {
+  it('refuse sans photo ni base quand copies-de-fil/<fil> existe déjà', async () => {
+    const repo = await depot()
+    const copies = join(repo, '..', 'copies-de-fil')
+    mkdirSync(join(copies, 'conv-3'), { recursive: true })
+    writeFileSync(join(copies, 'conv-3', 'note.txt'), 'à quelqu’un\n')
+
+    const copie = await ouvrirLaCopieDuFil({
+      dossier: repo,
+      conversationId: 'conv-3',
+      dossierDesCopies: copies
+    })
+
+    expect(copie).toMatchObject({ ok: false })
+    expect((copie as { raison: string }).raison).toContain(join(copies, 'conv-3'))
+    expect(readFileSync(join(copies, 'conv-3', 'note.txt'), 'utf8')).toBe('à quelqu’un\n')
+    expect(await git(repo, 'for-each-ref', 'refs/autowin/')).toBe('')
   })
 })

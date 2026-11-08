@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
-import { ouvrirLaCopieDuFil } from '../git/photo-du-code'
+import { avancerLaBaseDuFil, ouvrirCopiesDEssai, ouvrirLaCopieDuFil } from '../git/photo-du-code'
 import {
   CALME_AVANT_MENAGE_MS,
   decisionPourLaCopie,
@@ -28,6 +28,7 @@ const H = 3_600_000
 const MAINTENANT = 1_800_000_000_000
 const COPIE =
   'D:\\AutoWinOS\\.autowin-data\\autowin-os\\retours-de-tour\\essai__conv-9-1700000000000-1'
+const COPIE_NEUVE = 'D:\\AutoWinOS\\.autowin-data\\autowin-os\\copies-de-fil\\conv-9'
 
 function fil(champs: Partial<FilDuMenage>): FilDuMenage {
   return { id: 'conv-9', updatedAt: MAINTENANT - 13 * H, ...champs }
@@ -100,6 +101,33 @@ describe('decisionPourLaCopie — qui se sert de la copie, et chacun a-t-il fini
     ).toBe(false)
   })
 
+  it('copies-de-fil/<fil> : même décision, le fil lu dans le nom', () => {
+    const neuve = COPIE_NEUVE
+    expect(
+      decisionPourLaCopie({
+        copie: neuve,
+        fils: [fil({ projectPath: neuve, copieDuFil: { chemin: neuve } })],
+        tourEnCours: () => false,
+        maintenant: MAINTENANT
+      })
+    ).toEqual({ supprimer: true, filDuNom: 'conv-9', aDecrocher: ['conv-9'] })
+  })
+
+  it('copies-de-fil/<fil> sans fil : l’âge vient du disque, et sans lui la copie reste', () => {
+    const neuve = COPIE_NEUVE
+    const decider = (ouverteA?: number) =>
+      decisionPourLaCopie({
+        copie: neuve,
+        fils: [],
+        tourEnCours: () => false,
+        maintenant: MAINTENANT,
+        ...(ouverteA === undefined ? {} : { ouverteA })
+      }).supprimer
+    expect(decider(MAINTENANT - 13 * H)).toBe(true)
+    expect(decider(MAINTENANT - H)).toBe(false)
+    expect(decider()).toBe(false)
+  })
+
   it('ignore ce qui n’est pas une copie de fil', () => {
     expect(
       decisionPourLaCopie({
@@ -122,7 +150,12 @@ afterEach(() => {
 })
 
 /** Un dépôt avec ses modules installés, et le dossier de ses copies de fil. */
-async function depot(): Promise<{ repo: string; retours: string; canari: string }> {
+async function depot(): Promise<{
+  repo: string
+  retours: string
+  copies: string
+  canari: string
+}> {
   const racine = mkdtempSync(join(tmpdir(), 'autowin-menage-copies-'))
   dossiers.push(racine)
   const repo = join(racine, 'depot')
@@ -139,14 +172,14 @@ async function depot(): Promise<{ repo: string; retours: string; canari: string 
   writeFileSync(canari, 'module du dépôt\n')
   const retours = join(racine, 'retours-de-tour')
   mkdirSync(retours)
-  return { repo, retours, canari }
+  return { repo, retours, copies: join(racine, 'copies-de-fil'), canari }
 }
 
-async function copieDuFil(repo: string, retours: string, conversationId: string): Promise<string> {
+async function copieDuFil(repo: string, copies: string, conversationId: string): Promise<string> {
   const ouverte = await ouvrirLaCopieDuFil({
     dossier: repo,
     conversationId,
-    dossierDesRetours: retours,
+    dossierDesCopies: copies,
     quand: MAINTENANT - 20 * H
   })
   if (!ouverte.ok) throw new Error(ouverte.raison)
@@ -156,12 +189,13 @@ async function copieDuFil(repo: string, retours: string, conversationId: string)
 
 describe('menageDesCopiesDeFil — sur un vrai dépôt', () => {
   it('retire la copie identique à sa base, décroche son fil, et laisse les modules du dépôt', async () => {
-    const { repo, retours, canari } = await depot()
-    const copie = await copieDuFil(repo, retours, 'conv-1')
+    const { repo, retours, copies, canari } = await depot()
+    const copie = await copieDuFil(repo, copies, 'conv-1')
     const decroches: string[] = []
 
     const bilan = await menageDesCopiesDeFil({
       dossierDesRetours: retours,
+      dossierDesCopiesDeFil: copies,
       depot: repo,
       lireFils: () => [fil({ id: 'conv-1', projectPath: copie, copieDuFil: { chemin: copie } })],
       tourEnCours: () => false,
@@ -171,19 +205,20 @@ describe('menageDesCopiesDeFil — sur un vrai dépôt', () => {
 
     expect(bilan).toEqual({ supprimees: [copie], gardees: [], echecs: [] })
     expect(decroches).toEqual(['conv-1'])
-    expect(readdirSync(retours)).toEqual([])
+    expect(readdirSync(copies)).toEqual([])
     expect(existsSync(canari)).toBe(true)
-    expect(await git(repo, 'worktree', 'list')).not.toContain('essai__')
+    expect(await git(repo, 'worktree', 'list')).not.toContain('copies-de-fil')
   })
 
   it('garde la copie qui porte un fichier non publié, même si son fil est fini', async () => {
-    const { repo, retours } = await depot()
-    const copie = await copieDuFil(repo, retours, 'conv-2')
+    const { repo, retours, copies } = await depot()
+    const copie = await copieDuFil(repo, copies, 'conv-2')
     writeFileSync(join(copie, 'travail.txt'), 'jamais passé par la porte\n')
     const decrocher = vi.fn()
 
     const bilan = await menageDesCopiesDeFil({
       dossierDesRetours: retours,
+      dossierDesCopiesDeFil: copies,
       depot: repo,
       lireFils: () => [fil({ id: 'conv-2', projectPath: copie, copieDuFil: { chemin: copie } })],
       tourEnCours: () => false,
@@ -198,11 +233,12 @@ describe('menageDesCopiesDeFil — sur un vrai dépôt', () => {
   })
 
   it('garde la copie quand son fil repart pendant la mesure de l’écart', async () => {
-    const { repo, retours } = await depot()
-    const copie = await copieDuFil(repo, retours, 'conv-3')
+    const { repo, retours, copies } = await depot()
+    const copie = await copieDuFil(repo, copies, 'conv-3')
     let lectures = 0
     const bilan = await menageDesCopiesDeFil({
       dossierDesRetours: retours,
+      dossierDesCopiesDeFil: copies,
       depot: repo,
       // 1re lecture : fil fini ; 2e, juste avant le geste : un message vient d'arriver.
       lireFils: () => [
@@ -241,5 +277,39 @@ describe('menageDesCopiesDeFil — sur un vrai dépôt', () => {
     expect(bilan.echecs).toEqual([])
     expect(existsSync(reste)).toBe(false)
     expect(existsSync(canari)).toBe(true)
+  })
+
+  it('retire aussi une copie d’avant, rangée sous retours-de-tour/essai__…', async () => {
+    const { repo, retours, copies } = await depot()
+    const ouvertes = await ouvrirCopiesDEssai({
+      dossier: repo,
+      conversationId: 'conv-5',
+      dossierDesRetours: retours,
+      nombre: 1,
+      quand: MAINTENANT - 20 * H
+    })
+    if (!ouvertes.ok) throw new Error(ouvertes.raison)
+    const ancienne = ouvertes.chemins[0] as string
+    await avancerLaBaseDuFil({
+      dossier: repo,
+      conversationId: 'conv-5',
+      depuis: null,
+      vers: ouvertes.sha
+    })
+
+    const bilan = await menageDesCopiesDeFil({
+      dossierDesRetours: retours,
+      dossierDesCopiesDeFil: copies,
+      depot: repo,
+      lireFils: () => [
+        fil({ id: 'conv-5', projectPath: ancienne, copieDuFil: { chemin: ancienne } })
+      ],
+      tourEnCours: () => false,
+      decrocher: () => undefined,
+      maintenant: () => MAINTENANT
+    })
+
+    expect(bilan).toEqual({ supprimees: [ancienne], gardees: [], echecs: [] })
+    expect(existsSync(ancienne)).toBe(false)
   })
 })

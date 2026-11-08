@@ -23,18 +23,21 @@ import type { CarteDesBesoins } from './carte-des-besoins'
 import { carteDesProjetsPartages } from './board-projets-partages'
 import { canonicalProjectPath, estCheminDeDossier } from './project-path'
 import { nomDeCopieDEssai } from './essai-trois-facons'
+import { nomDeCopieDeFil } from './copie-du-fil'
 
 /** Au-delà, la liste est refusée : la barre latérale n'a jamais autant de dossiers. */
 export const DOSSIERS_DU_CHAT_MAX = 500
 
 /**
  * Un dossier que la liste du Chat peut garder : un chemin, sauf la COPIE DE TRAVAIL d'un fil
- * (`essai__<fil>-<instant>-<rang>`, `src/main/git/photo-du-code.ts`). L'app l'ouvre seule pour chaque
+ * (`copies-de-fil/<fil>`, ou `essai__<fil>-<instant>-<rang>` avant elle, `src/main/git/photo-du-code.ts`). L'app l'ouvre seule pour chaque
  * fil, et le fil y passe seul : ce n'est pas un dossier de l'utilisateur. Sans cette règle, chaque
  * fil ajoutait sa copie au menu « Ranger dans… » et au Board, par les dossiers des fils.
  */
 export function estDossierDuChat(chemin: string | null | undefined): boolean {
-  return estCheminDeDossier(chemin) && !nomDeCopieDEssai(chemin ?? undefined)
+  return (
+    estCheminDeDossier(chemin) && !nomDeCopieDEssai(chemin ?? undefined) && !nomDeCopieDeFil(chemin)
+  )
 }
 
 /** La clé de comparaison d'un dossier : `d:/x/`, `D:\x` et `D:\X` sont le même dossier Windows. */

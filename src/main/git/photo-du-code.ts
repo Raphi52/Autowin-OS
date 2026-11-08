@@ -447,6 +447,21 @@ export async function ouvrirCopiesDEssai(entree: {
   const destinations = Array.from({ length: entree.nombre }, (_, index) =>
     join(entree.dossierDesRetours, `essai__${entree.conversationId}-${quand}-${index + 1}`)
   )
+  return photographierPuisOuvrir({ ...entree, quand, destinations })
+}
+
+/**
+ * UNE photo du code maintenant, puis une copie détachée à cette photo pour chaque destination. Le
+ * refus d'un chemin trop long se décide AVANT la photo (voir `LONGUEUR_MAX_CHEMIN_DE_COPIE`).
+ */
+async function photographierPuisOuvrir(entree: {
+  dossier: string
+  conversationId: string
+  quand: number
+  destinations: string[]
+  runGit?: GitRunner
+}): Promise<CopiesDEssai> {
+  const { quand, destinations } = entree
   const tropLong = destinations.find((chemin) => chemin.length > LONGUEUR_MAX_CHEMIN_DE_COPIE)
   if (tropLong)
     return {
@@ -484,8 +499,10 @@ export type CopieDuFilOuverte =
   | { ok: false; raison: string }
 
 /**
- * LA COPIE D'UN FIL D'AUTOWINOS : la copie d'« Essaie 3 façons » à une seule façon, au nom que
- * « Garder » lit (`essai__<fil>-<instant>-1`), puis deux gestes que la porte exige :
+ * LA COPIE D'UN FIL D'AUTOWINOS : une copie détachée à la photo du dossier partagé, rangée sous
+ * `<dossierDesCopies>/<id du fil>` — le nom que l'utilisateur lit, et que le ménage reconnaît
+ * (`nomDeCopieDeFil`, `src/shared/copie-du-fil.ts`). La porte de fin de tour ne lit pas ce nom : elle
+ * part de la copie notée sur le fil et de sa base. Puis deux gestes que la porte exige :
  *  - la BASE du fil posée à la photo d'ouverture : la porte publie l'écart depuis elle, et refuse
  *    sans elle. Une base déjà là (copie précédente effacée) avance jusqu'à la nouvelle photo, sinon
  *    le premier passage republierait ce que l'ancienne copie a déjà fait entrer dans main ;
@@ -500,12 +517,31 @@ export type CopieDuFilOuverte =
 export async function ouvrirLaCopieDuFil(entree: {
   dossier: string
   conversationId: string
-  dossierDesRetours: string
+  /** Le dossier qui range les copies de fil (`copies-de-fil` des données de l'app). */
+  dossierDesCopies: string
   quand?: number
   runGit?: GitRunner
 }): Promise<CopieDuFilOuverte> {
+  if (!refDeBaseDuFil(entree.conversationId))
+    return {
+      ok: false,
+      raison: `« ${entree.conversationId} » ne peut pas nommer un dossier de copie : aucune copie n’a été ouverte.`
+    }
+  const destination = join(entree.dossierDesCopies, entree.conversationId)
+  // Une copie de fil déjà notée se reprend sans passer ici : un dossier présent n'est pas le sien.
+  if (existsSync(destination))
+    return {
+      ok: false,
+      raison: `Le dossier ${destination} existe déjà sans être la copie notée sur ce fil : rien n’a été écrit par-dessus.`
+    }
   const git = entree.runGit ?? (await defaultGitRunner())
-  const copies = await ouvrirCopiesDEssai({ ...entree, nombre: 1, runGit: git })
+  const copies = await photographierPuisOuvrir({
+    dossier: entree.dossier,
+    conversationId: entree.conversationId,
+    quand: entree.quand ?? Date.now(),
+    destinations: [destination],
+    runGit: git
+  })
   if (!copies.ok) return copies
   const chemin = copies.chemins[0]
   const depot = await racineDuDepot(entree.dossier, git)
