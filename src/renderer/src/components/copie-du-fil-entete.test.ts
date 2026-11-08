@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { brancheEstLaCopieDuFil, copieAfficheeDuFil } from './copie-du-fil-entete'
+import { copieAfficheeDuFil, dossierDeLaBranche } from './copie-du-fil-entete'
 
 const COPIE = 'D:\\AutoWinOS\\.autowin-data\\autowin-os\\copies-de-fil\\conv-1710'
 
@@ -10,7 +10,7 @@ describe('copieAfficheeDuFil — l’en-tête nomme le projet, pas la copie', ()
         projectPath: COPIE,
         copieDuFil: { chemin: COPIE, depot: 'D:\\AutoWinOS', dossierAvant: 'D:\\AutoWinOS' }
       })
-    ).toEqual({ projet: 'D:\\AutoWinOS', copie: COPIE })
+    ).toEqual({ projet: 'D:\\AutoWinOS', depot: 'D:\\AutoWinOS', copie: COPIE })
   })
 
   it('sans dossier d’avant, le dépôt ; chemins comparés sans casse ni barre finale', () => {
@@ -34,15 +34,24 @@ describe('copieAfficheeDuFil — l’en-tête nomme le projet, pas la copie', ()
   })
 })
 
-describe('brancheEstLaCopieDuFil — « copie du fil » remplace « (detached) »', () => {
-  const copie = { projet: 'D:\\AutoWinOS', copie: COPIE }
+describe('dossierDeLaBranche — la branche est celle où le travail entre', () => {
+  const copie = { projet: 'D:\\AutoWinOS', depot: 'D:\\AutoWinOS', copie: COPIE }
 
-  it('dans la copie du fil, la branche détachée est la copie du fil', () => {
-    expect(brancheEstLaCopieDuFil('(detached)', copie)).toBe(true)
+  it('dans sa copie, le fil lit la branche du dépôt partagé, pas celle de la copie', () => {
+    expect(dossierDeLaBranche(COPIE, copie)).toBe('D:\\AutoWinOS')
   })
 
-  it('une vraie branche, ou un détachement hors copie, reste tel quel', () => {
-    expect(brancheEstLaCopieDuFil('main', copie)).toBe(false)
-    expect(brancheEstLaCopieDuFil('(detached)', null)).toBe(false)
+  it('hors copie, le fil lit la branche de son propre dossier', () => {
+    expect(dossierDeLaBranche('D:\\Projet', null)).toBe('D:\\Projet')
+    expect(dossierDeLaBranche(undefined, null)).toBeUndefined()
+  })
+
+  it('sans dépôt connu, le dossier d’avant porte la branche', () => {
+    expect(
+      copieAfficheeDuFil({
+        projectPath: COPIE,
+        copieDuFil: { chemin: COPIE, dossierAvant: 'D:\\AutoWinOS' }
+      })?.depot
+    ).toBe('D:\\AutoWinOS')
   })
 })

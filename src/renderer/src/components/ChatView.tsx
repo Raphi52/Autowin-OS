@@ -9,7 +9,7 @@ import {
 import { formaterNombre } from '../langue'
 import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { useBrancheCourante } from './branche-courante'
-import { brancheEstLaCopieDuFil, copieAfficheeDuFil } from './copie-du-fil-entete'
+import { copieAfficheeDuFil, dossierDeLaBranche } from './copie-du-fil-entete'
 import { presenceDepuisRunsVivants } from './run-presence'
 import { useClampDansFenetre } from './useClampDansFenetre'
 import { createPortal } from 'react-dom'
@@ -761,11 +761,13 @@ export function ChatView({
     ? convAffichee.projectPath?.trim()
     : (dossierNouveauFil ?? undefined)
   const gitCwd = dossierProjetAffiche || defaultWorkspace || undefined
+  // Un fil dans sa copie lit la branche du dépôt où son travail entre : la copie n'en a aucune.
+  const cwdDeLaBranche = dossierDeLaBranche(gitCwd, copieAffichee)
   // `getGitBranch`, pas `getGitState` : ce dernier creait 2 processus git sur le fil principal a
   // chaque relecture (toutes les 5 s) — 9 gels de 3,3 a 9,8 s.
   const lireEtatGit = useCallback(
-    () => Promise.resolve(window.api.getGitBranch?.(gitCwd)),
-    [gitCwd]
+    () => Promise.resolve(window.api.getGitBranch?.(cwdDeLaBranche)),
+    [cwdDeLaBranche]
   )
   const gitBranch = useBrancheCourante(lireEtatGit)
   /*
@@ -5030,21 +5032,20 @@ export function ChatView({
                       </button>
                     )
                   })()}
-                  {gitBranch &&
-                    copieAffichee &&
-                    brancheEstLaCopieDuFil(gitBranch, copieAffichee) && (
-                      // Une copie n'a pas de branche à changer : la pastille explique, sans menu.
-                      <span
-                        className="chat-git-branch-btn"
-                        data-testid="chat-git-branch"
-                        title={texteFil('entete.copieDuFil.titre', {
-                          projet: copieAffichee.projet
-                        })}
-                      >
-                        <ForkIcon /> {texteFil('entete.copieDuFil')}
-                      </span>
-                    )}
-                  {gitBranch && !brancheEstLaCopieDuFil(gitBranch, copieAffichee) && (
+                  {gitBranch && copieAffichee && (
+                    // La branche se change dans le dossier principal, pas depuis la copie : sans menu.
+                    <span
+                      className="chat-git-branch-btn"
+                      data-testid="chat-git-branch"
+                      title={texteFil('entete.copieDuFil.titre', {
+                        projet: copieAffichee.projet,
+                        branche: gitBranch
+                      })}
+                    >
+                      <ForkIcon /> {texteFil('entete.copieDuFil', { branche: gitBranch })}
+                    </span>
+                  )}
+                  {gitBranch && !copieAffichee && (
                     <button
                       type="button"
                       className="chat-git-branch-btn"
