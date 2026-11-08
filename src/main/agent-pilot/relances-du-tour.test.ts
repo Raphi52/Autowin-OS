@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { ContexteDuTour } from './contexte-du-tour'
 import { etatInitialDuTour, type EtatDuTour } from './etat-du-tour'
 import {
   consignesDifferees,
   consignesDuBudget,
+  relanceConclusionAbsente,
   relanceQuestionSansLecture,
   relanceTourMuet
 } from './relances-du-tour'
@@ -128,6 +130,32 @@ describe('un contrôle ne mord qu’une fois, et ne touche à rien quand il ne m
     expect(e.conclusionRecoveryAvailable).toBe(false)
     expect(e.relanceDeFormeUtilisee).toBe(true)
     expect(relanceTourMuet(e)).toBeUndefined()
+  })
+
+  /*
+   * Un tour qui a modifié des fichiers par les outils natifs du modèle (Edit, Write, Bash qui
+   * écrit) a AGI autant qu'un `<cmd>` : l'utilisateur attend le bloc de fin. Vécu : trois tours de
+   * suite livrés en code sans « ✅ Fait », parce que la garde ne regardait que les commandes de l'app.
+   */
+  it('conclusion absente : un tour qui n’a modifié que des fichiers doit finir par le bloc de fin', () => {
+    const tour = (e: EtatDuTour): ContexteDuTour =>
+      ({ etat: e, exigerExperienceSoignee: true }) as unknown as ContexteDuTour
+    const prose = 'J’ai retiré les trois panneaux, les tests passent.'
+
+    const lectureSeule = etat()
+    lectureSeule.anyReadExecuted = true
+    lectureSeule.visibleTextThisTurn = prose
+    expect(relanceConclusionAbsente(tour(lectureSeule))).toBeUndefined()
+
+    const fichiersModifies = etat()
+    fichiersModifies.actionNativeCeTour = true
+    fichiersModifies.visibleTextThisTurn = prose
+    expect(relanceConclusionAbsente(tour(fichiersModifies))?.motif).toBe('conclusion-absente')
+
+    const dejaClos = etat()
+    dejaClos.actionNativeCeTour = true
+    dejaClos.visibleTextThisTurn = `${prose}\n\n✅ Fait\n1. Panneaux retirés.\n\n👉 Recommandé\nRelis l’écran.`
+    expect(relanceConclusionAbsente(tour(dejaClos))).toBeUndefined()
   })
 
   it('question sans lecture : une seule relance', () => {

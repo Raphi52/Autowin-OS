@@ -415,6 +415,11 @@ export function relanceBlocVisuelNonFerme(tour: ContexteDuTour): Relance | undef
  * suite. MESURE le 2026-08-15 : 39 conversations de sonde sur 39 finissaient ainsi.
  * Verdict de l'utilisateur : « toutes tes sondes sont des echecs ». Bornee a une relance,
  * comme ses jumelles, et armee seulement si le tour a REELLEMENT agi.
+ *
+ * AGIR, C'EST AUSSI MODIFIER UN FICHIER. Un Edit, un Write ou un Bash qui ecrit, joues par le
+ * modele lui-meme, ne passent pas par `<cmd>` : `anyActionExecuted` restait faux, et un tour qui
+ * avait livre du code se terminait sans « ✅ Fait » (vecu : trois tours de suite, « ya pas eu le
+ * bloc fait »). `actionNativeCeTour` les compte ; une simple lecture, elle, ne l'arme pas.
  */
 export function relanceConclusionAbsente(tour: ContexteDuTour): Relance | undefined {
   const { etat, exigerExperienceSoignee } = tour
@@ -422,7 +427,7 @@ export function relanceConclusionAbsente(tour: ContexteDuTour): Relance | undefi
     exigerExperienceSoignee &&
     !etat.relanceDeFormeUtilisee &&
     etat.conclusionFormatRecoveryAvailable &&
-    exigeUneConclusion(etat.anyActionExecuted, etat.visibleTextThisTurn)
+    exigeUneConclusion(etat.anyActionExecuted || etat.actionNativeCeTour, etat.visibleTextThisTurn)
   ) {
     etat.relanceDeFormeUtilisee = true
     etat.conclusionFormatRecoveryAvailable = false

@@ -142,7 +142,9 @@ describe('agir plutot que recommander — la cloture ne sert pas a rendre le tra
   })
 
   it('nomme les actes qui ne se recommandent JAMAIS : lecture seule, diagnostic, verification', () => {
-    expect(consigne).toMatch(/diagnostic, une lecture seule, une v[ée]rification, une recherche ne se recommandent JAMAIS/iu)
+    expect(consigne).toMatch(
+      /diagnostic, une lecture seule, une v[ée]rification, une recherche ne se recommandent JAMAIS/iu
+    )
   })
 
   it('interdit la question dont l agent prendrait lui-meme l option recommandee', () => {
@@ -262,19 +264,28 @@ describe('STYLE_CLOTURE_CHAT — critère « a agi »', () => {
   it('lie la clôture à une commande exécutée, pas à « substantielle »', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).not.toMatch(/après une tâche substantielle/iu)
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
-      /seulement si ce tour a exécuté au moins une commande/iu
+      /seulement si ce tour a AGI — un bloc <cmd>, un outil direct/u
     )
-    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(/sans commande.*aucun bloc de clôture/iu)
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(/sans action.*aucun bloc de clôture/iu)
+  })
+
+  // Trois tours de suite ont livré du code par Edit/Bash sans « ✅ Fait » : la règle ne comptait que
+  // les commandes de l'app, comme la garde `relanceConclusionAbsente` (relances-du-tour.ts).
+  // ENTRÉE QUI DOIT FAIRE ÉCHOUER : retirer « qui MODIFIE un fichier » de la règle.
+  it('compte un fichier modifié par les outils du modèle, pas une simple lecture', () => {
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /ou un de tes outils qui MODIFIE un fichier \(Edit, Write, Bash qui écrit\), une lecture seule ne compte pas/u
+    )
   })
 
   // 2026-10-11 : 2 tours réels sur 2 ont répondu sans clôture après un `get_state`
   // DIRECT ; la relance de conclusion a doublé l'appel au modèle et la phrase affichée.
   it('compte un outil direct mcp__autowin__ comme une commande, dans les DEUX sens de la règle', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
-      /au moins une commande — un bloc <cmd> OU un outil direct `mcp__autowin__…`, les deux comptent/u
+      /un bloc <cmd>, un outil direct `mcp__autowin__…` ou un de tes outils/u
     )
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
-      /sans commande ni outil direct, n'ajoute aucun bloc de clôture/u
+      /sans action \(lecture ou conversation\), n'ajoute aucun bloc de clôture/u
     )
   })
 
