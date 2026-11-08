@@ -76,18 +76,30 @@ export function decodeRoleBinding(value: unknown): RoleBinding | undefined {
 const CLE_PETITES_TACHES = 'petitesTaches'
 /** Interrupteur du build trivial sur Haiku (`roles.ts` modeleDuBuildTrivial). */
 const CLE_BUILD_TRIVIAL = 'buildTrivialSurHaiku'
+/**
+ * Interrupteur du routage des questions du chat sur les petites tâches (`roles.ts` bindingDuTourChat).
+ * fix-ok: cause mesurée — `decodeRoleBindings` rejette tout fichier qui porte une clé inconnue (lu :
+ * ligne « cle !== CLE_BUILD_TRIVIAL »), donc la clé doit figurer dans la liste autorisée, sinon le
+ * `roles.json` entier serait ignoré au chargement.
+ */
+const CLE_ROUTAGE_CHAT = 'chatLectureSeuleSurHaiku'
 
 function decodeRoleBindings(value: unknown): RolesPersistes | undefined {
   if (!isPlainObject(value)) return undefined
   if (
     Object.keys(value).some(
       (cle) =>
-        cle !== CLE_PETITES_TACHES && cle !== CLE_BUILD_TRIVIAL && !ALL_ROLES.includes(cle as Role)
+        cle !== CLE_PETITES_TACHES &&
+        cle !== CLE_BUILD_TRIVIAL &&
+        cle !== CLE_ROUTAGE_CHAT &&
+        !ALL_ROLES.includes(cle as Role)
     )
   ) {
     return undefined
   }
   if (value[CLE_BUILD_TRIVIAL] !== undefined && typeof value[CLE_BUILD_TRIVIAL] !== 'boolean')
+    return undefined
+  if (value[CLE_ROUTAGE_CHAT] !== undefined && typeof value[CLE_ROUTAGE_CHAT] !== 'boolean')
     return undefined
   const decoded: RolesPersistes = {}
   for (const role of ALL_ROLES) {
@@ -103,6 +115,8 @@ function decodeRoleBindings(value: unknown): RolesPersistes | undefined {
   }
   if (typeof value[CLE_BUILD_TRIVIAL] === 'boolean')
     decoded.buildTrivialSurHaiku = value[CLE_BUILD_TRIVIAL]
+  if (typeof value[CLE_ROUTAGE_CHAT] === 'boolean')
+    decoded.chatLectureSeuleSurHaiku = value[CLE_ROUTAGE_CHAT]
   return Object.keys(decoded).length > 0 ? decoded : undefined
 }
 
@@ -121,18 +135,20 @@ export function loadRoleBindings(): RolesPersistes | undefined {
 }
 
 /**
- * Écrit les quatre rôles, le réglage des petites tâches ET l'interrupteur du build trivial :
- * `roles.json` est réécrit en entier à chaque resynchronisation de la topologie, donc un appelant
- * qui oublierait l'un d'eux le ferait disparaître du disque.
+ * Écrit les quatre rôles, le réglage des petites tâches ET les deux interrupteurs : `roles.json` est
+ * réécrit en entier à chaque resynchronisation de la topologie, donc un appelant qui oublierait l'un
+ * d'eux le ferait disparaître du disque.
  */
 export function saveRoleBindings(
   bindings: Record<Role, RoleBinding>,
   petitesTaches: RoleBinding | undefined,
-  buildTrivialSurHaiku?: boolean
+  buildTrivialSurHaiku?: boolean,
+  chatLectureSeuleSurHaiku?: boolean
 ): void {
   writeBindings(rolesPath(), {
     ...bindings,
     ...(petitesTaches ? { petitesTaches } : {}),
-    ...(typeof buildTrivialSurHaiku === 'boolean' ? { buildTrivialSurHaiku } : {})
+    ...(typeof buildTrivialSurHaiku === 'boolean' ? { buildTrivialSurHaiku } : {}),
+    ...(typeof chatLectureSeuleSurHaiku === 'boolean' ? { chatLectureSeuleSurHaiku } : {})
   })
 }

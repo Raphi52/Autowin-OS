@@ -221,6 +221,28 @@ export function bindingDesPetitesTaches(
 }
 
 /**
+ * Le modèle d'un tour de chat : celui du chat, sauf une QUESTION pure (`demandeSansAction`, tri fait
+ * avant le tour) que les petites tâches servent moins cher. Le routage ne joue que entre deux modèles
+ * Claude : le CLI Claude sert les outils du chat, un autre moteur garde le sien. Interrupteur coupé
+ * (`routageActif` faux, posé dans `roles.json` par `chatLectureSeuleSurHaiku: false`) = le modèle du chat.
+ * fix-ok: cause mesurée — 374 tours en lecture seule sur 7 jours (journaux de tour et cost.jsonl, rôle
+ * supervisor), 362 $ au tarif Opus 5.5 ; ils partaient tous sur Opus. Gain estimé, réécriture du
+ * cache au premier appel Haiku comprise : ≈ 283 $ sur 7 jours, au tarif public (équivalent, pas une facture).
+ */
+export function bindingDuTourChat(entree: {
+  chat: RoleBinding
+  petitesTaches: RoleBinding
+  routageActif: boolean
+  sansAction: boolean
+}): RoleBinding {
+  if (!entree.routageActif || !entree.sansAction) return entree.chat
+  if (entree.chat.provider !== 'claude' || entree.petitesTaches.provider !== 'claude') {
+    return entree.chat
+  }
+  return { ...entree.petitesTaches }
+}
+
+/**
  * LE BUILD DES RUNS TRIVIAUX SUR HAIKU (2026-10-22).
  *
  * Mesure : `scripts/banc-modeles-petits-defauts.mjs`, 4 petits défauts réels d'un seul fichier, effort
@@ -249,6 +271,8 @@ export function modeleDuBuildTrivial(
 export interface PetitesTachesEtat {
   reglage: RoleBinding | null
   effectif: RoleBinding
+  /** Les questions du chat passent-elles par ce modèle ? Absent = version antérieure du processus. */
+  routageChat?: boolean
 }
 
 /**
@@ -258,6 +282,7 @@ export interface PetitesTachesEtat {
 export type RolesPersistes = Partial<Record<Role, RoleBinding>> & {
   petitesTaches?: RoleBinding
   buildTrivialSurHaiku?: boolean
+  chatLectureSeuleSurHaiku?: boolean
 }
 
 export class RoleModelConfig {
@@ -268,6 +293,8 @@ export class RoleModelConfig {
   private petitesTaches?: RoleBinding
   /** Interrupteur du build trivial sur Haiku tel que posé ; absent = actif. */
   private buildTrivialSurHaiku?: boolean
+  /** Routage des questions pures du chat sur les petites tâches ; absent = actif. */
+  private chatLectureSeuleSurHaiku?: boolean
 
   constructor(defaults?: RolesPersistes, catalog?: ImportedModel[]) {
     this.catalog = catalog
@@ -286,12 +313,29 @@ export class RoleModelConfig {
       if (defaults.petitesTaches) this.petitesTaches = { ...defaults.petitesTaches }
       if (typeof defaults.buildTrivialSurHaiku === 'boolean')
         this.buildTrivialSurHaiku = defaults.buildTrivialSurHaiku
+      if (typeof defaults.chatLectureSeuleSurHaiku === 'boolean')
+        this.chatLectureSeuleSurHaiku = defaults.chatLectureSeuleSurHaiku
     }
   }
 
   /** L'interrupteur tel que posé dans `roles.json`, `undefined` s'il ne l'a jamais été. */
   getBuildTrivialSurHaiku(): boolean | undefined {
     return this.buildTrivialSurHaiku
+  }
+
+  /** L'interrupteur du routage des questions du chat tel que posé, `undefined` s'il ne l'a jamais été. */
+  getChatLectureSeuleSurHaiku(): boolean | undefined {
+    return this.chatLectureSeuleSurHaiku
+  }
+
+  /** Vrai sauf si l'utilisateur a posé `chatLectureSeuleSurHaiku: false` dans `roles.json`. */
+  routageChatLectureSeuleActif(): boolean {
+    return this.chatLectureSeuleSurHaiku !== false
+  }
+
+  /** Pose l'interrupteur du routage ; `os.ts` l'écrit ensuite sur disque (`saveRoleBindings`). */
+  setChatLectureSeuleSurHaiku(actif: boolean): void {
+    this.chatLectureSeuleSurHaiku = actif
   }
 
   /**

@@ -644,6 +644,9 @@ const api = {
     reasoningEffort?: string
   ): Promise<PetitesTachesEtat> =>
     ipcRenderer.invoke('os:setPetitesTaches', provider, model, reasoningEffort),
+  /** Les questions du chat passent-elles par les petites tâches ? `false` = tout le chat reste sur son modèle. */
+  setRoutageChatLectureSeule: (actif: boolean): Promise<PetitesTachesEtat> =>
+    ipcRenderer.invoke('os:setRoutageChatLectureSeule', actif),
   models: (force = false): Promise<ImportedModel[]> => ipcRenderer.invoke('os:models:list', force),
   fabricNodes: (): Promise<FabricNodeSummary[]> => ipcRenderer.invoke('os:fabric:list'),
   installIsolatedFabricFixture: (): Promise<{

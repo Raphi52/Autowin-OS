@@ -31,7 +31,12 @@ describe('setRoles — une seule écriture de roles.json pour un lot de rôles',
       fake as never,
       [['orchestrator', { provider: 'claude', model: 'opus' }]] as never
     )
-    expect(saveRoleBindings).toHaveBeenCalledWith(expect.any(Object), petitesTaches, undefined)
+    expect(saveRoleBindings).toHaveBeenCalledWith(
+      expect.any(Object),
+      petitesTaches,
+      undefined,
+      undefined
+    )
   })
 
   // L'interrupteur du build trivial sur Haiku vit dans le même fichier, réécrit en entier.
@@ -42,9 +47,14 @@ describe('setRoles — une seule écriture de roles.json pour un lot de rôles',
       fake as never,
       [['orchestrator', { provider: 'claude', model: 'opus' }]] as never
     )
-    expect(saveRoleBindings).toHaveBeenCalledWith(expect.any(Object), undefined, false)
+    expect(saveRoleBindings).toHaveBeenCalledWith(expect.any(Object), undefined, false, undefined)
     AutowinOS.prototype.setPetitesTaches.call(fake as never, undefined)
-    expect(saveRoleBindings).toHaveBeenLastCalledWith(expect.any(Object), undefined, false)
+    expect(saveRoleBindings).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      undefined,
+      false,
+      undefined
+    )
   })
 
   it('setPetitesTaches persiste puis applique, et undefined efface', () => {
@@ -55,9 +65,19 @@ describe('setRoles — une seule écriture de roles.json pour un lot de rôles',
       model: 'claude-haiku-4-5'
     })
     expect(pose).toEqual({ provider: 'claude', model: 'claude-haiku-4-5' })
-    expect(saveRoleBindings).toHaveBeenLastCalledWith(expect.any(Object), pose, undefined)
+    expect(saveRoleBindings).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      pose,
+      undefined,
+      undefined
+    )
     expect(AutowinOS.prototype.setPetitesTaches.call(fake as never, undefined)).toBeUndefined()
-    expect(saveRoleBindings).toHaveBeenLastCalledWith(expect.any(Object), undefined, undefined)
+    expect(saveRoleBindings).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      undefined,
+      undefined,
+      undefined
+    )
     expect(fake.roles.getPetitesTaches()).toBeUndefined()
   })
 
@@ -66,5 +86,23 @@ describe('setRoles — une seule écriture de roles.json pour un lot de rôles',
     const fake = { roles: new RoleModelConfig(undefined) }
     AutowinOS.prototype.setRoles.call(fake as never, [])
     expect(saveRoleBindings).not.toHaveBeenCalled()
+  })
+
+  // L’interrupteur du routage des questions du chat vit dans le même fichier : il doit survivre à chaque écriture.
+  it('réécrit roles.json SANS perdre l’interrupteur du routage du chat', () => {
+    saveRoleBindings.mockClear()
+    const fake = { roles: new RoleModelConfig({ chatLectureSeuleSurHaiku: false }) }
+    AutowinOS.prototype.setRoles.call(
+      fake as never,
+      [['orchestrator', { provider: 'claude', model: 'opus' }]] as never
+    )
+    expect(saveRoleBindings).toHaveBeenCalledWith(expect.any(Object), undefined, undefined, false)
+    AutowinOS.prototype.setPetitesTaches.call(fake as never, undefined)
+    expect(saveRoleBindings).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      undefined,
+      undefined,
+      false
+    )
   })
 })

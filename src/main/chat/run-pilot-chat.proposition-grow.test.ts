@@ -61,7 +61,7 @@ async function propositionsApres(
   }
   const os = avecRepli({
     waitUntilReady: async () => {},
-    roles: { getBinding: () => ({ provider: 'claude', model: 'modele-test' }) },
+    roles: { bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }), routageChatLectureSeuleActif: () => false, getBinding: () => ({ provider: 'claude', model: 'modele-test' }) },
     conversations: store,
     executionSupervisor: { currentSignal: () => undefined },
     runChatTurn: async (_contenu: string, _signal: AbortSignal, lancer: () => unknown) => lancer()

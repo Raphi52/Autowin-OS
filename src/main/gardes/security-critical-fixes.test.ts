@@ -857,7 +857,12 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `node scripts/canaux-ipc.mjs HEAD` : aucun ajout, deux retraits, dans `ipc/chat.ts` — la
     //   fenetre « Le modele a besoin de toi » est supprimee, un travail bloque tranche lui-meme :
     //   `model:question:pending`, `model:question:answer`. Aucune protection retiree, `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(301)
+    // MISE A JOUR 2026-11-08 — 301 -> 302 : un seul ajout, aucun retrait, dans `ipc/roles.ts`, garde
+    //   `assertTrustedRendererSender(event, 'SetRoutageChatLectureSeule')` des sa PREMIERE ligne :
+    //   `os:setRoutageChatLectureSeule` — l'interrupteur
+    //   « les questions du chat passent par ce modèle » du bloc des petites tâches. Il n'accepte qu'un
+    //   booléen ; rien d'autre n'entre dans `roles.json`. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(302)
     expect(unguarded).toEqual([])
   })
 

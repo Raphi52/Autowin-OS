@@ -25,6 +25,8 @@ interface Binding {
 interface PetitesTaches {
   reglage: Binding | null
   effectif: Binding
+  /** Absent = version antérieure du processus : le routage est alors actif par défaut. */
+  routageChat?: boolean
 }
 
 export function PetitesTachesReglage({
@@ -112,6 +114,22 @@ export function PetitesTachesReglage({
     }
   }
 
+  // L'interrupteur du routage : décoché, les questions du chat restent sur le modèle du chat.
+  // fix-ok: cause mesurée — `chatLectureSeuleSurHaiku` n'apparaissait dans aucun fichier de src/renderer
+  // (grep : 0 résultat) : le réglage existait dans roles.json et nulle part dans les Réglages.
+  const changerRoutage = async (actif: boolean): Promise<void> => {
+    if (pending) return
+    setPending(true)
+    setError(null)
+    try {
+      setPetitesTaches(await window.api.setRoutageChatLectureSeule(actif))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPending(false)
+    }
+  }
+
   if (!petitesTaches && !error) return null
   return (
     <section className="router-default" data-testid={testId}>
@@ -166,6 +184,18 @@ export function PetitesTachesReglage({
         <p className="router-hint" data-testid={`${testId}-defaut`}>
           {t('routeur.petites.nonRegle')}
         </p>
+      )}
+      {petitesTaches && (
+        <label className="router-petites-taches-routage" data-testid={`${testId}-routage`}>
+          <input
+            type="checkbox"
+            checked={petitesTaches.routageChat !== false}
+            disabled={pending}
+            onChange={(event) => void changerRoutage(event.currentTarget.checked)}
+          />
+          <span>{t('routeur.petites.routage.libelle')}</span>
+          <small>{t('routeur.petites.routage.aide')}</small>
+        </label>
       )}
       {petitesTaches?.reglage && (
         <button

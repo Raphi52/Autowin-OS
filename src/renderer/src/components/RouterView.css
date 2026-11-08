@@ -129,6 +129,17 @@
   opacity: 0.5;
   cursor: default;
 }
+.router-petites-taches-routage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 10px;
+}
+.router-petites-taches-routage small {
+  flex-basis: 100%;
+  opacity: 0.75;
+}
 .router-actions .router-standby {
   border-color: rgba(126, 177, 219, 0.32);
   color: #c8def1;
