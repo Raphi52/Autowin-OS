@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { titreDeCommitAuto } from './titre-de-commit'
 
 /**
- * TITRES DE COMMIT AUTOMATIQUES (candidat 6 du scout). Le 2026-10-22, 125 des 400
- * derniers commits étaient `auto(conv-N): <100 premiers caractères de la demande>` — par exemple
- * `auto(conv-1075): vazy`, qui ne dit rien de ce qui a changé. AGENTS.md exige
- * `type(zone): phrase (conv-NNN)`.
+ * Le titre d'un commit automatique dit ce qui a changé, au format `type(zone): phrase (conv-NNN)`.
+ * Une demande elliptique (« vazy ») n'en dit rien : elle ne doit jamais devenir le titre.
  *
  * L'entrée qui ferait échouer ces tests si la correction était fausse : la demande ELLIPTIQUE
  * « vazy » avec un compte rendu « ✅ Fait » — un titre encore tiré de la demande rend « vazy ».
@@ -35,13 +33,11 @@ describe('titreDeCommitAuto', () => {
   })
 
   /**
-   * Réponses en anglais depuis le 27/10 (réglage Settings · Interface) : 18 des 424
-   * derniers commits commençaient par « Added/Created/Wrote… », chemin `D:\…` compris — par exemple
-   * `feat(annonce-commit-local): Created D:\AutoWinOS\src\main\git\titre-bandeau-git.ts. It turns the git…`.
-   * Le message de commit suit la règle du projet (AGENTS.md : français), pas la langue
-   * de l'interface. ENTRÉE QUI DOIT FAIRE ÉCHOUER UN MAUVAIS CORRECTIF : la réponse
-   * anglaise ci-dessous avec `langueDuCompteRendu: 'en'` — un titre encore tiré du « ✅ Fait »
-   * commence par « Created ».
+   * Une réponse en anglais (réglage Settings · Interface) donne un « ✅ Fait » en anglais, chemin
+   * `D:\…` compris. Le message de commit suit la règle du projet (AGENTS.md : français), pas la langue
+   * de l'interface. ENTRÉE QUI DOIT FAIRE ÉCHOUER UN MAUVAIS CORRECTIF : la réponse anglaise
+   * ci-dessous avec `langueDuCompteRendu: 'en'` — un titre encore tiré du « ✅ Fait » commence par
+   * « Created ».
    */
   const COMPTE_RENDU_ANGLAIS = [
     '### ✅ Fait',
@@ -58,7 +54,9 @@ describe('titreDeCommitAuto', () => {
         langueDuCompteRendu: 'en',
         fichiers: ['src/main/git/titre-bandeau-git.ts', 'src/main/git/titre-bandeau-git.test.ts']
       })
-    ).toBe('feat(titre-bandeau-git): le titre du bloc git doit dire si le push a réussi (conv-1573)')
+    ).toBe(
+      'feat(titre-bandeau-git): le titre du bloc git doit dire si le push a réussi (conv-1573)'
+    )
   })
 
   it('réponse en anglais et demande elliptique : le titre décrit les fichiers, en français', () => {
@@ -79,7 +77,8 @@ describe('titreDeCommitAuto', () => {
       titreDeCommitAuto({
         id: 'conv-1573',
         demande: 'vazy',
-        compteRendu: '### ✅ Fait\n1. Créé D:\\AutoWinOS\\src\\main\\git\\titre-bandeau-git.ts : un statut lisible',
+        compteRendu:
+          '### ✅ Fait\n1. Créé D:\\AutoWinOS\\src\\main\\git\\titre-bandeau-git.ts : un statut lisible',
         langueDuCompteRendu: 'fr',
         fichiers: ['src/main/git/titre-bandeau-git.ts']
       })
@@ -150,5 +149,150 @@ describe('titreDeCommitAuto', () => {
         zoneParDefaut: 'agent'
       })
     ).toBe('feat(scout): comment améliorer ce graph (run-3e2)')
+  })
+})
+
+/**
+ * Trois tours de chat réels, sans bloc « ✅ Fait ». La demande tapée ne devient jamais le titre quand
+ * c'est une relance ou un symptôme : le titre nomme alors les fichiers publiés. La réponse est neutre.
+ */
+describe('titre sans « ✅ Fait » : la relance et le symptôme ne deviennent pas le titre', () => {
+  const REPONSE_SANS_FAIT =
+    'Le test échoue pour la bonne raison. Je corrige la logique et je relance les tests.'
+
+  it('relance « oui fais le » : le titre nomme les fichiers publiés', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-1711',
+        demande: 'oui fais le',
+        compteRendu: REPONSE_SANS_FAIT,
+        fichiers: [
+          'src/renderer/src/components/ChatView.branche-copie-du-fil.test.tsx',
+          'src/renderer/src/components/ChatView.tsx',
+          'src/renderer/src/components/copie-du-fil-entete.test.ts',
+          'src/renderer/src/components/copie-du-fil-entete.ts',
+          'src/renderer/src/textes-ecrans/chat-fil.ts'
+        ]
+      })
+    ).toBe('feat(ChatView): modifie ChatView.tsx, copie-du-fil-entete.ts, chat-fil.ts (conv-1711)')
+  })
+
+  it('symptôme « je vois encore… » : un bug signalé donne fix, et le titre nomme les fichiers', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-1699',
+        demande: 'je vois encore les tanukis de mes collegues leur /gc et /curation',
+        compteRendu: REPONSE_SANS_FAIT,
+        fichiers: [
+          'skills/gc/SKILL.md',
+          'src/main/ipc/chat.ts',
+          'src/main/skills/skill-pipeline.test.ts',
+          'src/main/skills/skill-pipeline.ts',
+          'src/main/task-manager/chat-dispatch.test.ts',
+          'src/main/task-manager/chat-dispatch.ts',
+          'src/main/task-manager/curate-seed.test.ts',
+          'src/main/task-manager/curate-seed.ts',
+          'src/main/task-manager/gc-seed.test.ts',
+          'src/main/task-manager/gc-seed.ts',
+          'src/main/task-manager/menage-sur-cet-ordinateur.ts'
+        ]
+      })
+    ).toBe('fix(SKILL): modifie SKILL.md, chat.ts, skill-pipeline.ts et 4 autres (conv-1699)')
+  })
+
+  it('symptôme « quand … devrait… » : même règle, le titre nomme les fichiers', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-1719',
+        demande: 'quand ca fait ca ca devrait remonter a la superconv',
+        compteRendu: REPONSE_SANS_FAIT,
+        fichiers: [
+          'src/main/commands/catalogue.ts',
+          'src/main/orchestration/plans-de-lots-app.ts',
+          'src/main/orchestration/plans-de-lots-app.valider.test.ts',
+          'src/shared/plan-de-lots.test.ts',
+          'src/shared/plan-de-lots.ts'
+        ]
+      })
+    ).toBe(
+      'fix(catalogue): modifie catalogue.ts, plans-de-lots-app.ts, plan-de-lots.ts (conv-1719)'
+    )
+  })
+
+  it('relance seule, sans fichier : le repli ne recopie pas la relance', () => {
+    expect(titreDeCommitAuto({ id: 'conv-5', demande: 'oui', repli: 'travail du chat' })).toBe(
+      'auto(conv-5): travail du chat'
+    )
+  })
+
+  it('« ✅ Fait » réduit à une relance : le titre vient de la demande, puis des fichiers, jamais de « ok »', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-6',
+        demande: 'oui fais le',
+        compteRendu: '### ✅ Fait\n1. ok',
+        fichiers: ['src/main/git/a.ts']
+      })
+    ).toBe('feat(a): modifie a.ts (conv-6)')
+  })
+
+  it('nature : découper ou renommer un module est un refactor', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-7',
+        demande: 'découpe le module de titre en deux fichiers',
+        fichiers: ['src/main/git/titre-de-commit.ts']
+      })
+    ).toBe('refactor(titre-de-commit): découpe le module de titre en deux fichiers (conv-7)')
+  })
+})
+
+/**
+ * fix-ok: cause mesurée — la liste fermée des relances laisse passer « vas-y, lance-le maintenant », et
+ * le repli recopie « /build fais le » ainsi que les symptômes sans verbe de travail. La garde tient donc
+ * sur une preuve positive : une demande ne devient titre que si elle nomme un changement.
+ * Chaque refus a son jumeau accepté, plus bas.
+ */
+describe('relance et symptôme sous une autre forme : jamais en titre', () => {
+  it.each([
+    'vas-y, lance-le maintenant',
+    'oui fais le ca marche',
+    'allez, on continue et on pousse',
+    'tu peux le lancer maintenant',
+    'parfait, on valide'
+  ])('avec un fichier, « %s » ne devient pas le titre : le titre nomme le fichier', (demande) => {
+    expect(titreDeCommitAuto({ id: 'conv-1', demande, fichiers: ['src/main/git/a.ts'] })).toBe(
+      'feat(a): modifie a.ts (conv-1)'
+    )
+  })
+
+  it.each([
+    '/build fais le',
+    'vas-y, lance-le maintenant',
+    'oui fais le ca marche',
+    'je vois encore les tanukis de mes collegues',
+    'je vois encore un doublon, il faut le corriger'
+  ])('sans fichier, « %s » tombe sur le repli, jamais sur la phrase tapée', (demande) => {
+    expect(titreDeCommitAuto({ id: 'conv-3', demande })).toBe('auto(conv-3): travail du chat')
+  })
+
+  it('jumeau accepté : « oui, ajoute … » garde la demande, sans l’interjection', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-1',
+        demande: 'oui, ajoute le bouton Exporter',
+        fichiers: ['src/main/git/a.ts']
+      })
+    ).toBe('feat(a): ajoute le bouton Exporter (conv-1)')
+  })
+
+  it('jumeau accepté : « vas-y, corrige … » est une réparation, pas une relance', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-1',
+        demande: 'vas-y, corrige le bouton Stop',
+        fichiers: ['src/main/git/a.ts']
+      })
+    ).toBe('fix(a): corrige le bouton Stop (conv-1)')
   })
 })
