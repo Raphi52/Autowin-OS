@@ -92,7 +92,7 @@ export const PLAN = {
   ],
   consignes: [
     'agents-md-faits', 'chat-pilotage-prompt', 'consigne-bureau-cache', 'consigne-plan-de-lots',
-    'consignes-plafond', 'constitution', 'context-files', 'ordre-de-priorite-des-consignes',
+    'constitution', 'context-files', 'ordre-de-priorite-des-consignes',
     'phase-briefs', 'profil-ecrase-le-cadrage', 'rappel-cloisonnement', 'rappel-conversations',
     'rappel-securite', 'response-style', 'textes-coeur', 'think-briefing', 'vocabulaire-autowin'
   ],

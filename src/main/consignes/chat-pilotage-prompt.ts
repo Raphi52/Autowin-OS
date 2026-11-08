@@ -660,8 +660,7 @@ export function buildChatPilotagePrompt(
     horsLecture(
       // La vérité du code (commands/orchestration-tache.ts, `modelPhaseAllowed`) : le chat joint
       // toujours le message de l'utilisateur, et seule `judge` passe alors, sauf sur une tâche à
-      // risque qui garde toutes ses étapes. Le plafond (consignes-plafond.test.ts) ne laisse pas la
-      // place de le dire ici.
+      // risque qui garde toutes ses étapes.
       `PHASE d'\`orchestrate\` (omets-la en doute) : seule \`judge\` (auditer un livrable existant) ` +
         `passe ; \`scout\` (chercher quoi faire), \`frame\` (cadrer), \`build\` et \`clean\` sont ignorées ;\n` +
         `- \`terrain\` : SEULEMENT si l'utilisateur le demande.\n`

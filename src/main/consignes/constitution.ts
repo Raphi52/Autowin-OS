@@ -81,14 +81,14 @@
  * du juge reçoivent ce ton sans ce texte.
  * Trois parts que seule la consigne du chat portait y viennent aussi, une phrase chacune : le fait
  * public cherché sur le web et cité (réflexe 8), « nettoie avant de parler » (premier paragraphe
- * d'Autonomie) et l'échec sans rapport avec le changement (Autonomie 2). Pour les payer sans monter
- * le plafond (consignes-plafond.test.ts), des redites internes sont parties : « jamais un parcours
+ * d'Autonomie) et l'échec sans rapport avec le changement (Autonomie 2). Pour les payer, des
+ * redites internes sont parties : « jamais un parcours
  * de l'arbre entier » du réflexe 11 (« Symptôme nu » le dit), « sans localisation, la règle ajoutée
  * n'est qu'un vœu » (la phrase qui précède le dit), « exécute sans re-confirmer » au premier
  * paragraphe de la limite destructive (la phrase du réflexe 10, gardée et raccourcie, le dit : elle
  * désarme ce réflexe, constitution.test.ts l'exige).
  * Les autres redites du chat (symptôme, acte final) n'y gardent que leur part propre au chat : ce
- * texte sert aussi les runs, et son plafond ne monte jamais.
+ * texte sert aussi les runs.
  */
 export const CONSTITUTION = `# Constitution — réflexes cardinaux
 
