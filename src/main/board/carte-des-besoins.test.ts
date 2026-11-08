@@ -259,7 +259,7 @@ describe('assemblerLaCarte — rangée par projet comme la barre latérale', () 
     const premiere = await calculer()
     expect(calcules).toEqual(['a', 'b'])
     expect(premiere.demandes).toBe(2)
-    expect(premiere.runsNonExamines).toBe(3)
+    expect(premiere.runsNonOuverts).toBe(3)
 
     fils = [
       { ...conv('a', [user('une', 1_000), asst(1_100, []), user('encore', 3_000)]), updatedAt: 2 },
@@ -337,11 +337,11 @@ describe('assemblerLaCarte — rangée par projet comme la barre latérale', () 
       conversations: [],
       demandesParConversation: new Map(),
       runs: [],
-      runsNonExamines: 1122,
+      runsNonOuverts: 1122,
       calculeeA: 1,
       dureeMs: 1
     })
-    expect(resultat.runsNonExamines).toBe(1122)
+    expect(resultat.runsNonOuverts).toBe(1122)
     expect(resultat.projets).toEqual([])
   })
 })

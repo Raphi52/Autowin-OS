@@ -39,7 +39,11 @@ export type RunSummary = {
 }
 
 /** Les statuts d'un run que le juge a validé (`succeeded` : fossile de succès, voir `isBlocked`). */
-const STATUTS_VALIDES: ReadonlySet<string> = new Set(['green', 'degraded-closed', 'succeeded'])
+export const STATUTS_VALIDES: ReadonlySet<string> = new Set([
+  'green',
+  'degraded-closed',
+  'succeeded'
+])
 
 const STATUSES = new Set([
   'pending',

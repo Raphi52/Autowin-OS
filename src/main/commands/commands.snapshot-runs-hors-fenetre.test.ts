@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SEUIL_ROUGE_ANCIEN_JOURS } from '../dashboards/runs-scan'
 import { AppCommandBus } from './commands'
 
 /**
@@ -33,7 +34,9 @@ const run = (i: number, blocked = false): Run => ({
   blocked
 })
 
-const os = (runs: Run[] & { horsFenetre?: number }): OsDouble =>
+type Fenetre = Run[] & { horsFenetre?: number; horsFenetreARegarder?: number }
+
+const os = (runs: Fenetre): OsDouble =>
   ({
     executionWorkspace: process.cwd(),
     conversations: { list: () => [] },
@@ -46,11 +49,14 @@ const os = (runs: Run[] & { horsFenetre?: number }): OsDouble =>
     travauxNonPubliesBornes: () => []
   }) as unknown as OsDouble
 
-/** 24 runs lus, le plus récent d'abord ; le 20e est bloqué ; 176 RUN.md plus anciens non lus. */
-const fenetre = (): Run[] & { horsFenetre: number } =>
+/**
+ * 24 runs lus, le plus récent d'abord ; le 20e est bloqué. 176 RUN.md plus anciens non lus, dont
+ * 12 seulement demandent un regard (les autres sont verts ou des rouges trop anciens).
+ */
+const fenetre = (): Fenetre =>
   Object.assign(
     Array.from({ length: 24 }, (_, i) => run(i, i === 20)),
-    { horsFenetre: 176 }
+    { horsFenetre: 176, horsFenetreARegarder: 12 }
   )
 
 describe('runs bloqués : la troncature se voit', () => {
@@ -98,17 +104,39 @@ describe('runs bloqués : la troncature se voit', () => {
     ])
   })
 
-  it('le nombre de RUN.md NON lus est dit, dans get_state comme dans l’état du tour', async () => {
+  it('le nombre de RUN.md qui demandent encore un regard est dit, dans get_state comme dans l’état du tour', async () => {
     const bus = new AppCommandBus(os(fenetre()), () => {})
-    expect((await bus.snapshot()).runsNonExamines).toBe(176)
-    expect((await bus.snapshotForPrompt()).runsNonExamines).toBe(176)
+    expect((await bus.snapshot()).runsNonExamines).toBe(12)
+    expect((await bus.snapshotForPrompt()).runsNonExamines).toBe(12)
   })
 
-  it('rien d’écarté (ou double sans le champ) : aucun champ ajouté', async () => {
-    const complet = Object.assign([run(0), run(1, true)], { horsFenetre: 0 })
-    const bus = new AppCommandBus(os(complet), () => {})
+  // fix-ok: cause mesurée — la clé `runsNonExamines` partait nue dans l'état du tour : aucune consigne ni aucun outil ne la décrit (grep : 0 occurrence), donc le modèle lisait un nombre sans savoir ce qu'il compte.
+  it('le compte arrive avec sa légende : l’agent lit ce que veut dire 0, pas seulement le nom de la clé', async () => {
+    const bus = new AppCommandBus(os(fenetre()), () => {})
+    const legende = (await bus.snapshotForPrompt()).runsNonExaminesLegende
+    expect(legende).toContain('rien à regarder')
+    expect(legende).toContain(`${SEUIL_ROUGE_ANCIEN_JOURS} jours`)
+  })
+
+  it('compte calculé à zéro : le chat lit 0, et ne le confond pas avec « pas encore calculé »', async () => {
+    const rienARegarder = Object.assign(
+      Array.from({ length: 24 }, (_, i) => run(i)),
+      { horsFenetre: 176, horsFenetreARegarder: 0 }
+    )
+    const bus = new AppCommandBus(os(rienARegarder), () => {})
+    expect((await bus.snapshot()).runsNonExamines).toBe(0)
+    expect((await bus.snapshotForPrompt()).runsNonExamines).toBe(0)
+  })
+
+  it('premier calcul pas encore fini (compte absent) : aucun champ, et un double sans le champ non plus', async () => {
+    const pasEncore = Object.assign(
+      Array.from({ length: 24 }, (_, i) => run(i)),
+      { horsFenetre: 176 }
+    )
+    const bus = new AppCommandBus(os(pasEncore), () => {})
     expect((await bus.snapshot()).runsNonExamines).toBeUndefined()
     expect('runsNonExamines' in (await bus.snapshotForPrompt())).toBe(false)
+    expect('runsNonExaminesLegende' in (await bus.snapshotForPrompt())).toBe(false)
     const ancien = new AppCommandBus(os([]), () => {})
     expect('runsNonExamines' in (await ancien.snapshotForPrompt())).toBe(false)
   })

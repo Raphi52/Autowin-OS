@@ -112,9 +112,13 @@ export interface AppSnapshot {
   /** Les 12 runs les plus récents, PLUS tout run bloqué plus ancien lu dans la fenêtre du scan. */
   runs: Array<{ subject: string; status: string; blocked: boolean; decisionAttendue?: true }>
   /**
-   * RUN.md NON LUS par le scan borné (au-delà des `LIMITE_RUNS_SNAPSHOT` plus récents) — ABSENT
-   * quand rien n'a été écarté. Présent = `runs` et `runsBlocked` sont PARTIELS : un run bloqué plus
-   * ancien n'y figure pas. Ajouté le 2026-09-25 : ce compte était calculé puis jeté.
+   * RUN.md HORS FENÊTRE (au-delà des `LIMITE_RUNS_SNAPSHOT` plus récents) qui DEMANDENT ENCORE UN
+   * REGARD. `0` = calculé, rien à regarder. ABSENT = le premier calcul n'est pas encore fini : c'est
+   * alors « pas encore su », jamais « rien à regarder ». Pas le total écarté : les verts validés, les
+   * rouges de plus de 30 jours, les rouges coupés, les abandons et les interrompus (hors publication
+   * refusée et reprise bloquée à l'intégration) n'y figurent pas (`demandeUnRegard`, runs-scan.ts).
+   * Le Board n'en garde que le nombre total (`runsNonOuverts`). Servi à l'agent avec sa légende
+   * (`LEGENDE_RUNS_NON_EXAMINES`).
    */
   runsNonExamines?: number
   /**
@@ -165,11 +169,14 @@ export interface PromptSnapshot {
   providers: string[]
   runsBlocked: Array<{ subject: string; status: string; decisionAttendue?: true }>
   /**
-   * RUN.md NON EXAMINÉS pour `runsBlocked` — ABSENT quand le scan a tout lu. Présent, il dit que
-   * `runsBlocked` ne couvre que les runs les plus récents : une liste vide n'y prouve PAS l'absence de
-   * run bloqué (2026-09-25).
+   * RUN.md hors fenêtre QUI DEMANDENT ENCORE UN REGARD. `0` = calculé, rien à regarder ; ABSENT = le
+   * premier calcul n'est pas encore fini (« pas encore su », pas « rien à regarder »). Présent, il
+   * dit que `runsBlocked` ne couvre que les runs les plus récents : une liste vide n'y prouve PAS
+   * l'absence de run bloqué. Même règle que dans l'état de l'app (`demandeUnRegard`).
    */
   runsNonExamines?: number
+  /** Ce que compte `runsNonExamines` : servi avec le nombre, pour que l'agent sache lire 0. */
+  runsNonExaminesLegende?: string
   conversationsCount: number
   /**
    * Les commandes `/` REELLEMENT invocables, lues sur disque a chaque tour.

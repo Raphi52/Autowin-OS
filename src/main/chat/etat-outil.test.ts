@@ -40,6 +40,17 @@ describe('etatPourOutil', () => {
     expect(String(sortie.note)).toContain('1170 conversation(s) omise(s)')
   })
 
+  it('un compte de RUN.md à regarder calculé à zéro reste lisible : 0, pas un champ absent', () => {
+    const etat = { ...etatRealiste(3), runsNonExamines: 0 }
+    const compteurs = etatPourOutil(etat, {}).compteurs as Record<string, unknown>
+    expect(compteurs.runsNonExamines).toBe(0)
+  })
+
+  it('le compteur de RUN.md à regarder arrive avec sa légende, pour que 0 se lise « rien à regarder »', () => {
+    const compteurs = etatPourOutil(etatRealiste(3), {}).compteurs as Record<string, unknown>
+    expect(String(compteurs.runsNonExaminesLegende)).toContain('rien à regarder')
+  })
+
   it('trie par lastUserMessageAt décroissant et réduit les champs', () => {
     const sortie = etatPourOutil(etatRealiste(30), { limite: '3' })
     const convs = sortie.conversations as Array<Record<string, unknown>>
