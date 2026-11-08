@@ -1,4 +1,5 @@
 import { ESSAIS_MAX } from './delai-de-reprise'
+import { classifierRefusDeReprise } from '../runs/resume-refusal'
 import { describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -485,6 +486,114 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         publishedSha: '4'.repeat(40),
         files: [{ path: 'src/human-after-publish.ts', kind: 'mod' }]
       })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('traduit le verdict « cleanup-only » de la garde en refus classé « publication acquise » (unitaire, garde simulée)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-acquise-resume-'))
+    try {
+      const runId = 'run-acquise-sur-branche'
+      const worktreePath = join(root, `agent__${runId}`)
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      const context = {
+        workspacePath: root,
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA
+      }
+      const prepareAsync = vi.fn(async () => ({ context, path: worktreePath }))
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({ listAgentIds: () => [], describe: () => context }),
+          describeAsync: vi.fn(async () => context),
+          prepareAsync,
+          // La garde a vu la SHA préparée déjà sur `main` : elle répond « cleanup-only ».
+          validateRecoveryContextAsync: vi.fn(async () => ({
+            ok: true as const,
+            decision: 'cleanup-only' as const,
+            publishedSha: PUBLISHED_SHA
+          })),
+          hasActiveProcessesAsync: vi.fn(async () => false)
+        },
+        stateStore,
+        nowFn: () => 30
+      })
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        agentName: 'Builder',
+        worktreePath,
+        worktreeAvailable: true,
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'blocked',
+        files: [],
+        createdAtMs: 10,
+        updatedAtMs: 20
+      })
+
+      const refus = await coordinator
+        .beginAsync(runId, 'Builder', true, { resumeExisting: true })
+        .then(
+          () => undefined,
+          (error: unknown) => error
+        )
+      expect(refus).toBeInstanceOf(Error)
+      expect(classifierRefusDeReprise((refus as Error).message)).toBe('publication-acquise')
+      expect(prepareAsync).not.toHaveBeenCalled()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reprend une copie que la garde ne prouve pas publiée (jumeau accepté)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-non-acquise-resume-'))
+    try {
+      const runId = 'run-non-acquise'
+      const worktreePath = join(root, `agent__${runId}`)
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      const context = {
+        workspacePath: root,
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA
+      }
+      const prepareAsync = vi.fn(async () => ({ context, path: worktreePath }))
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({ listAgentIds: () => [], describe: () => context }),
+          describeAsync: vi.fn(async () => context),
+          prepareAsync,
+          validateRecoveryContextAsync: vi.fn(async () => ({ ok: true as const })),
+          hasActiveProcessesAsync: vi.fn(async () => false)
+        },
+        stateStore,
+        nowFn: () => 30
+      })
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        agentName: 'Builder',
+        worktreePath,
+        worktreeAvailable: true,
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'blocked',
+        files: [],
+        createdAtMs: 10,
+        updatedAtMs: 20
+      })
+
+      await expect(
+        coordinator.beginAsync(runId, 'Builder', true, { resumeExisting: true })
+      ).resolves.toBe(worktreePath)
+      expect(prepareAsync).toHaveBeenCalledTimes(1)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

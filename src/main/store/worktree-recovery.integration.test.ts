@@ -22,6 +22,7 @@ import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 import { messageCommitAgent, WorktreeManager } from './worktree-manager'
 import { annonceCommitLocal } from '../chat/annonce-commit-local'
 import { WorktreeRunStateStore } from './worktree-run-state'
+import { classifierRefusDeReprise } from '../runs/resume-refusal'
 
 const roots: string[] = []
 
@@ -78,6 +79,61 @@ function authorizeGreenRecovery(
     createdAtMs: now,
     updatedAtMs: now
   })
+}
+
+/**
+ * Une copie d'agent déjà préparée, sans marqueur de publication (l'ancre est retirée une fois la
+ * publication reconnue). La fiche reste en `publication: 'blocked'`, l'état qui laisse passer la
+ * reprise de relance. Si `fusionnerSurMain`, la SHA préparée est déjà la tête de `main`.
+ */
+function preparerReprisePubliee(fusionnerSurMain: boolean): {
+  repo: string
+  store: WorktreeRunStateStore
+  worktreeRoot: string
+  runId: string
+  agentPath: string
+  agentSha: string
+} {
+  const repo = tempRepo()
+  const previous = manager(repo)
+  const runId = fusionnerSurMain ? 'run-deja-sur-main' : 'run-pas-encore-sur-main'
+  const context = previous.manager.describe(runId)
+  const agentPath = previous.manager.acquire(runId, context)
+  writeFileSync(join(agentPath, 'agent.txt'), 'agent\n')
+  git(agentPath, 'add', 'agent.txt')
+  git(agentPath, 'commit', '-q', '-m', 'agent work')
+  const agentSha = git(agentPath, 'rev-parse', 'HEAD')
+  if (fusionnerSurMain) git(repo, 'merge', '--ff-only', agentSha)
+  const store = stateStore(previous.worktreeRoot)
+  store.save({
+    version: 1,
+    repoId: 'repo-test',
+    runId,
+    agentName: 'Builder',
+    role: 'build',
+    task: 'reprise après publication',
+    worktreePath: context.worktreePath,
+    baseBranch: context.baseBranch,
+    baseSha: context.baseSha,
+    publicationBaseSha: context.baseSha,
+    publicationAgentSha: agentSha,
+    verdict: 'green',
+    publication: 'blocked',
+    files: [{ path: 'agent.txt', kind: 'add' }],
+    createdAtMs: 10,
+    updatedAtMs: 20
+  })
+  return { repo, store, worktreeRoot: previous.worktreeRoot, runId, agentPath, agentSha }
+}
+
+/** Le refus levé par l'action, ou `undefined` si elle a réussi. */
+function refusDeLaReprise(action: () => unknown): Error | undefined {
+  try {
+    action()
+    return undefined
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error))
+  }
 }
 
 afterEach(async () => {
@@ -280,6 +336,107 @@ describe('récupération des worktrees après redémarrage', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 30))
     expect(publications).toHaveLength(1)
+  })
+
+  // fix-ok: la vérification de reprise doit recevoir la SHA préparée ; sans elle, une copie déjà sur main n'est pas reconnue.
+  it('classe « publication acquise » une reprise de relance dont la SHA préparée est déjà sur main', () => {
+    const { repo, store, worktreeRoot, runId } = preparerReprisePubliee(true)
+    const coordinateur = new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      stateStore: store,
+      sansRecuperation: true
+    })
+
+    const refus = refusDeLaReprise(() =>
+      coordinateur.begin(runId, 'Builder', true, { resumeExisting: true })
+    )
+
+    expect(refus).toBeInstanceOf(Error)
+    expect(classifierRefusDeReprise(refus!.message)).toBe('publication-acquise')
+  })
+
+  it('classe « publication acquise » aussi sur la reprise asynchrone de relance', async () => {
+    const { repo, store, worktreeRoot, runId } = preparerReprisePubliee(true)
+    const coordinateur = new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      stateStore: store,
+      sansRecuperation: true
+    })
+
+    const refus = await coordinateur
+      .beginAsync(runId, 'Builder', true, { resumeExisting: true })
+      .then(
+        () => undefined,
+        (error: unknown) => error
+      )
+
+    expect(refus).toBeInstanceOf(Error)
+    expect(classifierRefusDeReprise((refus as Error).message)).toBe('publication-acquise')
+  })
+
+  it('reprend une copie dont la SHA n’est pas encore sur main (jumeau accepté)', () => {
+    const { repo, store, worktreeRoot, runId } = preparerReprisePubliee(false)
+    const coordinateur = new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      stateStore: store,
+      sansRecuperation: true
+    })
+
+    const cwd = coordinateur.begin(runId, 'Builder', true, { resumeExisting: true })
+
+    expect(cwd).toEqual(expect.any(String))
+  })
+
+  it('classe « publication acquise » un repère de publication posé sur une SHA déjà sur main', () => {
+    const { repo, store, worktreeRoot, runId, agentSha } = preparerReprisePubliee(false)
+    git(repo, 'merge', '--ff-only', agentSha)
+    git(repo, 'update-ref', `refs/autowin/publications/${runId}`, agentSha)
+    const coordinateur = new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      stateStore: store,
+      sansRecuperation: true
+    })
+
+    const refus = refusDeLaReprise(() =>
+      coordinateur.begin(runId, 'Builder', true, { resumeExisting: true })
+    )
+
+    expect(refus).toBeInstanceOf(Error)
+    expect(classifierRefusDeReprise(refus!.message)).toBe('publication-acquise')
+  })
+
+  it('refuse une reprise dont la copie ne porte plus exactement le commit préparé', () => {
+    const { repo, store, worktreeRoot, runId, agentPath } = preparerReprisePubliee(false)
+    git(agentPath, 'commit', '-q', '--allow-empty', '-m', 'travail ajouté après la préparation')
+    const coordinateur = new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      stateStore: store,
+      sansRecuperation: true
+    })
+
+    const refus = refusDeLaReprise(() =>
+      coordinateur.begin(runId, 'Builder', true, { resumeExisting: true })
+    )
+
+    expect(refus).toBeInstanceOf(Error)
+    expect(refus!.message).toContain('La copie ne porte plus exactement le commit préparé.')
+  })
+
+  it('refuse une reprise dont la copie préparée a été modifiée sans commit', () => {
+    const { repo, store, worktreeRoot, runId, agentPath } = preparerReprisePubliee(false)
+    writeFileSync(join(agentPath, 'agent.txt'), 'modifié à la main\n')
+    const coordinateur = new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      stateStore: store,
+      sansRecuperation: true
+    })
+
+    const refus = refusDeLaReprise(() =>
+      coordinateur.begin(runId, 'Builder', true, { resumeExisting: true })
+    )
+
+    expect(refus).toBeInstanceOf(Error)
+    expect(refus!.message).toContain('La copie préparée a changé avant la reprise.')
   })
 
   it('reprend la publication après un crash juste après la préparation du commit agent', () => {

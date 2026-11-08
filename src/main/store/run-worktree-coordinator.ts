@@ -331,6 +331,18 @@ function contexteDeValidationRecuperee(
 }
 
 /**
+ * Les SHA de publication que le suivi garde. La garde s'en sert pour reconnaître une copie dont le
+ * travail est déjà sur la branche : sans elles, elle ne peut pas le savoir.
+ */
+// fix-ok: la garde de reprise reçoit les SHA de publication du suivi, comme au démarrage.
+function faitsDePublicationDuSuivi(tracked: Tracked): { publishedSha?: string; agentSha?: string } {
+  return {
+    ...(tracked.publishedSha ? { publishedSha: tracked.publishedSha } : {}),
+    ...(tracked.publicationAgentSha ? { agentSha: tracked.publicationAgentSha } : {})
+  }
+}
+
+/**
  * Le nombre d'essais n'est plus un chiffre isole : il DECOULE du bareme d'attentes
  * (`delai-de-reprise.ts`). Deux verites separees auraient diverge au premier reglage -- l'une
  * disant « six essais », l'autre en proposant sept delais.
@@ -563,6 +575,9 @@ export class RunWorktreeCoordinator {
             excludedDirtyFilesTruncated: record.excludedDirtyFilesTruncated,
             verdict: record.verdict,
             publication: record.publication,
+            // Recopiées du manifeste : sans elles la garde ne voit jamais la SHA préparée.
+            publicationAgentSha: record.publicationAgentSha,
+            publishedSha: record.publishedSha,
             recovered: true,
             detail: record.detail
           }
@@ -596,6 +611,18 @@ export class RunWorktreeCoordinator {
         `Reprise du worktree refusée pour ${tracked.runId} : publication ${tracked.publication ?? 'inconnue'} déjà engagée.`
       )
     }
+  }
+
+  /**
+   * La garde a prouvé que le travail est déjà sur la branche. La phrase garde la forme que
+   * `resume-refusal.ts` classe « publication-acquise » : `publication <état> déjà engagée`.
+   * L'état écrit ici est « published », le verdict de la garde. Ce n'est pas `tracked.publication` :
+   * `assertResumePublicationIsOpen` a déjà exigé « blocked » ou « not-requested » avant cet appel.
+   */
+  private refusDeRepriseDejaPubliee(runId: string): Error {
+    return new Error(
+      `Reprise du worktree refusée pour ${runId} : publication published déjà engagée.`
+    )
   }
 
   private assertResumeStateAfterProcessCheck(tracked: Tracked): void {
@@ -682,7 +709,8 @@ export class RunWorktreeCoordinator {
           sourceSha: context.sourceSha,
           canonicalBaseRef: context.canonicalBaseRef,
           excludedDirtyFiles: context.excludedDirtyFiles,
-          publication: 'pending'
+          publication: 'pending',
+          ...faitsDePublicationDuSuivi(tracked)
         })
         if (!validation.ok || validation.decision === 'cleanup-only') {
           /*
@@ -701,11 +729,9 @@ export class RunWorktreeCoordinator {
            * On refuse toujours la reprise juste apres : elle a genuinement echoue.
            */
           if (!validation.ok && validation.definitif) this.libererLaCopieEnConflit(runId)
-          throw new Error(
-            !validation.ok
-              ? `Reprise du worktree refusée : ${validation.detail}`
-              : 'Reprise du worktree refusée : cette copie est déjà publiée.'
-          )
+          throw validation.ok
+            ? this.refusDeRepriseDejaPubliee(runId)
+            : new Error(`Reprise du worktree refusée : ${validation.detail}`)
         }
         const cwd = this.manager.acquire(runId, context)
         this.activateResumed(tracked, context, cwd)
@@ -816,7 +842,8 @@ export class RunWorktreeCoordinator {
               sourceSha: context.sourceSha,
               canonicalBaseRef: context.canonicalBaseRef,
               excludedDirtyFiles: context.excludedDirtyFiles,
-              publication: 'pending'
+              publication: 'pending',
+              ...faitsDePublicationDuSuivi(tracked)
             })
           : this.manager.validateRecoveryContext(runId, {
               worktreePath: context.worktreePath,
@@ -825,7 +852,8 @@ export class RunWorktreeCoordinator {
               sourceSha: context.sourceSha,
               canonicalBaseRef: context.canonicalBaseRef,
               excludedDirtyFiles: context.excludedDirtyFiles,
-              publication: 'pending'
+              publication: 'pending',
+              ...faitsDePublicationDuSuivi(tracked)
             })
         if (!validation.ok || validation.decision === 'cleanup-only') {
           /*
@@ -844,11 +872,9 @@ export class RunWorktreeCoordinator {
            * On refuse toujours la reprise juste apres : elle a genuinement echoue.
            */
           if (!validation.ok && validation.definitif) this.libererLaCopieEnConflit(runId)
-          throw new Error(
-            !validation.ok
-              ? `Reprise du worktree refusée : ${validation.detail}`
-              : 'Reprise du worktree refusée : cette copie est déjà publiée.'
-          )
+          throw validation.ok
+            ? this.refusDeRepriseDejaPubliee(runId)
+            : new Error(`Reprise du worktree refusée : ${validation.detail}`)
         }
         const prepared = await this.manager.prepareAsync(runId, context)
         this.activateResumed(tracked, prepared.context, prepared.path)

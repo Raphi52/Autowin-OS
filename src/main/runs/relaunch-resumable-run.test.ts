@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { admitAutomaticResumeRuntime, type OrchestrationRunState } from './orchestration-state'
 import { creerRelanceDeRunReprenable, type DependancesDeRelance } from './relaunch-resumable-run'
+import { classifierRefusDeReprise } from './resume-refusal'
 import { loadConvRunTrace, saveConvRunTrace, statutDuRunMd } from './conv-runs'
 import { causeDInterruption } from '../orchestration/classe-terminale-echec'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
@@ -724,6 +725,26 @@ describe('relance — un refus definitif tarit le checkpoint au lieu de le rejou
     expect(b.observe.diffusions).toContainEqual(
       expect.objectContaining({ type: 'orchestrate-end', status: 'green' })
     )
+  })
+
+  it('publication-acquise sur la phrase réelle du coordinateur : le RUN.md est clos en vert', async () => {
+    // Phrase EXACTE émise par `run-worktree-coordinator.ts` quand la garde prouve la publication,
+    // classée par le VRAI classifieur (pas un bouchon).
+    const b = banc({
+      sabotage: (d) => ({ ...d, classifierRefusDeReprise }),
+      resultat: async () => {
+        throw new Error(
+          'Reprise du worktree refusée pour run-repris : publication published déjà engagée.'
+        )
+      }
+    })
+    await b.relance()
+
+    expect(b.observe.oublis).toContain('run-repris')
+    expect(b.observe.clotures).toEqual([
+      expect.objectContaining({ chemin: 'C:/runs/RUN.md', statut: 'green' })
+    ])
+    expect(b.observe.cartes[0].fail).toEqual([])
   })
 
   it.each(['copie-durable-absente', 'contexte-de-reprise-invalide'])(

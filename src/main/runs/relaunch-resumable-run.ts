@@ -575,6 +575,12 @@ export function creerRelanceDeRunReprenable(
           durableResumeTurn.succeed({ result: dejaPublie })
           fin.issue = { ok: true, texte: dejaPublie }
           os.forgetResumableOrchestration(resumableRun.runId)
+          // Le travail est entré : la fiche du run se ferme en vert, sinon elle garde le « Reprise
+          // en échec » de la tentative précédente et le tableau affiche un rouge faux.
+          if (resumedRunFile) {
+            closeConvRun(resumedRunFile.path, 'green', dejaPublie)
+            broadcast({ type: 'refresh', scope: 'workflows' })
+          }
           broadcast({
             type: 'orchestrate-end',
             convId: conversationId,
