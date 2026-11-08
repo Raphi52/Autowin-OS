@@ -30,7 +30,6 @@ import {
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 
 const H = 3_600_000
-// fix-ok: cause mesurée — rouvrir une copie coûte 8 s à chaud (photo 3,0 s + worktree add 4,9 s, dépôt de 4 781 fichiers, le 08/11) ; le délai de ménage était de 12 h, donc une copie propre restait 12 h.
 const MAINTENANT = 1_800_000_000_000
 const COPIE =
   'D:\\AutoWinOS\\.autowin-data\\autowin-os\\retours-de-tour\\essai__conv-9-1700000000000-1'
@@ -68,8 +67,8 @@ describe('decisionPourLaCopie — qui se sert de la copie, et chacun a-t-il fini
     ).toBe(false)
   })
 
-  it('le délai de calme ne dépasse pas le coût mesuré de rouvrir une copie (8 s à chaud, le 08/11)', () => {
-    expect(CALME_AVANT_MENAGE_MS).toBeLessThanOrEqual(8_000)
+  it('une copie propre reste 1 h après la fin du tour : la suite du travail ne paie pas sa réouverture', () => {
+    expect(CALME_AVANT_MENAGE_MS).toBe(H)
   })
 
   it('un fil marqué inactif n’a pas de délai plus court : le même calme', () => {
@@ -285,7 +284,7 @@ describe('menageDesCopiesDeFil — sur un vrai dépôt', () => {
       lireFils: () => [
         fil({
           id: 'conv-7',
-          updatedAt: MAINTENANT - 8_000,
+          updatedAt: MAINTENANT - CALME_AVANT_MENAGE_MS,
           projectPath: copie,
           copieDuFil: { chemin: copie }
         })
@@ -312,7 +311,7 @@ describe('menageDesCopiesDeFil — sur un vrai dépôt', () => {
       lireFils: () => [
         fil({
           id: 'conv-8',
-          updatedAt: MAINTENANT - 8_000,
+          updatedAt: MAINTENANT - CALME_AVANT_MENAGE_MS,
           projectPath: premiere,
           copieDuFil: { chemin: premiere }
         })

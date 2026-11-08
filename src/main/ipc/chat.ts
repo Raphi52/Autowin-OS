@@ -3014,12 +3014,12 @@ Le fil reprend ensuite normalement.`
   setTimeout(passeDuMenageDesCopies, 5 * 60_000).unref()
   setInterval(passeDuMenageDesCopies, 60 * 60 * 1_000).unref()
   /*
-   * LE MÉNAGE APRÈS LA FIN D'UN TOUR : le délai de calme d'une copie propre est court (le coût de la
-   * rouvrir, `CALME_AVANT_MENAGE_MS`), le balayage horaire la garderait jusqu'à l'heure suivante. Chaque
-   * fin de tour relance donc une passe après ce délai, une seule à la fois : la passe relit l'état, et
-   * un fil repris entre-temps garde sa copie (tour en cours, ou calme pas encore atteint).
+   * LE MÉNAGE APRÈS LA FIN D'UN TOUR : le balayage horaire, décalé du délai de calme
+   * (`CALME_AVANT_MENAGE_MS`, 1 h), garderait une copie propre jusqu'à près de 2 h. Chaque fin de tour
+   * relance donc une passe après ce délai, une seule à la fois : la passe relit l'état, et un fil repris
+   * entre-temps garde sa copie (tour en cours, ou calme pas encore atteint).
    */
-  // fix-ok: cause mesurée — le balayage horaire (setInterval 1 h, plus haut) laisserait une copie propre jusqu'à une heure après le tour ; le délai de calme est désormais de 8 s (CALME_AVANT_MENAGE_MS, mesuré le 08/11).
+  // fix-ok: le balayage horaire (setInterval 1 h, plus haut) laisserait une copie propre jusqu'à près de 2 h après le tour ; cette passe la retire au bout du délai de calme.
   let minuterieDuMenage: ReturnType<typeof setTimeout> | undefined
   const planifierLeMenageDesCopies = (): void => {
     if (minuterieDuMenage) clearTimeout(minuterieDuMenage)

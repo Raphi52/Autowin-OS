@@ -18,8 +18,8 @@ import { delierLesDependances } from '../store/dependances-copie-agent'
  * publié. Une copie qui porte un écart reste, quelle que soit l'ancienneté du fil. Mesuré le 07/11 :
  * 9 copies sur 11 étaient dans ce cas, et celle de conv-1702 portait un travail non publié.
  *
- * « FINI » = aucun tour en cours, et le fil est resté calme `CALME_AVANT_MENAGE_MS`, qui est le coût
- * de rouvrir la copie (voir plus bas). Une copie retirée se rouvre au MÊME chemin (`copies-de-fil/<fil>`) :
+ * « FINI » = aucun tour en cours, et le fil est resté calme `CALME_AVANT_MENAGE_MS` (1 h, voir plus
+ * bas). Une copie retirée se rouvre au MÊME chemin (`copies-de-fil/<fil>`) :
  * la session du CLI, rangée sous ce chemin, reste reprenable. Le retrait ne touche jamais à l'historique
  * du CLI (`~/.claude`), qui n'est pas dans la copie.
  *
@@ -33,14 +33,14 @@ import { delierLesDependances } from '../store/dependances-copie-agent'
  */
 
 /*
- * LE DÉLAI DE CALME : une copie propre et sans tour ne reste pas plus longtemps que ce qu'elle coûte à
- * rouvrir. Mesuré le 08/11/2026 sur ce dépôt (4 781 fichiers suivis) : `ouvrirLaCopieDuFil` = photo du
- * code (`add -A` sur un index temporaire : 3,0 s à chaud, 10,4 s à froid), puis `worktree add` (4,9 s à
- * chaud, 7,3 s à froid), puis la jonction des modules (0,1 s). Soit 8 s à chaud, 18 s à froid : on prend
- * le plancher chaud. Une copie garde environ 98 Mo tant qu'elle est là, pour rien.
+ * LE DÉLAI DE CALME : 1 h, choix de l'utilisateur (08/11/2026) entre 8 s, 1 h et 12 h. Rouvrir une copie
+ * coûte 8 s à chaud et 18 s à froid sur ce dépôt (4 781 fichiers suivis, mesuré le même jour : photo du
+ * code 3,0 à 10,4 s, `worktree add` 4,9 à 7,3 s, jonction des modules 0,1 s), plus l'annonce de la copie
+ * dans le fil. Avec 8 s, presque chaque demande après une pause payait ce coût ; 1 h couvre une pause
+ * ordinaire. Une copie garde environ 98 Mo tant qu'elle est là.
  */
-// fix-ok: cause mesurée — le délai était 12 h alors que rouvrir une copie coûte 8 s à chaud (photo 3,0 s + worktree add 4,9 s, le 08/11) : une copie propre restait 12 h sans raison.
-export const CALME_AVANT_MENAGE_MS = 8_000
+// fix-ok: décision de l'utilisateur (08/11) — 8 s faisait rouvrir la copie à presque chaque demande après une pause (8 à 18 s d'attente).
+export const CALME_AVANT_MENAGE_MS = 60 * 60_000
 
 /**
  * Une copie SANS fil peut être celle qu'un tour est en train d'ouvrir (8 à 18 s) : son âge seul la
