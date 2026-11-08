@@ -5042,7 +5042,7 @@ export function ChatView({
                         branche: gitBranch
                       })}
                     >
-                      <ForkIcon /> {texteFil('entete.copieDuFil', { branche: gitBranch })}
+                      <ForkIcon /> {gitBranch}
                     </span>
                   )}
                   {gitBranch && !copieAffichee && (

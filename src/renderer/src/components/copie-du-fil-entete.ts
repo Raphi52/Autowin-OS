@@ -3,7 +3,7 @@
  * travaille sur le projet dont elle est la copie, et c'est ce projet que l'en-tête nomme. La copie
  * n'est sur aucune branche (« (detached) ») : son travail entre, à la fin de chaque tour, dans la
  * branche ACTIVE du dépôt partagé, qui n'est pas forcément main (la branche d'un work item, par
- * exemple). La pastille de branche lit donc la branche de ce dépôt, suivie de « copie du fil ».
+ * exemple). La pastille de branche montre donc la branche de ce dépôt, seule.
  */
 export interface FilAvecCopie {
   projectPath?: string

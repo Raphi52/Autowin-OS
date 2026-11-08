@@ -517,7 +517,6 @@ export const TEXTES_FR = {
   'entete.branche.titre':
     'Branche git courante du depot : {branche}\nCliquer pour choisir une autre branche.',
   'entete.dossierCopie': 'Ce fil travaille sur {projet}, dans sa propre copie : {copie}',
-  'entete.copieDuFil': '{branche} · copie du fil',
   'entete.copieDuFil.titre':
     'Ce fil travaille dans sa propre copie de {projet}.\nSes changements entrent dans la branche {branche} de {projet} à la fin de chaque tour, et la copie reçoit ceux des autres fils au début du tour suivant.',
   'entete.details.titre': 'Détails de l’exécution',
@@ -1095,7 +1094,6 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'entete.branche.titre':
     'Current git branch of the repository: {branche}\nClick to choose another branch.',
   'entete.dossierCopie': 'This thread works on {projet}, in its own copy: {copie}',
-  'entete.copieDuFil': '{branche} · thread copy',
   'entete.copieDuFil.titre':
     'This thread works in its own copy of {projet}.\nIts changes go into the {branche} branch of {projet} at the end of each turn, and the copy receives those of the other threads at the start of the next turn.',
   'entete.details.titre': 'Run details',

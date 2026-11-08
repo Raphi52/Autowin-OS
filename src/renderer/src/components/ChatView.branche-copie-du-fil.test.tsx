@@ -12,8 +12,8 @@ import {
 /**
  * LA BRANCHE D'UN FIL DANS SA COPIE. La copie n'est sur aucune branche : son travail entre, à la fin
  * de chaque tour, dans la branche active du dossier principal. Un développeur qui y travaille sur la
- * branche de son work item doit lire CETTE branche dans l'en-tête, pas « (detached) » ni un libellé
- * qui la cache.
+ * branche de son work item doit lire CETTE branche dans l'en-tête, seule, sans « (detached) » ni
+ * mention de la copie.
  */
 const DEPOT = 'D:/Projets/Autowin'
 const COPIE = 'D:/Projets/Autowin/.autowin-data/autowin-os/copies-de-fil/conv-1'
@@ -52,9 +52,8 @@ describe('ChatView — branche affichée pour un fil qui travaille dans sa copie
     })
 
     const badge = harness.container.querySelector<HTMLElement>('[data-testid="chat-git-branch"]')
-    expect(badge?.textContent ?? '').toContain('wi-1234')
-    expect(badge?.textContent ?? '').toContain('copie du fil')
-    expect(badge?.textContent ?? '').not.toContain('detached')
+    // Tous les fils travaillent dans une copie : le badge montre la branche seule, sans mention.
+    expect((badge?.textContent ?? '').trim()).toBe('wi-1234')
     expect(badge?.title ?? '').toContain('wi-1234')
     expect(getGitBranch.mock.calls.at(-1)?.[0]).toBe(DEPOT)
   })
