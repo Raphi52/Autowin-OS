@@ -231,6 +231,61 @@ describe('poids-du-contexte', () => {
     expect(agreger([coupee]).lecturesNonReprises.sessions).toBe(0)
   })
 
+  it("chiffre ce que coûterait de repartir d'un fil neuf : gagnant à froid, perdant à chaud", () => {
+    // Deux fils repris au même socle de 200 000 tokens, deux étapes chacun. Le premier revient après
+    // l'expiration de la mémoire de relecture : 190 000 tokens réécrits à sa 1re étape. Le second
+    // revient à temps : tout est relu.
+    // Le CLI date chaque ligne et nomme sa session à l'ouverture : de quoi mesurer l'inactivité
+    // entre deux passages d'une même session.
+    const dater = (lignesSession, sid, iso) =>
+      lignesSession.map((l) => {
+        const o = JSON.parse(l)
+        if (o.type === 'system') o.session_id = sid
+        return JSON.stringify({ ...o, timestamp: iso })
+      })
+    const repris = (ecrit) => [
+      init,
+      ...etape('r0', 200_000, { type: 'text', text: 'je reprends' }, OPUS, {
+        ...usage(200_000, { relu: 200_000 - ecrit, ecrit5: ecrit })
+      }),
+      ...etape('r1', 200_100, { type: 'text', text: 'fini' }, OPUS, compteReel(200_100, 200_000)),
+      bilanDe({ local: 0.5, cumul: 26 })
+    ]
+    const neuf = (sid, iso) =>
+      analyserSession(dater([...session(), bilanDe({ local: 0.5 })], sid, iso))
+    // A : revenu après deux heures, la mémoire a expiré. B : revenu après 5 min, et pourtant tout
+    // est réécrit — la mémoire a été CASSÉE. C : revenu après 2 min, tout est relu.
+    const expire = analyserSession(dater(repris(190_000), 'A', '2026-11-08T12:00:00Z'))
+    const casse = analyserSession(dater(repris(190_000), 'B', '2026-11-08T10:05:00Z'))
+    const chaud = analyserSession(dater(repris(0), 'C', '2026-11-08T10:02:00Z'))
+    const avant = ['A', 'B', 'C'].map((sid) => neuf(sid, '2026-11-08T10:00:00Z'))
+    expect(expire).toMatchObject({ sessionId: 'A', socleCout: { froid: true } })
+    expect(chaud.socleCout).toMatchObject({ froid: false })
+    const toutes = [expire, casse, chaud, ...avant]
+    const r = agreger(toutes).reprises
+    expect(r).toMatchObject({ sessions: 3, froides: 2, expirees: 1, cassees: 1 })
+    // Le socle payé par les fils repris : écritures de la 1re étape, relectures de la 1re, puis des suivantes.
+    expect(r.ecritureFroideUsd).toBeCloseTo(2 * 190_000 * ECRITURE5, 12)
+    expect(r.ecritureCasseeUsd).toBeCloseTo(190_000 * ECRITURE5, 12)
+    expect(r.relecturePremiereUsd).toBeCloseTo((2 * 10_000 + 200_000) * RELECTURE, 12)
+    expect(r.relecturesSuivantesUsd).toBeCloseTo(3 * 200_000 * RELECTURE, 12)
+    // Un fil neuf repart du socle médian des sessions neuves (1 000) plus le fil renvoyé, au plus
+    // 60 000 tokens (TOKENS_MAX_HISTORIQUE de src/main/chat/chat-turn-messages.ts).
+    expect(r.socleApresCoupe).toBe(61_000)
+    const apres = 61_000 * (ECRITURE5 + RELECTURE)
+    // Seule la reprise EXPIRÉE se coupe : après une heure d'inactivité, l'app sait que la mémoire est
+    // perdue ; la mémoire cassée, elle, se répare à sa cause.
+    expect(r.coupeAFroid.sessions).toBe(1)
+    expect(r.coupeAFroid.usd).toBeCloseTo(
+      190_000 * ECRITURE5 + 10_000 * RELECTURE + 200_000 * RELECTURE - apres,
+      12
+    )
+    // À chaud, repartir réécrit 61 000 tokens au lieu d'en relire 200 000 : c'est une perte.
+    expect(r.coupeAChaud.sessions).toBe(1)
+    expect(r.coupeAChaud.usd).toBeCloseTo(apres - 2 * 200_000 * RELECTURE, 12)
+    expect(rapport(agreger(toutes))).toMatch(/## Fils repris[\s\S]*plus d’une heure[\s\S]*cassée/)
+  })
+
   it('signale ce qui échappe au calcul au lieu de le deviner', () => {
     // Bilan sans coût local pour le modèle de la session : aucune facture, plutôt qu'une facture à 0.
     const sansLocal = JSON.stringify({

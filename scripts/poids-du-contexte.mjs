@@ -157,6 +157,7 @@ export function analyserSession(lignes) {
   let debutMs
   let finMs
   let modele
+  let sessionId
   const bilans = [] // { local, cumul } de chaque `result`
   let sortie = 0
   let finsOrphelines = 0
@@ -200,7 +201,10 @@ export function analyserSession(lignes) {
       lignesIllisibles++
       continue
     }
-    if (j.type === 'system' && j.subtype === 'init') session = true
+    if (j.type === 'system' && j.subtype === 'init') {
+      session = true
+      if (!sessionId && j.session_id) sessionId = j.session_id
+    }
     // Le bilan du CLI (un par tour, parfois plusieurs par fichier). `modelUsage` et
     // `total_cost_usd` sont CUMULÉS sur toute la conversation reprise (mesuré le 2026-11-08 :
     // 72 M tokens relus au bilan pour 459 000 dans ce passage) ; `model_usage_since_last_result`
@@ -392,6 +396,7 @@ export function analyserSession(lignes) {
   const prix = prixDuModele(modele)
   let etapesUsd
   let sortieUsd
+  let socleCout
   const sortieParType = {}
   if (prix) {
     const mult = etapes.map((e) => prix.multiplicateur(e.ctx))
@@ -412,6 +417,27 @@ export function analyserSession(lignes) {
       const premiere = b.entreeReelle ? payeEtape[b.debut] : b.tokens * ecriture * mult[b.debut]
       const suivantes = b.tokens * prix.relecture * (multRelu[b.fin + 1] - multRelu[b.debut + 1])
       b.usd = premiere + suivantes
+    }
+    // CE QUE LE SOCLE A COÛTÉ, et à quel prix par token il se serait payé s'il avait été neuf :
+    // de quoi chiffrer « repartir d'un fil neuf plutôt que reprendre » (`agreger`, rubrique reprises).
+    // Froid : la 1re étape a surtout ÉCRIT son contexte — la mémoire de relecture avait expiré.
+    const socle = relus.find((b) => b.categorie === SOCLE)
+    if (socle) {
+      const e0 = etapes[0]
+      const ecrit0 = e0.entree + e0.ecriture5 + e0.ecriture1h
+      socleCout = {
+        tokens: socle.tokens,
+        froid: ecrit0 > e0.ctx / 2,
+        ecritureUsd:
+          (e0.entree * prix.entree +
+            e0.ecriture5 * prix.ecriture5 +
+            e0.ecriture1h * prix.ecriture1h) *
+          mult[0],
+        relectureUsd: e0.relecture * prix.relecture * mult[0],
+        suivantesUsd: socle.usd - payeEtape[0],
+        prixPremiere: ecriture * mult[0],
+        prixSuivantes: prix.relecture * (multRelu[socle.fin + 1] - multRelu[1])
+      }
     }
     // SORTIE, étape par étape, au palier de son étape. La réflexion y a son compte EXACT (fin de
     // message) ; le reste se partage entre texte et appels d'outils au prorata des caractères —
@@ -482,6 +508,8 @@ export function analyserSession(lignes) {
     debutMs,
     finMs,
     modele,
+    // Identifiant de la session du CLI : ses passages successifs se suivent par lui.
+    sessionId,
     // Facturé par le CLI pour ce passage, au modèle de la session : contrôle de etapesUsd + sortieUsd.
     factureLocale,
     annexesUsd,
@@ -498,8 +526,96 @@ export function analyserSession(lignes) {
     etapesUsd,
     sortieUsd,
     sortieParType,
+    socleCout,
     blocs: relus
   }
+}
+
+/**
+ * Plus gros fil qu'Autowin renvoie quand il repart sans reprendre la session du CLI : 60 000 tokens
+ * (`TOKENS_MAX_HISTORIQUE`, src/main/chat/chat-turn-messages.ts). Majorant : le fil réel est souvent
+ * plus court, donc le gain d'une coupe est plutôt sous-estimé.
+ */
+export const FIL_RENVOYE_MAX_TOKENS = 60_000
+
+/**
+ * Durée de vie de la mémoire de relecture du CLI : une heure (ses écritures sont toutes
+ * `ephemeral_1h_input_tokens`). Mesuré le 2026-11-08 sur 112 reprises Opus : au-delà de 65 min
+ * d'inactivité, 11 sur 11 ont tout réécrit ; entre 30 et 55 min, 2 sur 6.
+ */
+export const MEMOIRE_RELECTURE_MIN = 60
+
+/**
+ * FILS REPRIS : ce que leur socle a coûté, et ce que changerait de repartir d'un fil neuf (socle
+ * médian des sessions neuves + fil renvoyé au plus large). Une reprise relit l'historique à 1/40e
+ * du prix d'écriture (Opus 5.5 : 0,20 $/M contre 8 $/M) TANT QUE la mémoire de relecture est
+ * vivante ; perdue, elle le réécrit en entier. Deux pertes à ne pas confondre : EXPIRÉE (plus d'une
+ * heure sans passage : l'app peut le savoir d'avance, et repartir d'un fil neuf) et CASSÉE (passage
+ * rapproché, mais le début du prompt a changé : se répare à sa cause, pas par une coupe).
+ */
+function mesurerReprises(sessions, socleNeuf) {
+  const r = {
+    sessions: 0,
+    froides: 0,
+    expirees: 0,
+    cassees: 0,
+    usd: 0,
+    socleUsd: 0,
+    ecritureFroideUsd: 0,
+    ecritureExpireeUsd: 0,
+    ecritureCasseeUsd: 0,
+    relecturePremiereUsd: 0,
+    relecturesSuivantesUsd: 0,
+    socleApresCoupe: socleNeuf + FIL_RENVOYE_MAX_TOKENS,
+    coupeAFroid: { sessions: 0, usd: 0 },
+    coupeAChaud: { sessions: 0, usd: 0 }
+  }
+  // Fin du passage précédent de la même session : l'inactivité avant chaque reprise.
+  const parSession = new Map()
+  for (const s of sessions) {
+    if (!s.sessionId || s.debutMs === undefined || s.finMs === undefined) continue
+    const liste = parSession.get(s.sessionId) || []
+    liste.push(s)
+    parSession.set(s.sessionId, liste)
+  }
+  const inactiviteMin = (s) => {
+    const avant = (parSession.get(s.sessionId) || []).filter((x) => x !== s && x.finMs <= s.debutMs)
+    if (!avant.length || s.debutMs === undefined) return undefined
+    return (s.debutMs - Math.max(...avant.map((x) => x.finMs))) / 60000
+  }
+  for (const s of sessions) {
+    const c = s.socleCout
+    if (s.reprise !== true || !c) continue
+    r.sessions++
+    r.usd += s.etapesUsd + s.sortieUsd
+    const paye = c.ecritureUsd + c.relectureUsd + c.suivantesUsd
+    r.socleUsd += paye
+    r.relecturePremiereUsd += c.relectureUsd
+    r.relecturesSuivantesUsd += c.suivantesUsd
+    const inactivite = inactiviteMin(s)
+    const expiree = c.froid && inactivite !== undefined && inactivite > MEMOIRE_RELECTURE_MIN
+    if (c.froid) {
+      r.froides++
+      r.ecritureFroideUsd += c.ecritureUsd
+      if (expiree) {
+        r.expirees++
+        r.ecritureExpireeUsd += c.ecritureUsd
+      } else if (inactivite !== undefined) {
+        r.cassees++
+        r.ecritureCasseeUsd += c.ecritureUsd
+      }
+    }
+    if (c.tokens <= r.socleApresCoupe) continue
+    const gain = paye - r.socleApresCoupe * (c.prixPremiere + c.prixSuivantes)
+    if (expiree) {
+      r.coupeAFroid.sessions++
+      r.coupeAFroid.usd += gain
+    } else if (!c.froid) {
+      r.coupeAChaud.sessions++
+      r.coupeAChaud.usd -= gain
+    }
+  }
+  return r
 }
 
 const quantile = (valeurs, f) => {
@@ -684,7 +800,8 @@ export function agreger(sessions, seuilLignes = 350) {
       sessions.filter((s) => s.reprise === false),
       seuilLignes
     ),
-    sortiesLongues: { nombre: sortiesLongues.nombre, partUsd: part(sortiesLongues.usd) }
+    sortiesLongues: { nombre: sortiesLongues.nombre, partUsd: part(sortiesLongues.usd) },
+    reprises: mesurerReprises(sessions, quantile(socles.nonReprises, 0.5))
   }
 }
 
@@ -787,6 +904,27 @@ export function rapport(a) {
   l.push(
     `- Alléger de 30 % le socle de départ : au plus **${pct(partDe(SOCLE) * 0.3)}** — consignes et outils d'un côté, historique repris de l'autre : deux leviers différents.`
   )
+  const r = a.reprises
+  if (r && r.sessions) {
+    l.push('')
+    l.push('## Fils repris : reprendre la session, ou repartir d’un fil neuf ?')
+    l.push('')
+    l.push(
+      `- ${r.sessions} sessions reprises : **${dollars(r.usd)}** (${pct(a.usd ? r.usd / a.usd : 0)} des dollars), dont **${dollars(r.socleUsd)}** pour leur socle.`
+    )
+    l.push(
+      `- Socle payé : **${dollars(r.ecritureFroideUsd)}** réécrits par ${r.froides} reprises qui avaient perdu leur mémoire de relecture, ${dollars(r.relecturePremiereUsd)} relus à la 1re étape, ${dollars(r.relecturesSuivantesUsd)} relus aux étapes suivantes.`
+    )
+    l.push(
+      `- Mémoire **expirée** (plus d’une heure sans passage) : ${r.expirees} reprises, ${dollars(r.ecritureExpireeUsd)} réécrits. Mémoire **cassée** (passage rapproché, mais le début du prompt a changé) : ${r.cassees} reprises, **${dollars(r.ecritureCasseeUsd)}** réécrits — à réparer à leur cause. Le reste : passage précédent hors de l’échantillon.`
+    )
+    l.push(
+      `- Repartir d’un fil neuf (socle de ${milliers(r.socleApresCoupe)} tokens au plus : socle médian d’une session neuve + fil renvoyé au maximum) après plus d’une heure d’inactivité : **${dollars(r.coupeAFroid.usd)}** gagnés sur ${r.coupeAFroid.sessions} sessions, soit **${pct(a.usd ? r.coupeAFroid.usd / a.usd : 0)}** des dollars — avant le coût d’éventuelles étapes en plus pour retrouver ce que la session savait.`
+    )
+    l.push(
+      `- Repartir quand la mémoire est encore vivante : **${dollars(r.coupeAChaud.usd)}** perdus sur ${r.coupeAChaud.sessions} sessions — réécrire un socle neuf coûte plus que relire l’ancien.`
+    )
+  }
   return l.join('\n')
 }
 
