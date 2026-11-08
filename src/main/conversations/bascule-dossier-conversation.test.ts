@@ -160,7 +160,12 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
   function preparer(
     store: ConversationStore,
     id: string,
-    options: { actif?: boolean; depot?: string | null; ouvrir?: () => Promise<Ouverture> } = {}
+    options: {
+      actif?: boolean
+      depot?: string | null
+      ouvrir?: () => Promise<Ouverture>
+      questionSeule?: boolean
+    } = {}
   ): {
     issue: ReturnType<typeof preparerLeDossierDuTour>
     annonces: string[]
@@ -172,6 +177,7 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
       fil: store.get(id),
       depotPartage: options.depot === undefined ? DEPOT : options.depot,
       actif: options.actif ?? true,
+      questionSeule: options.questionSeule ?? false,
       ouvrirCopie: async () => {
         ouvertures += 1
         return options.ouvrir ? options.ouvrir() : { ok: true, chemin: COPIE }
@@ -213,6 +219,31 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
     expect(await essai.issue).toBe('ouverte')
     expect(store.get(id)?.projectPath).toBe(COPIE)
     expect(essai.ouvertures()).toBe(1)
+  })
+
+  it('une question seule n’ouvre aucune copie : le fil reste au dépôt, sans annonce', async () => {
+    const store = new ConversationStore(() => 1000)
+    const id = store.create({ title: 'T', provider: 'claude' }).id
+
+    const essai = preparer(store, id, { questionSeule: true })
+
+    expect(await essai.issue).toBe('rien')
+    expect(essai.ouvertures()).toBe(0)
+    expect(essai.annonces).toEqual([])
+    expect(dossierDeTravailDuTour(store.get(id)?.projectPath, DEPOT, existe)).toBe(DEPOT)
+  })
+
+  it('une question reprend quand même la copie déjà ouverte du fil : rien de neuf n’est créé', async () => {
+    const store = new ConversationStore(() => 1000)
+    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
+    store.passerDansLaCopie(id, { chemin: COPIE, depot: DEPOT })
+    store.revenirDeLaCopie(id)
+
+    const essai = preparer(store, id, { questionSeule: true })
+
+    expect(await essai.issue).toBe('reprise')
+    expect(essai.ouvertures()).toBe(0)
+    expect(store.get(id)?.projectPath).toBe(COPIE)
   })
 
   it('un fil rangé dans un autre projet ne change pas : ni copie, ni annonce', async () => {

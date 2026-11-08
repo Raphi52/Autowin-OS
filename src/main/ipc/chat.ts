@@ -244,6 +244,7 @@ import {
 import { ouvrirLaCopieDuFil, photographierLeCode } from '../git/photo-du-code'
 import { ligneDeMiseAJour, mettreLaCopieDuFilAJour } from '../git/copie-du-fil-a-jour'
 import { DOSSIER_DES_COPIES_DE_FIL } from '../../shared/copie-du-fil'
+import { estUneQuestionSansAction } from '../chat/grow-au-debut'
 import { messageLiaison } from '../store/dependances-copie-agent'
 import { materializeChatArtifact } from '../store/chat-artifact-store'
 import { filterNativePreflight, readNativePreflight } from '../activity/native-preflight'
@@ -2319,9 +2320,12 @@ Le fil reprend ensuite normalement.`
    * LE FIL PASSE DANS SA COPIE AU DÉBUT DE SON TOUR (`preparerLeDossierDuTour`). Le dépôt partagé est
    * celui d'où tourne l'app, et seulement s'il est le dépôt d'Autowin : ailleurs, rien ne change.
    * Une copie qui ne s'ouvre pas, même par une panne de git, est DITE dans le fil, et le tour part
-   * là où il était : le passage ne coûte jamais la réponse.
+   * là où il était : le passage ne coûte jamais la réponse. Une question seule n'en ouvre pas de neuve.
    */
-  const passerLeFilDansSaCopie = async (conversationId: string): Promise<void> => {
+  const passerLeFilDansSaCopie = async (
+    conversationId: string,
+    messages: Message[]
+  ): Promise<void> => {
     const depot = os.executionWorkspace
     const annoncer = (ligne: string): void => {
       os.conversations.append(conversationId, { role: 'assistant', content: ligne })
@@ -2331,6 +2335,9 @@ Le fil reprend ensuite normalement.`
       fil: os.conversations.get(conversationId),
       depotPartage: estDepotAutowin(depot) ? depot : null,
       actif: lireReglageCopieParFil(reglageCopieParFil()),
+      questionSeule: estUneQuestionSansAction(
+        [...messages].reverse().find((m) => m.role === 'user')?.content
+      ),
       ouvrirCopie: async () => {
         const copie = await ouvrirLaCopieDuFil({
           dossier: dossierDuTour(conversationId),
@@ -2505,7 +2512,7 @@ Le fil reprend ensuite normalement.`
        * `preparerLeDossierDuTour` (bascule-dossier-conversation.test.ts) et le passage sans reprise de
        * session (agent-pilot.session-resume.test.ts) étaient rouges sur le code d'avant.
        */
-      if (args[4] === undefined) await passerLeFilDansSaCopie(conversationId)
+      if (args[4] === undefined) await passerLeFilDansSaCopie(conversationId, args[1])
       /*
        * LE MODÈLE DU FIL (2026-10-11) : une conversation peut porter son propre modèle.
        * Un modèle imposé par l'appelant (reprise d'un tour coupé, qui rejoue SON modèle d'origine)

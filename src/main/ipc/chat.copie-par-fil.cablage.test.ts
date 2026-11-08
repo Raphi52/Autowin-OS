@@ -17,7 +17,7 @@ const corps = pilote.slice(0, pilote.indexOf('startupRecoverableChatCalls'))
 
 describe('une copie par fil — au début du tour', () => {
   it('passe le fil dans sa copie AVANT toute lecture du dossier du tour', () => {
-    const passage = corps.indexOf('await passerLeFilDansSaCopie(conversationId)')
+    const passage = corps.indexOf('await passerLeFilDansSaCopie(conversationId, args[1])')
     expect(passage).toBeGreaterThan(-1)
     expect(passage).toBeLessThan(corps.indexOf('photographierDebutDeTour(dossierDuTour('))
     expect(passage).toBeLessThan(corps.indexOf('photographierLeCode({ dossier: dossierDuTour('))
@@ -26,14 +26,21 @@ describe('une copie par fil — au début du tour', () => {
 
   it('après la bascule par chemin cité, qui prime', () => {
     expect(corps.indexOf('alignerDossierSurLaDemande(conversationId')).toBeLessThan(
-      corps.indexOf('await passerLeFilDansSaCopie(conversationId)')
+      corps.indexOf('await passerLeFilDansSaCopie(conversationId, args[1])')
     )
   })
 
   it('jamais pour un tour repris après un redémarrage : il a commencé avant', () => {
     expect(corps).toContain(
-      'if (args[4] === undefined) await passerLeFilDansSaCopie(conversationId)'
+      'if (args[4] === undefined) await passerLeFilDansSaCopie(conversationId, args[1])'
     )
+  })
+
+  it('une question seule n’ouvre pas de copie : la décision lit la dernière demande du tour', () => {
+    const passage = source.slice(source.indexOf('const passerLeFilDansSaCopie = async ('))
+    const bloc = passage.slice(0, passage.indexOf('const tourCompteDesReception'))
+    expect(bloc).toContain('questionSeule: estUneQuestionSansAction(')
+    expect(bloc).toContain("[...messages].reverse().find((m) => m.role === 'user')?.content")
   })
 
   it('relit le réglage à chaque tour, et ne vise que le dépôt d’Autowin', () => {

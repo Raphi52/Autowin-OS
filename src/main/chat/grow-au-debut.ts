@@ -230,6 +230,20 @@ export function estUneDemandeDAction(demande: string | undefined, skillInvoquee?
   return ACTION_QUI_SUIT.test(coeur) || SYMPTOME.test(coeur)
 }
 
+/**
+ * Une QUESTION SEULE : ni demande d'action, ni skill invoquée, et une tournure de question (mot
+ * interrogatif en tête ou point d'interrogation final). Lue aussi par la copie de fil
+ * (`preparerLeDossierDuTour`) : une question n'a rien à écrire, elle ne mérite pas de copie. Étroite
+ * par construction, à l'inverse de `estUneDemandeDAction` : dans le doute, le fil reçoit sa copie.
+ */
+export function estUneQuestionSansAction(demande: string | undefined): boolean {
+  const brut = normalizeIntent(demande ?? '')
+  if (!brut || brut.startsWith('/')) return false
+  if (estUneDemandeDAction(demande)) return false
+  const coeur = sansPreambule(brut)
+  return INTERROGATIF.test(coeur) || brut.endsWith('?')
+}
+
 /** En-tête du bloc complet : dit au modèle d'où vient la procédure et ce qu'elle ne remplace pas. */
 export const ENTETE_GROW_AU_DEBUT =
   'GROW — procédure chargée par l’app au début de cette demande d’action (ce n’est pas une demande de l’utilisateur). ' +

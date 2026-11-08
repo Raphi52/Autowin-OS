@@ -220,6 +220,9 @@ export type IssueDuPassage = 'rien' | 'ouverte' | 'reprise' | 'revenu' | 'refuse
  * LE DOSSIER DU FIL, DÉCIDÉ AU DÉBUT DE SON TOUR, avant que le dossier du tour soit lu.
  *  - réglage allumé, fil du dépôt partagé : il reprend sa copie si elle existe encore, sinon il en
  *    reçoit une (`ouvrirCopie`) ; une ouverture refusée le laisse où il était, raison dite ;
+ *  - une question seule (`questionSeule`) n'ouvre pas de copie NEUVE : elle n'a rien à écrire, et la
+ *    copie coûtait une annonce, un dossier sur le disque et la session du modèle. Le fil la reçoit à
+ *    sa première demande d'action ; une copie déjà ouverte est reprise comme d'habitude ;
  *  - réglage éteint, fil dans sa copie : il revient à son dossier d'avant, la copie reste intacte ;
  *  - tout autre cas : rien ne change.
  * `depotPartage` : le dépôt d'Autowin d'où tourne l'app, ou `null` quand l'app travaille sur un autre
@@ -229,6 +232,8 @@ export async function preparerLeDossierDuTour(entree: {
   fil: { projectPath?: string; copieDuFil?: unknown } | undefined
   depotPartage: string | null
   actif: boolean
+  /** Le message du tour est une question sans action (`estUneQuestionSansAction`). */
+  questionSeule?: boolean
   ouvrirCopie: () => Promise<{ ok: true; chemin: string } | { ok: false; raison: string }>
   passer: (copie: { chemin: string; depot: string }) => void
   revenir: () => void
@@ -258,6 +263,7 @@ export async function preparerLeDossierDuTour(entree: {
     )
     return 'reprise'
   }
+  if (entree.questionSeule) return 'rien'
   const ouverte = await entree.ouvrirCopie()
   if (!ouverte.ok) {
     entree.annoncer(

@@ -3,6 +3,7 @@ import {
   blocGrowDuTour,
   ENTETE_GROW_AU_DEBUT,
   estUneDemandeDAction,
+  estUneQuestionSansAction,
   RAPPEL_GROW_AU_DEBUT
 } from './grow-au-debut'
 
@@ -149,5 +150,44 @@ describe('blocGrowDuTour', () => {
         active: () => true
       })
     ).toEqual({ texte: '', complet: false })
+  })
+})
+
+/**
+ * La question qui n'ouvre pas de copie de fil (`preparerLeDossierDuTour`). Étroite par construction :
+ * dans le doute, le fil reçoit sa copie, comme avant.
+ */
+describe('estUneQuestionSansAction', () => {
+  it.each([
+    // Message réel : une question pure, qui ouvrait pourtant une copie.
+    ['codex utilise quoi pour dupliquer le keyboard et la souris?'],
+    ['pourquoi le Board est lent'],
+    ['c’est quoi la différence entre frame et scout ?'],
+    ['combien de fils sont ouverts'],
+    ['tu penses que c’est mieux en bleu ?'],
+    ['et du coup, où est rangé le réglage ?']
+  ])('question : %s', (message) => {
+    expect(estUneQuestionSansAction(message)).toBe(true)
+  })
+
+  it.each([
+    ['peux-tu corriger le test du Board ?'],
+    ['est-ce que tu peux ajouter un bouton Copier ?'],
+    ['pourquoi ça plante ? corrige-le'],
+    ['le bouton Copier ne marche plus ?'],
+    ['go'],
+    ['ajoute un tri par date'],
+    ['/scout le module veille ?'],
+    ['le bouton en rouge'],
+    // Le rapport de défaut de ce correctif : sans point d’interrogation ni tournure de question.
+    ['ca fait des copies meme quand je pose une question et que je vais pas coder'],
+    [''],
+    ['   ']
+  ])('pas une question seule : %s', (message) => {
+    expect(estUneQuestionSansAction(message)).toBe(false)
+  })
+
+  it('un message sans texte n’en est pas une', () => {
+    expect(estUneQuestionSansAction(undefined)).toBe(false)
   })
 })
