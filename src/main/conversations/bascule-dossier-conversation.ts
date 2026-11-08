@@ -159,7 +159,8 @@ export function dossierDeLectureDuFil(
  * LE PASSAGE SE FAIT AU DÉBUT D'UN TOUR, jamais au milieu : un fil déjà commencé y passe à son tour
  * suivant, un fil neuf à son premier. Le dossier rangé DEVIENT la copie (le dossier rangé et le
  * dossier de travail ne diffèrent jamais). Le passage garde la session de l'agent : elle est
- * recopiée sous la copie au tour (`session-du-tour.ts`, `suivreSessionVersCopie`).
+ * recopiée sous la copie au tour, et rapatriée sous le dossier d'avant au retour
+ * (`session-du-tour.ts`, `suivreSessionEntreDossiers`).
  *
  * Seuls les fils du dépôt partagé (rangés dedans, ou sans dossier) sont concernés. Un fil rangé
  * ailleurs — un autre projet, la copie d'un essai, celle d'un retour à un tour — ne change pas.
@@ -173,7 +174,7 @@ export interface CopieDuFilNotee {
 }
 
 /** La copie notée sur un fil, si elle a une forme utilisable ; tout le reste vaut « aucune ». */
-function copieNotee(fil: { copieDuFil?: unknown } | undefined): CopieDuFilNotee | null {
+export function copieNotee(fil: { copieDuFil?: unknown } | undefined): CopieDuFilNotee | null {
   const copie = fil?.copieDuFil as Partial<CopieDuFilNotee> | undefined
   if (!copie || typeof copie.chemin !== 'string' || typeof copie.depot !== 'string') return null
   if (!isAbsolute(copie.chemin) || !isAbsolute(copie.depot)) return null

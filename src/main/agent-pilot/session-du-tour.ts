@@ -14,7 +14,7 @@ import {
 import type { ProviderRegistry } from '../providers/registry'
 import type { Message } from '../providers/types'
 import type { RoleBinding } from '../profil/roles'
-import { suivreSessionVersCopie } from '../store/historique-cli-copie'
+import { suivreSessionEntreDossiers } from '../store/historique-cli-copie'
 
 export type SessionDuTour = {
   /** Clé de session pour un compte donné. */
@@ -27,13 +27,16 @@ export type SessionDuTour = {
   resumeSessionId: string | undefined
 }
 
-/** Le fil travaille dans sa copie : la copie et le dossier d'où elle vient (voir `bascule-dossier`). */
+/**
+ * La copie notée du fil et le dossier d'où elle vient (voir `bascule-dossier`). Notée même quand le fil
+ * n'y travaille plus : après un retour au dossier d'avant, c'est là que sa session attend.
+ */
 export type CopieDuFilDuChat = { chemin: string; depot: string; dossierAvant?: string }
 
 /**
  * LA COPIE DU FIL, pour le tour. Branché au démarrage (`index.ts`), comme le compte du fil : sans ce
- * branchement, aucun passage n'est reconnu et la session ne suit pas le fil. Par défaut il ne rend
- * RIEN : un module non configuré garde le comportement d'avant.
+ * branchement, aucun passage ni retour n'est reconnu et la session ne suit pas le fil. Par défaut il ne
+ * rend RIEN : un module non configuré garde le comportement d'avant.
  */
 let copieDuFilDuChat: (conversationId: string) => CopieDuFilDuChat | null = () => null
 
@@ -162,35 +165,45 @@ export function sessionDuTour(entree: {
     return (compteDuFil ? compteDuFil.env : claudeAccountEnv()).CLAUDE_CONFIG_DIR || undefined
   }
   /**
-   * LE PASSAGE DANS LA COPIE GARDE LA SESSION.
+   * LA SESSION SUIT LE FIL ENTRE SON DOSSIER D'AVANT ET SA COPIE, DANS LES DEUX SENS.
    *
    * Le fil passe de son dossier d'avant à SA copie au début de son tour (`bascule-dossier-conversation`).
    * Le dossier fait partie de la clé : sans ce cas, la session est oubliée et l'agent relit tout le fil.
-   * Si la session a été ouverte sous le dossier d'avant et que le fil est bien dans sa copie, elle est
-   * recopiée sous la copie et reprise là. Tout autre changement de dossier garde la règle d'avant.
-   * Seuls les fournisseurs qui reprennent leur session sont concernés : les autres renvoient le fil
-   * entier de toute façon.
-   * fix-ok: cause mesurée — la clé de session contient le dossier (`cleAvecDossier`) et tout
-   * changement de clé oublie la session (bloc « known.key !== sessionKey ») : le passage perdait la
-   * reprise (test rouge mesuré, `resumeSessionId` undefined au lieu de 'sess-1'). Le correctif garde la
-   * session quand le fil passe de son dossier d'avant à sa copie, et seulement là.
+   * Le retour est le même cas à l'envers : le ménage retire la copie propre une fois le fil fini, et le
+   * fil revient dans son dossier d'avant. Sa session, posée sous la copie, doit suivre le fil, sinon la
+   * question suivante repart à blanc.
+   * Dans les deux sens, la source est le dossier que la clé de session désigne : le dernier tour réussi
+   * sous cette clé y a écrit la session la plus récente. Elle est recopiée sous le dossier d'arrivée et
+   * reprise là. Tout autre changement de dossier garde la règle d'avant. Seuls les fournisseurs qui
+   * reprennent leur session sont concernés : les autres renvoient le fil entier de toute façon.
+   * fix-ok: cause mesurée — la clé de session contient le dossier (`cleAvecDossier`) et tout changement
+   * de clé oublie la session (bloc « known.key !== sessionKey »). Le passage aller perdait la reprise
+   * (test rouge mesuré, `resumeSessionId` undefined au lieu de 'sess-1'), et le retour au dossier d'avant
+   * la perdait aussi : le fournisseur ne rendait plus la copie, et seul le sens aller était suivi. Le
+   * correctif suit la session dans les deux sens, et seulement entre le dossier d'avant et sa copie.
    */
-  const sessionSuivieVersLaCopie = (): boolean => {
+  const sessionSuivieEntreCopieEtDossier = (): boolean => {
     const copie = copieDuFil(conversationId)
-    if (!known || !copie || !memeCheminSurDisque(copie.chemin, workspaceDeSession)) return false
+    if (!known || !copie) return false
     const dossierAvant = resolve(copie.dossierAvant ?? copie.depot)
-    if (memeCheminSurDisque(dossierAvant, workspaceDeSession)) return false
-    if (known.key !== cleAvecDossier(dossierAvant, compteAuDepart)) return false
+    const chemin = resolve(copie.chemin)
+    const dansLaCopie = memeCheminSurDisque(chemin, workspaceDeSession)
+    const dansLeDossierAvant = memeCheminSurDisque(dossierAvant, workspaceDeSession)
+    // Ni dans la copie, ni revenu dans le dossier d'avant : le fil est ailleurs, rien à suivre.
+    if (dansLaCopie === dansLeDossierAvant) return false
+    // La destination est le cwd exact du tour : le CLI range la session sous ce nom-là.
+    const depuis = dansLaCopie ? dossierAvant : chemin
+    if (known.key !== cleAvecDossier(depuis, compteAuDepart)) return false
     return (
-      suivreSessionVersCopie({
+      suivreSessionEntreDossiers({
         configDir: configDuCompte(),
-        depuis: dossierAvant,
+        depuis,
         vers: workspaceDeSession,
         sessionId: known.sessionId
       }) === 'suivie'
     )
   }
-  const suivie = providerResumes && known ? sessionSuivieVersLaCopie() : false
+  const suivie = providerResumes && known ? sessionSuivieEntreCopieEtDossier() : false
   const resumeSessionId =
     providerResumes && (known?.key === sessionKey || suivie) ? known?.sessionId : undefined
   // Un détour par un autre provider/modèle ajoute des échanges absents de l'ancienne session.

@@ -128,14 +128,15 @@ export function supprimerHistoriqueCli(
   return supprimes
 }
 
-/** Ce qu'il advient de la session d'un fil au passage dans sa copie (voir `suivreSessionVersCopie`). */
+/** Ce qu'il advient de la session d'un fil quand il change de dossier (voir `suivreSessionEntreDossiers`). */
 export type SuiviDeSession = 'suivie' | 'absente' | 'echec'
 
 /**
- * LA SESSION SUIT LE FIL DANS SA COPIE. Le CLI cherche une session sous le dossier de SON cwd. Un fil
- * qui passe dans sa copie change de cwd : sans recopie, la reprise ne trouve plus rien et l'agent
- * relit tout le fil. On pose donc, sous le dossier de la copie, la session du fil : son `.jsonl` et
- * son dossier `<session>/` (sorties d'outils trop longues).
+ * LA SESSION SUIT LE FIL ENTRE DEUX DOSSIERS, DANS LES DEUX SENS. Le CLI cherche une session sous le
+ * dossier de SON cwd. Un fil qui passe dans sa copie, ou qui en revient quand le ménage l'a retirée,
+ * change de cwd : sans recopie, la reprise ne trouve plus rien et l'agent relit tout le fil. On pose donc,
+ * sous le dossier d'arrivée, la session du fil : son `.jsonl` et son dossier `<session>/` (sorties
+ * d'outils trop longues).
  *
  * LA SOURCE FAIT FOI, ET ELLE ÉCRASE. La clé de session pointe encore sur l'ancien dossier : le
  * dernier tour réussi sous cette clé est donc celui de la source. Une copie déjà posée sous la copie
@@ -146,7 +147,7 @@ export type SuiviDeSession = 'suivie' | 'absente' | 'echec'
  * l'identifiant est invalide), `suivie`, ou `echec` (la session n'est pas posée : le tour repart
  * sans reprise, comme avant ce mécanisme).
  */
-export function suivreSessionVersCopie(entree: {
+export function suivreSessionEntreDossiers(entree: {
   configDir?: string
   depuis: string
   vers: string

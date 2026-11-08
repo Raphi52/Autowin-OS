@@ -6,7 +6,7 @@ import {
   encoderCheminCli,
   planHistoriqueCliASupprimer,
   racinesHistoriqueCliPour,
-  suivreSessionVersCopie,
+  suivreSessionEntreDossiers,
   supprimerHistoriqueCli
 } from './historique-cli-copie'
 
@@ -83,7 +83,7 @@ describe('supprimerHistoriqueCli', () => {
   })
 })
 
-describe('suivreSessionVersCopie', () => {
+describe('suivreSessionEntreDossiers', () => {
   const SOURCE = join('D:', 'AutoWinOS')
   const VERS = join(SOURCE, '.autowin-data', 'autowin-os', 'retours-de-tour', 'essai__conv-S-1')
   const SID = '3cd742bb-8548-4ae9-8b2f-7038dd27af57'
@@ -103,7 +103,7 @@ describe('suivreSessionVersCopie', () => {
     writeFileSync(join(projets(config, SOURCE), SID, 'tool-results', 'r.txt'), 'sortie', 'utf8')
 
     expect(
-      suivreSessionVersCopie({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
+      suivreSessionEntreDossiers({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
     ).toBe('suivie')
     expect(readFileSync(join(projets(config, VERS), `${SID}.jsonl`), 'utf8')).toBe('tour 1')
     expect(readFileSync(join(projets(config, VERS), SID, 'tool-results', 'r.txt'), 'utf8')).toBe(
@@ -117,16 +117,35 @@ describe('suivreSessionVersCopie', () => {
     poser(config, VERS, 'ancienne version')
 
     expect(
-      suivreSessionVersCopie({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
+      suivreSessionEntreDossiers({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
     ).toBe('suivie')
     expect(readFileSync(join(projets(config, VERS), `${SID}.jsonl`), 'utf8')).toBe('tour 1 et 2')
     expect(readFileSync(join(projets(config, SOURCE), `${SID}.jsonl`), 'utf8')).toBe('tour 1 et 2')
   })
 
+  // fix-ok: cause mesurée — le défaut (session perdue au retour dans le dossier d'avant) est dans
+  // session-du-tour.ts, rouge sur agent-pilot.session-resume.test.ts. Ici : la copie fonctionne déjà dans
+  // le sens retour ; ce test le fige, il est vert dès la fonction générique.
+  it('retour : la session posée sous la copie revient sous le dossier d’avant, la copie reste intacte', () => {
+    const config = mkdtempSync(join(tmpdir(), 'cfg-suivi-'))
+    poser(config, VERS, 'tour 1 et 2 faits dans la copie')
+    poser(config, SOURCE, 'ancienne version')
+
+    expect(
+      suivreSessionEntreDossiers({ configDir: config, depuis: VERS, vers: SOURCE, sessionId: SID })
+    ).toBe('suivie')
+    expect(readFileSync(join(projets(config, SOURCE), `${SID}.jsonl`), 'utf8')).toBe(
+      'tour 1 et 2 faits dans la copie'
+    )
+    expect(readFileSync(join(projets(config, VERS), `${SID}.jsonl`), 'utf8')).toBe(
+      'tour 1 et 2 faits dans la copie'
+    )
+  })
+
   it('aucune session sous l’ancien dossier → absente, et rien n’est posé', () => {
     const config = mkdtempSync(join(tmpdir(), 'cfg-suivi-'))
     expect(
-      suivreSessionVersCopie({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
+      suivreSessionEntreDossiers({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
     ).toBe('absente')
     expect(existsSync(projets(config, VERS))).toBe(false)
   })
@@ -135,7 +154,7 @@ describe('suivreSessionVersCopie', () => {
     const config = mkdtempSync(join(tmpdir(), 'cfg-suivi-'))
     poser(config, SOURCE, 'tour 1')
     expect(
-      suivreSessionVersCopie({
+      suivreSessionEntreDossiers({
         configDir: config,
         depuis: SOURCE,
         vers: VERS,

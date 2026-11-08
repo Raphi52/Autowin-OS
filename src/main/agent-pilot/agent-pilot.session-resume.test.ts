@@ -10,7 +10,7 @@ import {
   configureClaudeActiveAccountId
 } from '../providers/claude-accounts'
 import {
-  copieOuTravailleLeFil,
+  copieNotee,
   dossierDeTravailDuTour,
   preparerLeDossierDuTour
 } from '../conversations/bascule-dossier-conversation'
@@ -461,7 +461,7 @@ describe('chat() — un fil qui passe dans sa copie garde la session de l’outi
     const captured: Captured[] = []
     const store = new ConversationStore(() => 1000)
     const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
-    configureCopieDuFilDuChat((conversationId) => copieOuTravailleLeFil(store.get(conversationId)))
+    configureCopieDuFilDuChat((conversationId) => copieNotee(store.get(conversationId)))
     const dossierDuTour = (conversationId?: string): string =>
       dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
     const p = pilote(captured, { reprend: true, ecrit: true, dossierDuTour })
@@ -490,7 +490,7 @@ describe('chat() — un fil qui passe dans sa copie garde la session de l’outi
     const captured: Captured[] = []
     const store = new ConversationStore(() => 1000)
     const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
-    configureCopieDuFilDuChat((conversationId) => copieOuTravailleLeFil(store.get(conversationId)))
+    configureCopieDuFilDuChat((conversationId) => copieNotee(store.get(conversationId)))
     const dossierDuTour = (conversationId?: string): string =>
       dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
     const p = pilote(captured, { reprend: true, ecrit: false, dossierDuTour })
@@ -537,7 +537,7 @@ describe('chat() — un fil qui passe dans sa copie garde la session de l’outi
     const captured: Captured[] = []
     const store = new ConversationStore(() => 1000)
     const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
-    configureCopieDuFilDuChat((conversationId) => copieOuTravailleLeFil(store.get(conversationId)))
+    configureCopieDuFilDuChat((conversationId) => copieNotee(store.get(conversationId)))
     const dossierDuTour = (conversationId?: string): string =>
       dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
     const p = pilote(captured, { reprend: false, ecrit: true, dossierDuTour })
@@ -556,5 +556,89 @@ describe('chat() — un fil qui passe dans sa copie garde la session de l’outi
     expect(captured[1].content).toContain('le code secret est 4417')
     // Aucune copie de l'ancienne session : la ligne du tour 1 n'est pas dans le dossier de la copie.
     expect(readFileSync(fichierDeSession(COPIE), 'utf8')).not.toContain('tour 1')
+  })
+
+  // fix-ok: cause mesurée — rouge : `expected undefined to be 'sess-1'`. Le fournisseur ne rendait la copie
+  // que pour un fil qui y travaille (copieOuTravailleLeFil), et la session n'était suivie que dans le sens
+  // aller : une fois le fil revenu dans son dossier d'avant, la clé de session ne retrouvait rien.
+  it('copie retirée, fil revenu dans son dossier d’avant → le tour suivant reprend la session, recopiée sous ce dossier', async () => {
+    const captured: Captured[] = []
+    const store = new ConversationStore(() => 1000)
+    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
+    configureCopieDuFilDuChat((conversationId) => copieNotee(store.get(conversationId)))
+    const dossierDuTour = (conversationId?: string): string =>
+      dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
+    const p = pilote(captured, { reprend: true, ecrit: true, dossierDuTour })
+
+    await p.chat(history('le code secret est 4417'), () => {}, undefined, 1, id)
+    await passerDansLaCopie(store, id)
+    await p.chat(
+      history('le code secret est 4417', 'noté', 'quel est le code ?'),
+      () => {},
+      undefined,
+      1,
+      id
+    )
+    // Le ménage retire la copie et remet le fil dans son dossier d'avant (`decrocher` → `revenirDeLaCopie`).
+    store.revenirDeLaCopie(id)
+    await p.chat(
+      history(
+        'le code secret est 4417',
+        'noté',
+        'quel est le code ?',
+        'le code est 4417',
+        'et maintenant ?'
+      ),
+      () => {},
+      undefined,
+      1,
+      id
+    )
+
+    expect(captured).toHaveLength(3)
+    expect(captured[2].options.workspaceCwd).toBe(DEPOT)
+    expect(captured[2].options.resumeSessionId).toBe('sess-1')
+    expect(captured[2].content).toContain('et maintenant ?')
+    expect(captured[2].content).not.toContain('le code secret est 4417')
+    // La session du dossier d'avant porte les tours faits dans la copie (« tour 2 »), pas seulement le sien.
+    expect(readFileSync(fichierDeSession(DEPOT), 'utf8')).toContain('tour 2')
+  })
+
+  it('copie retirée sans session posée sous elle → fil complet, sans reprise, rien n’est recopié', async () => {
+    const captured: Captured[] = []
+    const store = new ConversationStore(() => 1000)
+    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
+    configureCopieDuFilDuChat((conversationId) => copieNotee(store.get(conversationId)))
+    const dossierDuTour = (conversationId?: string): string =>
+      dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
+    const p = pilote(captured, { reprend: true, ecrit: false, dossierDuTour })
+
+    await p.chat(history('le code secret est 4417'), () => {}, undefined, 1, id)
+    await passerDansLaCopie(store, id)
+    await p.chat(
+      history('le code secret est 4417', 'noté', 'quel est le code ?'),
+      () => {},
+      undefined,
+      1,
+      id
+    )
+    store.revenirDeLaCopie(id)
+    await p.chat(
+      history(
+        'le code secret est 4417',
+        'noté',
+        'quel est le code ?',
+        'le code est 4417',
+        'et maintenant ?'
+      ),
+      () => {},
+      undefined,
+      1,
+      id
+    )
+
+    expect(captured[2].options.resumeSessionId).toBeUndefined()
+    expect(captured[2].content).toContain('le code secret est 4417')
+    expect(existsSync(fichierDeSession(DEPOT))).toBe(false)
   })
 })
