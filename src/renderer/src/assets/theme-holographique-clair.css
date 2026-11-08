@@ -724,6 +724,20 @@
   }
 }
 /* RECHERCHE-GROSSE:FIN */
+/* QUESTION A COTE : pas de rose, comme la saisie juste dessous. Le rose de ce theme est reserve a
+   ce qui est actif ; le panneau le prenait pour son titre et pour le bord du champ au focus, et
+   tranchait sur la saisie noire a cadre or. Le titre prend le texte des titres de panneau, le champ
+   le contour de la recherche : gris au repos, blanc pendant la saisie, sans halo. */
+:root[data-theme='holographique-clair'] .question-a-cote-titre {
+  color: var(--text);
+}
+:root[data-theme='holographique-clair'] .question-a-cote-champ {
+  border-color: rgba(20, 15, 40, 0.435);
+}
+:root[data-theme='holographique-clair'] .question-a-cote-champ:focus {
+  border-color: #121018;
+  box-shadow: none;
+}
 :root[data-theme='holographique-clair'] .cosmic-outline .conv-item {
   border: 1px solid transparent;
   border-radius: 14px;

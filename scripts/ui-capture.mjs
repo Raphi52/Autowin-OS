@@ -1570,6 +1570,10 @@ const main = async () => {
   // sans la saisie presentee comme avec.
   const saisie = saisieDemandee(process.argv)
   if (saisie) {
+    // L'instance cachee n'a jamais le focus de Windows : sans cette emulation, `el.focus()` ne fait
+    // pas matcher `:focus`, et la capture montre le champ AU REPOS alors que l'utilisateur, lui,
+    // le voit pendant qu'il ecrit (contour de focus).
+    await envoyer('Emulation.setFocusEmulationEnabled', { enabled: true })
     const avant = await evaluer(`(() => {
       const el = document.querySelector(${JSON.stringify(saisie.champ)})
       if (!el || !(el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement)) return { echec: true }
