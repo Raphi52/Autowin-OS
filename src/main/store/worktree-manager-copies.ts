@@ -611,6 +611,7 @@ export async function tenterRetraitDisqueAsync(
   }
 }
 
+// fix-ok: cause mesurée — test rouge « copie que git ne connaît plus, retirée par le disque : son historique CLI part avec elle » (worktree-manager-copies.test.ts) : l'historique restait après le retrait disque, car ce chemin n'appelait jamais le rangement.
 /**
  * Dernier recours commun aux deux formes : le disque, puis `worktree prune`, puis l'echec VISIBLE.
  * `detailDisque` : retrait disque DÉJÀ tenté par la forme asynchrone ; absent, il est fait ici.
@@ -620,9 +621,20 @@ export function finirBalayageParLeDisque(
   path: string,
   detailDisque?: string
 ): boolean {
+  // Relevées AVANT le retrait : les copies voisines protègent leur propre historique CLI.
+  const voisines = copiesVivantes(path)
   const detail = detailDisque ?? this.tenterRetraitDisque(path)
   this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
-  if (!existsSync(path)) return this.oublierEchecDeBalayage(path)
+  if (!existsSync(path)) {
+    /*
+     * Ce chemin ne passe pas par `conclureRetraitDeCopie` : sans ce rangement, une copie retirée par le
+     * disque laissait son historique CLI sous `~/.claude/projects` (test rouge : l'historique restait).
+     * La fiche de suppression, posée au début, s'efface avec la copie.
+     */
+    supprimerHistoriqueCli(path, voisines)
+    this.oublierSuppressionCommencee(path)
+    return this.oublierEchecDeBalayage(path)
+  }
 
   this.noterEchecDeBalayage(path, detail || 'le dossier de la copie survit au balayage')
   return false
