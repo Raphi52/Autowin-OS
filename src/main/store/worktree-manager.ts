@@ -684,6 +684,12 @@ export class WorktreeManager {
   declare commitDejaReference: OmitThisParameter<typeof copies.commitDejaReference>
   declare sweepAbandonedAgentCopies: typeof copies.sweepAbandonedAgentCopies
   declare sweepAbandonedAgentCopiesAsync: OmitThisParameter<typeof copies.sweepAbandonedAgentCopiesAsync>
+  declare noterSuppressionCommencee: typeof copies.noterSuppressionCommencee
+  declare oublierSuppressionCommencee: typeof copies.oublierSuppressionCommencee
+  declare reprendreSuppressionsCommencees: typeof copies.reprendreSuppressionsCommencees
+  declare reprendreSuppressionsCommenceesAsync: OmitThisParameter<
+    typeof copies.reprendreSuppressionsCommenceesAsync
+  >
   declare markProcess: OmitThisParameter<typeof copies.markProcess>
   declare markSpawnIntent: OmitThisParameter<typeof copies.markSpawnIntent>
   declare confirmSpawn: OmitThisParameter<typeof copies.confirmSpawn>

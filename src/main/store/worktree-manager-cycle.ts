@@ -71,14 +71,20 @@ export function shaDuReflog(this: WorktreeManager, path: string): string | undef
   }
 }
 
+/** Le retrait ne part pas sans la note qui le rend reprenable : la copie est gardée telle quelle. */
+const DETAIL_NOTE_REFUSEE = 'la note de retrait n’a pas pu être écrite : la copie est gardée'
+
 export function cleanupWorktree(
   this: WorktreeManager,
   path: string,
   force = true
 ): { ok: boolean; detail?: string } {
   const voisines = this.preparerRetraitDeCopie(path)
+  if (voisines === undefined) return { ok: false, detail: DETAIL_NOTE_REFUSEE }
   const remove = this.tryGitFn(this.baseRepo, argsDeRetraitDeCopie(path, force))
-  return this.conclureRetraitDeCopie(path, force, remove, voisines)
+  const resultat = this.conclureRetraitDeCopie(path, force, remove, voisines)
+  this.oublierSuppressionCommencee(path)
+  return resultat
 }
 
 /**
@@ -99,13 +105,23 @@ export async function cleanupWorktreeAsync(
   force = true
 ): Promise<{ ok: boolean; detail?: string }> {
   const voisines = this.preparerRetraitDeCopie(path)
+  if (voisines === undefined) return { ok: false, detail: DETAIL_NOTE_REFUSEE }
   const remove = await this.tryGitAsyncFn(this.baseRepo, argsDeRetraitDeCopie(path, force))
   const detailDisque =
     remove.code !== 0 && force ? await this.tenterRetraitDisqueAsync(path) : undefined
-  return this.conclureRetraitDeCopie(path, force, remove, voisines, detailDisque)
+  const resultat = this.conclureRetraitDeCopie(path, force, remove, voisines, detailDisque)
+  this.oublierSuppressionCommencee(path)
+  return resultat
 }
 
-export function preparerRetraitDeCopie(this: WorktreeManager, path: string): string[] {
+/**
+ * `undefined` : la note de retrait n'a pas pu être écrite, et rien n'a été touché. Sans elle, un retrait
+ * coupé ne serait reconnaissable nulle part.
+ */
+export function preparerRetraitDeCopie(this: WorktreeManager, path: string): string[] | undefined {
+  // La note passe AVANT le lien git : c'est git qui le retire en premier, et un arrêt à ce moment-là
+  // laisserait un dossier sans lien que personne ne reprendrait.
+  if (!this.noterSuppressionCommencee(path)) return undefined
   /*
    * Les copies encore presentes sont relevees AVANT toute suppression : elles servent a proteger
    * leur propre historique CLI, et apres coup la copie visee aurait deja disparu de la liste.

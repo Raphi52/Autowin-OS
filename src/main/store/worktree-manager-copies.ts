@@ -11,11 +11,13 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  rmdirSync,
   rmSync,
   statSync,
   writeFileSync
 } from 'node:fs'
-import { isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
+import { delierLesDependances } from './dependances-copie-agent'
 import { isSameProcessIdentity } from '../app/process-identity'
 import { parsePorcelainPaths } from '../runs/run-autoclose'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
@@ -549,6 +551,8 @@ function deciderApresAppartenance(
  * ici n'est donc qu'une question de MOYEN de suppression, pas de securite.
  */
 export function balayerLeChemin(this: WorktreeManager, path: string): boolean {
+  // Sans note écrite, rien ne part : l'escalade disque ci-dessous ne doit jamais couper un retrait non noté.
+  if (!this.noterSuppressionCommencee(path)) return false
   if (this.cleanupWorktree(path, false).ok) return this.oublierEchecDeBalayage(path)
 
   /*
@@ -574,6 +578,8 @@ export function balayerLeChemin(this: WorktreeManager, path: string): boolean {
  * sur une copie oubliée de git (`balayage-disque-async.test.ts`).
  */
 export async function balayerLeCheminAsync(this: WorktreeManager, path: string): Promise<boolean> {
+  // Même porte que `balayerLeChemin` : pas de retrait, même par le disque, sans note écrite.
+  if (!this.noterSuppressionCommencee(path)) return false
   if ((await this.cleanupWorktreeAsync(path, false)).ok) return this.oublierEchecDeBalayage(path)
   if (this.estWorktreeEnregistree(path) && (await this.cleanupWorktreeAsync(path, true)).ok) {
     return this.oublierEchecDeBalayage(path)
@@ -743,8 +749,214 @@ export function commitDejaReference(this: WorktreeManager, sha: string): boolean
   return Boolean(containing.stdout.trim())
 }
 
+/*
+ * LA NOTE DE RETRAIT. Retirer une copie commence par son lien git : c'est git qui le retire en premier,
+ * puis le dossier. Si le retrait s'arrête entre les deux, le dossier reste SANS lien, et
+ * `ownershipIssueAsync` le refuse à chaque passage : rien ne le reprenait jamais (22 copies le 08/11).
+ *
+ * Avant tout geste sur la copie, on écrit donc une fiche `.a-supprimer/<agent>.json` : « un retrait de
+ * cette copie a été demandé », avec l'instant de création du dossier. Le passage suivant reprend un
+ * dossier qui porte la fiche ET n'a plus de lien git. Un dossier recréé au même nom (un run qui revient)
+ * a une autre création : il n'est jamais touché. Un dossier qui garde son lien reste au balayage normal,
+ * qui le juge avec toutes ses gardes.
+ */
+// fix-ok: cause mesurée par worktree-manager-copies.test.ts (rouge avant le correctif, 3 échecs sur `existsSync`) : un retrait coupé laisse un dossier sans `.git`, que `ownershipIssueAsync` refuse à chaque passage, et rien ne désignait ce dossier pour reprise.
+export const DOSSIER_DES_FICHES_DE_SUPPRESSION = '.a-supprimer'
+
+interface FicheDeSuppression {
+  agentId: string
+  /** 0 quand le disque ne donne pas l'instant de création : la vérification d'identité est alors sautée. */
+  naissance: number
+}
+
+type VerdictDeReprise = 'attendre' | 'laisser' | 'oublier' | 'finir' | 'retirer'
+
+function identifiantDeCopieAgent(chemin: string): string | undefined {
+  const nom = basename(chemin)
+  if (!nom.startsWith('agent__')) return undefined
+  const agentId = nom.slice('agent__'.length)
+  return SAFE_ID.test(agentId) ? agentId : undefined
+}
+
+function dossierDesFiches(racine: string): string {
+  return join(racine, DOSSIER_DES_FICHES_DE_SUPPRESSION)
+}
+
+function ficheDe(racine: string, agentId: string): string {
+  return join(dossierDesFiches(racine), `${agentId}.json`)
+}
+
+/** L'instant de création du dossier ; `undefined` s'il n'existe pas. */
+function naissanceDuDossier(chemin: string): number | undefined {
+  try {
+    return statSync(chemin).birthtimeMs
+  } catch {
+    return undefined
+  }
+}
+
+/** Efface une fiche, puis le dossier des fiches s'il est vide. */
+function retirerLaFiche(racine: string, agentId: string): void {
+  rmSync(ficheDe(racine, agentId), { force: true })
+  try {
+    rmdirSync(dossierDesFiches(racine))
+  } catch {
+    /* encore des fiches dedans : rien à faire */
+  }
+}
+
+/**
+ * Note qu'un retrait de cette copie commence. Rend `false` si la note ne peut pas être écrite : dans ce
+ * cas le retrait ne doit pas commencer, sinon il ne serait pas reconnaissable s'il s'arrêtait.
+ */
+export function noterSuppressionCommencee(this: WorktreeManager, chemin: string): boolean {
+  const agentId = identifiantDeCopieAgent(chemin)
+  if (!agentId) return true
+  const naissance = naissanceDuDossier(chemin)
+  if (naissance === undefined) return true
+  try {
+    mkdirSync(dossierDesFiches(this.worktreeRoot), { recursive: true })
+    writeFileSync(ficheDe(this.worktreeRoot, agentId), JSON.stringify({ agentId, naissance }))
+    return true
+  } catch (erreur) {
+    this.noterEchecDeBalayage(
+      chemin,
+      `la note de retrait n’a pas pu être écrite : ${message(erreur)}`
+    )
+    return false
+  }
+}
+
+/** Efface la fiche une fois la copie partie. Tant que le dossier est là, la fiche reste. */
+export function oublierSuppressionCommencee(this: WorktreeManager, chemin: string): void {
+  const agentId = identifiantDeCopieAgent(chemin)
+  if (!agentId || existsSync(chemin)) return
+  retirerLaFiche(this.worktreeRoot, agentId)
+}
+
+function message(erreur: unknown): string {
+  return erreur instanceof Error ? erreur.message : String(erreur)
+}
+
+function fichesDeSuppression(racine: string): FicheDeSuppression[] {
+  let noms: string[]
+  try {
+    noms = readdirSync(dossierDesFiches(racine))
+  } catch {
+    return []
+  }
+  const fiches: FicheDeSuppression[] = []
+  for (const nom of noms) {
+    if (!nom.endsWith('.json')) continue
+    try {
+      const lue = JSON.parse(readFileSync(join(dossierDesFiches(racine), nom), 'utf8')) as Partial<
+        Record<keyof FicheDeSuppression, unknown>
+      >
+      if (
+        typeof lue.agentId === 'string' &&
+        SAFE_ID.test(lue.agentId) &&
+        nom === `${lue.agentId}.json` &&
+        typeof lue.naissance === 'number'
+      ) {
+        fiches.push({ agentId: lue.agentId, naissance: lue.naissance })
+      }
+    } catch {
+      /* fiche illisible : on ne devine pas ce qu'elle protège, on la laisse */
+    }
+  }
+  return fiches
+}
+
+/**
+ * Ce que le passage suivant fait d'une fiche. Le dossier n'est touché que dans le cas `retirer` : fiche
+ * présente, dossier de la même création, sans lien git, sans bail.
+ */
+function verdictDeReprise(
+  this: WorktreeManager,
+  fiche: FicheDeSuppression,
+  chemin: string
+): VerdictDeReprise {
+  if (this.hasActiveProcesses(fiche.agentId)) return 'attendre'
+  const naissance = naissanceDuDossier(chemin)
+  if (naissance === undefined) return 'finir'
+  if (fiche.naissance !== 0 && naissance !== fiche.naissance) return 'oublier'
+  if (existsSync(join(chemin, '.git'))) return 'laisser'
+  return 'retirer'
+}
+
+/**
+ * Reprend les retraits coupés : la jonction des modules d'abord (jamais suivie), puis le dossier, puis
+ * `worktree prune`. Une reprise qui échoue reste notée et garde sa fiche pour le passage suivant.
+ */
+export function reprendreSuppressionsCommencees(this: WorktreeManager): string[] {
+  const reprises: string[] = []
+  for (const fiche of fichesDeSuppression(this.worktreeRoot)) {
+    const chemin = join(this.worktreeRoot, `agent__${fiche.agentId}`)
+    const verdict = verdictDeReprise.call(this, fiche, chemin)
+    if (verdict === 'attendre' || verdict === 'laisser') continue
+    if (verdict === 'oublier') {
+      retirerLaFiche(this.worktreeRoot, fiche.agentId)
+      continue
+    }
+    const voisines = copiesVivantes(chemin)
+    if (verdict === 'retirer') {
+      const lien = delierLesDependances(chemin)
+      if (lien.fait === 'echec') {
+        this.noterEchecDeBalayage(chemin, lien.raison)
+        continue
+      }
+      const detail = this.tenterRetraitDisque(chemin)
+      if (existsSync(chemin)) {
+        this.noterEchecDeBalayage(chemin, detail || 'le dossier survit à la reprise')
+        continue
+      }
+    }
+    this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
+    supprimerHistoriqueCli(chemin, voisines)
+    retirerLaFiche(this.worktreeRoot, fiche.agentId)
+    this.oublierEchecDeBalayage(chemin)
+    reprises.push(fiche.agentId)
+  }
+  return reprises
+}
+
+/** `reprendreSuppressionsCommencees` sans tenir la boucle : même verdict, retraits attendus. */
+export async function reprendreSuppressionsCommenceesAsync(
+  this: WorktreeManager
+): Promise<string[]> {
+  const reprises: string[] = []
+  for (const fiche of fichesDeSuppression(this.worktreeRoot)) {
+    const chemin = join(this.worktreeRoot, `agent__${fiche.agentId}`)
+    const verdict = verdictDeReprise.call(this, fiche, chemin)
+    if (verdict === 'attendre' || verdict === 'laisser') continue
+    if (verdict === 'oublier') {
+      retirerLaFiche(this.worktreeRoot, fiche.agentId)
+      continue
+    }
+    const voisines = copiesVivantes(chemin)
+    if (verdict === 'retirer') {
+      const lien = delierLesDependances(chemin)
+      if (lien.fait === 'echec') {
+        this.noterEchecDeBalayage(chemin, lien.raison)
+        continue
+      }
+      const detail = await this.tenterRetraitDisqueAsync(chemin)
+      if (existsSync(chemin)) {
+        this.noterEchecDeBalayage(chemin, detail || 'le dossier survit à la reprise')
+        continue
+      }
+    }
+    await this.tryGitAsyncFn(this.baseRepo, ['worktree', 'prune'])
+    supprimerHistoriqueCli(chemin, voisines)
+    retirerLaFiche(this.worktreeRoot, fiche.agentId)
+    this.oublierEchecDeBalayage(chemin)
+    reprises.push(fiche.agentId)
+  }
+  return reprises
+}
+
 export function sweepAbandonedAgentCopies(this: WorktreeManager): string[] {
-  const swept: string[] = []
+  const swept: string[] = this.reprendreSuppressionsCommencees()
   for (const entry of this.copiesCandidates()) {
     const balayee = this.balayerUneCopie(entry)
     if (balayee) swept.push(balayee)
@@ -759,7 +971,7 @@ export function sweepAbandonedAgentCopies(this: WorktreeManager): string[] {
  * ce balayage est du ramassage OPPORTUNISTE dont rien n'attend le résultat.
  */
 export async function sweepAbandonedAgentCopiesAsync(this: WorktreeManager): Promise<string[]> {
-  const swept: string[] = []
+  const swept: string[] = await this.reprendreSuppressionsCommenceesAsync()
   for (const entry of this.copiesCandidates()) {
     const balayee = await this.balayerUneCopieAsync(entry)
     if (balayee) swept.push(balayee)
