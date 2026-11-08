@@ -489,7 +489,14 @@ describe('fusionnerBureaux — numéro de processus repris par un autre programm
   )
 })
 
-import { argumentsAct, agirHdesk, TOUCHES_TV } from './hdesk-tv'
+import {
+  argumentsAct,
+  argumentsElement,
+  agirHdesk,
+  refusAct,
+  texteDuGeste,
+  TOUCHES_TV
+} from './hdesk-tv'
 describe('TV interactive — geste vers hdesk-act', () => {
   it('construit l’appel de hdesk-act.ps1 avec clic arrondi, texte et Entrée', () => {
     const a = argumentsAct('R', { id: 'run-1', x: 10.6, y: 4.2, texte: 'abc', entree: true })
@@ -500,11 +507,19 @@ describe('TV interactive — geste vers hdesk-act', () => {
       '11',
       '-Y',
       '4',
-      '-Texte',
-      'abc',
+      '-TexteEntree',
       '-Entree'
     ])
     expect(a[4]).toBe(join('R', 'scripts', 'hdesk-act.ps1'))
+  })
+  // La ligne de commande d'un processus se lit depuis tout le poste (Gestionnaire des tâches, WMI) :
+  // un code de connexion tapé y passait en clair. Il part désormais sur l'entrée standard.
+  it('le texte tapé ne passe JAMAIS dans la ligne de commande : il part sur l’entrée standard', () => {
+    const g = { id: 'run-1', x: 1, y: 2, texte: 'CODE-SECRET-42' }
+    expect(argumentsAct('R', g).join(' ')).not.toContain('CODE-SECRET-42')
+    expect(texteDuGeste(g)).toBe('CODE-SECRET-42')
+    expect(texteDuGeste({ id: 'run-1', x: 1, y: 2 })).toBeUndefined()
+    expect(argumentsAct('R', { id: 'run-1', x: 1, y: 2 })).not.toContain('-TexteEntree')
   })
   it('refuse un identifiant hors ^[a-zA-Z0-9_-]+$ sans rien lancer', async () => {
     expect(() => argumentsAct('R', { id: 'a b;calc', x: 1, y: 1 })).toThrow(/invalide/)
@@ -528,7 +543,7 @@ describe('TV interactive — geste vers hdesk-act', () => {
       /trop long/
     )
     expect(argumentsAct('R', { id: 'a', x: 1, y: 1, texte: 'x'.repeat(1000) })).toContain(
-      'x'.repeat(1000)
+      '-TexteEntree'
     )
   })
   it('un registre donné (tests) part en -Registre ; sans lui, rien n’est ajouté', () => {
@@ -673,6 +688,56 @@ describe('bureau caché fermé — le journal des gestes part avec lui', () => {
     expect(existsSync(join(d, 'ui-capture-1.gestes.jsonl'))).toBe(false)
     expect(existsSync(join(d, 'vivant.gestes.jsonl'))).toBe(true)
     rmSync(d, { recursive: true, force: true })
+  })
+  // Les lectures gardées (repères de scripts/hdesk-arbre.cs) portent les noms des éléments lus.
+  it('efface aussi <id>.lectures.txt des bureaux fermés ; garde celui des vivants', () => {
+    const d = mkdtempSync(join(tmpdir(), 'hdesk-purge-lectures-'))
+    for (const id of ['mort', 'vivant']) writeFileSync(join(d, `${id}.lectures.txt`), 'L\tabc\t1\n')
+    purgerBureauxFermes(d, ['vivant'])
+    expect(existsSync(join(d, 'mort.lectures.txt'))).toBe(false)
+    expect(existsSync(join(d, 'vivant.lectures.txt'))).toBe(true)
+    rmSync(d, { recursive: true, force: true })
+  })
+})
+
+describe('refus de hdesk-act — code en tête', () => {
+  it('sépare le code « [PERIME] » du message', () => {
+    expect(refusAct('[PERIME] L’élément a changé.\nReessai : relis l’arbre.')).toEqual({
+      ok: false,
+      code: 'PERIME',
+      message: 'L’élément a changé.\nReessai : relis l’arbre.'
+    })
+  })
+  it('un refus sans code reste un message, sans code inventé', () => {
+    expect(refusAct('Bureau introuvable.')).toEqual({ ok: false, message: 'Bureau introuvable.' })
+  })
+})
+
+describe('remplir un champ — valeur sur l’entrée standard', () => {
+  it('-Remplir -TexteEntree, la valeur jamais dans la ligne de commande ; vide = vider', () => {
+    const g = { id: 'b1', element: '@k3f9a2:e4', valeur: 'mot-a-garder' }
+    const a = argumentsElement('R', g)
+    expect(a).toEqual(
+      expect.arrayContaining(['-Element', '@k3f9a2:e4', '-Remplir', '-TexteEntree'])
+    )
+    expect(a.join(' ')).not.toContain('mot-a-garder')
+    expect(texteDuGeste(g)).toBe('mot-a-garder')
+    expect(texteDuGeste({ id: 'b1', element: 'x', valeur: '' })).toBe('')
+    expect(argumentsElement('R', { id: 'b1', element: 'x', valeur: '' })).toContain('-Remplir')
+  })
+  it('sans valeur : un appui, ni -Remplir ni entrée standard', () => {
+    const a = argumentsElement('R', { id: 'b1', element: 'OK' })
+    expect(a).not.toContain('-Remplir')
+    expect(a).not.toContain('-TexteEntree')
+    expect(texteDuGeste({ id: 'b1', element: 'OK' })).toBeUndefined()
+  })
+  it('valeur trop longue (> 5000) refusée ; jumeau accepté à 5000', () => {
+    expect(() =>
+      argumentsElement('R', { id: 'b1', element: 'x', valeur: 'v'.repeat(5001) })
+    ).toThrow(/5000/)
+    expect(argumentsElement('R', { id: 'b1', element: 'x', valeur: 'v'.repeat(5000) })).toContain(
+      '-Remplir'
+    )
   })
 })
 

@@ -247,9 +247,10 @@ export function purgerBureauxFermes(dossier: string, vivants: readonly string[])
       // Fichier encore tenu par un processus qui se termine : repris au prochain passage.
     }
   }
-  // JOURNAL DES GESTES : part avec son bureau, qu'il ait une fiche ou non (ui-capture-*).
+  // JOURNAL DES GESTES et LECTURES GARDÉES (repères de scripts/hdesk-arbre.cs, avec les noms des
+  // éléments lus) : partent avec leur bureau, qu'il ait une fiche ou non (ui-capture-*).
   for (const nom of existsSync(dossier) ? readdirSync(dossier) : []) {
-    const m = /^([a-zA-Z0-9_-]+)\.gestes\.jsonl$/.exec(nom)
+    const m = /^([a-zA-Z0-9_-]+)\.(?:gestes\.jsonl|lectures\.txt)$/.exec(nom)
     if (!m || enVie.has(m[1])) continue
     try {
       rmSync(join(dossier, nom), { force: true })
@@ -547,6 +548,8 @@ export const TOUCHES_TV = [
 export const COORDONNEE_MAX = 32767
 /** Frappe bornée : un texte énorme bloquerait le geste jusqu'au délai de 20 s. */
 export const FRAPPE_MAX = 1000
+/** Remplissage d'un champ (`valeur`) : une seule opération d'accessibilité, d'où une borne plus large. */
+export const VALEUR_MAX = 5000
 
 /**
  * `registre` : dossier du journal des gestes (`<id>.gestes.jsonl`) ; absent = celui du script
@@ -574,7 +577,10 @@ export function argumentsAct(racine: string, g: GesteTv, registre?: string): str
     '-Y',
     String(Math.round(g.y))
   ]
-  if (typeof g.texte === 'string' && g.texte) args.push('-Texte', g.texte)
+  // Le texte part sur l'entrée standard (`texteDuGeste`), jamais dans la ligne de commande : celle-ci
+  // se lit depuis tout processus du poste (Gestionnaire des tâches, WMI), et un code de connexion y
+  // passait en clair.
+  if (typeof g.texte === 'string' && g.texte) args.push('-TexteEntree')
   if (g.entree === true) args.push('-Entree')
   if (g.touche !== undefined) {
     if (!(TOUCHES_TV as readonly string[]).includes(g.touche)) throw new Error('Touche inconnue.')
@@ -599,8 +605,29 @@ export type ActionHdesk = {
   /** Appui par nom : l'élément visé et le moyen employé (`clic` ou `accessibilite:…`). */
   element?: unknown
   appui?: string
+  /** Appui par élément : ce qui a changé dans sa fenêtre après le geste (scripts/hdesk-arbre.cs, EtatApres). */
+  apres?: ApresGeste
 }
-export type ResultatGeste = { ok: true; action?: ActionHdesk } | { ok: false; message: string }
+export interface ApresGeste {
+  changement?: boolean
+  attenteMs?: number
+  /** État de l'élément après le geste, ou « disparu » / « inconnu ». */
+  element?: unknown
+  changements?: string[]
+  fenetres?: string[]
+}
+/**
+ * `code` : celui d'un refus d'appui par élément (« [PERIME] … », scripts/hdesk-arbre.cs) — PERIME,
+ * INVALIDE, INTROUVABLE, AMBIGU, INACTIF, HORS_ECRAN, REFUSE, SANS_ARBRE.
+ */
+export type ResultatGeste =
+  { ok: true; action?: ActionHdesk } | { ok: false; message: string; code?: string }
+
+/** Refus de hdesk-act.ps1 (stderr) : son code entre crochets en tête, s'il y en a un. */
+export function refusAct(message: string): { ok: false; message: string; code?: string } {
+  const m = /^\[([A-Z_]+)\]\s*/.exec(message)
+  return m ? { ok: false, message: message.slice(m[0].length), code: m[1] } : { ok: false, message }
+}
 
 // hdesk-act.ps1 ecrit son JSON {instanceId,x,y,cible,messages} sur la derniere ligne JSON de stdout.
 export function resultatAct(out: string): ResultatGeste {
@@ -620,14 +647,17 @@ export function resultatAct(out: string): ResultatGeste {
 }
 
 /**
- * APPUI PAR NOM : `element` = identifiant, nom ou libellé d'un élément de l'arbre
- * d'accessibilité du bureau (scripts/hdesk-arbre.cs). `origine` : celle de l'image que l'agent regarde,
- * pour que les positions citées dans un refus soient en pixels de SON image.
+ * APPUI PAR ÉLÉMENT : `element` = repère `@<lecture>:e<n>` (refusé si l'élément a changé depuis la
+ * lecture), identifiant, nom ou libellé d'un élément de l'arbre d'accessibilité du bureau
+ * (scripts/hdesk-arbre.cs). `origine` : celle de l'image que l'agent regarde, pour que les positions
+ * citées dans un refus soient en pixels de SON image. `valeur` : REMPLIT le champ au lieu d'appuyer
+ * (vide = le vider).
  */
 export interface GesteElement {
   id: string
   element: string
   origine?: OrigineCapture
+  valeur?: string
 }
 
 /** Longueur maximale d'un `element` : au-delà, ce n'est plus un nom d'élément. */
@@ -664,8 +694,21 @@ export function argumentsElement(racine: string, g: GesteElement, registre?: str
       '-OrigineY',
       String(Math.min(o.y, COORDONNEE_MAX))
     )
+  if (g.valeur !== undefined) {
+    if (typeof g.valeur !== 'string') throw new Error('Valeur invalide : un texte est attendu.')
+    if (g.valeur.length > VALEUR_MAX)
+      throw new Error(`Valeur trop longue (${VALEUR_MAX} caractères au plus).`)
+    // La valeur part sur l'entrée standard, comme la frappe (`texteDuGeste`).
+    args.push('-Remplir', '-TexteEntree')
+  }
   if (typeof registre === 'string' && registre) args.push('-Registre', registre)
   return args
+}
+
+/** Texte que le geste envoie sur l'entrée standard de hdesk-act.ps1 (`-TexteEntree`), s'il en a un. */
+export function texteDuGeste(g: GesteTv | GesteElement): string | undefined {
+  if (estGesteElement(g)) return typeof g.valeur === 'string' ? g.valeur : undefined
+  return typeof g.texte === 'string' && g.texte ? g.texte : undefined
 }
 
 export function agirHdesk(
@@ -681,11 +724,21 @@ export function agirHdesk(
   } catch (e) {
     return Promise.resolve({ ok: false, message: (e as Error).message })
   }
+  const texte = texteDuGeste(g)
   return new Promise((resolve) => {
-    execFile('powershell.exe', args, { windowsHide: true, timeout: 20000 }, (err, out, errOut) => {
-      if (err) resolve({ ok: false, message: String(errOut || err.message).trim() })
-      else resolve(resultatAct(String(out)))
-    })
+    const enfant = execFile(
+      'powershell.exe',
+      args,
+      { windowsHide: true, timeout: 20000 },
+      (err, out, errOut) => {
+        if (err) resolve(refusAct(String(errOut || err.message).trim()))
+        else resolve(resultatAct(String(out)))
+      }
+    )
+    // Entrée standard fermée dans tous les cas : sans texte, le script ne la lit pas. Un processus
+    // déjà mort à l'écriture (EPIPE) est rapporté par le rappel ci-dessus.
+    enfant.stdin?.on('error', () => {})
+    enfant.stdin?.end(texte ?? '', 'utf8')
   })
 }
 

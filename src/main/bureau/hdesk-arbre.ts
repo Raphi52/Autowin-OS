@@ -28,10 +28,15 @@ import {
 export const ARBRE_PLAFOND = 500
 /** Texte de l'arbre joint à une observation : il entre dans le contexte du modèle à chaque capture. */
 export const ARBRE_TEXTE_MAX = 4000
-/** Lecture de l'arbre : PowerShell + compilation du C# (≈ 1 à 3 s), plus l'arbre lui-même. */
+/**
+ * Lecture de l'arbre : PowerShell + chargement du C# (compilé une fois, scripts/hdesk-types.ps1),
+ * plus l'arbre lui-même — mesure du 2026-11-08 : 0,6 à 0,9 s pour la Table des caractères.
+ */
 const ARBRE_DELAI_MS = 20_000
 
 export interface ElementArbre {
+  /** Repère `@<lecture>:e<n>` : vise CET élément, refusé s'il a disparu ou changé depuis la lecture. */
+  ref?: string
   type: string
   nom?: string
   id?: string
@@ -46,10 +51,14 @@ export interface ElementArbre {
   horsEcran?: boolean
   coche?: string
   valeur?: string
+  /** Champ dont la valeur se remplit par `valeur` dans bureau_cache_agir (jamais un mot de passe). */
+  modifiable?: boolean
   fenetre: number
 }
 
 export interface ArbreHdesk {
+  /** Identifiant de la lecture, celui des repères ; absent d'un ancien script. */
+  lecture?: string
   fenetres: string[]
   total: number
   omis: number
@@ -89,6 +98,7 @@ export function interpreterArbre(out: string): LectureArbre {
     return {
       ok: true,
       arbre: {
+        ...(typeof brut.lecture === 'string' && brut.lecture ? { lecture: brut.lecture } : {}),
         fenetres: brut.fenetres.map(String),
         total: Number.isFinite(brut.total) ? Number(brut.total) : brut.elements.length,
         omis: Number.isFinite(brut.omis) ? Number(brut.omis) : 0,
@@ -136,12 +146,14 @@ const CONTROLES = new Set([
 function ligneElement(e: ElementArbre, o: OrigineCapture): string {
   const montre = e.nom || e.libelle || ''
   let l = `${e.type}${montre ? ` « ${montre} »` : ''}`
+  if (typeof e.ref === 'string' && e.ref) l += ` ${e.ref}`
   if (e.id && e.id !== montre) l += ` id=${e.id}`
   if (Number.isFinite(e.x) && Number.isFinite(e.largeur))
     l += ` (${Math.round(e.x! + e.largeur! / 2 - o.x)},${Math.round(e.y! + e.hauteur! / 2 - o.y)})`
   if (e.actif === false) l += ' inactif'
   if (e.coche) l += ` coché=${e.coche}`
   if (typeof e.valeur === 'string' && e.valeur) l += ` valeur=« ${e.valeur} »`
+  if (e.modifiable === true) l += ' remplissable'
   return l
 }
 
@@ -166,9 +178,11 @@ export function texteArbre(
     .map((e, i) => ({ e, i }))
     .sort((a, b) => a.e.fenetre - b.e.fenetre || rang(a.e) - rang(b.e) || a.i - b.i)
     .map((x) => x.e)
-  const tete =
-    "Arbre d'accessibilité (position = centre, en pixels de cette image). " +
-    'bureau_cache_agir accepte `element` = id, nom ou libellé, à la place de x/y.'
+  const tete = arbre.lecture
+    ? `Arbre d'accessibilité, lecture ${arbre.lecture} (position = centre, en pixels de cette image). ` +
+      'bureau_cache_agir : `element` = repère @…:eN (le plus sûr : refusé si l’élément a changé depuis cette lecture), id, nom ou libellé, à la place de x/y ; `valeur` remplit un champ remplissable.'
+    : "Arbre d'accessibilité (position = centre, en pixels de cette image). " +
+      'bureau_cache_agir accepte `element` = id, nom ou libellé, à la place de x/y.'
   const lignes = [tete]
   let taille = tete.length
   let montres = 0

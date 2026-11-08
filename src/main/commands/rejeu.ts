@@ -76,14 +76,19 @@ export function redactedArgs(name: string, args: Record<string, unknown>): Recor
     }
   }
   // Un mot de passe peut passer par la frappe — seul son nombre de caractères est gardé.
-  // Même règle pour la saisie dans le navigateur intégré (lot 4/5).
-  if (
-    (name === 'bureau_cache_agir' || name === 'navigateur_agir') &&
-    typeof args.texte === 'string'
-  )
-    return redactTrace({ ...args, texte: `[${args.texte.length} caractères]` }) as Record<
-      string,
-      unknown
-    >
+  // Même règle pour la saisie dans le navigateur intégré (lot 4/5), et pour le remplissage d'un
+  // champ du bureau caché (`valeur`).
+  if (name === 'bureau_cache_agir' || name === 'navigateur_agir') {
+    const masque = { ...args }
+    let masquer = false
+    for (const cle of ['texte', 'valeur'] as const) {
+      const v = args[cle]
+      if (typeof v === 'string') {
+        masque[cle] = `[${v.length} caractères]`
+        masquer = true
+      }
+    }
+    if (masquer) return redactTrace(masque) as Record<string, unknown>
+  }
   return redactTrace(args) as Record<string, unknown>
 }

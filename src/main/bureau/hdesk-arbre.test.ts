@@ -101,6 +101,13 @@ describe('lecture de la sortie de hdesk-arbre.ps1', () => {
       }
     })
   })
+  it('garde l’identifiant de la lecture et le repère de chaque élément', () => {
+    const l = interpreterArbre(
+      '{"bureau":"b","lecture":"k3f9a2","fenetres":["F"],"total":1,"omis":0,"elements":[{"ref":"@k3f9a2:e1","type":"Edit","nom":"Nom","actif":true,"modifiable":true,"fenetre":0}]}'
+    )
+    expect(l.ok && l.arbre.lecture).toBe('k3f9a2')
+    expect(l.ok && l.arbre.elements[0].ref).toBe('@k3f9a2:e1')
+  })
   it('sortie vide ou cassée → lecture ratée, jamais un arbre vide', () => {
     for (const out of ['', 'texte', '{pas du json', '{"elements":"x","fenetres":[]}'])
       expect(interpreterArbre(out).ok).toBe(false)
@@ -157,6 +164,40 @@ describe('texte de l’arbre joint à l’observation', () => {
     expect(t).toContain('coché=Off')
     expect(t).toContain('valeur=« ! »')
     expect(t).toContain('[Fenêtre « Table des caractères »]')
+  })
+  it('repère de chaque élément et champs remplissables montrés ; en-tête qui cite la lecture', () => {
+    const t = texteArbre(
+      {
+        ok: true,
+        arbre: {
+          lecture: 'k3f9a2',
+          fenetres: ['Table des caractères'],
+          total: 2,
+          omis: 0,
+          elements: [
+            { ...SELECTIONNER, ref: '@k3f9a2:e4' },
+            {
+              ref: '@k3f9a2:e5',
+              type: 'Edit',
+              nom: 'Caractères à copier :',
+              id: '104',
+              actif: true,
+              modifiable: true,
+              x: 158,
+              y: 405,
+              largeur: 165,
+              hauteur: 26,
+              fenetre: 0
+            }
+          ]
+        }
+      },
+      { x: 7, y: 57 }
+    )
+    expect(t).toContain('Button « Sélectionner » @k3f9a2:e4 id=103 (360,360)')
+    expect(t).toMatch(/Edit « Caractères à copier : » @k3f9a2:e5 id=104 \(\d+,\d+\) remplissable/)
+    expect(t.split('\n')[0]).toContain('lecture k3f9a2')
+    expect(t.split('\n')[0]).toContain('repère')
   })
   it('libellé montré quand le nom est vide ; élément hors écran tu', () => {
     const t = texteArbre(

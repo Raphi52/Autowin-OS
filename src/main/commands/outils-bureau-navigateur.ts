@@ -3,8 +3,8 @@
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import type { Message } from '../providers/types'
-import type { GesteTv } from '../bureau/hdesk-tv'
-import { ELEMENT_MAX } from '../bureau/hdesk-tv'
+import type { ActionHdesk, GesteTv } from '../bureau/hdesk-tv'
+import { ELEMENT_MAX, VALEUR_MAX } from '../bureau/hdesk-tv'
 import { identifiantBureauCacheChat } from '../consignes/consigne-bureau-cache'
 import type { ActionAgentNavigateur, CibleAgentNavigateur } from '../../shared/navigateur'
 import { argumentAbsent, booleenEnvoye } from './arguments'
@@ -14,6 +14,24 @@ import {
   TERMINAL_LIGNES_MAX,
   SUITE_REFUS_NAVIGATEUR
 } from './navigateur-terminal'
+
+/**
+ * Phrase rendue à l'agent après un geste sur un élément : ce que le script a relu dans la fenêtre
+ * (`apres`, scripts/hdesk-arbre.cs EtatApres). Avec elle, l'agent sait si son geste a porté sans
+ * refaire une capture ; sans changement visible, il sait qu'il doit re-observer.
+ */
+export function detailApres(quoi: string, action: ActionHdesk | undefined): string {
+  const apres = action?.apres
+  if (!apres || typeof apres !== 'object')
+    return `${quoi} : re-observe (bureau_cache_observer) pour vérifier son effet.`
+  const lignes = Array.isArray(apres.changements)
+    ? apres.changements.filter((l): l is string => typeof l === 'string')
+    : []
+  const ms = Number.isFinite(apres.attenteMs) ? ` en ${apres.attenteMs} ms` : ''
+  if (apres.changement === true && lignes.length > 0)
+    return `${quoi}. Changé dans la fenêtre${ms} : ${lignes.join(' ; ')}.`
+  return `${quoi}, mais aucun changement visible dans sa fenêtre${ms} : le geste a peut-être été ignoré — re-observe (bureau_cache_observer) avant de continuer.`
+}
 
 /**
  * `bureau_cache_lancer / observer / agir` (scout n°4). Le fil est celui de l'APPEL : un
@@ -125,6 +143,15 @@ export async function outilBureauCache(
   const element = argumentAbsent(brutElement) ? '' : String(brutElement).trim()
   const avecX = !argumentAbsent(a.x)
   const avecY = !argumentAbsent(a.y)
+  // REMPLIR UN CHAMP : `valeur` avec `element`. Une chaîne vide vide le champ ; un nombre vaut texte.
+  const brutValeur = a.valeur
+  const avecValeur = brutValeur !== undefined && brutValeur !== null
+  if (avecValeur && typeof brutValeur !== 'string' && typeof brutValeur !== 'number')
+    return refus('Refusé : `valeur` doit être un texte (ce qu’il faut mettre dans le champ).')
+  if (avecValeur && !element)
+    return refus(
+      'Refusé : `valeur` va avec `element` (le champ à remplir, par son repère, son id ou son nom).'
+    )
   if (element) {
     if (avecX || avecY) return refus('Refusé : passe `element` OU `x` et `y`, pas les deux.')
     if (element.length > ELEMENT_MAX)
@@ -137,18 +164,30 @@ export async function outilBureauCache(
       vrai('sansClic')
     )
       return refus(
-        'Refusé : `element` = un seul appui, sans frappe, touche ni molette. Appuie d’abord sur l’élément, puis tape avec `sansClic: true` (le curseur reste posé) ou en visant x/y.'
+        'Refusé : `element` = un seul appui (ou un remplissage par `valeur`), sans frappe, touche ni molette. Appuie d’abord sur l’élément, puis tape avec `sansClic: true` (le curseur reste posé) ou en visant x/y.'
       )
-    const r = await bus.agirBureauCache!({ id, element })
+    const valeur = avecValeur ? String(brutValeur) : undefined
+    if (valeur !== undefined && valeur.length > VALEUR_MAX)
+      return refus(`Refusé : \`valeur\` trop longue (${VALEUR_MAX} caractères au plus).`)
+    const r = await bus.agirBureauCache!({
+      id,
+      element,
+      ...(valeur !== undefined ? { valeur } : {})
+    })
     return {
       data: r.ok
         ? {
             ok: true,
             id,
             ...(r.action ? { action: r.action } : {}),
-            detail: 'Élément appuyé : re-observe (bureau_cache_observer) pour vérifier son effet.'
+            detail: detailApres(valeur !== undefined ? 'Champ rempli' : 'Élément appuyé', r.action)
           }
-        : { ok: false, id, detail: `Geste refusé : ${r.message}` }
+        : {
+            ok: false,
+            id,
+            ...(r.code ? { code: r.code } : {}),
+            detail: `Geste refusé : ${r.message}`
+          }
     }
   }
   if (!avecX && !avecY)
@@ -172,7 +211,12 @@ export async function outilBureauCache(
           ...(r.action ? { action: r.action } : {}),
           detail: 'Geste envoyé : re-observe (bureau_cache_observer) pour vérifier son effet.'
         }
-      : { ok: false, id, detail: `Geste refusé : ${r.message}` }
+      : {
+          ok: false,
+          id,
+          ...(r.code ? { code: r.code } : {}),
+          detail: `Geste refusé : ${r.message}`
+        }
   }
 }
 

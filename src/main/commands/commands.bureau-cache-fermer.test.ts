@@ -270,6 +270,86 @@ describe('bureau_cache_lancer / observer / agir', () => {
     expect(r.data).toMatchObject({ ok: false, detail: `Geste refusé : ${message}` })
   })
 
+  /*
+   * Repères, remplissage et état après le geste (scripts/hdesk-arbre.cs) : l'outil passe `valeur` au
+   * script, rend le code d'un refus, et dit à l'agent ce qui a changé sans nouvelle capture.
+   */
+  it('agir : `valeur` avec `element` part en remplissage ; vide = vider le champ', async () => {
+    const { bus, gestes } = busOutils()
+    await bus.exec('bureau_cache_agir', { element: '@k3f9a2:e5', valeur: 'Bonjour' }, 'conv-222')
+    await bus.exec('bureau_cache_agir', { element: '@k3f9a2:e5', valeur: '' }, 'conv-222')
+    expect(gestes).toEqual([
+      { id: 'chat-conv-222', element: '@k3f9a2:e5', valeur: 'Bonjour' },
+      { id: 'chat-conv-222', element: '@k3f9a2:e5', valeur: '' }
+    ])
+  })
+
+  it.each([
+    ['valeur sans element', { valeur: 'abc', x: 1, y: 2 }, /va avec `element`/],
+    ['valeur objet', { element: 'Champ', valeur: { a: 1 } }, /doit être un texte/],
+    ['valeur trop longue', { element: 'Champ', valeur: 'v'.repeat(5001) }, /5000/]
+  ])('agir : %s → refus nommé, rien n’est envoyé', async (_cas, args, motif) => {
+    const { bus, gestes } = busOutils()
+    const r = await bus.exec('bureau_cache_agir', args, 'conv-222')
+    expect(r.data).toMatchObject({ ok: false })
+    expect(String((r.data as { detail?: string }).detail)).toMatch(motif)
+    expect(gestes).toEqual([])
+  })
+
+  it('agir : la valeur remplie n’atteint jamais la trace', async () => {
+    const { bus } = busOutils()
+    const traces: Array<Record<string, unknown>> = []
+    bus.trace = (_nom, args) => traces.push(args)
+    await bus.exec('bureau_cache_agir', { element: 'Champ', valeur: 'secret456' }, 'conv-222')
+    expect(JSON.stringify(traces)).not.toContain('secret456')
+    expect(traces[0]).toMatchObject({ valeur: '[9 caractères]' })
+  })
+
+  it('agir : ce qui a changé dans la fenêtre est dit à l’agent ; rien de changé → re-observe', async () => {
+    const { bus } = busOutils()
+    bus.agirBureauCache = async () => ({
+      ok: true,
+      action: {
+        appui: 'clic',
+        apres: {
+          changement: true,
+          attenteMs: 330,
+          changements: ["Edit 'Caractères à copier :' : valeur '!' -> '!!'"]
+        }
+      }
+    })
+    const r = await bus.exec('bureau_cache_agir', { element: '@k3f9a2:e4' }, 'conv-222')
+    expect(String((r.data as { detail?: string }).detail)).toBe(
+      "Élément appuyé. Changé dans la fenêtre en 330 ms : Edit 'Caractères à copier :' : valeur '!' -> '!!'."
+    )
+    bus.agirBureauCache = async () => ({
+      ok: true,
+      action: {
+        appui: 'accessibilite:Invoke',
+        apres: { changement: false, attenteMs: 1012, changements: [] }
+      }
+    })
+    const r2 = await bus.exec('bureau_cache_agir', { element: 'OK' }, 'conv-222')
+    expect(String((r2.data as { detail?: string }).detail)).toMatch(
+      /aucun changement visible dans sa fenêtre en 1012 ms.*re-observe/
+    )
+  })
+
+  it('agir : un refus avec code (repère périmé) rend le code à part', async () => {
+    const { bus } = busOutils()
+    bus.agirBureauCache = async () => ({
+      ok: false,
+      code: 'PERIME',
+      message: "L'element @k3f9a2:e19 a change depuis la lecture."
+    })
+    const r = await bus.exec('bureau_cache_agir', { element: '@k3f9a2:e19' }, 'conv-222')
+    expect(r.data).toMatchObject({
+      ok: false,
+      code: 'PERIME',
+      detail: "Geste refusé : L'element @k3f9a2:e19 a change depuis la lecture."
+    })
+  })
+
   it('agir : x/y deviennent facultatifs au catalogue, element est déclaré', () => {
     const spec = new AppCommandBus(os, () => undefined)
       .catalog()

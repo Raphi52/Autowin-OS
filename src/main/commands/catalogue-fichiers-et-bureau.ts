@@ -287,7 +287,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   {
     name: 'bureau_cache_observer',
     description:
-      'Capturer TON bureau Windows caché : l’image est jointe à ta prochaine lecture (PNG, pixels réels — ce sont les coordonnées de bureau_cache_agir). Le résultat porte aussi `arbre` : les éléments de la fenêtre (type, nom, id, état, valeur, position = centre en pixels de cette image), lus par l’accessibilité de Windows ; vise-les par `element` dans bureau_cache_agir. Arbre vide (page web, rendu GPU) : vise x/y sur l’image. Une page web ou un rendu GPU peut sortir uni (`statut: uni`) : lis alors le titre de la fenêtre ou pilote le navigateur par son port de débogage. Seulement les bureaux de cette conversation',
+      'Capturer TON bureau Windows caché : l’image est jointe à ta prochaine lecture (PNG, pixels réels — ce sont les coordonnées de bureau_cache_agir). Le résultat porte aussi `arbre` : les éléments de la fenêtre (type, nom, repère @lecture:eN, id, état, valeur, « remplissable », position = centre en pixels de cette image), lus par l’accessibilité de Windows ; vise-les par `element` dans bureau_cache_agir, de préférence par leur repère. Arbre vide (page web, rendu GPU) : vise x/y sur l’image. Une page web ou un rendu GPU peut sortir uni (`statut: uni`) : lis alors le titre de la fenêtre ou pilote le navigateur par son port de débogage. Seulement les bureaux de cette conversation',
     args: {
       id: 'facultatif — identifiant du bureau. Absent = `chat-<id du fil>`'
     },
@@ -301,10 +301,12 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   {
     name: 'bureau_cache_agir',
     description:
-      'Cliquer, taper, appuyer une touche ou faire défiler dans TON bureau Windows caché (messages fenêtre : jamais la vraie souris ni le vrai clavier de l’utilisateur). Soit `element` : appuyer sur un élément de l’`arbre` de bureau_cache_observer, par son id, son nom ou son libellé (WPF : par l’accessibilité, autre : clic à son centre) — plus sûr qu’un point, et il marche sur une fenêtre WPF où un clic posté reste sans effet. Soit un clic au point (x, y), sauf `sansClic`, puis la frappe éventuelle. `element` = un seul appui, sans frappe ni touche. Appuyer deux fois rebascule une case. Re-observe ensuite pour vérifier. Seulement les bureaux de cette conversation',
+      'Cliquer, taper, appuyer une touche ou faire défiler dans TON bureau Windows caché (messages fenêtre : jamais la vraie souris ni le vrai clavier de l’utilisateur). Soit `element` : appuyer sur un élément de l’`arbre` de bureau_cache_observer (WPF : par l’accessibilité, autre : clic à son centre, après l’avoir fait défiler à l’écran si besoin) — plus sûr qu’un point, et il marche sur une fenêtre WPF où un clic posté reste sans effet. Vise-le par son REPÈRE @lecture:eN : il est refusé (`code: PERIME`) si l’élément a disparu ou changé depuis la lecture, au lieu d’appuyer sur un autre ; relis alors l’arbre. Avec `valeur`, l’élément est un champ que tu REMPLIS (toutes technologies, jamais un mot de passe). Le résultat dit ce qui a changé dans la fenêtre (`action.apres`) : aucun changement = re-observe. Un refus porte un `code` (PERIME, AMBIGU, INTROUVABLE, INACTIF, HORS_ECRAN, REFUSE…) et dit quoi faire. Soit un clic au point (x, y), sauf `sansClic`, puis la frappe éventuelle. `element` = un seul appui ou un remplissage, sans frappe ni touche. Appuyer deux fois rebascule une case. Seulement les bureaux de cette conversation',
     args: {
       element:
-        'facultatif — id, nom ou libellé d’un élément de l’arbre (200 caractères au plus), à la place de x/y. Plusieurs éléments ou aucun : le refus liste les candidats ou les plus proches',
+        'facultatif — repère @lecture:eN (le plus sûr), id, nom ou libellé d’un élément de l’arbre (200 caractères au plus), à la place de x/y. Plusieurs éléments ou aucun : le refus liste les candidats ou les plus proches',
+      valeur:
+        'facultatif — avec `element` : texte à mettre dans ce champ, qui REMPLACE son contenu (5000 caractères au plus ; vide = vider le champ)',
       x: 'facultatif — entier, pixels de la capture de bureau_cache_observer (0 à 32767), avec y ; sans `element`',
       y: 'facultatif — entier, pixels de la capture de bureau_cache_observer (0 à 32767), avec x ; sans `element`',
       texte: 'facultatif — texte à taper après le clic (1000 caractères au plus)',
@@ -317,6 +319,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
     },
     argsTypes: {
       element: { type: 'string', maxLength: 200 },
+      valeur: { type: 'string', maxLength: 5000 },
       x: { type: 'integer', minimum: 0, maximum: 32767 },
       y: { type: 'integer', minimum: 0, maximum: 32767 },
       texte: { type: 'string', maxLength: 1000 },
