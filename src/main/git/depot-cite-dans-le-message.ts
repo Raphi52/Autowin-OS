@@ -4,6 +4,7 @@ import { estUneRepriseAutomatique } from '../chat/relance-taches-de-fond'
 import { estUnPromptDOrdre } from '../conversations/messages-entre-fils-app'
 import { estUneConsigneDeRedemarrage } from '../app/redemarrage-reprise'
 import { formeDuChemin, memeCheminSurDisque } from '../fichiers/meme-chemin'
+import { estUnMessageDuPlan } from '../../shared/plan-de-lots'
 
 /**
  * LE DEPOT CITE PAR LA DEMANDE — pour aligner le dossier de travail sur ce dont l'utilisateur PARLE.
@@ -27,6 +28,10 @@ import { formeDuChemin, memeCheminSurDisque } from '../fichiers/meme-chemin'
  * pourtant avec le role `user` ; on les reconnait a leur en-tete, comme le controle des deux lectures
  * (agent-pilot.ts). La consigne de `restart_app`, envoyee telle quelle sans en-tete, se reconnait a
  * l'egalite avec une consigne que ce processus a rendue (`estUneConsigneDeRedemarrage`).
+ *
+ * Un message COMPOSE PAR UN PLAN DE LOTS non plus (2026-11-08) : le reveil du chef recopiait sa
+ * preuve de validation, qui citait un autre depot, et le chef est parti y travailler avec la
+ * publication de fin de tour allumee. Un lot, lui, s'ouvre dans le dossier du chef par construction.
  *
  * Aucun redemarrage n'est requis : le dossier est resolu A CHAQUE tour depuis la conversation.
  */
@@ -68,7 +73,8 @@ export function depotCiteDansLeMessage(
   if (
     estUnPromptDOrdre(message) ||
     estUneRepriseAutomatique(message) ||
-    estUneConsigneDeRedemarrage(message)
+    estUneConsigneDeRedemarrage(message) ||
+    estUnMessageDuPlan(message)
   )
     return null
   const depotActif = dossierActif.trim() ? racineDepot(dossierActif, existe) : undefined

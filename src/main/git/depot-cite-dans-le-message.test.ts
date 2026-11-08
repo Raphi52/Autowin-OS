@@ -156,4 +156,27 @@ describe('depotCiteDansLeMessage', () => {
     const reprise = `${ENTETE_REPRISE_AUTOMATIQUE} Ton tour précédent s’est terminé.\nDossier : D:\\Projets\\Contoso`
     expect(depotCiteDansLeMessage(reprise, ACTIF, existe)).toBeNull()
   })
+
+  /*
+   * MESSAGE COMPOSÉ PAR UN PLAN DE LOTS (2026-11-08). Le réveil du fil chef recopiait la preuve
+   * de validation écrite par le chef (« D:\Projets\Contoso git status vide ») : le chef a quitté
+   * son dépôt pour ce projet-là, avec la publication automatique de fin de tour allumée.
+   * Le prompt d'un lot a le même défaut : un lot s'ouvre dans le dossier du chef, pas ailleurs.
+   */
+  it('ne bascule pas sur le reveil d un plan de lots qui cite un autre depot', () => {
+    const existe = disque('D:\\Projets\\Contoso', 'D:\\Projets\\Contoso\\.git')
+    const reveil =
+      'RÉVEIL DU PLAN DE LOTS « Refonte » (plan-1) — message de l’app, pas de l’utilisateur.\n' +
+      'Lots qui viennent de finir : lot 4 « Cadrer » : fait (validé par le chef : ' +
+      'D:\\Projets\\Contoso git status vide), fil conv-2.'
+    expect(depotCiteDansLeMessage(reveil, ACTIF, existe)).toBeNull()
+  })
+
+  it('ne bascule pas sur le prompt d un lot qui cite un autre depot', () => {
+    const existe = disque('D:\\Projets\\Contoso', 'D:\\Projets\\Contoso\\.git')
+    const prompt =
+      'Lot 4 sur 5 du plan « Refonte », confié par le fil chef conv-1 (plan-1).\n' +
+      'Alerte : une fin de tour pourrait envoyer D:\\Projets\\Contoso vers son serveur.'
+    expect(depotCiteDansLeMessage(prompt, ACTIF, existe)).toBeNull()
+  })
 })
