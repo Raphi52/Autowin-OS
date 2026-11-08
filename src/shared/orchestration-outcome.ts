@@ -936,10 +936,12 @@ function finDeLigneAvant(tableau: TableauMarkdown, limite: number): number {
  * arme la relance « corriger et poursuivre ». L'agent repartait reparer ce qui n'avait pas casse.
  *
  * Un travail vert mis de cote exprES repond NON aux deux questions : il n'est pas livre, il n'a pas
- * echoue. Un predicat partage ne se reinterprete pas sans tracer qui le lit.
+ * echoue. Un predicat partage ne se reinterprete pas sans tracer qui le lit. Meme reponse pour un
+ * travail vert qui attend seulement que la base se libere (`attendSeulementSaPublication`).
  */
 export function orchestrationEnEchec(outcome: OrchestrationOutcome): boolean {
   if (isDeliveredOrchestrationOutcome(outcome)) return false
+  if (attendSeulementSaPublication(outcome)) return false
   return !(
     asString(outcome.status) === 'succeeded' &&
     outcome.valid === true &&
@@ -1546,6 +1548,35 @@ function lireLeBlocage(
     .map((fichier) => fichier.trim())
     .filter(Boolean)
   return { ...(BLOCAGES[brut] ? { lecture: BLOCAGES[brut] } : {}), brut, fichiers }
+}
+
+/** Les blocages que la base lève d'elle-même, sans geste de l'agent ni arbitrage de l'utilisateur. */
+const BLOCAGES_QUI_SE_LEVENT_SEULS = new Set(['base-dirty', 'base-in-progress'])
+const RAISON_D_INTEGRATION_EN_COURS = 'intégration locale non terminée'
+
+/**
+ * CE RUN VERT ATTEND-IL SEULEMENT QUE LA BASE SE LIBÈRE ?
+ *
+ * Le contrôle final n'écrit le diagnostic « blocage d'intégration » qu'après un vert, et la
+ * reprise automatique republie le travail dès que la base est libre (`repechage-automatique.ts`).
+ * Compter ce run en échec armait la relance « corrige la cause, puis poursuis » : l'agent repartait
+ * chercher quoi réparer alors que l'issue elle-même dit « aucun geste de plus », et, sur
+ * `base-dirty`, la relance le poussait vers les fichiers non commités d'un autre fil.
+ *
+ * Strict : toutes les raisons doivent appartenir à cette attente. Une raison de plus (intégration
+ * vide, refus…) ou un blocage que personne ne lève seul (conflit, fusion refusée) reste un échec.
+ * Même vocabulaire que `attendSaPublication`, côté orchestrateur.
+ */
+export function attendSeulementSaPublication(outcome: OrchestrationOutcome): boolean {
+  if (outcome.gateBlocked !== true) return false
+  const raisons = Array.isArray(outcome.gateReasons) ? outcome.gateReasons : []
+  const { brut } = lireLeBlocage(raisons)
+  if (!brut || !BLOCAGES_QUI_SE_LEVENT_SEULS.has(brut)) return false
+  return raisons.every(
+    (raison) =>
+      typeof raison === 'string' &&
+      (raison === RAISON_D_INTEGRATION_EN_COURS || raison.includes('blocage d’intégration:'))
+  )
 }
 
 /**
