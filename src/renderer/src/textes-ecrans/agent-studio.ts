@@ -38,16 +38,12 @@ export const TEXTES_FR = {
     'Le fan-out des sous-agents n’est pas branché : un second sous-agent ne serait pas exécuté. Remplacez le slot existant.',
   'topo.rang.orchestrateur': '01 · Autorité unique',
   'topo.rang.sousAgents': '02 · Exécution bornée',
-  'topo.rang.panel': 'Panel parallèle',
   'topo.slot.introuvableTitre':
     'Aucun modèle « {modele} » au catalogue : déposez-en un pour résoudre ce slot',
   'topo.slot.introuvable': 'modèle introuvable',
   'topo.slot.retirer': 'Retirer ce slot',
   'topo.slot.actif': 'actif',
   'topo.slot.roleRuntime': 'rôle runtime',
-  'topo.slot.paralleleTitre':
-    "Exécuté en parallèle puis agrégé par l'orchestrateur (union pour scout/frame, quorum pour judge)",
-  'topo.slot.parallele': 'parallèle · actif',
   'topo.slot.inactifTitre':
     "Le fan-out des sous-agents n'est pas encore branché — ce slot n'est pas utilisé au runtime",
   'topo.slot.inactif': 'non actif',
@@ -88,21 +84,14 @@ export const TEXTES_FR = {
   'topo.modele.efforts': ' · efforts {liste}',
   'topo.autorite.titre': 'Autorité',
   'topo.autorite.main': 'La configuration est validée et persistée par le main process.',
-  'topo.autorite.fanout':
-    'Scouts, Frame et Judges : tous les modèles déposés s’exécutent (fan-out + agrégation). Orchestrateur et Sous-agents : seul le premier slot alimente le runtime.',
+  'topo.autorite.fanout': 'Orchestrateur et Sous-agents : seul le premier modèle déposé sert.',
   'topo.orchestrateur.titre': 'Orchestrateur',
   'topo.orchestrateur.description': 'Un seul modèle pilote et consolide.',
   'topo.sousAgents.titre': 'Sous-agents',
   'topo.sousAgents.description': 'Zéro à plusieurs exécutants bornés.',
-  'topo.panels.eyebrow': 'Panels composés',
-  'topo.panels.titre': 'Exploration et vérification parallèles',
-  'topo.panels.note': 'Les sorties restent distinctes avant synthèse.',
-  'topo.scout.description': 'Plusieurs lectures indépendantes du même front.',
-  'topo.frame.description': 'Plusieurs modèles cadrent la même tâche ; angles fusionnés.',
-  'topo.judge.description': 'Plusieurs challenges indépendants avant verdict.',
   'topo.runtime.titre': 'Runtime actuel',
   'topo.runtime.detail':
-    '**Scouts, Frame et Judges** : déposez-y plusieurs modèles — ils s’exécutent en parallèle puis l’orchestrateur agrège (union des sorties pour Scouts/Frame, quorum de vote pour Judges). **Orchestrateur et Sous-agents** : seul le premier slot alimente le runtime (fan-out des sous-agents pas encore branché).',
+    '**Orchestrateur et Sous-agents** : seul le premier modèle déposé sert (plusieurs sous-agents en parallèle : pas encore branché). **Plusieurs modèles sur une étape** : passe par un workflow, ou par une skill qui lance ses propres sous-agents (liste dans le bloc Sous-agents).',
   'topo.runtime.workflow':
     '**Workflows** : un workflow (onglet Workflows) qui place ses propres agents sur une étape passe avant ces blocs, pour cette étape seulement.',
 
@@ -118,32 +107,17 @@ export const TEXTES_FR = {
   'topo.couvre.orchestrateur.couvre':
     'Le modèle qui **te répond dans le Chat**, dans chaque fil qui n’a pas choisi le sien. Changer de modèle dans l’en-tête d’un chat change aussi ce bloc.',
   'topo.couvre.orchestrateur.pendant':
-    'Il **découpe** un gros chantier en morceaux menés en parallèle, et il **fusionne** les propositions quand un bloc ci-dessous a plusieurs modèles.',
+    'Il **découpe** un gros chantier en morceaux menés en parallèle, et il **fusionne** les propositions quand un workflow met plusieurs modèles sur une même étape.',
   'topo.couvre.orchestrateur.horsChamp':
     'Les **petites tâches** (bloc en haut de page) et l’exécution des étapes (**Sous-agents**).',
   'topo.couvre.sousAgents.couvre':
-    'Le modèle qui **fait le travail** lancé depuis le chat : l’étape **build** (modifier puis prouver), **clean** (nettoyage avant le contrôle final), et toute étape dont le bloc ci-dessous est **vide**.',
+    'Le modèle qui **fait le travail** lancé depuis le chat, **à toutes les étapes** : scout, frame, build, clean et le contrôle final (judge). Pour ce contrôle, il **juge son propre travail**, sauf si un **workflow** place un autre modèle sur l’étape judge.',
   'topo.couvre.sousAgents.plusieurs': '**Pas encore** : seul le premier emplacement travaille.',
   'topo.couvre.sousAgents.vide': 'L’**orchestrateur** fait le travail lui-même.',
   'topo.couvre.sousAgents.skills':
     '**/arena** (un par bras du banc) · **/scout** (un par angle) · **/steal** (un par couche de recherche) · **/frame** et **/draft** (pistes et variantes générées en parallèle) · **/remake** (angles en parallèle, puis travaux enfants) · **/kaizen** (6 à 9 angles, dans un run seulement) · **/judge** (juges en parallèle hors de l’app ; dans l’app, l’un après l’autre).',
   'topo.couvre.sousAgents.modeleSkills':
     'Le modèle **qui joue la skill** (celui du chat ou de l’étape en cours) : Autowin ne leur transmet **pas** le modèle de ce bloc.',
-  'topo.couvre.scout.couvre':
-    'L’étape **scout** : explorer une cible (code, projet, outil) et rendre une courte liste de **pistes d’amélioration**, avant de choisir quoi faire.',
-  'topo.couvre.scout.plusieurs':
-    'Chacun explore **en parallèle, sous un angle différent** ; l’orchestrateur réunit leurs pistes.',
-  'topo.couvre.frame.couvre':
-    'L’étape **frame** : cadrer **quoi faire et comment** — le vrai besoin, les critères de réussite, l’approche retenue.',
-  'topo.couvre.frame.plusieurs':
-    'Chacun cadre la même demande **en parallèle** ; l’orchestrateur fusionne les cadrages.',
-  'topo.couvre.judge.couvre':
-    'L’étape **judge**, la dernière : relire le résultat **en adversaire** et dire s’il est vraiment bon avant de l’annoncer fini.',
-  'topo.couvre.judge.plusieurs':
-    'Chaque juge rend son avis seul ; le verdict suit la **majorité**, sauf seuil réglé dans un workflow.',
-  'topo.couvre.judge.vide':
-    'Le modèle des **Sous-agents** juge son propre travail : mets ici **un autre modèle** pour un vrai contrôle.',
-  'topo.couvre.panel.vide': 'Le modèle des **Sous-agents** fait l’étape seul.',
 
   // — Workflows : liste des profils (WorkflowProfilesView) —
   'wf.cout': '{montant} $',
@@ -270,15 +244,11 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     'Sub-agent fan-out is not wired: a second sub-agent would not run. Replace the existing slot.',
   'topo.rang.orchestrateur': '01 · Single authority',
   'topo.rang.sousAgents': '02 · Bounded execution',
-  'topo.rang.panel': 'Parallel panel',
   'topo.slot.introuvableTitre': 'No model “{modele}” in the catalog: drop one to resolve this slot',
   'topo.slot.introuvable': 'model not found',
   'topo.slot.retirer': 'Remove this slot',
   'topo.slot.actif': 'active',
   'topo.slot.roleRuntime': 'runtime role',
-  'topo.slot.paralleleTitre':
-    'Run in parallel, then aggregated by the orchestrator (union for scout/frame, quorum for judge)',
-  'topo.slot.parallele': 'parallel · active',
   'topo.slot.inactifTitre': 'Sub-agent fan-out is not wired yet — this slot is not used at runtime',
   'topo.slot.inactif': 'inactive',
   'topo.vide': 'Drop a model here',
@@ -316,21 +286,14 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.modele.efforts': ' · effort levels {liste}',
   'topo.autorite.titre': 'Authority',
   'topo.autorite.main': 'The configuration is validated and persisted by the main process.',
-  'topo.autorite.fanout':
-    'Scouts, Frame and Judges: every model dropped there runs (fan-out + aggregation). Orchestrator and Sub-agents: only the first slot feeds the runtime.',
+  'topo.autorite.fanout': 'Orchestrator and Sub-agents: only the first model dropped is used.',
   'topo.orchestrateur.titre': 'Orchestrator',
   'topo.orchestrateur.description': 'A single model drives and consolidates.',
   'topo.sousAgents.titre': 'Sub-agents',
   'topo.sousAgents.description': 'Zero to several bounded executors.',
-  'topo.panels.eyebrow': 'Composed panels',
-  'topo.panels.titre': 'Parallel exploration and verification',
-  'topo.panels.note': 'Outputs stay separate until the synthesis.',
-  'topo.scout.description': 'Several independent readings of the same front.',
-  'topo.frame.description': 'Several models frame the same task; angles merged.',
-  'topo.judge.description': 'Several independent challenges before the verdict.',
   'topo.runtime.titre': 'Current runtime',
   'topo.runtime.detail':
-    '**Scouts, Frame and Judges**: drop several models there — they run in parallel, then the orchestrator aggregates (union of outputs for Scouts/Frame, voting quorum for Judges). **Orchestrator and Sub-agents**: only the first slot feeds the runtime (sub-agent fan-out not wired yet).',
+    '**Orchestrator and Sub-agents**: only the first model dropped is used (several sub-agents in parallel: not wired yet). **Several models on one step**: use a workflow, or a skill that launches its own sub-agents (listed in the Sub-agents block).',
   'topo.runtime.workflow':
     '**Workflows**: a workflow (Workflows tab) that places its own agents on a step takes precedence over these blocks, for that step only.',
 
@@ -345,32 +308,17 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.couvre.orchestrateur.couvre':
     'The model that **answers you in the Chat**, in every thread that has not picked its own. Changing the model in a chat header changes this block too.',
   'topo.couvre.orchestrateur.pendant':
-    'It **splits** a large job into pieces run in parallel, and it **merges** the proposals when a block below has several models.',
+    'It **splits** a large job into pieces run in parallel, and it **merges** the proposals when a workflow puts several models on the same step.',
   'topo.couvre.orchestrateur.horsChamp':
     'The **small tasks** (block at the top of the page) and running the steps (**Sub-agents**).',
   'topo.couvre.sousAgents.couvre':
-    'The model that **does the work** started from the chat: the **build** step (change, then prove), **clean** (tidy-up before the final check), and any step whose block below is **empty**.',
+    'The model that **does the work** started from the chat, **at every step**: scout, frame, build, clean and the final check (judge). For that check it **judges its own work**, unless a **workflow** puts another model on the judge step.',
   'topo.couvre.sousAgents.plusieurs': '**Not yet**: only the first slot works.',
   'topo.couvre.sousAgents.vide': 'The **orchestrator** does the work itself.',
   'topo.couvre.sousAgents.skills':
     '**/arena** (one per bench arm) · **/scout** (one per angle) · **/steal** (one per research layer) · **/frame** and **/draft** (leads and variants generated in parallel) · **/remake** (angles in parallel, then child jobs) · **/kaizen** (6 to 9 angles, in a run only) · **/judge** (judges in parallel outside the app; inside the app, one after the other).',
   'topo.couvre.sousAgents.modeleSkills':
     'The model **that runs the skill** (the chat’s or the current step’s): Autowin does **not** pass them this block’s model.',
-  'topo.couvre.scout.couvre':
-    'The **scout** step: explore a target (code, project, tool) and return a short list of **improvement leads**, before choosing what to do.',
-  'topo.couvre.scout.plusieurs':
-    'Each one explores **in parallel, from a different angle**; the orchestrator gathers their leads.',
-  'topo.couvre.frame.couvre':
-    'The **frame** step: settle **what to do and how** — the real need, the success criteria, the chosen approach.',
-  'topo.couvre.frame.plusieurs':
-    'Each one frames the same request **in parallel**; the orchestrator merges the framings.',
-  'topo.couvre.judge.couvre':
-    'The **judge** step, the last one: review the result **as an adversary** and say whether it is really good before it is announced as done.',
-  'topo.couvre.judge.plusieurs':
-    'Each judge gives its opinion alone; the verdict follows the **majority**, unless a threshold is set in a workflow.',
-  'topo.couvre.judge.vide':
-    'The **Sub-agents** model judges its own work: put **another model** here for a real check.',
-  'topo.couvre.panel.vide': 'The **Sub-agents** model runs the step alone.',
 
   'wf.cout': '${montant}',
   'wf.arene.aucune': 'Arena: no measurement recorded',

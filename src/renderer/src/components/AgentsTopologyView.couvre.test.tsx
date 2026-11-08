@@ -64,7 +64,7 @@ afterEach(async () => {
   container.remove()
 })
 
-const CIBLES = ['orchestrator', 'subagents', 'scout', 'frame', 'judge']
+const CIBLES = ['orchestrator', 'subagents']
 
 const bloc = (cible: string): HTMLElement => {
   const trouve = container.querySelector<HTMLElement>(`[data-testid="topology-couvre-${cible}"]`)
@@ -86,23 +86,19 @@ describe('Agents Studio — ce que couvre chaque rôle', () => {
     expect(texte).toContain('petites tâches')
   })
 
-  it('les sous-agents couvrent build, clean et toute étape restée vide', () => {
+  it('les sous-agents couvrent toutes les étapes, contrôle final compris', () => {
     const texte = bloc('subagents').textContent ?? ''
-    expect(texte).toContain('build')
-    expect(texte).toContain('clean')
+    for (const etape of ['scout', 'frame', 'build', 'clean', 'judge'])
+      expect(texte).toContain(etape)
+    expect(texte).toContain('juge son propre travail')
     expect(texte).toContain('L’orchestrateur fait le travail lui-même.')
   })
 
-  it('un panel vide renvoie aux sous-agents, et le juge vide prévient de l’auto-jugement', () => {
-    for (const cible of ['scout', 'frame']) {
-      expect(bloc(cible).textContent).toContain('Le modèle des Sous-agents fait l’étape seul.')
+  it('les panneaux Scouts, Frame, Judges et Terrain n’existent plus', () => {
+    for (const cible of ['scout', 'frame', 'judge', 'terrain']) {
+      expect(container.querySelector(`[data-target="${cible}"]`)).toBeNull()
+      expect(container.querySelector(`[data-testid="topology-couvre-${cible}"]`)).toBeNull()
     }
-    expect(bloc('judge').textContent).toContain('juge son propre travail')
-  })
-
-  it('le panneau Terrain n’existe plus', () => {
-    expect(container.querySelector('[data-target="terrain"]')).toBeNull()
-    expect(container.querySelector('[data-testid="topology-couvre-terrain"]')).toBeNull()
   })
 
   it('les sous-agents nomment chaque skill qui lance des sous-agents, et leur vrai modèle', () => {
@@ -129,13 +125,13 @@ describe('Agents Studio — ce que couvre chaque rôle', () => {
   })
 
   it('chaque bloc se replie seul, et l’état est retenu sous le nom de son rôle', async () => {
-    const titre = bloc('judge').querySelector('button')
+    const titre = bloc('subagents').querySelector('button')
     expect(titre?.getAttribute('aria-expanded')).toBe('true')
     await act(async () => titre?.click())
-    expect(bloc('judge').querySelector('dl')).toBeNull()
-    expect(bloc('scout').querySelector('dl')).not.toBeNull()
+    expect(bloc('subagents').querySelector('dl')).toBeNull()
+    expect(bloc('orchestrator').querySelector('dl')).not.toBeNull()
     expect(
       JSON.parse(window.localStorage.getItem('autowin.ceQueCaCouvre.replies') ?? '{}')
-    ).toEqual({ 'topologie-judge': true })
+    ).toEqual({ 'topologie-subagents': true })
   })
 })

@@ -123,8 +123,9 @@ afterEach(() => {
 })
 
 describe('AgentsTopologyView concurrent persistence', () => {
-  // Terrain n'a plus de panneau : la skill a quitté le kit, l'utilisateur a demandé de retirer son bloc.
-  it('ordonne les trois panels Scout, Frame, Judge, sans panneau Terrain', async () => {
+  // Scout, Frame, Judges et Terrain n'ont plus de panneau : les skills lancent elles-mêmes leurs
+  // sous-agents, l'utilisateur a demandé de retirer ces blocs. Restent les deux rôles du runtime.
+  it('ne montre que Orchestrateur et Sous-agents, aucun panneau Scout, Frame, Judge ni Terrain', async () => {
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
       models: async () => models,
       topology: async () => topology,
@@ -136,12 +137,15 @@ describe('AgentsTopologyView concurrent persistence', () => {
     await act(async () => root.render(createElement(AgentsTopologyView)))
     await flush()
 
-    const targets = [...container.querySelectorAll('.topology-parallel > .topology-panel')].map(
-      (panel) => panel.getAttribute('data-target')
+    const targets = [...container.querySelectorAll('.topology-panel')].map((panel) =>
+      panel.getAttribute('data-target')
     )
-    expect(targets).toEqual(['scout', 'frame', 'judge'])
-    expect(container.querySelector('[data-target="terrain"]')).toBeNull()
-    expect(container.textContent).not.toContain('Terrain')
+    expect(targets).toEqual(['orchestrator', 'subagents'])
+    expect(container.querySelector('.topology-parallel-heading')).toBeNull()
+    for (const titre of ['Scouts', 'Frame', 'Judges', 'Terrain']) {
+      expect(container.querySelector('.topology-panel h3')?.textContent).not.toBe(titre)
+      expect([...container.querySelectorAll('h3')].map((h) => h.textContent)).not.toContain(titre)
+    }
   })
 
   it('shows only dynamically loaded models in the Agent Studio library', async () => {

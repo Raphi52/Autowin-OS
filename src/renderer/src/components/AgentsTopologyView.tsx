@@ -38,30 +38,27 @@ type AgentTopology = {
   }
 }
 
-type Target = 'orchestrator' | 'subagents' | 'scout' | 'frame' | 'terrain' | 'judge'
-
-/** Cibles dont le fan-out multi-modèles EST branché au runtime (≥2 slots → dupliqué + agrégé). */
-const FANOUT_ACTIVE: ReadonlySet<Target> = new Set<Target>(['scout', 'frame', 'terrain', 'judge'])
+/**
+ * Les seuls panneaux montrés. Scouts, Frame, Judges et Terrain n'en ont plus : les skills lancent
+ * elles-mêmes leurs sous-agents, et un workflow place les siens sur une étape. Leurs listes restent
+ * dans la topologie enregistrée — le processus principal les lit encore (`runtimeRoleSlots`) —,
+ * l'écran ne propose simplement plus d'y déposer un modèle.
+ */
+type Target = 'orchestrator' | 'subagents'
 
 type CleAgentStudio = Parameters<ReturnType<typeof useTextesAgentStudio>['t']>[0]
 
 /**
- * Les panneaux montrés. Terrain n'en a plus : la skill a quitté le kit et l'étape ne se joue que
- * nommée (`task-regime.ts`). Sa liste reste dans la topologie enregistrée — le processus principal
- * la lit encore —, l'écran ne propose simplement plus d'y déposer un modèle.
- */
-type CibleAffichee = Exclude<Target, 'terrain'>
-
-/**
  * Ce que couvre chaque panneau : une paire (intitulé, explication) par ligne. Chaque fait est lu
- * dans le processus principal, pas supposé — un bloc vide se replie sur `subagents[0]` puis sur
- * l'orchestrateur (`runtimeRoleSlots`), toute étape sauf judge tombe sur les sous-agents
- * (`bindingDeRepliPourPhase`), le quorum par défaut des juges est la majorité (`quorum.ts`), et les
- * sous-agents qu'une skill lance d'elle-même ne reçoivent que le `--model` de l'agent qui la joue
- * (`appendClaudeSelectionArgs`). Changer l'un de ces comportements, c'est changer ce texte.
+ * dans le processus principal, pas supposé — sans panel scout ni judge, ces rôles se replient sur
+ * `subagents[0]`, lui-même sur l'orchestrateur (`runtimeRoleSlots`) ; toute autre étape tombe sur
+ * les sous-agents (`bindingDeRepliPourPhase`) ; les agents qu'un workflow pose sur un nœud priment
+ * (`resolvePhaseFanOut`) ; et les sous-agents qu'une skill lance d'elle-même ne reçoivent que le
+ * `--model` de l'agent qui la joue (`appendClaudeSelectionArgs`). Changer l'un de ces
+ * comportements, c'est changer ce texte.
  */
 const COUVERTURE: Readonly<
-  Record<CibleAffichee, ReadonlyArray<readonly [CleAgentStudio, CleAgentStudio]>>
+  Record<Target, ReadonlyArray<readonly [CleAgentStudio, CleAgentStudio]>>
 > = {
   orchestrator: [
     ['topo.couvre.couvre', 'topo.couvre.orchestrateur.couvre'],
@@ -74,21 +71,6 @@ const COUVERTURE: Readonly<
     ['topo.couvre.vide', 'topo.couvre.sousAgents.vide'],
     ['topo.couvre.skills', 'topo.couvre.sousAgents.skills'],
     ['topo.couvre.modeleSkills', 'topo.couvre.sousAgents.modeleSkills']
-  ],
-  scout: [
-    ['topo.couvre.couvre', 'topo.couvre.scout.couvre'],
-    ['topo.couvre.plusieurs', 'topo.couvre.scout.plusieurs'],
-    ['topo.couvre.vide', 'topo.couvre.panel.vide']
-  ],
-  frame: [
-    ['topo.couvre.couvre', 'topo.couvre.frame.couvre'],
-    ['topo.couvre.plusieurs', 'topo.couvre.frame.plusieurs'],
-    ['topo.couvre.vide', 'topo.couvre.panel.vide']
-  ],
-  judge: [
-    ['topo.couvre.couvre', 'topo.couvre.judge.couvre'],
-    ['topo.couvre.plusieurs', 'topo.couvre.judge.plusieurs'],
-    ['topo.couvre.vide', 'topo.couvre.judge.vide']
   ]
 }
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
@@ -101,11 +83,11 @@ function ModelMark({ provider }: { provider: string }): React.JSX.Element {
   )
 }
 
-function nextSlotId(target: Exclude<Target, 'orchestrator'>, topology: AgentTopology): string {
-  const slots = target === 'subagents' ? topology.subagents : topology.panels[target]
+function nextSubagentSlotId(topology: AgentTopology): string {
+  const slots = topology.subagents
   let index = slots.length + 1
-  while (slots.some((slot) => slot.slotId === `${target.replace(/s$/, '')}-${index}`)) index += 1
-  return `${target.replace(/s$/, '')}-${index}`
+  while (slots.some((slot) => slot.slotId === `subagent-${index}`)) index += 1
+  return `subagent-${index}`
 }
 
 export function AgentsTopologyView({
@@ -328,20 +310,12 @@ export function AgentsTopologyView({
       return
     }
     setValidationError('')
-    const id = target === 'orchestrator' ? 'orchestrator' : (slotId ?? nextSlotId(target, current))
+    const id = target === 'orchestrator' ? 'orchestrator' : (slotId ?? nextSubagentSlotId(current))
     const binding = bindingFor(model, id)
     const next =
       target === 'orchestrator'
         ? { ...current, orchestrator: binding }
-        : target === 'subagents'
-          ? { ...current, subagents: replaceOrAppend(current.subagents, binding) }
-          : {
-              ...current,
-              panels: {
-                ...current.panels,
-                [target]: replaceOrAppend(current.panels[target], binding)
-              }
-            }
+        : { ...current, subagents: replaceOrAppend(current.subagents, binding) }
     void persist(next)
   }
 
@@ -359,36 +333,22 @@ export function AgentsTopologyView({
     const next =
       target === 'orchestrator'
         ? { ...current, orchestrator: update(current.orchestrator) }
-        : target === 'subagents'
-          ? { ...current, subagents: current.subagents.map(update) }
-          : {
-              ...current,
-              panels: { ...current.panels, [target]: current.panels[target].map(update) }
-            }
+        : { ...current, subagents: current.subagents.map(update) }
     void persist(next)
   }
 
-  function remove(target: Exclude<Target, 'orchestrator'>, slotId: string): void {
+  function removeSubagent(slotId: string): void {
     const current = topologyRef.current
     if (!current) return
-    const next =
-      target === 'subagents'
-        ? { ...current, subagents: current.subagents.filter((slot) => slot.slotId !== slotId) }
-        : {
-            ...current,
-            panels: {
-              ...current.panels,
-              [target]: current.panels[target].filter((slot) => slot.slotId !== slotId)
-            }
-          }
-    void persist(next)
+    void persist({
+      ...current,
+      subagents: current.subagents.filter((slot) => slot.slotId !== slotId)
+    })
   }
 
   function slotsFor(target: Target): SlotBinding[] {
     if (!topology) return []
-    if (target === 'orchestrator') return [topology.orchestrator]
-    if (target === 'subagents') return topology.subagents
-    return topology.panels[target]
+    return target === 'orchestrator' ? [topology.orchestrator] : topology.subagents
   }
 
   function renderTargetPanel({
@@ -397,7 +357,7 @@ export function AgentsTopologyView({
     description,
     accent
   }: {
-    target: CibleAffichee
+    target: Target
     title: string
     description: string
     accent: string
@@ -422,11 +382,7 @@ export function AgentsTopologyView({
         <header>
           <div>
             <span>
-              {target === 'orchestrator'
-                ? t('topo.rang.orchestrateur')
-                : target === 'subagents'
-                  ? t('topo.rang.sousAgents')
-                  : t('topo.rang.panel')}
+              {target === 'orchestrator' ? t('topo.rang.orchestrateur') : t('topo.rang.sousAgents')}
             </span>
             <h3>{title}</h3>
             <p>{description}</p>
@@ -494,7 +450,7 @@ export function AgentsTopologyView({
                   <button
                     type="button"
                     title={t('topo.slot.retirer')}
-                    onClick={() => remove(target, slot.slotId)}
+                    onClick={() => removeSubagent(slot.slotId)}
                   >
                     ×
                   </button>
@@ -504,19 +460,13 @@ export function AgentsTopologyView({
                     {target === 'orchestrator' ? t('topo.slot.actif') : t('topo.slot.roleRuntime')}
                   </em>
                 )}
-                {/* Fan-out multi-modèles branché pour scout/frame/judge : un slot >1 est RÉELLEMENT
-                    exécuté en parallèle puis agrégé par l'orchestrateur. Pour subagents il ne l'est
-                    pas encore (seul le 1er slot alimente les phases d'exécution) → marqué non actif. */}
-                {index > 0 &&
-                  (FANOUT_ACTIVE.has(target) ? (
-                    <em className="slot-parallel" title={t('topo.slot.paralleleTitre')}>
-                      {t('topo.slot.parallele')}
-                    </em>
-                  ) : (
-                    <em className="slot-inactive" title={t('topo.slot.inactifTitre')}>
-                      {t('topo.slot.inactif')}
-                    </em>
-                  ))}
+                {/* Le fan-out des sous-agents n'est pas branché : seul le 1er slot alimente les
+                    phases d'exécution ; un slot de plus (topologie ancienne) est marqué non actif. */}
+                {index > 0 && (
+                  <em className="slot-inactive" title={t('topo.slot.inactifTitre')}>
+                    {t('topo.slot.inactif')}
+                  </em>
+                )}
               </article>
             )
           })}
@@ -814,34 +764,6 @@ export function AgentsTopologyView({
             title: t('topo.sousAgents.titre'),
             description: t('topo.sousAgents.description'),
             accent: 'cyan'
-          })}
-        </div>
-        <div className="topology-parallel-heading">
-          <div>
-            <span>{t('topo.panels.eyebrow')}</span>
-            <h3>{t('topo.panels.titre')}</h3>
-          </div>
-          <small>{t('topo.panels.note')}</small>
-        </div>
-        <div className="topology-parallel">
-          {renderTargetPanel({
-            target: 'scout',
-            // « Scouts », « Frame », « Judges » : les noms des phases du moteur.
-            title: 'Scouts',
-            description: t('topo.scout.description'),
-            accent: 'pink'
-          })}
-          {renderTargetPanel({
-            target: 'frame',
-            title: 'Frame',
-            description: t('topo.frame.description'),
-            accent: 'amber'
-          })}
-          {renderTargetPanel({
-            target: 'judge',
-            title: 'Judges',
-            description: t('topo.judge.description'),
-            accent: 'violet'
           })}
         </div>
         <div className="topology-runtime-limit">
