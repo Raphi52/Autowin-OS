@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { annonceCommitLocal, pushDuCompteRendu } from './annonce-commit-local'
+import { refusDePublication } from '../../shared/echec-publication'
 
 describe('pushDuCompteRendu', () => {
   it('« pushed » avec une branche → la branche et le mode ; tout le reste → rien poussé', () => {
@@ -68,6 +69,37 @@ describe('annonceCommitLocal', () => {
     expect(repli).toContain('git push origin e4daf1702e098832:refs/heads/auto/run-1')
     expect(repli).toContain('1 commit et push origin auto/run-1 réussi')
     expect(repli).not.toContain('ALLOW_MAIN_PUSH')
+  })
+
+  it('une publication refusée se dit dans la réponse du run : la raison, quoi faire, une seule fois', () => {
+    const refus = refusDePublication({
+      status: 'failed',
+      error:
+        'Command failed: git push origin abc:refs/heads/main\n  ⛔ Push refuse vers le depot public (origin) : ce qui part porte un nom ou un terme\n'
+    })
+    const ligne = annonceCommitLocal(
+      { outcome: 'merged', committed: true, publishedSha: 'abcdef1234567890' },
+      'run-1',
+      'Rends les commits lisibles',
+      undefined,
+      refus
+    )
+    expect(ligne).toContain('non poussé')
+    expect(ligne).toContain('⛔ Envoi refusé')
+    expect(ligne).toContain("élément réservé à l'entreprise")
+    expect(ligne).toContain('/git')
+    // fix-ok: `ligne` peut être absente ; le décompte se fait alors sur une chaîne vide.
+    expect((ligne ?? '').split('⛔').length - 1).toBe(1)
+  })
+
+  it('sans refus, la phrase « non poussé » reste celle d’avant : rien d’ajouté', () => {
+    const ligne = annonceCommitLocal(
+      { outcome: 'merged', committed: true, publishedSha: 'abcdef1234567890' },
+      'run-1',
+      'Rends les commits lisibles'
+    )
+    expect(ligne).not.toContain('⛔')
+    expect(ligne).not.toContain('Envoi')
   })
 
   it("n'annonce rien quand aucun commit n'a été créé", () => {

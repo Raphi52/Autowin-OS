@@ -346,6 +346,66 @@ describe('SourceControlPane (prompt-first)', () => {
     )
   })
 
+  // fix-ok: l'erreur brute de git ne doit pas arriver à l'utilisateur ; la cause et l'action suffisent.
+  it('un envoi du projet refusé dit pourquoi et quoi faire, sans la commande git brute', async () => {
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        gitApresFil: true,
+        last: {
+          runId: 'run-7',
+          branch: 'auto/run-7',
+          at: '2026-11-08T09:00:00.000Z',
+          project: {
+            status: 'failed',
+            error:
+              'Command failed: git push origin 1234abcd:refs/heads/main\n  ⛔ Push refuse vers le depot public (origin) : ce qui part porte un nom ou un terme\n  d’entreprise (profils de D:\\AutoWinOS\\entreprise/).\n'
+          }
+        }
+      })
+    await render()
+    await openWorkspaceView()
+
+    const last = container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent ?? ''
+    expect(last).not.toContain('Command failed')
+    expect(last).not.toContain('profils de')
+    // La cause reste sur la ligne du projet ; la ligne d'action dit quoi faire.
+    expect(last).toContain("élément réservé à l'entreprise")
+    const action = container.querySelector('[data-testid="sc-autoclose-refus"]')?.textContent ?? ''
+    expect(action).toContain('/git')
+  })
+
+  it.each([
+    ['porte-refusee', 'base du fil absente'],
+    ['porte-en-attente', 'fichier non commité dans le dossier partagé']
+  ])(
+    'un tour de chat arrêté par la porte dit la cause en mots courants, jamais le mot brut « %s »',
+    async (reason, attendu) => {
+      mockApi(GIT)
+      const api = (window as unknown as { api: Record<string, unknown> }).api
+      api.getAutoClose = () =>
+        Promise.resolve({
+          enabled: true,
+          gitApresFil: true,
+          last: {
+            runId: 'conv-1734 · tour e651201f',
+            branch: 'auto/conv-1734-e651201f',
+            at: '2026-11-08T14:21:18.663Z',
+            source: 'chat',
+            project: { status: 'skipped', reason }
+          }
+        })
+      await render()
+      await openWorkspaceView()
+
+      const last = container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent ?? ''
+      expect(last).not.toContain(reason)
+      expect(last).toContain(attendu)
+    }
+  )
+
   it('un enchaînement de CHAT dit ce qui est parti et nomme ce qui reste en attente', async () => {
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api

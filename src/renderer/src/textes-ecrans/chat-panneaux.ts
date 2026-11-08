@@ -65,6 +65,9 @@ export const TEXTES_FR = {
   'sc.raison.nonAttribue': 'aucun fichier du tour prouvé à ce fil',
   'sc.raison.testsRouges': 'tests rouges',
   'sc.raison.typageRouge': 'typage rouge',
+  'sc.raison.porteRefusee': "rien n'est entré dans main : conflit ou base du fil absente",
+  'sc.raison.porteEnAttente':
+    "en attente : fichier non commité dans le dossier partagé. Autowin retentera dès qu'il sera commité.",
   'sc.dernierEnchainement': 'Dernier enchaînement · {run}',
   'sc.portee.projet': 'Projet',
   // SourceControlPane.tsx — onglets, en-tête, erreurs de lecture
@@ -512,6 +515,9 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'sc.raison.nonAttribue': 'no file of the turn proven to belong to this thread',
   'sc.raison.testsRouges': 'failing tests',
   'sc.raison.typageRouge': 'type errors',
+  'sc.raison.porteRefusee': 'nothing went into main: conflict or missing thread base',
+  'sc.raison.porteEnAttente':
+    'waiting: uncommitted file in the shared folder. Autowin will retry once it is committed.',
   'sc.dernierEnchainement': 'Last auto chaining · {run}',
   'sc.portee.projet': 'Project',
   // SourceControlPane.tsx — onglets, en-tête, erreurs de lecture

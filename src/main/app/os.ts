@@ -144,6 +144,8 @@ import {
 } from '../runs/autoclose-store'
 import { AUTOWIN_WORKSPACE_ENV, AUTOWIN_WORKSPACE_ORIGIN_ENV } from '../../shared/app-identity'
 import type { RapportRetention } from '../../shared/rapport-retention'
+import { PublicationARejouer } from '../../shared/echec-publication'
+import { annonceRefusDuProjet } from '../chat/annonce-commit-local'
 import { ExecutionSupervisor, type ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 import { compileExecutionQuote } from '../orchestration/execution-quote'
 import { DEFAULT_ORCHESTRATION_BUDGET } from '../orchestration/orchestration-budget'
@@ -674,7 +676,7 @@ export class AutowinOS {
             // fix-ok: cause mesurée — `endAsync({ merge: true })` sans `onPublished` appelle ce rappel
             // (`runId: porte-conv-1-x`, coordinateur et WorktreeManager réels), qui poussait main.
             if (this.autoClose && !estUnPassageDePorte(publication.runId)) {
-              this.lastAutoClose = await closeGreenRunOnDisk({
+              const rapport = await closeGreenRunOnDisk({
                 runId: publication.runId,
                 direct: true,
                 task: publication.task ?? 'Run récupéré',
@@ -686,10 +688,16 @@ export class AutowinOS {
                 },
                 recoveredWithoutBrainBaseline: true
               })
-              if (projectPublicationNeedsRetry(this.lastAutoClose)) {
-                throw new Error(
-                  `Publication projet distante a rejouer: ${JSON.stringify(this.lastAutoClose.project)}`
+              this.lastAutoClose = rapport
+              // La réponse du run est déjà partie : le refus, s'il y en a un, va dans le fil lui-même.
+              if (publication.conversationId)
+                annonceRefusDuProjet(
+                  this.conversations,
+                  publication.conversationId,
+                  rapport.project
                 )
+              if (projectPublicationNeedsRetry(rapport)) {
+                throw new PublicationARejouer(rapport.project)
               }
             }
             const evidence = preparedCommitMutationEvidence(
@@ -943,10 +951,10 @@ export class AutowinOS {
             baseline: await baselinePromise,
             projectPublication
           })
+          // fix-ok: une erreur de texte seul ne laisse pas l'orchestrateur lire la raison du refus ;
+          // l'erreur typée porte le compte rendu.
           if (projectPublication && projectPublicationNeedsRetry(this.lastAutoClose)) {
-            throw new Error(
-              `Publication projet distante a rejouer: ${JSON.stringify(this.lastAutoClose.project)}`
-            )
+            throw new PublicationARejouer(this.lastAutoClose.project)
           }
           // Rendu à l'orchestrateur : l'annonce du commit dit ce qui a VRAIMENT été poussé, au lieu
           // de « non poussé » écrit en dur (2026-10-25).
@@ -1073,6 +1081,9 @@ export class AutowinOS {
       })
       if (report) {
         this.lastAutoClose = report
+        // fix-ok: seul le panneau Git recevait le refus d'un tour ; l'écriture dans le fil n'existait
+        // qu'à la reprise au démarrage. Le refus d'un tour va désormais dans le fil de ce tour.
+        annonceRefusDuProjet(this.conversations, tour.conversationId, report.project)
         // Le panneau ne garde que le DERNIER rapport : le journal garde chaque issue, motif compris.
         const laisses = (report.exclus ?? []).map((e) => `${e.path} (${e.motif})`).join(', ')
         console.log(

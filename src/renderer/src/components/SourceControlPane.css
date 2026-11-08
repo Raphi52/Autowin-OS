@@ -325,6 +325,11 @@
   color: var(--text, #e6e9ee);
   font-size: 11px;
 }
+/* Ce qu'il faut faire après un envoi refusé : la couleur d'erreur, pas le gris du reste du bloc. */
+.sc-autoclose-refus {
+  color: var(--err);
+  font-size: 11px;
+}
 .sc-brain-call {
   padding: 9px 0;
   border-top: 1px solid var(--line, #262b33);

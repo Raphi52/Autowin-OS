@@ -11,6 +11,7 @@ import type {
 } from '../providers/types'
 import { RoleModelConfig } from '../profil/roles'
 import { TrustLedger } from '../trust/ledger'
+import { PublicationARejouer } from '../../shared/echec-publication'
 
 /*
  * L'ANNONCE DU COMMIT DIT LE VRAI ÉTAT DU PUSH (2026-10-25).
@@ -82,6 +83,23 @@ const avecRappel: RunWorktrees = {
   }
 }
 
+/**
+ * Fusion avec rappel qui ÉCHOUE, comme le coordinateur réel : il avale l'erreur du rappel et garde la
+ * publication à rejouer. La réponse du run doit quand même dire pourquoi l'envoi n'est pas parti.
+ */
+const avecRappelEtEchec: RunWorktrees = {
+  begin: () => 'C:\\wt\\run-1',
+  end: () => undefined,
+  endAsync: async (_runId, options) => {
+    try {
+      await options?.onPublished?.({ baseSha, agentSha: publishedSha })
+    } catch {
+      // Le coordinateur ne fait que garder la publication à rejouer.
+    }
+    return issueFusionnee
+  }
+}
+
 /** Fusion sans rappel : la clôture tourne APRÈS la fusion (chemin historique). */
 const sansRappel: RunWorktrees = {
   begin: () => 'C:\\wt\\run-1',
@@ -141,6 +159,35 @@ describe('annonce du commit : le vrai état du push', () => {
       const reponse = await reponseDuRun(avecRappel, vi.fn().mockResolvedValue(rendu))
       expect(reponse).toContain('non poussé')
     }
+  })
+
+  // fix-ok: un envoi refusé ou un rappel qui lève ne doit pas disparaître de la réponse du run.
+  it('envoi refusé par le garde-fou, rappel qui lève → la réponse dit pourquoi et quoi faire, sans chemin interne', async () => {
+    const close = vi.fn().mockRejectedValue(
+      new PublicationARejouer({
+        status: 'failed',
+        error:
+          "Command failed: git push origin x\n  ⛔ Push refuse vers le depot public (origin) : ce qui part porte un nom ou un terme\n  d'entreprise (profils de D:\\AutoWinOS\\entreprise/).\n"
+      })
+    )
+    const reponse = await reponseDuRun(avecRappelEtEchec, close)
+    expect(reponse).toContain('Commit local créé')
+    expect(reponse).toContain('non poussé')
+    expect(reponse).toContain('⛔ Envoi refusé')
+    expect(reponse).toContain('/git')
+    expect(reponse).not.toContain('profils de')
+    expect(reponse).not.toContain('D:\\AutoWinOS')
+  })
+
+  it('envoi refusé, clôture après la fusion → la réponse le dit une seule fois', async () => {
+    const close = vi.fn().mockResolvedValue({
+      status: 'skipped',
+      reason: 'protected-branch',
+      detail: 'main'
+    })
+    const reponse = await reponseDuRun(sansRappel, close)
+    expect(reponse).toContain('non poussé')
+    expect(reponse.split('⛔').length - 1).toBe(1)
   })
 
   it('push direct refusé, repli sur une branche dédiée → cette branche est nommée, pas la tienne', async () => {

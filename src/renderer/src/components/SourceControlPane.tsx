@@ -9,6 +9,7 @@ import { etapesGit } from './etapes-git'
 import { ProjectPane } from './ProjectPane'
 import { DiffView } from './DiffView'
 import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
+import { refusDePublication } from '../../../shared/echec-publication'
 import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
 import { repartirNotesAppel, type NoteAppel } from './brain-appel-notes'
 import {
@@ -198,6 +199,20 @@ function cheminsModifies(changes: GitChange[], racine?: string): string[] {
     .map((c) => c.path.replace(/\\/g, '/'))
 }
 
+/**
+ * La ligne « quoi faire » d'un envoi refusé ou échoué. La cause est déjà sur la ligne du projet
+ * (`autoCloseResultLabel`) : on ne la répète pas. Rien ne s'affiche quand l'envoi est parti.
+ */
+function RefusDuProjet({ result }: { result: AutoCloseViewResult }): React.JSX.Element | null {
+  const refus = refusDePublication(result)
+  if (!refus) return null
+  return (
+    <span className="sc-autoclose-refus" data-testid="sc-autoclose-refus" role="alert">
+      {refus.action}
+    </span>
+  )
+}
+
 function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): string {
   const portee = scope
   if (result.status === 'pushed') {
@@ -214,7 +229,13 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
     return tx('sc.publi.publie', { portee, branche })
   }
   if (result.status === 'committed') return tx('sc.publi.commiteLocalement', { portee })
-  if (result.status === 'failed') return tx('sc.publi.echec', { portee, erreur: result.error })
+  // fix-ok: la ligne « échec » ne recopie pas la commande git brute ; la cause vient de refusDePublication
+  // et l'action de RefusDuProjet.
+  if (result.status === 'failed')
+    return tx('sc.publi.echec', {
+      portee,
+      erreur: refusDePublication(result)?.raison ?? result.error
+    })
   const reasons: Record<string, CleDuPanneau> = {
     'no-changes': 'sc.raison.aucunChangement',
     'no-remote': 'sc.raison.aucunDistant',
@@ -226,7 +247,9 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
     'invalid-publication-range': 'sc.raison.plageInvalide',
     unattributed: 'sc.raison.nonAttribue',
     'tests-rouges': 'sc.raison.testsRouges',
-    'typage-rouge': 'sc.raison.typageRouge'
+    'typage-rouge': 'sc.raison.typageRouge',
+    'porte-refusee': 'sc.raison.porteRefusee',
+    'porte-en-attente': 'sc.raison.porteEnAttente'
   }
   const cle = reasons[result.reason]
   return tx('sc.publi.nonPublie', { portee, raison: cle ? tx(cle) : result.reason })
@@ -1022,6 +1045,7 @@ export function SourceControlPane({
               <div className="sc-autoclose-last" data-testid="sc-autoclose-last">
                 <strong>{t('sc.dernierEnchainement', { run: autoClose.last.runId })}</strong>
                 <span>{autoCloseResultLabel(t('sc.portee.projet'), autoClose.last.project)}</span>
+                <RefusDuProjet result={autoClose.last.project} />
                 {autoClose.last.brain && (
                   <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
                 )}

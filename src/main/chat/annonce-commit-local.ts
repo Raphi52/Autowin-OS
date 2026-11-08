@@ -1,5 +1,10 @@
 import { bandeauPublie } from '../git/git-apres-fil'
 import { messageCommitAgent } from '../store/worktree-manager'
+import {
+  phraseDuRefus,
+  refusDePublication,
+  type RefusDePublication
+} from '../../shared/echec-publication'
 
 /**
  * Ce que la clôture automatique a fait du commit sur le dépôt distant. Absent = rien poussé.
@@ -37,12 +42,16 @@ export function pushDuCompteRendu(compteRendu: unknown): PushDuRun | undefined {
  * Le push est dit d'après `push`, le compte rendu de la clôture : « non poussé » était écrit en dur,
  * et la clôture automatique a poussé `494e7d45` puis `e4daf170` sur `origin/main` le 2026-10-24
  * sous cette phrase.
+ *
+ * `refus` : l'envoi n'est pas parti et la clôture dit pourquoi. La réponse du run est le seul message
+ * que l'utilisateur lit dans son fil : sans cette ligne, l'échec ne s'y voit pas.
  */
 export function annonceCommitLocal(
   issue: unknown,
   agentId: string,
   task: string | undefined,
-  push?: PushDuRun
+  push?: PushDuRun,
+  refus?: RefusDePublication
 ): string | undefined {
   if (typeof issue !== 'object' || issue === null) return undefined
   const { outcome, committed, publishedSha } = issue as {
@@ -57,7 +66,11 @@ export function annonceCommitLocal(
   const tete = sha ? ` (tête de branche \`${sha.slice(0, 8)}\`)` : ''
   const message = `« ${messageCommitAgent(agentId, task)} », intégré dans ta branche${tete}`
   const transport = `C'est lui qui ramène le travail de la copie isolée.`
-  if (!push) return `Commit local créé : ${message}, non poussé. ${transport}`
+  // fix-ok: sans le motif, la réponse ne dit que « non poussé » : l'échec ne se voit pas dans le fil.
+  if (!push) {
+    const commit = `Commit local créé : ${message}, non poussé. ${transport}`
+    return refus ? `${commit}\n\n${phraseDuRefus(refus)}` : commit
+  }
   const destination =
     push.mode === 'pr'
       ? `sur la branche dédiée \`origin/${push.branche}\``
@@ -79,4 +92,62 @@ function bandeauGit(sha: string, sujet: string, push: PushDuRun): string {
   const accord = push.mode === 'direct' ? 'ALLOW_MAIN_PUSH=1 ' : ''
   const ligne = `${accord}git push origin ${sha}:refs/heads/${push.branche}`
   return bandeauPublie([{ sha: sha.slice(0, 8), sujet }], [ligne])
+}
+
+/** Ce que la annonce du refus a besoin du fil : le lire, et y poser un message de l'app. */
+export interface FilDuRefus {
+  get(id: string): { messages: ReadonlyArray<{ role: string; content: string }> } | undefined
+  append(id: string, message: { role: 'assistant'; content: string }): unknown
+}
+
+/**
+ * Pose dans le fil le refus d'une publication : celle d'un tour de chat, ou une publication reprise
+ * au démarrage (la réponse du run, elle, est déjà partie). Sans ce message, l'échec ne se voit que
+ * dans le panneau Git.
+ *
+ * Pas de doublon DANS LE TOUR COURANT : si la phrase y figure déjà (dans la réponse du run, ou posée
+ * par un rejeu au démarrage), elle n'est pas reposée. Un refus identique d'un tour antérieur ne
+ * compte pas : un nouveau tour qui échoue se dit, même avec le même texte. Rend `false` si rien
+ * n'a été posé (fil disparu, ou refus déjà dit dans ce tour).
+ */
+export function annonceRefusAuFil(
+  fil: FilDuRefus,
+  conversationId: string,
+  refus: RefusDePublication
+): boolean {
+  const conversation = fil.get(conversationId)
+  if (!conversation) return false
+  const phrase = phraseDuRefus(refus)
+  if (dejaDitDansLeTourCourant(conversation.messages, phrase)) return false
+  fil.append(conversationId, { role: 'assistant', content: phrase })
+  return true
+}
+
+/** Le tour courant commence après le dernier message de l'utilisateur. */
+function dejaDitDansLeTourCourant(
+  messages: ReadonlyArray<{ role: string; content: string }>,
+  phrase: string
+): boolean {
+  let debut = 0
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === 'user') {
+      debut = i + 1
+      break
+    }
+  }
+  return messages.slice(debut).some((m) => m.role === 'assistant' && m.content.includes(phrase))
+}
+
+/**
+ * Le refus d'un rapport de publication (le `project` d'un rapport de clôture), posé dans le fil de son
+ * tour. Rend `false` quand rien n'est à dire : envoi parti, rien à envoyer, ou une attente
+ * (`porte-en-attente`) qui se réessaie toute seule.
+ */
+export function annonceRefusDuProjet(
+  fil: FilDuRefus,
+  conversationId: string,
+  projet: unknown
+): boolean {
+  const refus = refusDePublication(projet)
+  return refus ? annonceRefusAuFil(fil, conversationId, refus) : false
 }

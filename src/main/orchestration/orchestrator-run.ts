@@ -18,6 +18,11 @@ import { identifiantBureauCache } from '../consignes/consigne-bureau-cache'
 import { instantDeRetourAnnonce } from '../../shared/reprise-quota'
 import { alignReportWithDisk, dispositionPourIssue } from '../git/worktree-path-rewrite'
 import { annonceCommitLocal, pushDuCompteRendu, type PushDuRun } from '../chat/annonce-commit-local'
+import {
+  PublicationARejouer,
+  refusDePublication,
+  type RefusDePublication
+} from '../../shared/echec-publication'
 import { annonceEditionLocaleNonRemise } from '../chat/annonce-edition-locale'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
 import type { WorktreeAgentActivity } from '../../shared/worktree-activity-model'
@@ -608,19 +613,31 @@ export async function run(
     let closeStarted = false
     // Ce que la clôture a poussé : l'annonce du commit le dit au lieu d'écrire « non poussé » en dur.
     let pushDuRun: PushDuRun | undefined
+    // Pourquoi l'envoi n'est pas parti (refus de règle, erreur) : la réponse du run le dit dans le fil.
+    // fix-ok: la clôture peut lever après un refus ; le motif est gardé avant que l'erreur remonte.
+    let refusDuRun: RefusDePublication | undefined
     const closePublishedRun = async (publication?: {
       baseSha: string
       publishedSha: string
     }): Promise<void> => {
       if (closeStarted || !green || !this.deps.closeGreenRun) return
       closeStarted = true
-      const compteRendu = await this.deps.closeGreenRun.close({
-        runId,
-        task,
-        workCwd: this.deps.executionWorkspace,
-        ...(publication ? { projectPublication: publication } : {})
-      })
+      let compteRendu: unknown
+      try {
+        compteRendu = await this.deps.closeGreenRun.close({
+          runId,
+          task,
+          workCwd: this.deps.executionWorkspace,
+          ...(publication ? { projectPublication: publication } : {})
+        })
+      } catch (erreur) {
+        // Publication à rejouer : l'erreur porte le compte rendu. On garde la raison, puis l'erreur
+        // remonte comme avant pour que le coordinateur garde la publication à rejouer.
+        if (erreur instanceof PublicationARejouer) refusDuRun = refusDePublication(erreur.project)
+        throw erreur
+      }
       pushDuRun = pushDuCompteRendu(compteRendu)
+      refusDuRun = refusDePublication(compteRendu)
     }
     const onPublished = async (publication: {
       baseSha: string
@@ -882,7 +899,7 @@ ${annonceEdition}`
     // APRÈS la dernière clôture possible (rappel pendant la fusion, ou chemin ci-dessus) : elle dit
     // ce que la clôture a VRAIMENT poussé (2026-10-25).
     const annonceCommit = produced
-      ? annonceCommitLocal(finalized, runId, task, pushDuRun)
+      ? annonceCommitLocal(finalized, runId, task, pushDuRun, refusDuRun)
       : undefined
     if (produced && annonceCommit && !produced.result.includes(annonceCommit)) {
       produced.result = `${produced.result.trimEnd()}
