@@ -188,7 +188,10 @@ import {
   revenirSiSaCopieADisparu,
   diagnostiqueDossierConversation
 } from '../conversations/bascule-dossier-conversation'
-import { menageDesCopiesDeFil } from '../conversations/menage-des-copies-de-fil'
+import {
+  CALME_AVANT_MENAGE_MS,
+  menageDesCopiesDeFil
+} from '../conversations/menage-des-copies-de-fil'
 import { depotCiteDansLeMessage } from '../git/depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from '../conversations/rangement-premier-message'
 import { noterAppelCourt, signalerPanneAppelCourt } from '../orchestration/petites-taches-trace'
@@ -2691,6 +2694,8 @@ Le fil reprend ensuite normalement.`
             broadcast({ type: 'refresh', scope: 'conversations' })
           })
           .catch((error) => console.warn('[bloc git du tour] non posé :', error))
+          // Après le bloc : c'est lui qui pose la dernière mise à jour du fil, donc le départ du calme.
+          .finally(planifierLeMenageDesCopies)
         return resultat
       } finally {
         finirTour()
@@ -3008,6 +3013,22 @@ Le fil reprend ensuite normalement.`
   }
   setTimeout(passeDuMenageDesCopies, 5 * 60_000).unref()
   setInterval(passeDuMenageDesCopies, 60 * 60 * 1_000).unref()
+  /*
+   * LE MÉNAGE APRÈS LA FIN D'UN TOUR : le délai de calme d'une copie propre est court (le coût de la
+   * rouvrir, `CALME_AVANT_MENAGE_MS`), le balayage horaire la garderait jusqu'à l'heure suivante. Chaque
+   * fin de tour relance donc une passe après ce délai, une seule à la fois : la passe relit l'état, et
+   * un fil repris entre-temps garde sa copie (tour en cours, ou calme pas encore atteint).
+   */
+  // fix-ok: cause mesurée — le balayage horaire (setInterval 1 h, plus haut) laisserait une copie propre jusqu'à une heure après le tour ; le délai de calme est désormais de 8 s (CALME_AVANT_MENAGE_MS, mesuré le 08/11).
+  let minuterieDuMenage: ReturnType<typeof setTimeout> | undefined
+  const planifierLeMenageDesCopies = (): void => {
+    if (minuterieDuMenage) clearTimeout(minuterieDuMenage)
+    minuterieDuMenage = setTimeout(() => {
+      minuterieDuMenage = undefined
+      passeDuMenageDesCopies()
+    }, CALME_AVANT_MENAGE_MS)
+    minuterieDuMenage.unref?.()
+  }
 
   ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
     assertTrustedRendererSender(event, 'PilotChat')

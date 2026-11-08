@@ -89,3 +89,26 @@ describe('le ménage des copies de fil', () => {
     expect(source).toContain('setInterval(passeDuMenageDesCopies, 60 * 60 * 1_000).unref()')
   })
 })
+
+/**
+ * LE MÉNAGE APRÈS LA FIN D'UN TOUR. Le calme qui retire une copie propre est court (le coût de la
+ * rouvrir) : le balayage horaire seul garderait la copie jusqu'à l'heure suivante. Chaque fin de tour
+ * replanifie donc une passe, une fois la publication du tour et son bloc git posés.
+ */
+describe('le ménage après la fin d’un tour', () => {
+  it('se replanifie une fois le bloc git du tour posé, pour que le calme soit atteint', () => {
+    expect(corps).toContain('.finally(planifierLeMenageDesCopies)')
+    expect(corps.indexOf('.finally(planifierLeMenageDesCopies)')).toBeGreaterThan(
+      corps.indexOf("console.warn('[bloc git du tour] non posé :', error)")
+    )
+  })
+
+  it('la minuterie repart du délai de calme, sans passe en double', () => {
+    const debut = source.indexOf('const planifierLeMenageDesCopies = (): void => {')
+    expect(debut).toBeGreaterThan(-1)
+    const bloc = source.slice(debut, source.indexOf('\n  }\n', debut))
+    expect(bloc).toContain('if (minuterieDuMenage) clearTimeout(minuterieDuMenage)')
+    expect(bloc).toContain('}, CALME_AVANT_MENAGE_MS)')
+    expect(bloc).toContain('passeDuMenageDesCopies()')
+  })
+})

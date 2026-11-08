@@ -3,7 +3,6 @@ import { join, resolve } from 'node:path'
 import { ancienNomDeCopieDeFil, nomDeCopieDeFil } from '../../shared/copie-du-fil'
 import { supprimerArbreAsync } from '../fichiers/fs-supprimer'
 import { lireLaBaseDuFil } from '../git/photo-du-code'
-import { CALME_AVANT_PUBLICATION_MS } from '../git/git-apres-fil'
 import { arbreDeLaCopie } from '../orchestration/garder-un-essai'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import { delierLesDependances } from '../store/dependances-copie-agent'
@@ -19,10 +18,10 @@ import { delierLesDependances } from '../store/dependances-copie-agent'
  * publié. Une copie qui porte un écart reste, quelle que soit l'ancienneté du fil. Mesuré le 07/11 :
  * 9 copies sur 11 étaient dans ce cas, et celle de conv-1702 portait un travail non publié.
  *
- * « FINI » = aucun tour en cours, et le fil est resté calme `CALME_AVANT_MENAGE_MS` (ou il est marqué
- * inactif et calme depuis `CALME_AVANT_PUBLICATION_MS`). Pas le calme de 3 min de la publication :
- * un fil repris après sa suppression rouvre une copie neuve et repart sans la session interne de
- * l'outil, avec tout l'historique du fil — un prix à ne payer qu'après une vraie pause.
+ * « FINI » = aucun tour en cours, et le fil est resté calme `CALME_AVANT_MENAGE_MS`, qui est le coût
+ * de rouvrir la copie (voir plus bas). Une copie retirée se rouvre au MÊME chemin (`copies-de-fil/<fil>`) :
+ * la session du CLI, rangée sous ce chemin, reste reprenable. Le retrait ne touche jamais à l'historique
+ * du CLI (`~/.claude`), qui n'est pas dans la copie.
  *
  * LE FIL EST DÉCROCHÉ AVANT LA SUPPRESSION : son dossier rangé redevient celui d'avant la copie.
  * Sans quoi son tour suivant serait refusé (« dossier rangé disparu »). La copie est d'abord RENOMMÉE
@@ -33,8 +32,21 @@ import { delierLesDependances } from '../store/dependances-copie-agent'
  * `supprimerArbreAsync` qui ne suit jamais un lien, puis `git worktree prune` dans le dépôt.
  */
 
-/** 12 h : un fil laissé le soir est rangé au matin, un fil de la journée garde sa copie. */
-export const CALME_AVANT_MENAGE_MS = 12 * 3_600_000
+/*
+ * LE DÉLAI DE CALME : une copie propre et sans tour ne reste pas plus longtemps que ce qu'elle coûte à
+ * rouvrir. Mesuré le 08/11/2026 sur ce dépôt (4 781 fichiers suivis) : `ouvrirLaCopieDuFil` = photo du
+ * code (`add -A` sur un index temporaire : 3,0 s à chaud, 10,4 s à froid), puis `worktree add` (4,9 s à
+ * chaud, 7,3 s à froid), puis la jonction des modules (0,1 s). Soit 8 s à chaud, 18 s à froid : on prend
+ * le plancher chaud. Une copie garde environ 98 Mo tant qu'elle est là, pour rien.
+ */
+// fix-ok: cause mesurée — le délai était 12 h alors que rouvrir une copie coûte 8 s à chaud (photo 3,0 s + worktree add 4,9 s, le 08/11) : une copie propre restait 12 h sans raison.
+export const CALME_AVANT_MENAGE_MS = 8_000
+
+/**
+ * Une copie SANS fil peut être celle qu'un tour est en train d'ouvrir (8 à 18 s) : son âge seul la
+ * retire, et seulement après 12 h.
+ */
+export const AGE_MIN_COPIE_SANS_FIL_MS = 12 * 3_600_000
 
 /** Le préfixe d'une copie décrochée et en cours de suppression : un ménage coupé la reprend. */
 export const PREFIXE_A_SUPPRIMER = 'a-supprimer__'
@@ -93,9 +105,10 @@ export function decisionPourLaCopie(entree: {
       (typeof fil.copieDuFil?.chemin === 'string' && cle(fil.copieDuFil.chemin) === ici)
   )
   // Sans fil (supprimé, ou archivé pas encore relu) : seule l'heure de la copie dit son âge. Une copie
-  // toute neuve peut être celle qu'un tour est en train d'ouvrir, avant de la noter sur son fil.
+  // toute neuve peut être celle qu'un tour est en train d'ouvrir, avant de la noter sur son fil : son
+  // âge ne suffit qu'au-delà de `AGE_MIN_COPIE_SANS_FIL_MS`, jamais au délai de calme d'un fil.
   if (utilisateurs.length === 0)
-    return ouverteA !== undefined && entree.maintenant - ouverteA >= calmeMs
+    return ouverteA !== undefined && entree.maintenant - ouverteA >= AGE_MIN_COPIE_SANS_FIL_MS
       ? { supprimer: true, filDuNom: nom.fil, aDecrocher: [] }
       : { supprimer: false, raison: 'copie récente sans fil : peut-être en cours d’ouverture' }
   const aDecrocher: string[] = []
@@ -103,7 +116,7 @@ export function decisionPourLaCopie(entree: {
     if (entree.tourEnCours(fil.id))
       return { supprimer: false, raison: `${fil.id} a un tour en cours` }
     const calme = entree.maintenant - fil.updatedAt
-    const fini = calme >= calmeMs || (fil.inactive === true && calme >= CALME_AVANT_PUBLICATION_MS)
+    const fini = calme >= calmeMs
     if (!fini) return { supprimer: false, raison: `${fil.id} n’est pas fini` }
     if (cle(fil.projectPath) !== ici) continue
     // Un fil rangé dans ce dossier sans que ce soit SA copie (une façon d'« Essaie 3 façons ») ne

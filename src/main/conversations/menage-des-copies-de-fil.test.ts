@@ -30,6 +30,7 @@ import {
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 
 const H = 3_600_000
+// fix-ok: cause mesurée — rouvrir une copie coûte 8 s à chaud (photo 3,0 s + worktree add 4,9 s, dépôt de 4 781 fichiers, le 08/11) ; le délai de ménage était de 12 h, donc une copie propre restait 12 h.
 const MAINTENANT = 1_800_000_000_000
 const COPIE =
   'D:\\AutoWinOS\\.autowin-data\\autowin-os\\retours-de-tour\\essai__conv-9-1700000000000-1'
@@ -57,15 +58,24 @@ describe('decisionPourLaCopie — qui se sert de la copie, et chacun a-t-il fini
     })
   })
 
-  it('garde la copie d’un fil qui a servi il y a moins de 12 h', () => {
-    expect(decider([fil({ ...dansSaCopie, updatedAt: MAINTENANT - 11 * H })]).supprimer).toBe(false)
+  it('un fil est fini à la limite du délai de calme, et pas une milliseconde avant', () => {
+    expect(
+      decider([fil({ ...dansSaCopie, updatedAt: MAINTENANT - CALME_AVANT_MENAGE_MS })]).supprimer
+    ).toBe(true)
+    expect(
+      decider([fil({ ...dansSaCopie, updatedAt: MAINTENANT - CALME_AVANT_MENAGE_MS + 1 })])
+        .supprimer
+    ).toBe(false)
   })
 
-  it('un fil marqué inactif est fini dès 3 min de calme', () => {
+  it('le délai de calme ne dépasse pas le coût mesuré de rouvrir une copie (8 s à chaud, le 08/11)', () => {
+    expect(CALME_AVANT_MENAGE_MS).toBeLessThanOrEqual(8_000)
+  })
+
+  it('un fil marqué inactif n’a pas de délai plus court : le même calme', () => {
     expect(
-      decider([fil({ ...dansSaCopie, inactive: true, updatedAt: MAINTENANT - 4 * 60_000 })])
-        .supprimer
-    ).toBe(true)
+      decider([fil({ ...dansSaCopie, inactive: true, updatedAt: MAINTENANT - 5_000 })]).supprimer
+    ).toBe(false)
   })
 
   it('garde la copie d’un fil dont un tour est en cours, même ancien', () => {
@@ -76,7 +86,7 @@ describe('decisionPourLaCopie — qui se sert de la copie, et chacun a-t-il fini
   })
 
   it('une branche du fil qui travaille encore dans la copie la garde', () => {
-    const branche = fil({ ...dansSaCopie, id: 'conv-10', updatedAt: MAINTENANT - H })
+    const branche = fil({ ...dansSaCopie, id: 'conv-10', updatedAt: MAINTENANT - 5_000 })
     expect(decider([fil(dansSaCopie), branche]).supprimer).toBe(false)
   })
 
@@ -261,6 +271,59 @@ describe('menageDesCopiesDeFil — sur un vrai dépôt', () => {
 
     expect(bilan.supprimees).toEqual([])
     expect(existsSync(copie)).toBe(true)
+  })
+
+  it('retire la copie propre dès que son fil a eu le délai de calme, sans attendre 12 h', async () => {
+    const { repo, retours, copies, canari } = await depot()
+    const copie = await copieDuFil(repo, copies, 'conv-7')
+    const decroches: string[] = []
+
+    const bilan = await menageDesCopiesDeFil({
+      dossierDesRetours: retours,
+      dossierDesCopiesDeFil: copies,
+      depot: repo,
+      lireFils: () => [
+        fil({
+          id: 'conv-7',
+          updatedAt: MAINTENANT - 8_000,
+          projectPath: copie,
+          copieDuFil: { chemin: copie }
+        })
+      ],
+      tourEnCours: () => false,
+      decrocher: (id) => decroches.push(id),
+      maintenant: () => MAINTENANT
+    })
+
+    expect(bilan).toEqual({ supprimees: [copie], gardees: [], echecs: [] })
+    expect(decroches).toEqual(['conv-7'])
+    expect(existsSync(copie)).toBe(false)
+    expect(existsSync(canari)).toBe(true)
+  })
+
+  it('une copie rouverte après son retrait reprend le même chemin : la session rangée sous ce chemin reste reprenable', async () => {
+    const { repo, retours, copies } = await depot()
+    const premiere = await copieDuFil(repo, copies, 'conv-8')
+
+    await menageDesCopiesDeFil({
+      dossierDesRetours: retours,
+      dossierDesCopiesDeFil: copies,
+      depot: repo,
+      lireFils: () => [
+        fil({
+          id: 'conv-8',
+          updatedAt: MAINTENANT - 8_000,
+          projectPath: premiere,
+          copieDuFil: { chemin: premiere }
+        })
+      ],
+      tourEnCours: () => false,
+      decrocher: () => undefined,
+      maintenant: () => MAINTENANT
+    })
+    expect(existsSync(premiere)).toBe(false)
+
+    expect(await copieDuFil(repo, copies, 'conv-8')).toBe(premiere)
   })
 
   it('reprend une copie déjà décrochée qu’un ménage coupé a laissée', async () => {
