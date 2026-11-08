@@ -14,8 +14,10 @@ describe('etiquette MINEUR bornee au verdict VALIDE', () => {
   })
 
   // 2026-09-24 : decision utilisateur, MINEUR bloque desormais la cloture verte.
+  // L'exemple est un ecart de comportement : un libelle seul est une remarque de forme, qui ne bloque
+  // plus (voir objections-juge.forme.test.ts).
   it("un VALIDE dont une puce est MINEUR n'est plus une cloture", () => {
-    const valide = 'VALIDE\nSCORE: 80\nOBJECTIONS:\n- MINEUR: libelle perfectible\n- OK: 12/12 tests'
+    const valide = 'VALIDE\nSCORE: 80\nOBJECTIONS:\n- MINEUR: seuil non mesure\n- OK: 12/12 tests'
     expect(verdictAvecObjectionsPortees(valide)).toMatch(/^DEFAUT:/)
   })
 

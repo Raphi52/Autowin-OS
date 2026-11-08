@@ -10,7 +10,7 @@
  * Ce module donne au juge ses objections precedentes (1) et reconnait, PAR DU CODE, un VALIDE dont
  * les seules reserves MINEUR sont revenues identiques (2). Une reserve NOUVELLE relance toujours.
  */
-import { objectionsDuJuge, verdictPanelValide } from './objections-juge'
+import { objectionsDuJuge, objectionsNotees, verdictPanelValide } from './objections-juge'
 
 /** Borne du rappel : le prompt du juge ne grossit que de quelques objections. */
 const MAX_OBJECTIONS_RAPPELEES = 12
@@ -65,7 +65,7 @@ export const MOTIF_RESERVES_MINEURES_FIGEES =
 export function noteVerdictPrecedentPourJuge(verdictPrecedent: string): string {
   const texte = (verdictPrecedent ?? '').trim()
   if (!texte) return ''
-  const objections = objectionsDuJuge(texte).slice(0, MAX_OBJECTIONS_RAPPELEES)
+  const objections = objectionsNotees(texte).slice(0, MAX_OBJECTIONS_RAPPELEES)
   const liste = objections.length
     ? objections
         .map((o) => `- ${o.length > MAX_CARACTERES_PAR_OBJECTION ? `${o.slice(0, MAX_CARACTERES_PAR_OBJECTION)}…` : o}`)

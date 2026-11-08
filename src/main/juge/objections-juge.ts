@@ -33,7 +33,7 @@ import { execFileHorsFil, type ErreurHorsFil } from '../gel/execution-hors-fil'
 export const CONTRAT_OBJECTIONS = `OBJECTIONS:
 - MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <défaut que le producteur peut encore corriger dans CE run — il BLOQUE la clôture et relance une réparation ; sur un /scout nommé, il est seulement ajouté au résultat comme réserve, sans nouveau passage : une erreur qui fausse une piste y est MAJEUR> | OK: <constat vérifié> | OK: hors run — <réserve qu'aucune réparation ne peut lever (publication faite par l'app après ton VALIDE, mesure qui attend des runs futurs, geste ou accord de l'utilisateur) et qui la lèvera>
 Facultatif, en fin d'une puce MAJEUR ou MINEUR : « | TEST: <fichier de test> | <commande> » — le test qui échoue aujourd'hui et que la réparation doit faire passer sans le modifier.
-Un défaut corrigeable dans ce run n'est jamais OK. Une puce OK ne bloque pas et reste affichée à l'utilisateur.
+Un défaut corrigeable dans ce run n'est jamais OK, sauf une remarque de forme seule (commentaire, titre, accord) : écris « OK: forme — <remarque> », première ligne VALIDE. Une puce OK ne bloque pas et reste affichée.
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
 
 /**
@@ -112,6 +112,44 @@ function normaliser(ligne: string): string {
 }
 
 /**
+ * UNE REMARQUE DE FORME NE BLOQUE PAS ; UN EFFET DE COMPORTEMENT OU DE TEST BLOQUE TOUJOURS.
+ *
+ * fix-ok: run build-fais-accepter-plusieurs-kaizen-mw7icgfg (2026-11-08) — le juge a refusé huit fois la
+ * même livraison. Le blocage tenait à un bandeau de fichier de test et à un titre de test, à côté d'une
+ * conversation nommée ignorée sans un mot, seule vraie défaillance. Mesure sur les 10 remarques
+ * distinctes de ce run : 5 de forme, 5 qui touchent un comportement, un test ou un fait faux.
+ *
+ * Lexical et conservateur : une remarque n'est de forme que si elle NOMME une forme (commentaire,
+ * bandeau, titre, accord, formulation, libellé) et qu'aucun mot d'effet n'y figure (lit, rend, ignore,
+ * compte, passe, « aucun test », « faux »…). Le doute bloque. Un MAJEUR et une puce sans étiquette
+ * bloquent toujours : seul un MINEUR peut redescendre.
+ */
+const NOMME_UNE_FORME =
+  /\b(commentaires?|bandeaux?|titres?|accords?|formulations?|libelles?|orthographe|intitules?)\b/
+const PORTE_UN_EFFET =
+  /\b(lit|lisent|ignore\w*|rend|rendent|rendu|attach\w*|disparai\w*|disparu|appel\w*|compte\w*|casse\w*|plante\w*|echou\w*|echec|rouge\w*|faux|fausse?s?|passe\w*|manqu\w*|bloqu\w*|aucun test\w*|sans test\w*|pas de test\w*|code de sortie)\b/
+
+/**
+ * Une remarque qui ne touche que la forme : une forme nommée, et aucun effet. Un écart de périmètre
+ * (« ÉTENDUE — ») ne l'est jamais : une partie de la demande manque, ce n'est pas un mot mal placé.
+ */
+export function remarqueDeForme(texte: string): boolean {
+  const normalisee = normaliser(texte)
+  if (/^\**\s*etendue\b/.test(normalisee)) return false
+  return NOMME_UNE_FORME.test(normaliser(horsCitations(texte))) && !PORTE_UN_EFFET.test(normalisee)
+}
+
+/**
+ * Une puce étiquetée bloque-t-elle ? MAJEUR oui. MINEUR oui, sauf une remarque de forme. OK non, sauf
+ * « OK: forme — » qui porte un effet : le juge ne déclasse pas un défaut en simple constat de forme.
+ */
+function bloqueLaPuceEtiquetee(gravite: string, texte: string): boolean {
+  if (/^ok$/i.test(gravite))
+    return /^forme\s*[—–-]/i.test(texte) && PORTE_UN_EFFET.test(normaliser(texte))
+  return !(gravite.toUpperCase() === 'MINEUR' && remarqueDeForme(texte))
+}
+
+/**
  * Les objections CONCRÈTES d'un texte de verdict, section `OBJECTIONS:` seulement.
  * Rend `[]` quand il n'y a pas de section, qu'elle est vide, ou qu'elle dit « aucune ».
  */
@@ -130,12 +168,26 @@ interface PuceDuJuge {
   enLigne: boolean
   retrait: number
   bloquante: boolean
+  /** MINEUR de forme : notée, elle ne bloque pas. */
+  forme: boolean
 }
 
 /** Les objections de `objectionsDuJuge`, avec la gravité retenue (MAJEUR/MINEUR/OK, ou `null` = puce nue). */
 function objectionsClassees(text: string, toutesGravites: boolean): PuceDuJuge[] {
   const puces = pucesDuJuge(text)
   return toutesGravites ? puces : puces.filter((p) => p.bloquante)
+}
+
+/**
+ * Les remarques à CONSERVER dans le résultat : les bloquantes, plus les MINEUR de forme. Une remarque
+ * de forme ne bloque pas, mais elle reste écrite : la relecture seule et la mémoire du juge la gardent.
+ */
+export function objectionsNotees(text: string): string[] {
+  return pucesNotees(text).map((p) => p.texte)
+}
+
+function pucesNotees(text: string): PuceDuJuge[] {
+  return pucesDuJuge(text).filter((p) => p.bloquante || p.forme)
 }
 
 /** Toutes les puces de la section `OBJECTIONS:`, chacune avec ce qui la rend bloquante ou non. */
@@ -181,7 +233,8 @@ function pucesDuJuge(text: string): PuceDuJuge[] {
           index,
           enLigne: true,
           retrait: 0,
-          bloquante: true
+          bloquante: true,
+          forme: false
         })
       continue
     }
@@ -207,14 +260,18 @@ function pucesDuJuge(text: string): PuceDuJuge[] {
     // fix-ok: (2026-09-24) — run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont
     // une puce MINEUR etait un vrai trou (drapeau `orientation` jamais transmis par run-pilot-chat.ts).
     // Decision utilisateur : tout defaut du juge, meme MINEUR, bloque la cloture verte. Seul OK passe.
-    const bloquante = gravite ? !/^ok$/i.test(gravite) : !aUnMajeur
+    // Exception voulue par l'utilisateur (2026-11-08) : un MINEUR qui ne porte que sur la forme est
+    // noté sans bloquer. Un MAJEUR ou une puce nue bloque toujours (voir bloqueLaPuceEtiquetee).
+    const texte = etiquette ? contenu.slice(etiquette[0].length).trim() : contenu
+    const bloquante = gravite ? bloqueLaPuceEtiquetee(gravite, texte) : !aUnMajeur
     objections.push({
       gravite: gravite ? gravite.toUpperCase() : null,
-      texte: etiquette ? contenu.slice(etiquette[0].length).trim() : contenu,
+      texte,
       index,
       enLigne: false,
       retrait,
-      bloquante
+      bloquante,
+      forme: !!gravite && gravite.toUpperCase() === 'MINEUR' && remarqueDeForme(texte)
     })
   }
   return objections
@@ -268,7 +325,7 @@ export function defautsDeLaRelectureSeule(
 ): string[] {
   if (phaseNommee !== 'judge' || phasesExecutees > 0) return []
   if (!refusEcritParLeJuge(text)) return []
-  return objectionsClassees(text, false).map((o) =>
+  return pucesNotees(text).map((o) =>
     o.gravite ? `${o.gravite}: ${o.texte}` : o.texte
   )
 }

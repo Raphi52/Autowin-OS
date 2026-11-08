@@ -97,13 +97,13 @@ describe('verdictDuPanel — ce que lisent le contrôle final et l’utilisateur
 
   it('la puce rejoint les objections déjà portées par les membres', () => {
     const verdict = verdictDuPanel(issueDuPanel({ prevus: 3, valides: 2, refus: 0 }), {
-      verdictValide: 'VALIDE\n\nOBJECTIONS:\n- MINEUR: libellé trompeur',
+      verdictValide: 'VALIDE\n\nOBJECTIONS:\n- MINEUR: seuil non mesuré',
       raisons: []
     })
     expect(verdict).toBe(
-      "VALIDE\n\nOBJECTIONS:\n- MINEUR: libellé trompeur\n- OK: hors run — 1 juge sur 3 n'a pas répondu"
+      "VALIDE\n\nOBJECTIONS:\n- MINEUR: seuil non mesuré\n- OK: hors run — 1 juge sur 3 n'a pas répondu"
     )
-    expect(objectionsDuJuge(verdict)).toEqual(['libellé trompeur'])
+    expect(objectionsDuJuge(verdict)).toEqual(['seuil non mesuré'])
   })
 
   it('un refus garde ses raisons et nomme les absents', () => {
