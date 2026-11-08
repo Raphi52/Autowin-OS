@@ -24,11 +24,12 @@ import {
   type TraceDesLectures
 } from '../chat/deux-lectures'
 import { estUnPromptDOrdre } from '../conversations/messages-entre-fils-app'
-import type { Message } from '../providers/types'
+import type { Attachment, Message } from '../providers/types'
 import { descriptionsDesCommandes } from './aides-du-tour'
 import type { ExecutionDeCommande } from './commandes-du-tour'
 import type { PilotEventVariant } from './evenements'
 import { commandResultSucceeded } from './issue-des-commandes'
+import { imagesDeLaDemande } from './pieces-jointes-du-fil'
 
 export type LectureRetenue = Extract<IssueDesLectures, { kind: 'retenue' }>
 
@@ -45,7 +46,13 @@ export type LecturesDuTour = {
 
 export function lecturesDuTour(entree: {
   demanderDeuxLectures:
-    ((systeme: string, charge: string, trace: TraceDesLectures) => Promise<string>) | undefined
+    | ((
+        systeme: string,
+        charge: string,
+        trace: TraceDesLectures,
+        images?: Attachment[]
+      ) => Promise<string>)
+    | undefined
   routingUserMessageOverride: string | undefined
   sendLimits: { systemProfile?: 'watchdog-read-only'; tourDeFond?: boolean } | undefined
   latestUserMessage: string | undefined
@@ -103,6 +110,9 @@ export function lecturesDuTour(entree: {
     // Ce que font les commandes citées (`/scout`, `/arena`) : sans elles, le petit modèle a lu
     // un fil comme nette — rejeu sur le vrai modèle du 2026-10-22, 0 question sur 3 cas visés.
     const descriptions = descriptionsDesCommandes(commandesNommees(demande))
+    // La capture jointe nomme souvent seule l'objet de la demande (« vire ces blocs ») : sans elle,
+    // le petit modèle prenait dans le fil un autre objet que celui montré (pieces-jointes-du-fil.ts).
+    const images = imagesDeLaDemande(history)
     lecturesMemorisees ??= demander(
       CONSIGNE_DEUX_LECTURES,
       // Les messages que des tours coupés ont laissés sans réponse font partie de la demande
@@ -117,14 +127,16 @@ export function lecturesDuTour(entree: {
             !estUneRepriseAutomatique(texte) &&
             !estUnMessageDuPlan(texte) &&
             !estUnPromptDOrdre(texte)
-        )
+        ),
+        images.length
       ),
       // Le coût de l'appel appartient au fil, et sa trace dit ce que le contrôle a DÉCIDÉ, pas la
       // réponse brute coupée à 160 caractères (527 lignes sur 696 inclassables).
       {
         ...(conversationId ? { conversationId } : {}),
         issue: (texte) => issueDesLecturesPourLaTrace(texte, demande, { questionPermise, moment })
-      }
+      },
+      images
     )
       .then((reponse) => {
         const issue = lireLesLectures(reponse, demande)

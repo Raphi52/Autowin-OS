@@ -78,6 +78,35 @@ describe('lecteurDeDeuxLectures — la ligne de coût du contrôle', () => {
     expect(b.lignes[0]).toMatchObject({ issue: 'illisible : {"lectures":[]}' })
   })
 
+  /*
+   * « vire ces blocs aussi alors », avec une capture des panneaux Scouts, Frame et Judges : la ligne
+   * compréhension a dit « Retirer le bloc Sous-agents », le seul mot que le texte du fil offrait.
+   * L'appel n'envoyait que la charge texte : l'image n'atteignait jamais le petit modèle.
+   */
+  it('les images de la demande partent avec la charge, sur le message envoyé au modèle', async () => {
+    const b = banc(async () => ({ text: '{"lectures":[]}', provider: 'claude' }))
+    const capture = {
+      name: 'image.png',
+      mimeType: 'image/png',
+      size: 4,
+      kind: 'image' as const,
+      content: 'iVBO'
+    }
+    await b.lecteur('consigne', 'charge', { issue: () => 'x' }, [capture])
+    const [, messages] = b.send.mock.calls[0] as unknown as [
+      string,
+      Array<{ role: string; content: string; attachments?: unknown[] }>
+    ]
+    expect(messages).toEqual([{ role: 'user', content: 'charge', attachments: [capture] }])
+  })
+
+  it('le jumeau : sans image, le message reste la charge seule', async () => {
+    const b = banc(async () => ({ text: '{"lectures":[]}', provider: 'claude' }))
+    await b.lecteur('consigne', 'charge', { issue: () => 'x' }, [])
+    const [, messages] = b.send.mock.calls[0] as unknown as [string, unknown[]]
+    expect(messages).toEqual([{ role: 'user', content: 'charge' }])
+  })
+
   it('une panne du modèle est nommée, rejetée, et n’écrit aucune ligne de coût', async () => {
     const avertissement = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const b = banc(async () => {

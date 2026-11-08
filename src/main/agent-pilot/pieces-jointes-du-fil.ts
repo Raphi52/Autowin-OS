@@ -38,6 +38,32 @@ export function replierSurLaMiniature(
 
 const MAX_PIECES_JOINTES_DU_FIL = 8
 
+/** Au plus tant d'images remises au petit modèle de la compréhension : chacune se paie en lecture. */
+const MAX_IMAGES_DE_LA_DEMANDE = 4
+
+/**
+ * LES IMAGES DE LA DEMANDE COURANTE, pour le petit modèle qui écrit la ligne compréhension.
+ *
+ * « vire ces blocs aussi alors », avec une capture des panneaux Scouts, Frame et Judges : la ligne a
+ * dit « Retirer le bloc Sous-agents », le seul objet que le texte du fil nommait. « ces blocs »
+ * n'était désigné que par l'image, et l'image n'atteignait pas ce modèle.
+ *
+ * Le DERNIER message de l'utilisateur seul : une image d'un tour antérieur a déjà eu sa ligne, et la
+ * remettre ferait lire au petit modèle un écran que la demande ne vise plus. Les images seules : un
+ * fichier texte ou binaire ne désigne pas un élément affiché, et chaque pièce se paie en lecture.
+ */
+export function imagesDeLaDemande(history: Message[]): NonNullable<Message['attachments']> {
+  const demande = [...history].reverse().find((message) => message.role === 'user')
+  const images: NonNullable<Message['attachments']> = []
+  for (const brute of demande?.attachments ?? []) {
+    if (brute.kind !== 'image') continue
+    const lisible = aPieceJointeLisible(brute) ? brute : replierSurLaMiniature(brute)
+    if (lisible) images.push(lisible)
+    if (images.length >= MAX_IMAGES_DE_LA_DEMANDE) break
+  }
+  return images
+}
+
 // Sortie de AgentPilot.chat(), où elle était calculée en place (lot 2).
 /**
  * LES PIECES JOINTES DE TOUT LE FIL, PAS SEULEMENT DU DERNIER MESSAGE.

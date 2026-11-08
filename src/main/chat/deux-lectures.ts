@@ -61,6 +61,9 @@ export const CONSIGNE_DEUX_LECTURES = [
   'Les messages précédents de l’utilisateur restés SANS RÉPONSE, s’ils te sont donnés, font partie de',
   'la demande : elle les prolonge, les précise ou les regroupe (« tout », « un lot », « les deux »).',
   'Ta phrase couvre CHACUN de leurs sujets, sauf celui que la demande remplace explicitement.',
+  'Une IMAGE jointe à la demande (souvent une capture d’écran) en fait partie : regarde-la AVANT de',
+  'répondre. « ces blocs », « ça », « ici » désignent alors ce qu’elle montre : ta phrase nomme ce que',
+  'tu y LIS (titres, libellés), jamais un objet deviné d’après le seul texte du fil.',
   'Question : deux personnes compétentes, qui connaissent les commandes citées, pourraient-elles',
   'comprendre cette demande de deux façons qui mènent à des travaux ou des réponses DIFFÉRENTS, au',
   "point que l'un des deux résultats serait jeté ?",
@@ -140,13 +143,16 @@ const PLAFOND_DEMANDE_RESTEE = 400
 
 /**
  * La charge envoyée au petit modèle : ce que font les commandes citées, l'extrait de contexte s'il
- * existe, les messages restés sans réponse (`demandesResteesSansReponse`), puis la demande.
+ * existe, les messages restés sans réponse (`demandesResteesSansReponse`), les images jointes, puis
+ * la demande.
  */
 export function chargeDeuxLectures(
   demande: string,
   dernierMessageAgent?: string,
   descriptionsDesCommandes: Readonly<Record<string, string>> = {},
-  demandesRestees: readonly string[] = []
+  demandesRestees: readonly string[] = [],
+  /** Le nombre d'images jointes à la demande, remises au modèle à côté de cette charge. */
+  imagesJointes = 0
 ): string {
   const contexte = (dernierMessageAgent ?? '').replace(/\s+/gu, ' ').trim()
   const commandes = commandesNommees(demande)
@@ -167,6 +173,9 @@ export function chargeDeuxLectures(
       : '',
     restees.length
       ? `Messages précédents de l'utilisateur, restés sans réponse (leur tour a été coupé) — ils font partie de la demande :\n${restees.join('\n')}\n`
+      : '',
+    imagesJointes > 0
+      ? `La demande a ${imagesJointes} ${imagesJointes > 1 ? 'images jointes' : 'image jointe'} : regarde-${imagesJointes > 1 ? 'les' : 'la'} avant de répondre.\n`
       : '',
     `Demande de l'utilisateur :\n${demande.trim()}`
   ]

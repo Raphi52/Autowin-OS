@@ -165,7 +165,9 @@ export class AgentPilot {
     private readonly demanderDeuxLectures?: (
       systeme: string,
       charge: string,
-      trace: TraceDesLectures
+      trace: TraceDesLectures,
+      /** Les images jointes à la demande : elles désignent souvent seules son objet. */
+      images?: NonNullable<Message['attachments']>
     ) => Promise<string>
   ) {}
 

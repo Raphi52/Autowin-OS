@@ -3,6 +3,7 @@ import type { CostSink } from '../dashboards/cost'
 import type { TraceDesLectures } from './deux-lectures'
 import { noterAppelCourt, signalerPanneAppelCourt } from '../orchestration/petites-taches-trace'
 import type { ProviderRegistry } from '../providers/registry'
+import type { Attachment } from '../providers/types'
 import type { RoleModelConfig } from '../profil/roles'
 
 /**
@@ -19,11 +20,21 @@ export function lecteurDeDeuxLectures(deps: {
   registry: Pick<ProviderRegistry, 'send'>
   roles: Pick<RoleModelConfig, 'bindingDesPetitesTaches'>
   cost: CostSink
-}): (systeme: string, charge: string, trace: TraceDesLectures) => Promise<string> {
-  return async (systeme, charge, trace) => {
+}): (
+  systeme: string,
+  charge: string,
+  trace: TraceDesLectures,
+  images?: Attachment[]
+) => Promise<string> {
+  return async (systeme, charge, trace, images = []) => {
     const binding = deps.roles.bindingDesPetitesTaches()
+    // Les images de la demande voyagent sur le message, comme pour le modèle du chat : c'est
+    // l'adaptateur du modèle qui sait les lui montrer (fichier à lire, bloc image…).
+    const demande = images.length
+      ? { role: 'user' as const, content: charge, attachments: images }
+      : { role: 'user' as const, content: charge }
     const reponse = await deps.registry
-      .send(binding.provider, [{ role: 'user', content: charge }], {
+      .send(binding.provider, [demande], {
         system: systeme,
         systemBlocks: [{ name: 'deuxLectures', chars: systeme.length }],
         model: binding.model,

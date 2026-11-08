@@ -329,6 +329,22 @@ describe('les filtres déterministes, avant tout appel de modèle', () => {
     expect(chargeDeuxLectures(DEMANDE_767, undefined, { build: 'répare' })).not.toContain('/build')
   })
 
+  // « vire ces blocs aussi alors » + capture des panneaux Scouts, Frame et Judges : « ces blocs »
+  // n'est nommé QUE par l'image. Lu sans elle, il a pris « Sous-agents » dans le fil.
+  it('une demande avec image jointe dit au petit modèle de la regarder avant de répondre', () => {
+    const charge = chargeDeuxLectures('vire ces blocs aussi alors', undefined, {}, [], 1)
+    expect(charge).toContain('1 image jointe')
+    expect(charge.indexOf('image jointe')).toBeLessThan(charge.indexOf("Demande de l'utilisateur"))
+    expect(chargeDeuxLectures('vire ces blocs aussi alors', undefined, {}, [], 2)).toContain(
+      '2 images jointes'
+    )
+    expect(CONSIGNE_DEUX_LECTURES).toMatch(/IMAGE jointe.*AVANT de\s+répondre/su)
+  })
+
+  it('le jumeau : sans image, la charge n’en parle pas', () => {
+    expect(chargeDeuxLectures('vire ces blocs aussi alors')).not.toMatch(/image/iu)
+  })
+
   it('le contexte remis au petit modèle est borné', () => {
     const charge = chargeDeuxLectures('nan pas ça', 'x'.repeat(5000))
     expect(charge.length).toBeLessThan(1000)

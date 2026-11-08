@@ -76,14 +76,22 @@ function banc(
           : { ok: true, data: { ok: true } }
     )
   }
-  const lecteur = vi.fn(async (systeme: string, charge: string, trace?: TraceDesLectures) => {
-    void systeme
-    void charge
-    void trace
-    if (reponseDuLecteur instanceof Error) throw reponseDuLecteur
-    if (typeof reponseDuLecteur === 'function') return reponseDuLecteur()
-    return reponseDuLecteur ?? '{"lectures":[]}'
-  })
+  const lecteur = vi.fn(
+    async (
+      systeme: string,
+      charge: string,
+      trace?: TraceDesLectures,
+      images?: NonNullable<Message['attachments']>
+    ) => {
+      void systeme
+      void charge
+      void trace
+      void images
+      if (reponseDuLecteur instanceof Error) throw reponseDuLecteur
+      if (typeof reponseDuLecteur === 'function') return reponseDuLecteur()
+      return reponseDuLecteur ?? '{"lectures":[]}'
+    }
+  )
   const pilote = new AgentPilot(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     registry as any,
@@ -446,6 +454,39 @@ describe('les deux autres points de passage', () => {
     const envoye = b.appelsModele[0].map((m) => String(m.content)).join('\n')
     for (const ligne of consigneDeLectureRetenue(retenue, ecartee).split('\n'))
       expect(envoye).toContain(ligne)
+  })
+
+  /*
+   * « vire ces blocs aussi alors », avec une capture des panneaux Scouts, Frame et Judges : la ligne
+   * a dit « Retirer le bloc Sous-agents de Studio et de Réglages ». Le petit modèle n'a reçu que le
+   * texte ; « ces blocs » n'était nommé que par l'image.
+   */
+  it('l’image jointe à la demande atteint le petit modèle ; celle d’un message précédent, non', async () => {
+    const ancienne = {
+      name: 'ancienne.png',
+      mimeType: 'image/png',
+      size: 4,
+      kind: 'image' as const,
+      content: 'AAAA'
+    }
+    const capture = { ...ancienne, name: 'image.png', content: 'iVBO' }
+    const texte = { ...ancienne, name: 'notes.txt', mimeType: 'text/plain', kind: 'text' as const }
+    const b = banc(reponse(['retirer les panneaux Scouts, Frame et Judges', 100]))
+    await b.jouer([
+      { role: 'user', content: 'regarde ces panneaux', attachments: [ancienne] },
+      { role: 'assistant', content: 'Ce sont les panneaux parallèles.' },
+      { role: 'user', content: 'vire ces blocs aussi alors', attachments: [capture, texte] }
+    ])
+    expect(b.lecteur).toHaveBeenCalledTimes(1)
+    expect(b.lecteur.mock.calls[0][3]).toEqual([capture])
+    expect(b.lecteur.mock.calls[0][1]).toContain('1 image jointe')
+  })
+
+  it('le jumeau : une demande sans image n’envoie aucune image au petit modèle', async () => {
+    const b = banc(reponse(['retirer les panneaux', 100]))
+    await b.jouer([{ role: 'user', content: 'vire ces blocs aussi alors' }])
+    expect(b.lecteur.mock.calls[0][3] ?? []).toEqual([])
+    expect(b.lecteur.mock.calls[0][1]).not.toMatch(/image/iu)
   })
 
   it('une question de l’utilisateur n’est pas une demande de changement : la ligne, jamais la question', async () => {
