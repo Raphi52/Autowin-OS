@@ -66,9 +66,13 @@ export function composerTacheDOrchestration(
    * silencieuse d'un chantier d'architecture ou de sécurité — exactement ce que l'audit du
    * 2026-07-29 a fait corriger sur le routage par intention. Les deux chemins sont
    * indistinguables en aval (même préfixe `/<phase> `), donc la garde est posée ICI, à l'entrée.
+   *
+   * Depuis un fil (`rootTask` toujours joint par le chat), seule `judge` passe : une relecture ne
+   * modifie rien, donc elle ne réduit pas le contrat de l'utilisateur. L'ignorer rejouait toute la
+   * demande de départ (87,69 $ et 26 commits non demandés, le 2026-10-30).
    */
   const modelPhaseAllowed =
-    !suppliedRootTask &&
+    (!suppliedRootTask || requestedPhase === 'judge') &&
     ORCHESTRATE_PHASES.has(requestedPhase) &&
     classifyRegime(authoritativeTask) !== 'critical'
   const phasePrefix = modelPhaseAllowed ? `/${requestedPhase} ` : ''

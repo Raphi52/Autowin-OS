@@ -295,7 +295,10 @@ export async function runVerifyAt(
   // Le verdict NOMME sa portee. Sans cela, un vert obtenu dans un arbre sale se lit comme un
   // vert du depot : mesure du 2026-08-22, « exit 0, 713 fichiers » a ete conclu
   // « pret pour la fusion » alors qu'`origin/main` portait 3 rouges au meme instant.
-  const portee = porteeDuVert(await bus.fichiersNonCommites(decision.cwd))
+  // Le dossier MESURÉ est celui du fil : la copie de vérification naît sur la dernière base, et son
+  // `git status` montre aussi les commits que le fil n'a pas (23 fichiers annoncés pour 0, le
+  // 2026-11-08). Les deux appels de `runVerifyAt` partent de `workspaceDuTour`.
+  const portee = porteeDuVert(await bus.fichiersNonCommites(bus.workspaceDuTour || decision.cwd))
   return portee ? { ...resultat, output: `${portee}${SAUT_PORTEE}${resultat.output}` } : resultat
 }
 
