@@ -111,6 +111,7 @@ import {
   describeProviderExit,
   isTransportExitCode
 } from './provider-failure-diagnosis'
+import { dureeLisible } from '../../shared/duree-lisible'
 
 /**
  * NETTOYAGE DE FIN D'APPEL — sans tenir la boucle principale.
@@ -1489,15 +1490,6 @@ export function ecrireConfigMcp(
   } catch {
     return undefined
   }
-}
-
-/** Duree d'un battement d'outil, rendue lisible : « 45 s », « 2 min 30 s », « 3 min ». */
-function dureeLisible(secondes: number): string {
-  const total = Math.round(secondes)
-  if (total < 60) return `${total} s`
-  const minutes = Math.floor(total / 60)
-  const reste = total % 60
-  return reste ? `${minutes} min ${reste} s` : `${minutes} min`
 }
 
 /**

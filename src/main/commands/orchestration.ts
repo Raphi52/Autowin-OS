@@ -708,6 +708,8 @@ export async function executerOrchestration(
             text: ''
           })),
           status: r.gateBlocked ? 'failed' : 'succeeded',
+          // Le texte du juge ne voyage pas (il vit dans RUN.md) : son verdict LU, si.
+          ...(r.verdictDuJuge ? { verdictDuJuge: r.verdictDuJuge } : {}),
           reused: run?.reused ?? false,
           // Le travail est-il reste dans la copie isolee ? C'est ce signal — jamais le vocabulaire
           // du conseil — qui decide si le `👉 Recommandé` du worker s'adresse encore a un arbre

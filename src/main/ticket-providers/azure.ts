@@ -5,6 +5,7 @@ import {
   type TicketProviderAdapter,
   type TicketProviderContext
 } from './provider-contract'
+import { isRecord } from '../../shared/is-record'
 
 const API_VERSION = '7.1'
 const DEFAULT_PAGE_SIZE = 100
@@ -57,10 +58,6 @@ interface AzureCommentsResponse {
 
 function invalidResponse(message = 'Réponse Azure DevOps invalide.'): TicketProviderError {
   return new TicketProviderError('INVALID_RESPONSE', message)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function readPageSize(pageSize: number | undefined): number {

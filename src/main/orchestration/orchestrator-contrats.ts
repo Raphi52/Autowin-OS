@@ -564,6 +564,12 @@ export interface OrchestrationResult {
   /** Verdict terminal du juge, tel qu'écrit — annexé au RUN.md pour la mémoire inter-runs. */
   judgeText?: string
   /**
+   * Le même verdict LU (`lireVerdictJuge`, sa note `SCORE`) : le chat ne reçoit pas `judgeText`, et
+   * `valid` mêle le juge et la publication — un run validé dont la publication attend passe à
+   * `valid: false` sans que rien ne dise que le juge, lui, a validé.
+   */
+  verdictDuJuge?: { valide: boolean; note?: number }
+  /**
    * PRÉSENT seulement quand une relecture seule (`/judge`) est LIVRÉE en nommant des défauts du
    * travail relu (`defautsDeLaRelectureSeule`) : le Journal du RUN.md doit le dire, au lieu de
    * « Juge: validé » (piste 5).

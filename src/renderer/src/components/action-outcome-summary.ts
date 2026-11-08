@@ -129,6 +129,16 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
   if (!data) return undefined
   const cost = formatExecutionCostCoverage(data)
   const suffix = cost ? ` · ${cost}` : ''
+  // Run vert qui attend seulement que la base se libère : la reprise automatique le publiera, ce
+  // n'est pas un échec (même règle que `orchestrationEnEchec`, qui décide de la relance du chat).
+  if (attendSeulementSaPublication(data)) {
+    const motifs = gateReasonLines(data.gateReasons)
+    return {
+      label: `${t('issue.attente-publication')}${suffix}`,
+      state: 'ok',
+      ...(motifs.length ? { why: motifs } : {})
+    }
+  }
   if (data.gateBlocked === true) {
     // Le MOTIF du blocage vit dans `gateReasons` depuis l'origine et n'était pas affiché : la
     // pastille disait seulement « bloqué par le gate · <coût> », si bien que la mention comptable
@@ -273,5 +283,8 @@ export function groupOutcomeSummary(actions: readonly ActionLike[]): OutcomeSumm
     summaries[0]
   )
 }
-import { formatExecutionCostCoverage } from '../../../shared/orchestration-outcome'
+import {
+  attendSeulementSaPublication,
+  formatExecutionCostCoverage
+} from '../../../shared/orchestration-outcome'
 import { texteChatExecution as t } from '../textes-ecrans/chat-execution'

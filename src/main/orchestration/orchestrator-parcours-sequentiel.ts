@@ -2221,6 +2221,12 @@ export async function runInner(
   let lastJudgeText = ''
   /** Verdict tel que les juges l'ont RENDU (panel : reconstruit depuis les membres) — memoire du juge. */
   let lastJudgeMemoire = ''
+  /** Le dernier verdict LU (lecteur canonique + note), rendu avec `judgeText`. */
+  let dernierVerdictLu: { valide: boolean; note?: number } | undefined
+  const lireLeVerdict = (valide: boolean, texte: string): { valide: boolean; note?: number } => {
+    const note = noteDuJuge(texte)
+    return note === undefined ? { valide } : { valide, note }
+  }
   /** Le livrable agrégé tel que le juge précédent l'a reçu : base du bloc « CE QUI A CHANGÉ » (changements-juge.ts). */
   let texteDejaJuge = ''
   /**
@@ -2349,6 +2355,7 @@ export async function runInner(
       defautsDeLaRelecture = defautsRelus
       lastJudgeText = resumedJudgeText.trim()
       lastJudgeMemoire = lastJudgeText
+      dernierVerdictLu = lireLeVerdict(verdictDuJuge, lastJudgeText)
       // Le juge repris a statué sur le texte repris, celui que porte `exec` ici.
       texteDejaJuge = exec.text
       // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
@@ -2773,6 +2780,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     defautsDeLaRelecture = defautsRelus
     lastJudgeText = verdict.text.trim()
     lastJudgeMemoire = memoirePanel.trim() || lastJudgeText
+    dernierVerdictLu = lireLeVerdict(verdictDuJuge, lastJudgeText)
     // Étape 2 de l'option A : les questions au build d'un refus du juge. Sans section
     // QUESTIONS AU BUILD, l'examen rend tout vide et la clôture ci-dessous est celle d'avant.
     const examenDesQuestions = examinerQuestionsDuJuge({
@@ -3385,6 +3393,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     // Le verdict SORT du run : sans ce champ il mourait dans `lastJudgeText` et n'atteignait
     // jamais le RUN.md, donc jamais la mémoire inter-runs.
     ...(lastJudgeText.trim() ? { judgeText: lastJudgeText.trim() } : {}),
+    ...(lastJudgeText.trim() && dernierVerdictLu ? { verdictDuJuge: dernierVerdictLu } : {}),
     ...(valid && !gate.blocked && defautsDeLaRelecture.length > 0
       ? { defautsDuTravailRelu: [...defautsDeLaRelecture] }
       : {}),

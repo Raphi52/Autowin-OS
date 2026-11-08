@@ -27,6 +27,7 @@ import type {
 import { RoleModelConfig } from '../profil/roles'
 import { TrustLedger } from '../trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
+import { noteDuJuge } from '../juge/memoire-juge'
 import type { WorkflowGraph } from '../workflow/workflow-graph'
 
 /**
@@ -144,5 +145,23 @@ describe('un panel de juges qui atteint le quorum garde les objections de ses me
   it('la puce du juge DISSIDENT reste MAJEUR dans le verdict agrege', async () => {
     const resultat = await harnais()()
     expect(resultat.judgeText ?? '').toContain(`MAJEUR: ${OBJECTION_C}`)
+  })
+})
+
+/**
+ * LE VERDICT LU SORT DU RUN avec son texte. Le chat ne reçoit pas `judgeText`, et `valid` mêle le
+ * juge et la publication : sans `verdictDuJuge`, un run validé dont la publication attendait une
+ * opération git s'est lu « la relecture n'a pas eu lieu ».
+ */
+describe('le verdict lu accompagne le texte du juge', () => {
+  it('dit le REFUS que le run a lu, même sous un texte qui commence par VALIDE', async () => {
+    const resultat = await harnais()()
+    const texte = resultat.judgeText ?? ''
+    // Le texte agrégé ouvre sur « VALIDE », mais la puce MAJEUR du dissident garde le refus (test
+    // précédent) : le verdict lu est celui du run, pas le premier mot. Sans ligne SCORE, pas de note.
+    expect(texte.startsWith('VALIDE')).toBe(true)
+    expect(noteDuJuge(texte)).toBeUndefined()
+    expect(resultat.valid).toBe(false)
+    expect(resultat.verdictDuJuge).toEqual({ valide: false })
   })
 })

@@ -4,6 +4,7 @@ import type { OrchestrationStep } from '../orchestration/orchestrator'
 import type { ChatArtifact } from '../../shared/artifacts'
 import { classifierRefusDeReprise, refusDeRepriseRaconteDuTravail } from './resume-refusal'
 import { ligneDePropositionGrowDuResultat } from '../chat/proposition-grow'
+import { attendSeulementSaPublication } from '../../shared/orchestration-outcome'
 
 /**
  * PERSISTANCE DU TOUR pour le chemin DIRECT `os:orchestrate` (bouton « Reprendre », pilotage
@@ -229,7 +230,11 @@ export function createOrchestrateTurnPersistence(
     succeed(result) {
       if (!opened || closed) return
       closed = true
-      const deliveryFailed = result?.gateBlocked === true || result?.valid === false
+      // Un run vert qui attend seulement que la base se libère sera publié par la reprise
+      // automatique : il ne fait échouer ni le tour ni sa carte (même règle que la relance du chat).
+      const deliveryFailed =
+        (result?.gateBlocked === true || result?.valid === false) &&
+        !attendSeulementSaPublication(result ?? {})
       for (const actionId of resumedActionIds)
         emit({
           kind: 'result',

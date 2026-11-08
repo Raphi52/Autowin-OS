@@ -22,6 +22,7 @@ import type { ExecutionEvidence } from '../providers/types'
 // souvient pour le MEME demarrage. Re-exportee pour les appelants qui la nommaient d'ici.
 import { RESUME_STALE_AFTER_MS, resumeIsStale } from '../../shared/resume-staleness'
 import { cibleDUneRelance } from '../../shared/relance-sans-objet'
+import { isRecord } from '../../shared/is-record'
 export { RESUME_STALE_AFTER_MS }
 
 /**
@@ -156,10 +157,6 @@ function isPhaseOutput(value: unknown): value is OrchestrationPhaseOutput {
       (Array.isArray(output.executionEvidence) &&
         output.executionEvidence.every(isExecutionEvidence)))
   )
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isNonEmptyString(value: unknown): value is string {

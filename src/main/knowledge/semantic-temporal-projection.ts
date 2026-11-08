@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import type { BrainTrace } from '../activity/brain-trace-spool'
 import { assertTraceEvent, type TraceEventV1 } from '../activity/trace-event'
+import { isRecord } from '../../shared/is-record'
 
 export type SemanticTemporalNodeKind =
   | 'mission'
@@ -147,10 +148,6 @@ function explicitRelation(type: string): SemanticTemporalRelation | undefined {
   if (type === 'links_to') return 'links-to'
   if (type === 'related' || type === 'supersedes' || type === 'contradicts') return type
   return undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isBrainTrace(value: unknown): value is BrainTrace {

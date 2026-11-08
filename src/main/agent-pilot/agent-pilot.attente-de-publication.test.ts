@@ -94,7 +94,12 @@ afterEach(() => {
   if (racine) rmSync(racine, { recursive: true, force: true })
 })
 
-async function tourAvec(issue: Record<string, unknown>): Promise<string[]> {
+type Evenement = { kind: string; name?: string; ok?: boolean }
+
+async function tourAvec(
+  issue: Record<string, unknown>,
+  evenements: Evenement[] = []
+): Promise<string[]> {
   const { pilot: p, sent } = pilot(issue, [
     'Je lance le run.<cmd>{"name":"orchestrate","args":{"task":"regroupe les doublons"}}</cmd>',
     CLOTURE,
@@ -103,7 +108,7 @@ async function tourAvec(issue: Record<string, unknown>): Promise<string[]> {
   ])
   await p.chat(
     history,
-    () => {},
+    (evenement) => evenements.push(evenement as Evenement),
     undefined,
     8,
     'conv-A',
@@ -131,5 +136,27 @@ describe('le tour ne relance pas une publication qui attend la base', () => {
   it('témoin : un conflit de contenu relance toujours', async () => {
     const sent = await tourAvec(issueEnAttente('conflict'))
     expect(sent.some((c) => c.includes(MARQUEUR))).toBe(true)
+  })
+})
+
+/**
+ * LA PASTILLE DE L'ACTION DIT LA MÊME CHOSE QUE LA RELANCE. Le fil affichait
+ * « [a exécuté orchestrate (échec)] » sur ce run vert, parce que la pastille lisait sa propre règle
+ * (`gateBlocked: true` ⇒ échec) au lieu du prédicat d'échec partagé.
+ */
+describe('la pastille d’un run vert qui attend la base', () => {
+  const pastille = (evenements: Evenement[]): boolean | undefined =>
+    evenements.find((e) => e.kind === 'result' && e.name === 'orchestrate')?.ok
+
+  it('ne dit pas « échec » sur une opération git en cours', async () => {
+    const evenements: Evenement[] = []
+    await tourAvec(issueEnAttente('base-in-progress'), evenements)
+    expect(pastille(evenements)).toBe(true)
+  })
+
+  it('témoin : dit « échec » sur un conflit de contenu', async () => {
+    const evenements: Evenement[] = []
+    await tourAvec(issueEnAttente('conflict'), evenements)
+    expect(pastille(evenements)).toBe(false)
   })
 })

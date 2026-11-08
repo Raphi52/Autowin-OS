@@ -844,7 +844,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `coffre:reimporter` — aucun argument : relit les variables du poste (meme regle de noms
     //     qu'au demarrage), sans jamais ecraser une cle saisie par l'utilisateur.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(305)
+    // MISE A JOUR 2026-11-08 — 305 -> 306, MESURE par ce test (rouge a 306) et NOMME par
+    //   `node scripts/canaux-ipc.mjs 37d1b605f HEAD` : un seul ajout, aucun retrait, dans
+    //   `ipc/chat.ts`, garde 'Dossier de travail' des sa PREMIERE ligne :
+    //   `os:execution-workspace:copie-par-fil` — l'interrupteur « Une copie par fil » des reglages.
+    //   L'argument est reduit a `actif === true` (toute autre valeur = eteint) ; ecrit seulement
+    //   `copie-par-fil.json` (donnees de l'app), relu au debut du tour suivant. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(306)
     expect(unguarded).toEqual([])
   })
 

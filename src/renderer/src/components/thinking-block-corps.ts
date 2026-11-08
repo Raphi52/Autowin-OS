@@ -9,6 +9,7 @@ import { langueCourante } from '../langue'
 import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
 import { lireLigneDErreur } from '../../../shared/erreur-d-action'
 import { estMarqueDeLignesOmises } from '../../../shared/chat-turn'
+import { dureeLisible } from '../../../shared/duree-lisible'
 
 /**
  * Corps du bloc RAISONNEMENT : la pensee du modele, et rien d'autre.
@@ -623,12 +624,8 @@ export function secondesDesEtapes(
   return sortie
 }
 
-/** `17 s`, `1 min`, `2 min 5 s` — une duree en secondes, telle que les en-tetes l'affichent. */
-export function dureeLisible(secondes: number): string {
-  return secondes >= 60
-    ? `${Math.floor(secondes / 60)} min${secondes % 60 ? ` ${secondes % 60} s` : ''}`
-    : `${secondes} s`
-}
+// `17 s`, `1 min`, `2 min 5 s` : la version partagée avec le processus principal.
+export { dureeLisible }
 
 /** Somme des durees connues des actions — la duree affichee dans la capsule Actions. */
 export function secondesDesActions(actions: readonly ActionFrise[]): number {

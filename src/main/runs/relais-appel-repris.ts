@@ -35,6 +35,7 @@ import { masquerValeurs } from '../app/coffre-cles'
 import type { RecoverableChatProviderCall } from './chat-provider-recovery'
 import { tailJsonLines } from './stdout-journal'
 import { appendTurnEvent, readTurnJournal, type TurnJournalEvent } from './turn-journal'
+import { dureeLisible } from '../../shared/duree-lisible'
 
 /** Une ligne pour le bloc Actions : le libellé court, et la cible entière quand il l'a rognée. */
 export interface LigneDAction {
@@ -46,15 +47,6 @@ export interface LigneDAction {
 
 /** Même coupure que le chemin direct : le libellé tient sur une ligne de l'en-tête du bloc. */
 const LONGUEUR_CIBLE = 120
-
-/** Même rendu que `dureeLisible` de `claude.ts` : « 45 s », « 2 min 30 s », « 3 min ». */
-function dureeLisible(secondes: number): string {
-  const total = Math.round(secondes)
-  if (total < 60) return `${total} s`
-  const minutes = Math.floor(total / 60)
-  const reste = total % 60
-  return reste ? `${minutes} min ${reste} s` : `${minutes} min`
-}
 
 /** Même préfixe retiré que `resumerCommandeDeFond` de `claude.ts`. */
 function resumerCommandeDeFond(brut: string): string {

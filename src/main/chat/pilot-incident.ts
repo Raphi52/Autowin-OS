@@ -5,6 +5,8 @@
  * l'auto-kaizen et lui survit.
  */
 
+import { attendSeulementSaPublication } from '../../shared/orchestration-outcome'
+
 function clipped(value: string, max = 8_000): string {
   const normalized = value.trim()
   return normalized.length <= max ? normalized : `${normalized.slice(0, max)}…[tronqué]`
@@ -72,6 +74,9 @@ export function incidentFromPilotEvent(event: {
   }
   if (!event.data || typeof event.data !== 'object') return undefined
   const result = event.data as Record<string, unknown>
+  // Un run vert qui attend seulement que la base se libère sera publié par la reprise
+  // automatique : réveiller la surveillance pour lui serait une fausse alerte.
+  if (attendSeulementSaPublication(result)) return undefined
   const status = typeof result.status === 'string' ? result.status.toLowerCase() : ''
   if (
     status === 'failed' ||

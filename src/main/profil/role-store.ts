@@ -10,6 +10,7 @@ import {
 import { ensureAutowinAppData } from '../app/app-data'
 import { PIPELINE_PHASES, type PipelinePhase } from '../skills/skill-pipeline'
 import { readDurableJson, writeDurableJson } from '../fichiers/durable-json'
+import { isRecord as isPlainObject } from '../../shared/is-record'
 
 /**
  * Persistance disque de la config modèle-par-rôle (sinon elle se réinitialise à
@@ -18,10 +19,6 @@ import { readDurableJson, writeDurableJson } from '../fichiers/durable-json'
  */
 function rolesPath(): string {
   return join(ensureAutowinAppData(), 'roles.json')
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function nonEmptyString(value: unknown): value is string {

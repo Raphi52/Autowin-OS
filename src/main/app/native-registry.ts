@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSy
 import { join } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 import { readDurableJson, writeDurableJson } from '../fichiers/durable-json'
+import { isRecord as isPlainObject } from '../../shared/is-record'
 
 /**
  * REGISTRE NATIF — source LOCALE unique des capacités, sans aucun sous-processus externe :
@@ -37,10 +38,6 @@ interface Catalog {
 }
 
 const REGISTRY_KINDS: RegistryKind[] = ['skills', 'hooks', 'tools', 'plugins']
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
 
 function booleanRecord(value: unknown): Record<string, boolean> | undefined {
   if (!isPlainObject(value)) return undefined

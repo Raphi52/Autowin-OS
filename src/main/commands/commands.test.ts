@@ -18,7 +18,10 @@ import { TraceStore } from '../activity/trace-store'
 import type { BrainRetrievalOptions } from '../brain/brain-retrieval'
 import type { OrchestrationStep } from '../orchestration/orchestrator'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
-import { formatOrchestrationOutcome } from '../../shared/orchestration-outcome'
+import {
+  formatOrchestrationOutcome,
+  formatOrchestrationOutcomePourLeModele
+} from '../../shared/orchestration-outcome'
 
 /*
  * RACINE APP-DATA PROPRE A CE FICHIER.
@@ -2577,6 +2580,42 @@ describe('issue d’orchestration', () => {
     const cloture = formatOrchestrationOutcome(true, res.data as never)
     expect(cloture).not.toContain('lancer judge')
     expect(cloture).toContain('Reste à faire : rien.')
+  })
+
+  /*
+   * LE VERDICT DU JUGE ARRIVE JUSQU'AU CHAT. Le résultat rendu est figé AVANT le jugement et cette
+   * lignée ne gardait que le NOM des phases : sur un run validé à 90 dont la publication attendait
+   * une opération git, l'agent du chat ne lisait que `valid: false` et a écrit à l'utilisateur
+   * « la relecture n'a pas eu lieu ».
+   */
+  it('porte le verdict du juge, même quand la publication attend la base', async () => {
+    const os = fakeOs()
+    os.runTask = async () => ({
+      gateBlocked: true,
+      gateReasons: [
+        'intégration locale non terminée',
+        'blocage d’intégration: base-in-progress — cause: L’index utilisateur a changé pendant la publication.'
+      ],
+      valid: false,
+      costUsd: 0,
+      result: '[phase build]\nregroupement fait',
+      phaseOutputs: [{ phase: 'build', text: 'regroupement fait' }],
+      judgeText: ['VALIDE', 'SCORE: 90', 'OBJECTIONS:', '- OK: preuves relues'].join('\n'),
+      // Ce que l'orchestrateur rend avec `judgeText` (orchestrator.panel-objections.test.ts).
+      verdictDuJuge: { valide: true, note: 90 }
+    })
+    const bus = new AppCommandBus(os, () => {})
+
+    const res = (await bus.exec(
+      'orchestrate',
+      { task: `regroupe les doublons ${Date.now()}` },
+      'conv-1'
+    )) as { data?: { verdictDuJuge?: unknown } }
+
+    expect(res.data?.verdictDuJuge).toEqual({ valide: true, note: 90 })
+    expect(formatOrchestrationOutcomePourLeModele(true, res.data as never)).toContain(
+      'Relecture indépendante : validée (note 90/100)'
+    )
   })
 
   it('sans verdict du juge, la clôture envoie toujours vers le juge (jumeau)', async () => {

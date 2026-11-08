@@ -1,3 +1,5 @@
+import { isRecord } from './is-record'
+
 export type TicketProvider = 'azure' | 'github' | 'gitlab'
 
 interface TicketSourceBase {
@@ -143,10 +145,6 @@ const PROVIDER_KEYS: Record<TicketProvider, ReadonlySet<string>> = {
     'baseUrl',
     ...EXECUTION_KEYS
   ])
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isSafeText(value: unknown, maxLength = 256): value is string {

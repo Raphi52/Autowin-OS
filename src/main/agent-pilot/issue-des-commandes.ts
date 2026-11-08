@@ -1,12 +1,19 @@
 // Issue réelle d'une commande du bus (réussite, mémoire non déposée, orchestration en échec),
 // sortie telle quelle de agent-pilot.ts (lot 1).
 import type { CommandResult } from '../commands/commands'
+import { attendSeulementSaPublication } from '../../shared/orchestration-outcome'
 
 /** Réussite visible de l'action, distincte de la seule réussite du transport IPC. */
 export function commandResultSucceeded(result: CommandResult): boolean {
   if (!result.ok) return false
   if (!result.data || typeof result.data !== 'object') return true
   const data = result.data as Record<string, unknown>
+  /*
+   * UN RUN VERT QUI ATTEND SEULEMENT QUE LA BASE SE LIBÈRE N'A PAS ÉCHOUÉ : même réponse que le
+   * prédicat d'échec partagé (`orchestrationEnEchec`). Sans ce cas, la pastille du fil disait
+   * « (échec) » sur le run que la relance, elle, ne comptait plus comme raté.
+   */
+  if (attendSeulementSaPublication(data)) return true
   if (data.ok === false || data.valid === false || data.gateBlocked === true) return false
   /*
    * UN REFUS TRANSPORTE DANS UN SUCCES EST UN ECHEC — decision utilisateur du 2026-09-01.

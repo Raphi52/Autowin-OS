@@ -22,6 +22,8 @@ export interface OrchestrationOutcome {
   status?: unknown
   /** Fichier de la copie ENTIÈRE des sorties d'étapes du run : la bulle coupée le nomme. */
   livrableEntier?: unknown
+  /** Le verdict du juge LU par l'orchestrateur : `{ valide, note? }`. */
+  verdictDuJuge?: unknown
   valid?: unknown
   gateBlocked?: unknown
   costUsd?: unknown
@@ -1624,6 +1626,15 @@ export function formatOrchestrationOutcomePourLeModele(
   return avis ? `${issue}\n\n${avis}` : issue
 }
 
+/** « Relecture indépendante : validée (note 90/100). », ou `undefined` sans verdict lisible. */
+function ligneDeRelecture(verdict: unknown): string | undefined {
+  if (!verdict || typeof verdict !== 'object') return undefined
+  const { valide, note } = verdict as { valide?: unknown; note?: unknown }
+  if (typeof valide !== 'boolean') return undefined
+  const surCent = typeof note === 'number' && Number.isFinite(note) ? ` (note ${note}/100)` : ''
+  return `Relecture indépendante : ${valide ? 'validée' : 'refusée'}${surCent}.`
+}
+
 /** Corps commun : `plafondDuResultat` absent = résultat entier. */
 function composerLIssue(
   ok: boolean,
@@ -1688,6 +1699,10 @@ function composerLIssue(
   ].filter((fact): fact is string => Boolean(fact))
 
   const lines = [facts.length ? `${headline} · ${facts.join(' · ')}` : headline]
+  // `valid` mêle le juge et la publication : sans cette ligne, un run validé dont la publication
+  // attend se lisait « la relecture n'a pas eu lieu ».
+  const relecture = ligneDeRelecture(outcome.verdictDuJuge)
+  if (relecture) lines.push(relecture)
   if (blocage.fichiers.length > 0) {
     lines.push(`Fichiers en cause : ${blocage.fichiers.join(', ')}`)
   }

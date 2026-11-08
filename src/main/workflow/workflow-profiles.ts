@@ -5,6 +5,7 @@ import { ALL_ROLES, type Role, type RoleBinding } from '../profil/roles'
 import type { PipelinePhase } from '../skills/skill-pipeline'
 import { graphDefects, graphFromPhases, type WorkflowGraph } from './workflow-graph'
 import { DEFAULT_WORKFLOWS } from './workflow-defaults'
+import { isRecord as isPlainObject } from '../../shared/is-record'
 
 /**
  * Sème le catalogue livré d'origine, UNE SEULE FOIS, quand aucun fichier n'existe encore.
@@ -304,10 +305,6 @@ const EMPTY: WorkflowProfilesFile = { profiles: [], activeId: null }
 
 function workflowProfilesPath(base = ensureAutowinAppData()): string {
   return join(base, 'workflow-profiles.json')
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 /** Un identifiant sert de clé ET de nom de sélection : on refuse tout ce qui n'est pas simple. */

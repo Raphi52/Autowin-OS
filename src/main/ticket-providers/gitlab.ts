@@ -5,6 +5,7 @@ import {
   type TicketProviderAdapter,
   type TicketProviderContext
 } from './provider-contract'
+import { isRecord } from '../../shared/is-record'
 
 function boundedInteger(value: number | undefined, fallback: number, maximum: number): number {
   if (value === undefined || !Number.isFinite(value)) return fallback
@@ -14,10 +15,6 @@ function boundedInteger(value: number | undefined, fallback: number, maximum: nu
 function pageFromCursor(cursor: string | undefined): number {
   if (!cursor || !/^[1-9]\d*$/.test(cursor)) return 1
   return boundedInteger(Number(cursor), 1, Number.MAX_SAFE_INTEGER)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function priorityFromLabels(labels: readonly string[]): string | undefined {

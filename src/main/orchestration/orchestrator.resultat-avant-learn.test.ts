@@ -159,5 +159,7 @@ describe('le résultat validé part avant la fin de learn', () => {
     expect(evenements).toEqual([])
     expect(etapes.some((s) => s.detail === LIGNE_RESULTAT_VALIDE)).toBe(false)
     expect(resultat.valid).toBe(true)
+    // Le verdict LU sort avec le texte du juge : le chat, qui ne reçoit pas `judgeText`, le lit.
+    expect(resultat.verdictDuJuge).toEqual({ valide: true, note: 90 })
   })
 })

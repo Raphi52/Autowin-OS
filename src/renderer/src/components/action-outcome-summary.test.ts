@@ -120,6 +120,33 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
     expect(summary).toEqual({ label: 'arrêté au contrôle final · 3,00 $', state: 'failed' })
   })
 
+  it('run vert qui attend seulement que la base se libère : en attente, pas un échec', () => {
+    const gateReasons = [
+      'intégration locale non terminée',
+      'blocage d’intégration: base-in-progress — cause: L’index utilisateur a changé pendant la publication.'
+    ]
+    const summary = orchestrateOutcomeSummary({
+      name: 'orchestrate',
+      data: { status: 'failed', valid: false, gateBlocked: true, gateReasons, costUsd: 6.89 }
+    })
+    expect(summary).toEqual({
+      label: 'en attente de publication · 6,89 $',
+      state: 'ok',
+      why: gateReasons
+    })
+    // Témoin : un conflit de contenu reste un arrêt au contrôle final.
+    expect(
+      orchestrateOutcomeSummary({
+        name: 'orchestrate',
+        data: {
+          status: 'failed',
+          gateBlocked: true,
+          gateReasons: [gateReasons[0], 'blocage d’intégration: conflict — cause: conflit.']
+        }
+      })?.state
+    ).toBe('failed')
+  })
+
   it('livrable REFUSE par le juge = echec, meme si l’appel a reussi', () => {
     expect(
       orchestrateOutcomeSummary({
