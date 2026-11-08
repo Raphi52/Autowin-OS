@@ -193,6 +193,64 @@ describe('creerFichesDeDemande', () => {
     expect(texte).toContain('sans preuve — fini sans vérification')
   })
 
+  it('une fiche suit l’état que le Board montre après coup : fusion arrivée, règle changée', async () => {
+    const racine = racineTemporaire()
+    let maintenant = 1_000_000
+    const fiches = creerFichesDeDemande({ racine, maintenant: () => (maintenant += 60_000) })
+    const refusee = await fiches.noterTour(
+      tour(
+        fil('conv-1', [utilisateur('m1', 'Corrige le tri'), reponse('m2', [verify(1)])]),
+        'conv-1',
+        'm1',
+        { nature: 'nouveau' }
+      )
+    )
+    expect(refusee).toMatchObject({ etat: 'refuse' })
+    const constatDuBoard = 'npm test → exit 0'
+    const ecart = [
+      { conversationId: 'conv-1', messageId: 'm1', etatDuBoard: 'prouve' as const, constatDuBoard }
+    ]
+
+    expect(await fiches.resynchroniser(ecart)).toBe(1)
+
+    const ligne = (await fiches.lignes()).find((l) => l.messageId === 'm1')
+    expect(ligne).toMatchObject({ etat: 'prouve', constat: constatDuBoard, fiche: refusee?.fiche })
+    const texte = readFileSync(cheminDe(racine, refusee), 'utf8')
+    expect(texte.startsWith('status: prouve\n')).toBe(true)
+    expect(texte).toContain(': prouvé — npm test → exit 0')
+    // Rejouée sans rien de nouveau : rien n'est ajouté.
+    expect(await fiches.resynchroniser(ecart)).toBe(0)
+  })
+
+  it('mettre à jour une fiche ancienne ne détourne pas la suite du fil vers elle', async () => {
+    const racine = racineTemporaire()
+    let maintenant = 1_000_000
+    const fiches = creerFichesDeDemande({ racine, maintenant: () => (maintenant += 60_000) })
+    const premier = [utilisateur('m1', 'Premier sujet'), reponse('m2', [verify(1)])]
+    const ancienne = await fiches.noterTour(
+      tour(fil('conv-1', premier), 'conv-1', 'm1', { nature: 'nouveau' })
+    )
+    const deuxieme = [...premier, utilisateur('m3', 'Autre sujet'), reponse('m4', [verify(0)])]
+    const recente = await fiches.noterTour(
+      tour(fil('conv-1', deuxieme), 'conv-1', 'm3', { nature: 'nouveau' })
+    )
+    expect(recente?.fiche).not.toBe(ancienne?.fiche)
+
+    await fiches.resynchroniser([
+      { conversationId: 'conv-1', messageId: 'm1', etatDuBoard: 'prouve', constatDuBoard: 'ok' }
+    ])
+    const suite = await fiches.noterTour(
+      tour(
+        fil('conv-1', [...deuxieme, utilisateur('m5', 'Et aussi ceci'), reponse('m6')]),
+        'conv-1',
+        'm5',
+        { nature: 'suite' }
+      )
+    )
+
+    expect(suite).toMatchObject({ role: 'suite', fiche: recente?.fiche })
+  })
+
   it('une question n’ouvre pas de fiche et ne touche pas celle du fil', async () => {
     const racine = racineTemporaire()
     const fiches = creerFichesDeDemande({ racine })

@@ -32,6 +32,7 @@ import { STATUTS_DEMANDE, type StatutDemande } from '../../shared/carte-des-beso
 import type { FicheDeDemande, FichesDesDemandes } from '../../shared/fiche-de-demande'
 import type { LigneBesoin } from '../../shared/ligne-besoin'
 import { demandesDuFil, type ConversationPourLaCarte } from './carte-des-besoins'
+import type { ArriveeDuTour } from './arrivee-sur-main'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { cleDuJournal, type EvenementDuJournal } from './journal-des-besoins'
 import { slugify } from '../runs/conv-runs'
@@ -99,7 +100,14 @@ function appliquer(index: IndexDesFiches, ligne: LigneDeFiche | RetraitDuFil): v
       if (effacee(fiche)) index.ficheDuFil.delete(autre)
     return
   }
-  index.parMessage.set(cleDuJournal(ligne.conversationId, ligne.messageId), ligne)
+  const cle = cleDuJournal(ligne.conversationId, ligne.messageId)
+  const dejaRangee = index.parMessage.has(cle)
+  index.parMessage.set(cle, ligne)
+  // Un message déjà rangé ne déplace pas la fiche du fil : son état mis à jour après coup peut venir
+  // d'une fiche ancienne, et la suite du fil doit rejoindre la plus récente, pas celle-là.
+  // fix-ok: cause mesurée — appliquer() faisait de chaque ligne la fiche courante du fil ; resynchroniser
+  // met à jour une fiche ancienne et détournait la suite vers elle (test « ne détourne pas la suite du fil »).
+  if (dejaRangee && ligne.role !== 'copie') return
   // Une copie rattachée APRÈS coup (branche née) ne détourne pas la suite d'une
   // branche qui a déjà sa propre fiche ; tant qu'elle n'en a pas, la dernière copie l'emporte.
   if (ligne.role === 'copie') {
@@ -262,7 +270,20 @@ export function resumeDeLaFiche(texte: string): { statut?: StatutDemande; titre:
   return { ...(statut ? { statut } : {}), titre }
 }
 
-export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => number }): {
+/** Une demande dont la fiche dit autre chose que le Board : ce qu'il faut faire suivre à la fiche. */
+export interface EcartAResynchroniser {
+  conversationId: string
+  messageId: string
+  etatDuBoard: StatutDemande
+  constatDuBoard: string
+}
+
+export function creerFichesDeDemande(deps: {
+  racine: string
+  maintenant?: () => number
+  /** Lit, au moment d'écrire la fiche, si le travail d'un tour est arrivé : même décision que le Board. */
+  arrivee?: () => ArriveeDuTour
+}): {
   /** Range le tour qui vient de finir ; `null` = rien à ranger (question, tour sans demande). */
   noterTour: (tour: TourPourLaFiche) => Promise<LigneDeFiche | null>
   /**
@@ -287,6 +308,13 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
    * relative à `demandes/` : c'est elle qui fait le post-it. Aucun RUN.md n'est ouvert.
    */
   fichesParDemande: () => Promise<Map<string, string>>
+  /**
+   * Fait suivre à la fiche l'état que le Board montre APRÈS coup : une fiche n'est écrite qu'à la fin
+   * du tour, or une fusion peut arriver plus tard, ou une règle de lecture changer. Chaque écart rend
+   * une ligne « Résultat » et réécrit l'en-tête. Rend le nombre de fiches corrigées ; rejouée sans
+   * changement, elle n'ajoute rien.
+   */
+  resynchroniser: (ecarts: readonly EcartAResynchroniser[]) => Promise<number>
   /** Un fil supprimé emporte ses fiches, comme ses autres fichiers. */
   retirerLeFil: (conversationId: string) => Promise<void>
 } {
@@ -345,12 +373,15 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
   }
 
   return {
+    // fix-ok: cause mesurée — la fiche est écrite à la fin du tour et jamais revue ; elle gardait l'état d'alors
+    // alors que la carte (demandesDuFil) lit désormais l'arrivée sur main. Mesuré par le rejeu sur données
+    // réelles : 10 écarts fiche/Board sur 10 avant correctif.
     async noterTour({ evenement, conversation }) {
       const { conversationId, messageId } = evenement
       if (!FIL_LISIBLE.test(conversationId)) return null
       // Hors de la file : l'état dit ce que le fil montre à la fin de CE tour.
       const demande = conversation
-        ? demandesDuFil(conversation).find((d) => d.messageId === messageId)
+        ? demandesDuFil(conversation, deps.arrivee?.()).find((d) => d.messageId === messageId)
         : undefined
       // Ni compactage ni consigne interne : ce que le Board ne montre pas n'a pas de fiche.
       if (!demande) return null
@@ -437,7 +468,7 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
             !index.parMessage.has(cleDuJournal(branche.id, dansLaBranche))
         )
         if (!aPointer) return 0
-        const recopiees = demandesDuFil(branche).filter(
+        const recopiees = demandesDuFil(branche, deps.arrivee?.()).filter(
           (demande) => demande.messageId !== undefined && paires.has(demande.messageId)
         )
         let ajoutees = 0
@@ -524,6 +555,34 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
         for (const [cle, ligne] of (await chargerIndex()).parMessage)
           parDemande.set(cle, ligne.fiche)
         return parDemande
+      })
+    },
+    resynchroniser(ecarts) {
+      if (ecarts.length === 0) return Promise.resolve(0)
+      return enFile(async () => {
+        const index = await chargerIndex()
+        let corrigees = 0
+        for (const ecart of ecarts) {
+          const ligne = index.parMessage.get(cleDuJournal(ecart.conversationId, ecart.messageId))
+          if (!ligne || ligne.etat === ecart.etatDuBoard) continue
+          const quand = maintenant()
+          const suivie = await ajouter(
+            ligne.fiche,
+            ligneDeResultat(quand, ecart.etatDuBoard, ecart.constatDuBoard),
+            ecart.etatDuBoard,
+            quand
+          )
+          // Fiche disparue du disque : rien à suivre, elle ne compte plus dans la comparaison.
+          if (!suivie) continue
+          await enregistrer(index, {
+            ...ligne,
+            ts: quand,
+            etat: ecart.etatDuBoard,
+            constat: ecart.constatDuBoard
+          })
+          corrigees += 1
+        }
+        return corrigees
       })
     },
     retirerLeFil(conversationId) {

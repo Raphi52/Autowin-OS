@@ -226,6 +226,41 @@ describe('creerMesureDesEcarts', () => {
     expect(bilan).toMatchObject({ calculeA: 7, lignesSansDemande: 1 })
   })
 
+  it('un écart d’état que la fiche suit après coup : la mesure suivante n’en compte plus', async () => {
+    const racine = mkdtempSync(join(tmpdir(), 'aos-ecarts-'))
+    dossiers.push(racine)
+    // Le cas relevé le 08/11 : la fiche dit « refusé », le Board « prouvé », pour la même demande.
+    let lignes = [ligne('message-conv-1705-6', 'refuse', { conversationId: 'conv-1705' })]
+    const resynchronises: number[] = []
+    const mesure = creerMesureDesEcarts({
+      racine,
+      lireLaCarte: async () => ({
+        projets: [
+          {
+            demandes: [
+              demande('message-conv-1705-6', 'prouve', 100, { conversationId: 'conv-1705' })
+            ]
+          }
+        ] as never
+      }),
+      lireLignes: async () => lignes,
+      maintenant: () => 7,
+      resynchroniser: async (ecarts) => {
+        resynchronises.push(ecarts.length)
+        lignes = lignes.map((l) => ({ ...l, etat: 'prouve' as const }))
+        return ecarts.length
+      }
+    })
+
+    await mesure.mesurer()
+
+    expect(resynchronises).toEqual([1])
+    const bilan = JSON.parse(
+      readFileSync(join(racine, DOSSIER_DES_FICHES, FICHIER_DES_ECARTS), 'utf8')
+    ) as { ecartsDEtat: { total: number }; enAccord: number }
+    expect(bilan).toMatchObject({ ecartsDEtat: { total: 0 }, enAccord: 1 })
+  })
+
   it('une rafale de fins de tour ne coûte qu’une mesure, et la suivante repart', async () => {
     const { attentes, lire, mesure } = banc()
 

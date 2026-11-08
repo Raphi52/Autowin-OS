@@ -15,6 +15,7 @@ import { ServiceTranscripts, dossierTranscripts } from './media/transcripts'
 import { registerChatIpc } from './ipc/chat'
 import { creerIdentitesEnCache, creerJournalDesBesoins } from './board/journal-des-besoins'
 import { creerFichesDeDemande, type BranchePourLaFiche } from './board/fiches-de-demande'
+import { arriveesDuPoste } from './board/arrivees-du-poste'
 import type { ConversationPourLaCarte } from './board/carte-des-besoins'
 import { gestionnaireNavigateur, registerNavigateurIpc } from './ipc/navigateur'
 import { registerQuestionACoteIpc } from './ipc/question-a-cote'
@@ -528,7 +529,10 @@ const journalDesBesoins = creerJournalDesBesoins({
   identite: creerIdentitesEnCache()
 })
 // RUN.md léger : une fiche par nouvelle demande, écrite par l'app à la fin du tour.
-const fichesDeDemande = creerFichesDeDemande({ racine: app.getPath('userData') })
+const fichesDeDemande = creerFichesDeDemande({
+  racine: app.getPath('userData'),
+  arrivee: () => arriveesDuPoste(() => os.executionWorkspace)
+})
 // Une branche du fil (« façon 1/3 », « revenir à ce tour ») pointe sur les fiches de sa source.
 const rattacherLaBrancheAuxFiches = (branche: object, source: object): Promise<number> =>
   fichesDeDemande.rattacherLaBranche({
