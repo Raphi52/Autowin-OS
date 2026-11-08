@@ -855,7 +855,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   — le bouton « ×3 » (Essaie 3 façons) est supprimé, Arena fait ce travail :
     //   `os:conversations:essaisEnParallele`, `…:comparerLesFacons`, `…:garderEssai`.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(303)
+    // MISE A JOUR 2026-11-08 — 303 -> 304, MESURE par ce test (rouge a 304) et NOMME par
+    //   `node scripts/canaux-ipc.mjs HEAD` : un seul ajout, aucun retrait, dans `ipc/roles.ts`, garde
+    //   `assertTrustedRendererSender(event, 'SetRoutageChatLectureSeule')` des sa PREMIERE ligne :
+    //   `os:setRoutageChatLectureSeule` — l'interrupteur
+    //   « les questions du chat passent par ce modèle » du bloc des petites tâches. Il n'accepte qu'un
+    //   booléen ; rien d'autre n'entre dans `roles.json`. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(304)
     expect(unguarded).toEqual([])
   })
 

@@ -59,7 +59,7 @@ function banc(chat: () => Promise<unknown>): {
   const fil = store.create({ title: 'B', provider: 'codex' })
   const os = avecRepli({
     waitUntilReady: async () => {},
-    roles: { getBinding: () => ({ provider: 'codex', model: 'modele-test' }) },
+    roles: { bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }), routageChatLectureSeuleActif: () => false, getBinding: () => ({ provider: 'codex', model: 'modele-test' }) },
     conversations: store,
     executionSupervisor: { currentSignal: () => undefined },
     runChatTurn: async (_contenu: string, _signal: AbortSignal, lancer: () => unknown) => lancer()

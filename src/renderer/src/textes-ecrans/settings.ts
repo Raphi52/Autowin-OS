@@ -208,6 +208,9 @@ export const TEXTES_FR = {
     'S’applique au prochain choix de workflow, aux deux lectures, au rangement du premier message et à l’arbitrage d’une dérive.',
   'routeur.petites.nonRegle': 'Non réglé : Haiku par défaut, en effort low.',
   'routeur.petites.revenir': 'Revenir au défaut (Haiku)',
+  'routeur.petites.routage.libelle': 'Les questions du chat passent par ce modèle',
+  'routeur.petites.routage.aide':
+    'Une question sans action (« que vaut… », « où est… ») part sur ce modèle, moins cher. Toute demande d’action reste sur le modèle du chat. Décochée, tout le chat reste sur son modèle. Le modèle léger garde tous les outils du chat.',
   'routeur.petites.couvre.titre': 'Ce que ça couvre',
   'routeur.petites.couvre.couvre': 'Couvre',
   'routeur.petites.couvre.pendant': 'Pendant un travail',
@@ -502,6 +505,9 @@ export const TEXTES_EN: Record<CleSettings, string> = {
     'Applies to the next workflow choice, to the two readings, to the filing of the first message and to drift arbitration.',
   'routeur.petites.nonRegle': 'Not set: Haiku by default, at low effort.',
   'routeur.petites.revenir': 'Back to the default (Haiku)',
+  'routeur.petites.routage.libelle': 'Chat questions go to this model',
+  'routeur.petites.routage.aide':
+    'A question with no action (“what is…”, “where is…”) goes to this model, which costs less. Any action request stays on the chat model. Unticked, the whole chat stays on its model. The light model keeps all the chat’s tools.',
   'routeur.petites.couvre.titre': 'What it covers',
   'routeur.petites.couvre.couvre': 'Covers',
   'routeur.petites.couvre.pendant': 'During a job',

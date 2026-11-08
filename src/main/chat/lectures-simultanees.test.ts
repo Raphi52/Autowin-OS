@@ -82,7 +82,7 @@ async function jouerLeTour(
   const causalTrace = new TraceStore(mkdtempSync(join(tmpdir(), 'autowin-trace-simultanee-')))
   const os = avecRepli({
     waitUntilReady: async () => {},
-    roles: { getBinding: () => ({ provider: 'claude', model: 'opus-5' }) },
+    roles: { bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }), routageChatLectureSeuleActif: () => false, getBinding: () => ({ provider: 'claude', model: 'opus-5' }) },
     conversations: store,
     executionSupervisor: { currentSignal: () => undefined, currentSnapshot: () => undefined },
     runChatTurn: async (_contenu: string, _signal: AbortSignal, lancer: () => unknown) => lancer()

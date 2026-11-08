@@ -607,3 +607,37 @@ export function demandeDeChangementDeRendu(demande: string | undefined): boolean
   if (QUESTION.test(texte) || /\?\s*$/u.test(texte)) return false
   return true
 }
+
+/**
+ * La demande est-elle une QUESTION pure, sans rien à faire ? Filtre déterministe, fait AVANT le tour
+ * pour choisir un modèle moins cher (les questions ne coûtent pas le prix d'une action).
+ *
+ * Penche vers « action » au moindre doute : un faux négatif garde le modèle du chat (coût normal), un
+ * faux positif confierait une action au modèle léger. Trois portes, toutes à fermer :
+ *  1. aucun verbe d'action dans le message (liste large : écrire, exécuter, déplacer, envoyer…) ;
+ *  2. une demande de possibilité (« peux-tu… ») n'est sans action que si son verbe est de LECTURE,
+ *     dans la liste fermée ci-dessous ;
+ *  3. une question sans formule de possibilité doit commencer par un mot interrogatif, ou en contenir un.
+ * Et ni commande (`/…`) ni relance (« ok », « go »), dont l'action dépend du tour précédent.
+ */
+const INTERROGATIF =
+  /^\s*(?:comment|pourquoi|pk|quel(?:le)?s?|o[uù]|combien|qui|quoi|est-ce|c['’]est quoi|qu['’]est-ce|explique[rz]?|expliquer|r[ée]sum[ée]r?|d[ée]cris|d[ée]crire)\b/iu
+const MOT_INTERROGATIF =
+  /(?<![\p{L}])(?:comment|pourquoi|quel(?:le)?s?|o[ùu]|combien|qui|quoi|quand|lequel|laquelle|est-ce|qu['’]est-ce)(?![\p{L}])/iu
+const DEMANDE_DE_POSSIBILITE =
+  /^\s*(?:peux-tu|pourrais-tu|saurais-tu|sais-tu|tu peux|tu pourrais|pouvez-vous|peut-on|est-ce que tu peux|est-ce que tu pourrais)\s+/iu
+// fix-ok: cause mesurée — le tri ne voyait que les verbes d'une petite liste : « écrire », « exécuter »,
+// « déplacer », « envoyer », « merger » passaient, et 13 demandes d'action sur 19 partaient sur Haiku.
+const VERBE_DE_LECTURE =
+  /^(?:me\s+|nous\s+|moi\s+)?(?:lire|relire|voir|montrer|afficher|expliquer|r[ée]sumer|d[ée]crire|comparer|chercher|retrouver|trouver|lister|compter|dire|savoir|comprendre|donner|citer|rappeler|regarder|consulter)(?![\p{L}])/iu
+const VERBE_D_ACTION =
+  /(?<![\p{L}])(?:[ée]cri\p{L}*|exécut\p{L}*|execut\p{L}*|d[ée]plac\p{L}*|envoi\p{L}*|envoy\p{L}*|merg\p{L}*|[ée]dit\p{L}*|copi\p{L}*|rebas\p{L}*|compil\p{L}*|build\p{L}*|install\p{L}*|supprim\p{L}*|efface\p{L}*|renomm\p{L}*|r[ée]par\p{L}*|corrig\p{L}*|modifi\p{L}*|cr[ée]\p{L}*|ajout\p{L}*|lanc\p{L}*|orchestr\p{L}*|commit\p{L}*|push\p{L}*|publi\p{L}*|d[ée]ploi\p{L}*|remplac\p{L}*|impl[ée]ment\p{L}*|change\p{L}*|refactor\p{L}*|migr\p{L}*|restaur\p{L}*|annul\p{L}*|relanc\p{L}*|ferm\p{L}*|arr[êe]t\p{L}*|red[ée]marr\p{L}*|fusionn\p{L}*|range\p{L}*|nettoi\p{L}*|sauvegard\p{L}*|enregistr\p{L}*|fais|faire|fait|mets?|mettre)(?![\p{L}])/iu
+
+export function demandeSansAction(demande: string | undefined): boolean {
+  const texte = (demande ?? '').trim()
+  if (!texte || texte.startsWith('/') || RELANCE.test(texte)) return false
+  if (VERBE_D_ACTION.test(texte)) return false
+  const possibilite = DEMANDE_DE_POSSIBILITE.exec(texte)
+  if (possibilite) return VERBE_DE_LECTURE.test(texte.slice(possibilite[0].length))
+  return INTERROGATIF.test(texte) || (/\?\s*$/u.test(texte) && MOT_INTERROGATIF.test(texte))
+}

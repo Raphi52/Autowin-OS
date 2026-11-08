@@ -433,6 +433,7 @@ interface ChatApi {
     model?: string,
     reasoningEffort?: string
   ) => Promise<PetitesTachesEtat>
+  setRoutageChatLectureSeule: (actif: boolean) => Promise<PetitesTachesEtat>
   models: (force?: boolean) => Promise<ImportedModel[]>
   fabricNodes: () => Promise<FabricNodeSummary[]>
   installIsolatedFabricFixture: () => Promise<{ summary: FabricNodeSummary; model: ImportedModel }>

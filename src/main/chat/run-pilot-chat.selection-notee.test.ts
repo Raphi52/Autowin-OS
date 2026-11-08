@@ -91,7 +91,7 @@ async function tourSansRun(
   }
   const os = avecRepli({
     waitUntilReady: async () => {},
-    roles: { getBinding: () => ({ provider: 'codex', model: 'modele-test' }) },
+    roles: { bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }), routageChatLectureSeuleActif: () => false, getBinding: () => ({ provider: 'codex', model: 'modele-test' }) },
     conversations: store,
     executionWorkspace: rangement.repli,
     executionSupervisor: { currentSignal: () => undefined },

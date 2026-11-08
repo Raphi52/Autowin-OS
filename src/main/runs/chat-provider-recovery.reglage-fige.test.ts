@@ -125,8 +125,10 @@ describe('câblage : la reprise et le tour passent chaque réglage à sa place',
 
   it('le tour prend le modèle du chat de la reprise, et journalise le réglage imposé', () => {
     expect(tour).toMatch(
-      /const turnRuntimeBinding =\s*bindingOverride \?\? recovery\?\.runtimeBinding \?\? os\.roles\.getBinding\('orchestrator'\)/
+      /const bindingDuChat =\s*bindingOverride \?\? recovery\?\.runtimeBinding \?\? os\.roles\.getBinding\('orchestrator'\)/
     )
+    // Le tri des questions ne touche jamais un modèle figé (choisi pour le fil) ni une reprise.
+    expect(tour).toMatch(/sansAction:\s*!bindingOverride && !recovery && !continuation/)
     const journal = tour.slice(tour.indexOf("kind: 'provider-journal'"))
     expect(journal.slice(0, 300)).toContain(
       '...(bindingOverride ? { bindingFige: bindingOverride } : {})'

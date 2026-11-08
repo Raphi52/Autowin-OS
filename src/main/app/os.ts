@@ -1440,12 +1440,22 @@ export class AutowinOS {
     spawnLoginTerminal(plan.command, {})
   }
 
-  /** Change le binding d'un rôle ET persiste sur disque. */
+  /**
+   * Change le binding d'un rôle ET persiste sur disque.
+   * fix-ok: cause mesurée — `saveRoleBindings` réécrit `roles.json` en entier : chaque appel doit passer
+   * les deux interrupteurs, sinon celui qui manque disparaît du disque (lu : role-store.ts, en-tête de
+   * `saveRoleBindings`). Les trois appels ci-dessous passent désormais `chatLectureSeuleSurHaiku`.
+   */
   setRole(role: Role, binding: RoleBinding): Record<Role, RoleBinding> {
     const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
       .setBinding(role, binding)
       .all()
-    saveRoleBindings(proposed, this.roles.getPetitesTaches(), this.roles.getBuildTrivialSurHaiku())
+    saveRoleBindings(
+      proposed,
+      this.roles.getPetitesTaches(),
+      this.roles.getBuildTrivialSurHaiku(),
+      this.roles.getChatLectureSeuleSurHaiku()
+    )
     this.roles.setBinding(role, proposed[role])
     return this.roles.all()
   }
@@ -1456,9 +1466,30 @@ export class AutowinOS {
    * AVANT d'appliquer : un disque qui refuse l'écriture ne laisse pas un réglage fantôme en mémoire.
    */
   setPetitesTaches(binding: RoleBinding | undefined): RoleBinding | undefined {
-    saveRoleBindings(this.roles.all(), binding, this.roles.getBuildTrivialSurHaiku())
+    saveRoleBindings(
+      this.roles.all(),
+      binding,
+      this.roles.getBuildTrivialSurHaiku(),
+      this.roles.getChatLectureSeuleSurHaiku()
+    )
     this.roles.setPetitesTaches(binding)
     return this.roles.getPetitesTaches()
+  }
+
+  /**
+   * Pose l'interrupteur « les questions du chat passent par les petites tâches » ET l'écrit sur disque.
+   * Même ordre que `setPetitesTaches` : écrire d'abord, poser ensuite, pour qu'un disque qui refuse
+   * n'installe pas un réglage fantôme en mémoire.
+   */
+  setRoutageChatLectureSeule(actif: boolean): boolean {
+    saveRoleBindings(
+      this.roles.all(),
+      this.roles.getPetitesTaches(),
+      this.roles.getBuildTrivialSurHaiku(),
+      actif
+    )
+    this.roles.setChatLectureSeuleSurHaiku(actif)
+    return this.roles.routageChatLectureSeuleActif()
   }
 
   /**
@@ -1471,7 +1502,12 @@ export class AutowinOS {
     const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
     for (const [role, binding] of bindings) proposed.setBinding(role, binding)
     const all = proposed.all()
-    saveRoleBindings(all, this.roles.getPetitesTaches(), this.roles.getBuildTrivialSurHaiku())
+    saveRoleBindings(
+      all,
+      this.roles.getPetitesTaches(),
+      this.roles.getBuildTrivialSurHaiku(),
+      this.roles.getChatLectureSeuleSurHaiku()
+    )
     for (const [role] of bindings) this.roles.setBinding(role, all[role])
     return this.roles.all()
   }

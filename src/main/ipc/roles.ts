@@ -83,7 +83,8 @@ export function registerRolesIpc({
    */
   const etatPetitesTaches = (): PetitesTachesEtat => ({
     reglage: os.roles.getPetitesTaches() ?? null,
-    effectif: os.roles.bindingDesPetitesTaches()
+    effectif: os.roles.bindingDesPetitesTaches(),
+    routageChat: os.roles.routageChatLectureSeuleActif()
   })
   ipcMain.handle('os:petitesTaches', async (event) => {
     assertTrustedRendererSender(event, 'PetitesTaches')
@@ -114,6 +115,17 @@ export function registerRolesIpc({
       return etatPetitesTaches()
     }
   )
+  /**
+   * L'interrupteur « les questions du chat passent par les petites tâches ». Coupé = tout le chat
+   * reste sur son modèle (réversible). N'accepte qu'un booléen : rien d'autre n'entre dans `roles.json`.
+   */
+  ipcMain.handle('os:setRoutageChatLectureSeule', async (event, actif: unknown) => {
+    assertTrustedRendererSender(event, 'SetRoutageChatLectureSeule')
+    if (typeof actif !== 'boolean') throw new Error('valeur attendue : vrai ou faux')
+    os.setRoutageChatLectureSeule(actif)
+    broadcastRolesRefresh()
+    return etatPetitesTaches()
+  })
   /**
    * LE MODÈLE D'UNE SEULE CONVERSATION (2026-10-11).
    *

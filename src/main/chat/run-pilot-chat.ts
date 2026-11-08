@@ -21,7 +21,7 @@ import type { Message, ProviderAdapter, SendResult, StreamChunk } from '../provi
 import { ProviderRegistry } from '../providers/registry'
 import { ChatTurnCostRecorder } from './chat-cost-recording'
 import { motifInactivite, terminalDuTour } from './chat-turn-arret'
-import { RoleModelConfig, type RoleBinding } from '../profil/roles'
+import { RoleModelConfig, bindingDuTourChat, type RoleBinding } from '../profil/roles'
 import { AppCommandBus } from '../commands/commands'
 import {
   CAP_ITERATIONS_TOUR,
@@ -102,7 +102,7 @@ import { collerTexteParle } from './coller-texte-parle'
 import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
 import { contenusDesToursArretes } from '../app/reprise-apres-arret'
-import { contenusDesAvisDeLApp } from './deux-lectures'
+import { contenusDesAvisDeLApp, demandeSansAction } from './deux-lectures'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
 import { solderOrientationsDuFil } from '../conversations/orientations-en-cours-app'
 import { estUnFluxDeBloc } from '../commands/montrer-bloc-command'
@@ -277,8 +277,20 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     continuation = false
   ) => {
     await os.waitUntilReady()
-    const turnRuntimeBinding =
+    const bindingDuChat =
       bindingOverride ?? recovery?.runtimeBinding ?? os.roles.getBinding('orchestrator')
+    // TRI AVANT LE TOUR : une question pure part sur les petites tâches (Haiku), le reste sur le modèle
+    // du chat. Un modèle choisi pour ce fil, une reprise ou une suite de tour gardent le leur.
+    // fix-ok: cause mesurée — chaque tour partait sur `orchestrator` (Opus) sans tri : 374 tours en
+    // lecture seule sur 7 jours, 362 $ au tarif Opus (turn-journals + cost.jsonl).
+    const derniereDemande = [...messages].reverse().find((m) => m.role === 'user')?.content
+    const turnRuntimeBinding = bindingDuTourChat({
+      chat: bindingDuChat,
+      petitesTaches: os.roles.bindingDesPetitesTaches(),
+      routageActif: os.roles.routageChatLectureSeuleActif(),
+      sansAction:
+        !bindingOverride && !recovery && !continuation && demandeSansAction(derniereDemande)
+    })
     // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
     // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
     const turnStartedAtMs = performance.now()
