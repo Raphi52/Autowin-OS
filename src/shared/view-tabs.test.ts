@@ -29,7 +29,7 @@ describe('onglets de vues', () => {
   it('lit la vue d’une fenêtre détachée dans son adresse, refuse l’inconnu', () => {
     expect(vueDetacheeDepuisHash('#view=observatory')).toBe('observatory')
     expect(vueDetacheeDepuisHash('#view=evil')).toBeNull()
-    expect(vueDetacheeDepuisHash('#model-question')).toBeNull()
+    expect(vueDetacheeDepuisHash('#storage-migration')).toBeNull()
     expect(isAppDestination('chat')).toBe(true)
   })
 })

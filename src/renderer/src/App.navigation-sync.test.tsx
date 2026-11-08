@@ -9,7 +9,6 @@ vi.mock('./components/TicketsView', () => ({ TicketsView: () => null }))
 vi.mock('./components/AgentStudioView', () => ({ AgentStudioView: () => null }))
 vi.mock('./components/KnowledgeView', () => ({ KnowledgeView: () => null }))
 vi.mock('./components/SettingsView', () => ({ SettingsView: () => null }))
-vi.mock('./components/ModelQuestionPopup', () => ({ ModelQuestionPopup: () => null }))
 
 import { MainApp } from './App'
 

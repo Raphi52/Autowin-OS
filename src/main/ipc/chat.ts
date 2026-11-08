@@ -343,7 +343,6 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
     appDataRoot,
     appelsChatReconnusAuChargement,
     applyFabricSummaries,
-    askModelQuestion,
     behaviourAccess,
     brainInboxWorker,
     brainSearchCoordinator,
@@ -370,7 +369,6 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
     ledger,
     mascotteDuBureau,
     modelCatalog,
-    modelQuestions,
     notifiedTaskAlerts,
     notifyWatchdogWorkflowIncident,
     openViewWindow,
@@ -389,8 +387,6 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
     profiles,
     providerStateStore,
     publicationsEnVol,
-    questionDeLaPage,
-    questionWindows,
     rattacherLaBrancheAuxFiches,
     refleterRunsVivants,
     repriseDesFilsActive,
@@ -1683,26 +1679,6 @@ Le fil reprend ensuite normalement.`
     }
   )
 
-  // La page de question demande la sienne quand elle est prête : rien à perdre si elle
-  // charge lentement, et un rechargement la retrouve. Une page ne lit que la question de sa fenêtre.
-  ipcMain.handle('model:question:pending', (event) => {
-    assertTrustedRendererSender(event, 'Model question')
-    return questionDeLaPage(event.sender.id)
-  })
-
-  ipcMain.handle('model:question:answer', (event, id: string, answer: unknown) => {
-    assertTrustedRendererSender(event, 'Model question')
-    const safeId = guardString(id, 'modelQuestion.id')
-    const win = questionWindows.get(safeId)
-    if (!win || win.webContents.id !== event.sender.id)
-      throw new Error('Fenêtre de question invalide')
-    modelQuestions.resolve(safeId, answer)
-    questionWindows.delete(safeId)
-    win.flashFrame(false)
-    setImmediate(() => win.close())
-    return { ok: true }
-  })
-
   // Usage RÉEL des outils (actions Codex/Claude observées) — distinct du catalogue natif décoratif.
   ipcMain.handle('os:toolUsage', (event) => {
     assertTrustedRendererSender(event, 'Tool usage')
@@ -2120,7 +2096,6 @@ Le fil reprend ensuite normalement.`
     isolatedTestInstance,
     broadcast,
     drainPendingDirectives,
-    askModelQuestion,
     notifyWatchdogWorkflowIncident,
     watchdogEngine: () => ctx.watchdogEngine,
     relancerTachesDeFond: (conversationId, taches) => {

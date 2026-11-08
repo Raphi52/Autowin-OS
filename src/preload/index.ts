@@ -86,7 +86,6 @@ import type { RunEntry } from '../main/dashboards/runs-scan'
 import type { CapabilityItem } from '../main/gardes/capability-controls'
 import type { SkillRegistryItem } from '../main/skills/skill-registry'
 import type { BehaviourFile } from '../main/behaviour/behaviour-files'
-import type { PendingModelQuestion } from '../main/modeles/model-questions'
 import type { ImportedModel } from '../main/modeles/models'
 import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
 import type { ProviderDisplayStatus, ProviderStatus } from '../main/providers/provider-status'
@@ -809,10 +808,6 @@ const api = {
   enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }): Promise<BrainPersoState> =>
     ipcRenderer.invoke('os:brain-perso:enregistrer', entree),
   resetBrainPerso: (): Promise<BrainPersoState> => ipcRenderer.invoke('os:brain-perso:reset'),
-  pendingModelQuestion: (): Promise<PendingModelQuestion | null> =>
-    ipcRenderer.invoke('model:question:pending'),
-  answerModelQuestion: (id: string, answer: string): Promise<{ ok: true }> =>
-    ipcRenderer.invoke('model:question:answer', id, answer),
   toolUsage: (): Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   > => ipcRenderer.invoke('os:toolUsage'),

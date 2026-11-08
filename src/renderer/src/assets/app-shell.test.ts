@@ -27,19 +27,12 @@ describe('collapsed navigation rail', () => {
     expect(css).toContain('.test-instance-banner')
   })
 
-  it('keeps the test marker above full-screen image and model-question overlays', () => {
+  it('keeps the test marker above the full-screen image overlay', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
     const chatCss = readFileSync(new URL('../components/ChatView.css', import.meta.url), 'utf8')
-    const questionCss = readFileSync(
-      new URL('../components/ModelQuestionPopup.css', import.meta.url),
-      'utf8'
-    )
     const markerZ = Number(css.match(/\.test-instance-banner\s*{[^}]*z-index:\s*(\d+)/s)?.[1])
     const imageZ = Number(chatCss.match(/\.image-lightbox\s*{[^}]*z-index:\s*(\d+)/s)?.[1])
-    const questionZ = Number(
-      questionCss.match(/\.model-question-layer\s*{[^}]*z-index:\s*(\d+)/s)?.[1]
-    )
-    expect(markerZ).toBeGreaterThan(Math.max(imageZ, questionZ))
+    expect(markerZ).toBeGreaterThan(imageZ)
   })
 
   it('uses the selected Segoe UI Variable face for the Autowin OS brand title', () => {

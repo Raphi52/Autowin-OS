@@ -92,7 +92,6 @@ vi.mock('../../../resources/autowin-os-dev.ico?asset', () => ({ default: 'dev.ic
 
 const { BrowserWindow } = await import('electron')
 const { createWindowing } = await import('./window')
-const { ModelQuestionHub } = await import('../modeles/model-questions')
 
 function fenetrage(): ReturnType<typeof createWindowing> {
   return createWindowing({
@@ -100,8 +99,7 @@ function fenetrage(): ReturnType<typeof createWindowing> {
     jalonDemarrage: () => undefined,
     automationInstanceMode: { isolated: true, headless: false },
     isolatedTestInstance: true,
-    headlessTestInstance: false,
-    modelQuestions: new ModelQuestionHub()
+    headlessTestInstance: false
   })
 }
 

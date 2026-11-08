@@ -77,7 +77,6 @@ describe('fin de tour — orientations déjà remises par le contrôle', () => {
       isolatedTestInstance: false,
       broadcast,
       drainPendingDirectives: () => [],
-      askModelQuestion: vi.fn(),
       notifyWatchdogWorkflowIncident: vi.fn(),
       watchdogEngine: () => undefined
     }) as unknown as RunPilotChatDeps

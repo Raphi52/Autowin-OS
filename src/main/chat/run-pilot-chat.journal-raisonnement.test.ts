@@ -90,7 +90,6 @@ describe('tour de chat — la pensée regroupée dans le journal fichier', () =>
         isolatedTestInstance: false,
         broadcast: vi.fn(),
         drainPendingDirectives: () => [],
-        askModelQuestion: vi.fn(),
         notifyWatchdogWorkflowIncident: vi.fn(),
         watchdogEngine: () => undefined
       }) as unknown as RunPilotChatDeps

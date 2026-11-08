@@ -71,7 +71,6 @@ async function tourQuiFinitSur(outcome: Record<string, unknown> | undefined) {
     isolatedTestInstance: false,
     broadcast: vi.fn(),
     drainPendingDirectives: () => [],
-    askModelQuestion: vi.fn(),
     notifyWatchdogWorkflowIncident: vi.fn(),
     watchdogEngine: () => undefined
   }) as unknown as RunPilotChatDeps

@@ -97,7 +97,6 @@ import type { WatchdogEngine } from '../task-manager/watchdog-engine'
 import type { TraceStore } from '../activity/trace-store'
 import type { TraceLedger } from '../activity/ledger'
 import type { AppEvent } from '../commands/commands'
-import type { ModelQuestion } from '../modeles/model-questions'
 import { collerTexteParle } from './coller-texte-parle'
 import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
@@ -121,13 +120,6 @@ export type RunPilotChatDeps = {
   isolatedTestInstance: boolean
   broadcast: (e: AppEvent) => void
   drainPendingDirectives: (conversationId: string) => string[]
-  askModelQuestion: (
-    sender: WebContents,
-    source: 'chat' | 'loop',
-    question: ModelQuestion,
-    context?: string,
-    signal?: AbortSignal
-  ) => Promise<string>
   notifyWatchdogWorkflowIncident: (
     incident: { kind: string; summary: string; detail: string },
     sourceConversationId?: string
@@ -262,7 +254,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     isolatedTestInstance,
     broadcast,
     drainPendingDirectives,
-    askModelQuestion,
     notifyWatchdogWorkflowIncident
   } = deps
 
@@ -1650,14 +1641,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             return turnPilot.chat(
               safe,
               handlePilotEvent,
-              (question) =>
-                sender
-                  ? askModelQuestion(sender, 'chat', question, 'Chat', supervisedSignal)
-                  : Promise.reject(
-                      new Error(
-                        'Une tâche planifiée ne peut pas répondre à une question interactive du modèle.'
-                      )
-                    ),
+              // Aucune fenêtre de question : le canal `<question>` du modèle est fermé
+              // (`modeles/model-questions.ts`), un tour bloqué tranche lui-même.
+              undefined,
               policy?.maxIterations ?? CAP_ITERATIONS_TOUR,
               conversationId,
               supervisedSignal,

@@ -25,7 +25,6 @@ vi.mock('./components/SettingsView', () => ({
   SettingsView: () =>
     createElement('button', { id: 'dans-reglages', className: 'reglage' }, 'Thème sombre')
 }))
-vi.mock('./components/ModelQuestionPopup', () => ({ ModelQuestionPopup: () => null }))
 
 import { MainApp } from './App'
 

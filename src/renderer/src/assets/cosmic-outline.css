@@ -95,27 +95,6 @@
   border-color: var(--rose-bright);
 }
 
-/* Fenêtre question séparée */
-.model-question-layer {
-  background: radial-gradient(circle at 84% 8%, rgba(239, 63, 145, 0.12), transparent 28%), var(--bg-0);
-}
-
-.model-question-popup {
-  border: 1px solid var(--line-strong);
-  background: #010102;
-  box-shadow: 0 22px 70px #000;
-}
-
-.model-question-options button {
-  background: #020203;
-  border-color: var(--line);
-}
-
-.model-question-options button:hover {
-  border-color: var(--rose-bright);
-  background: rgba(239, 63, 145, 0.09);
-}
-
 /* Transparence sobre : le fond galaxie reste l'unique ambiance lumineuse. */
 .cosmic-outline .chat-layout {
   background: var(--surface-page);
@@ -133,8 +112,7 @@
     .theme-filter,
     .node-search-result,
     .settings-section,
-    .node-links button,
-    .model-question-options button
+    .node-links button
   ) {
   background: var(--surface-card);
   box-shadow: none;
@@ -199,9 +177,7 @@
 }
 
 .cosmic-outline .graph-observatory--galaxy .selected-node,
-.cosmic-outline .graph-observatory--galaxy .node-panel pre,
-.cosmic-outline .model-question-layer,
-.cosmic-outline .model-question-popup {
+.cosmic-outline .graph-observatory--galaxy .node-panel pre {
   background: var(--surface-card);
   box-shadow: none;
 }

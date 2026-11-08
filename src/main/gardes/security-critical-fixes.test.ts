@@ -122,10 +122,8 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
         // site d'injection est vérifié séparément par le test « hors index.ts » plus bas.
         /\bassertTrusted\(\s*event/.test(block)
       const specializedGuard =
-        (channel === 'app:storage-migration-complete' &&
-          /isTrustedRendererUrl\(event\.senderFrame/.test(block)) ||
-        (channel === 'model:question:answer' &&
-          /questionWindows\.get\(event\.sender\.id\)/.test(block))
+        channel === 'app:storage-migration-complete' &&
+        /isTrustedRendererUrl\(event\.senderFrame/.test(block)
       return genericGuard || specializedGuard ? [] : [channel]
     })
 
@@ -855,7 +853,11 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   — le bouton « ×3 » (Essaie 3 façons) est supprimé, Arena fait ce travail :
     //   `os:conversations:essaisEnParallele`, `…:comparerLesFacons`, `…:garderEssai`.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(303)
+    // MISE A JOUR 2026-11-08 — 303 -> 301, MESURE par ce test (rouge a 301) et NOMME par
+    //   `node scripts/canaux-ipc.mjs HEAD` : aucun ajout, deux retraits, dans `ipc/chat.ts` — la
+    //   fenetre « Le modele a besoin de toi » est supprimee, un travail bloque tranche lui-meme :
+    //   `model:question:pending`, `model:question:answer`. Aucune protection retiree, `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(301)
     expect(unguarded).toEqual([])
   })
 

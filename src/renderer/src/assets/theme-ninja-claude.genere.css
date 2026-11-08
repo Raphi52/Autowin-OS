@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   990 regles, 1381 declarations. Voir genererNinjaClaude.
+   978 regles, 1366 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -1984,31 +1984,6 @@
     border-color: rgba(215, 110, 76, 0.45)
 }
 
-/* ---- src/renderer/src/components/ModelQuestionPopup.css ---- */
-:root[data-theme='ninja-claude'] .model-question-layer {
-    --mq-surface: rgba(38, 38, 36, 0.96);
-    --mq-accent: var(--rose, rgb(217, 118, 85));
-    background: radial-gradient(circle at 78% 12%, rgba(184, 182, 174, 0.1), transparent 42%),
-    radial-gradient(circle at 15% 90%, rgba(217, 118, 85, 0.08), transparent 45%),
-    rgba(31, 30, 29, 0.72)
-}
-:root[data-theme='ninja-claude'] .model-question-source {
-    color: var(--gold-bright, rgb(223, 139, 112))
-}
-:root[data-theme='ninja-claude'] .model-question-source.loop {
-    background: rgba(217, 118, 85, 0.12);
-    color: rgb(225, 148, 123)
-}
-:root[data-theme='ninja-claude'] .model-question-options button:hover {
-    background: rgba(217, 118, 85, 0.1)
-}
-:root[data-theme='ninja-claude'] .model-question-popup textarea {
-    background: rgba(31, 30, 29, 0.35)
-}
-:root[data-theme='ninja-claude'] .model-question-popup textarea:focus {
-    box-shadow: 0 0 0 2px rgba(217, 118, 85, 0.16)
-}
-
 /* ---- src/renderer/src/components/ModelQuotaIndicator.css ---- */
 :root[data-theme='ninja-claude'] .model-quota-trigger {
     color: rgb(187, 185, 178)
@@ -3276,18 +3251,6 @@
 :root[data-theme='ninja-claude'] .conv-item.active, :root[data-theme='ninja-claude'] .run-row.active {
     background: rgba(217, 118, 85, 0.09)
 }
-:root[data-theme='ninja-claude'] .model-question-layer {
-    background: radial-gradient(circle at 84% 8%, rgba(217, 118, 85, 0.12), transparent 28%), var(--bg-0)
-}
-:root[data-theme='ninja-claude'] .model-question-popup {
-    background: rgb(31, 30, 29)
-}
-:root[data-theme='ninja-claude'] .model-question-options button {
-    background: rgb(31, 30, 29)
-}
-:root[data-theme='ninja-claude'] .model-question-options button:hover {
-    background: rgba(217, 118, 85, 0.09)
-}
 :root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .graph-stage {
     background: transparent
 }
@@ -3320,12 +3283,6 @@
     box-shadow: none
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .node-panel pre {
-    background: var(--surface-card)
-}
-:root[data-theme='ninja-claude'] .cosmic-outline .model-question-layer {
-    background: var(--surface-card)
-}
-:root[data-theme='ninja-claude'] .cosmic-outline .model-question-popup {
     background: var(--surface-card)
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .chat > .composer {

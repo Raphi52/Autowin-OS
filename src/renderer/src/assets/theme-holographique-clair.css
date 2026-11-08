@@ -3298,7 +3298,7 @@
    modele x effort, comptes -- et la fenetre « Contexte de cette conversation ». Puis le MEME cadre
    pour les autres menus flottants (« Applique le meme cadre holo (coins coupes, trait blanc et
    argent, satin) aux autres menus flottants [...] : menu d'un fil, palette /, reglages du graphe,
-   question de modele ») ; la palette / y compte son encart de description (`.slash-detail`) et sa
+   question de modele », fenetre retiree depuis) ; la palette / y compte son encart de description (`.slash-detail`) et sa
    variante des mentions @ (`.slash-palette.mention-palette`). Pour ces quatre-la, seul le CADRE
    change : leur contenu garde son style. Les deux premieres gardaient l'habit d'avant le holo :
    plaque noire arrondie a filet OR en haut (regle des fenetres flottantes, section 4), puces roses
@@ -3337,7 +3337,6 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup,
     .delete-confirm-card
   ) {
   --nv-pop-aplat: rgba(var(--voile-rgb), 0.055);
@@ -3381,7 +3380,6 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup,
     .delete-confirm-card
   ) {
   scrollbar-color: auto;
@@ -3394,7 +3392,6 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup,
     .delete-confirm-card
   )::-webkit-scrollbar-track {
   margin-bottom: var(--nv-chanfrein);
@@ -3410,7 +3407,6 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup,
     .delete-confirm-card
   )::-webkit-scrollbar-thumb {
   background: var(--chat-ascenseur) padding-box;
@@ -3423,7 +3419,6 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup,
     .delete-confirm-card
   )::-webkit-scrollbar-thumb:hover {
   background: rgba(208, 43, 140, 0.55) padding-box;

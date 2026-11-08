@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   558 regles, 842 declarations. Voir genererCoucheClaire. */
+   549 regles, 830 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -1112,28 +1112,6 @@
     border-color: rgba(170, 14, 95, 0.45)
 }
 
-/* ---- src/renderer/src/components/ModelQuestionPopup.css ---- */
-:root[data-theme='holographique-clair'] .model-question-layer {
-    --mq-surface: rgba(253, 253, 255, 0.96);
-    --mq-border: rgba(20, 15, 40, 0.16);
-    background: radial-gradient(circle at 78% 12%, rgba(157, 121, 237, 0.1), transparent 42%),
-    radial-gradient(circle at 15% 90%, rgba(208, 43, 140, 0.08), transparent 45%),
-    rgba(253, 253, 255, 0.72)
-}
-:root[data-theme='holographique-clair'] .model-question-source {
-    color: var(--gold-bright, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] .model-question-source.loop {
-    background: rgba(208, 43, 140, 0.12);
-    color: #aa0e5f
-}
-:root[data-theme='holographique-clair'] .model-question-options button:hover {
-    background: rgba(208, 43, 140, 0.1)
-}
-:root[data-theme='holographique-clair'] .model-question-popup textarea {
-    background: rgba(20, 15, 40, 0.053)
-}
-
 /* ---- src/renderer/src/components/ModelQuotaIndicator.css ---- */
 :root[data-theme='holographique-clair'] .model-quota-bar-value {
     border: 1px solid color-mix(in srgb, var(--quota-teinte, var(--quota-color, #09712c)) 45%, transparent);
@@ -1948,18 +1926,6 @@
     background: #fdfdff
 }
 :root[data-theme='holographique-clair'] .conv-item.active, :root[data-theme='holographique-clair'] .run-row.active {
-    background: rgba(208, 43, 140, 0.09)
-}
-:root[data-theme='holographique-clair'] .model-question-layer {
-    background: radial-gradient(circle at 84% 8%, rgba(208, 43, 140, 0.12), transparent 28%), var(--bg-0)
-}
-:root[data-theme='holographique-clair'] .model-question-popup {
-    background: #fdfdff
-}
-:root[data-theme='holographique-clair'] .model-question-options button {
-    background: #fdfdff
-}
-:root[data-theme='holographique-clair'] .model-question-options button:hover {
     background: rgba(208, 43, 140, 0.09)
 }
 :root[data-theme='holographique-clair'] .cosmic-outline .chat > .composer {

@@ -11,12 +11,6 @@ export interface ModelQuestion {
   reason: ModelQuestionReason
 }
 
-export interface PendingModelQuestion extends ModelQuestion {
-  id: string
-  source: 'chat' | 'loop'
-  context?: string
-}
-
 const QUESTION_RE = /<question>\s*(\{[\s\S]*?\})\s*<\/question>/i
 export function parseModelQuestion(text: string): ModelQuestion | null {
   const match = QUESTION_RE.exec(text)
@@ -39,66 +33,7 @@ export function parseModelQuestion(text: string): ModelQuestion | null {
 // « ne demande pas un secret dans le chat », est passée dans la ligne Secrets de la constitution.
 // Interdire la balise <question> au modèle n'avait plus d'objet : `parseModelQuestion` rend null
 // quoi qu'il reçoive, et rien d'autre ne lui enseigne cette balise.
-
-export class ModelQuestionHub {
-  private nextId = 1
-  private readonly waiting = new Map<
-    string,
-    { resolve: (answer: string) => void; reject: (reason: Error) => void }
-  >()
-
-  ask(
-    source: PendingModelQuestion['source'],
-    question: ModelQuestion,
-    notify: (pending: PendingModelQuestion) => void,
-    context?: string,
-    signal?: AbortSignal
-  ): Promise<string> {
-    const id = `model-question-${this.nextId++}`
-    return new Promise((resolve, reject) => {
-      const abort = (): void => {
-        this.cancel(id, String(signal?.reason ?? 'Annulation demandée'))
-      }
-      const cleanup = (): void => signal?.removeEventListener('abort', abort)
-      this.waiting.set(id, {
-        resolve: (answer) => {
-          cleanup()
-          resolve(answer)
-        },
-        reject: (reason) => {
-          cleanup()
-          reject(reason)
-        }
-      })
-      if (signal?.aborted) {
-        abort()
-        return
-      }
-      signal?.addEventListener('abort', abort, { once: true })
-      notify({ id, source, context, ...question })
-    })
-  }
-
-  resolve(id: string, answer: unknown): void {
-    const pending = this.waiting.get(id)
-    if (!pending) throw new Error(`Question modèle inconnue : ${id}`)
-    if (typeof answer !== 'string' || !answer.trim() || answer.length > 20_000) {
-      throw new Error('Réponse modèle invalide')
-    }
-    this.waiting.delete(id)
-    pending.resolve(answer.trim())
-  }
-
-  cancel(id: string, reason = 'Question annulée'): boolean {
-    const pending = this.waiting.get(id)
-    if (!pending) return false
-    this.waiting.delete(id)
-    pending.reject(new Error(reason))
-    return true
-  }
-
-  cancelAll(reason = 'Fenêtre fermée'): void {
-    for (const pending of this.waiting.values()) pending.reject(new Error(reason))
-    this.waiting.clear()
-  }
-}
+//
+// LA FENÊTRE « Le modèle a besoin de toi » EST RETIRÉE (2026-11-08, choix de l'utilisateur : « je
+// veux pas de popup comme ça »), avec sa file d'attente, son ouverture et son pont vers la page. Un
+// travail bloqué tranche lui-même (`gates/etendue-repetee.ts`, `juge/relecture-froide.ts`).

@@ -41,7 +41,6 @@ import { TaskManagerView } from './components/TaskManagerView'
 import { AgentStudioView } from './components/AgentStudioView'
 import { KnowledgeView } from './components/KnowledgeView'
 import { SettingsView } from './components/SettingsView'
-import { ModelQuestionPopup } from './components/ModelQuestionPopup'
 import {
   APP_DESTINATIONS,
   resolveAppLocation,
@@ -837,7 +836,7 @@ export function MainApp(): React.JSX.Element {
 
 function App(): React.JSX.Element {
   if (window.location.hash === '#storage-migration') return <></>
-  return window.location.hash === '#model-question' ? <ModelQuestionPopup /> : <MainApp />
+  return <MainApp />
 }
 
 export default App

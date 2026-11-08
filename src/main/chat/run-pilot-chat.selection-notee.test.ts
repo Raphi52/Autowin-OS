@@ -105,7 +105,6 @@ async function tourSansRun(
     isolatedTestInstance: false,
     broadcast: vi.fn(),
     drainPendingDirectives: () => [],
-    askModelQuestion: vi.fn(),
     notifyWatchdogWorkflowIncident: vi.fn(),
     watchdogEngine: () => undefined
   }) as unknown as RunPilotChatDeps

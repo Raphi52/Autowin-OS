@@ -735,15 +735,6 @@
   color: var(--text);
 }
 
-/* components/ModelQuestionPopup.css — tailles */
-:root[data-theme^='malvoyant-'] .model-question-popup header small,
-:root[data-theme^='malvoyant-'] .model-question-popup footer small,
-:root[data-theme^='malvoyant-'] .model-question-source,
-:root[data-theme^='malvoyant-'] .model-question-context,
-:root[data-theme^='malvoyant-'] .model-question-popup label {
-  font-size: 13px;
-}
-
 /* components/ModelQuotaIndicator.css — tailles */
 :root[data-theme^='malvoyant-'] .model-quota-bar-value,
 :root[data-theme^='malvoyant-'] .model-quota-popover small,

@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   566 regles, 782 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   556 regles, 770 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -1104,30 +1104,6 @@
     border-color: rgba(251, 91, 171, 0.45)
 }
 
-/* ---- src/renderer/src/components/ModelQuestionPopup.css ---- */
-:root[data-theme='nebuleuse-verre'] .model-question-layer {
-    --mq-accent: var(--rose, rgb(255, 47, 151));
-    background: radial-gradient(circle at 78% 12%, rgba(157, 121, 237, 0.1), transparent 42%),
-    radial-gradient(circle at 15% 90%, rgba(255, 47, 151, 0.08), transparent 45%),
-    rgba(10, 10, 10, 0.72)
-}
-:root[data-theme='nebuleuse-verre'] .model-question-source {
-    color: var(--gold-bright, rgb(255, 131, 193))
-}
-:root[data-theme='nebuleuse-verre'] .model-question-source.loop {
-    background: rgba(255, 47, 151, 0.12);
-    color: rgb(255, 93, 174)
-}
-:root[data-theme='nebuleuse-verre'] .model-question-options button:hover {
-    background: rgba(255, 47, 151, 0.1)
-}
-:root[data-theme='nebuleuse-verre'] .model-question-popup textarea {
-    background: rgba(10, 10, 10, 0.35)
-}
-:root[data-theme='nebuleuse-verre'] .model-question-popup textarea:focus {
-    box-shadow: 0 0 0 2px rgba(255, 47, 151, 0.16)
-}
-
 /* ---- src/renderer/src/components/ModelQuotaIndicator.css ---- */
 :root[data-theme='nebuleuse-verre'] .model-quota-trigger {
     --quota-vert: rgb(0, 255, 85)
@@ -1901,18 +1877,6 @@
     background: rgb(10, 10, 10)
 }
 :root[data-theme='nebuleuse-verre'] .conv-item.active, :root[data-theme='nebuleuse-verre'] .run-row.active {
-    background: rgba(255, 47, 151, 0.09)
-}
-:root[data-theme='nebuleuse-verre'] .model-question-layer {
-    background: radial-gradient(circle at 84% 8%, rgba(255, 47, 151, 0.12), transparent 28%), var(--bg-0)
-}
-:root[data-theme='nebuleuse-verre'] .model-question-popup {
-    background: rgb(10, 10, 10)
-}
-:root[data-theme='nebuleuse-verre'] .model-question-options button {
-    background: rgb(10, 10, 10)
-}
-:root[data-theme='nebuleuse-verre'] .model-question-options button:hover {
     background: rgba(255, 47, 151, 0.09)
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer {

@@ -1,16 +1,14 @@
 /**
  * LES FENÊTRES de l'application, sorties de `src/main/index.ts`.
  *
- * Pourquoi ce fichier existe : `createWindow`, `setupTray`, `showMainWindow` et
- * `openQuestionWindow` étaient posés au milieu du fichier de démarrage, avec leur état (`tray`,
- * `isQuitting`, `relayoutMainWindow`) en variables de module — donc impossibles à lire ou à
- * modifier sans traverser tout `index.ts`.
+ * Pourquoi ce fichier existe : `createWindow`, `setupTray` et `showMainWindow` étaient posés au
+ * milieu du fichier de démarrage, avec leur état (`tray`, `isQuitting`) en variables de module —
+ * donc impossibles à lire ou à modifier sans traverser tout `index.ts`.
  *
  * Déplacement MÉCANIQUE, comportement inchangé : les corps sont identiques, seules les six valeurs
  * qu'ils prenaient dans `index.ts` deviennent des dépendances passées explicitement. L'état de
  * fenêtrage, lui, DÉMÉNAGE ICI : il n'était lu nulle part ailleurs, sauf `isQuitting` (exposé en
- * lecture par `estEnFermeture()`) et la table des fenêtres de question (exposée telle quelle, car
- * un canal IPC de `index.ts` la consulte).
+ * lecture par `estEnFermeture()`).
  */
 import { signalerInterfaceVisible } from './startup-gate'
 import { cloreDemarrage, pendantOperation } from '../gel/gel-main'
@@ -36,7 +34,6 @@ import { BOOT_SPLASH_DOCUMENT } from '../../shared/boot-splash'
 import { warmCapabilities } from '../gardes/capability-controls'
 import { isSceneFrameUrl, isTrustedRendererUrl } from '../behaviour/behaviour-access'
 import { behaviourRendererOptions } from '../ipc/ipc-senders'
-import { type ModelQuestionHub, type PendingModelQuestion } from '../modeles/model-questions'
 import { annoncerFermeture } from './journal-arrets'
 import { presentAutomationWindow } from './headless-instance'
 import { appliquerPresenceSysteme } from './os-presence-main'
@@ -69,7 +66,6 @@ export type WindowingDeps = {
   automationInstanceMode: { isolated: boolean; headless: boolean }
   isolatedTestInstance: boolean
   headlessTestInstance: boolean
-  modelQuestions: ModelQuestionHub
 }
 
 /** Ce que `index.ts` câble ensuite sur son démarrage et ses canaux IPC. */
@@ -77,16 +73,11 @@ export type Fenetres = {
   createWindow: () => void
   showMainWindow: () => void
   setupTray: () => void
-  openQuestionWindow: (parent: BrowserWindow | null, question: PendingModelQuestion) => void
   /** Ouvre une vue seule dans sa propre fenêtre, centrée sur le point écran du lâcher d'onglet. */
   openViewWindow: (view: AppDestination, screenX: number, screenY: number) => void
   rendererLocation: () => { devRendererUrl?: string; rendererHtmlPath: string }
   /** Vrai UNIQUEMENT après un quit demandé depuis le menu du tray. */
   estEnFermeture: () => boolean
-  /** Les fenêtres de question ouvertes, par identifiant — un canal IPC de `index.ts` les ferme. */
-  questionWindows: Map<string, BrowserWindow>
-  /** La question d'une page, ou `null` : une page ne lit jamais la question d'une autre fenêtre. */
-  questionDeLaPage: (pageId: number) => PendingModelQuestion | null
   /**
    * Jauge de barre des tâches + texte de l'icône de notification, d'après les runs vivants.
    * Ici parce que `tray` et la fenêtre principale sont tenus DANS cette fermeture : rien d'autre
@@ -96,7 +87,7 @@ export type Fenetres = {
   /**
    * La fenêtre PRINCIPALE vivante, ou `null` (fermée : l'app vit dans la barre d'état). Lue par le
    * navigateur intégré du chat, qui pose ses pages DANS cette fenêtre ; seule cette
-   * fermeture la connaît, `getAllWindows()` mêlant les fenêtres de question et la mascotte.
+   * fermeture la connaît, `getAllWindows()` mêlant les vues détachées et la mascotte.
    */
   fenetrePrincipale: () => BrowserWindow | null
 }
@@ -107,22 +98,13 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     jalonDemarrage,
     automationInstanceMode,
     isolatedTestInstance,
-    headlessTestInstance,
-    modelQuestions
+    headlessTestInstance
   } = deps
 
-  const questionWindows = new Map<string, BrowserWindow>()
-  /**
-   * La question de chaque page, gardée jusqu'à la fermeture de sa fenêtre : c'est la page qui la
-   * demande quand elle est prête. Un envoi unique à la fin du chargement arrivait 6 à
-   * 8 ms après le branchement de l'écoute : manqué une fois, il laissait une fenêtre noire et un run
-   * en pause (30/10), et il n'aurait pas non plus survécu à un rechargement de la page.
-   */
-  const questionsParPage = new Map<number, PendingModelQuestion>()
   /**
    * LA fenêtre principale vivante, ou null. Tenue ICI et pas déduite de
-   * `BrowserWindow.getAllWindows()` : cette liste contient AUSSI les fenêtres de question, donc elle
-   * ne dit pas si la fenêtre principale existe déjà.
+   * `BrowserWindow.getAllWindows()` : cette liste contient AUSSI les vues détachées et la mascotte,
+   * donc elle ne dit pas si la fenêtre principale existe déjà.
    *
    * CE QU'ELLE EMPÊCHE (constaté à l'écran le 2026-09-12) : une SECONDE fenêtre principale
    * construite alors que la première vivait. La nouvelle charge l'écran d'attente
@@ -130,12 +112,6 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
    * continuait de répondre derrière. On voyait donc un démarrage sans fin sur une app en marche.
    */
   let mainWindowVivante: BrowserWindow | null = null
-  /**
-   * Relayout forcé de la fenêtre principale (correctif desync fenêtre↔viewport, cf. createWindow).
-   * Exposé au niveau module pour être rejoué depuis les chemins déclenchés PAR LE MODÈLE (fermeture
-   * d'une fenêtre de question `alwaysOnTop` enfant), pas seulement sur les transitions utilisateur.
-   */
-  let relayoutMainWindow: (() => void) | null = null
   /**
    * Survie à la fermeture de FENÊTRE (robustesse niveau 1) : fermer la fenêtre ne tue plus l'app ni le
    * run en cours — le process main reste vivant en TRAY (les tours d'agent y tournent + s'y persistent),
@@ -186,50 +162,6 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
   }
   function refleterRunsVivants(etat: EtatRunsVivants): void {
     appliquerPresenceSysteme({ fenetre: mainWindowVivante, icone: tray }, etat)
-  }
-  function openQuestionWindow(parent: BrowserWindow | null, question: PendingModelQuestion): void {
-    const win = new BrowserWindow({
-      width: 640,
-      height: 560,
-      minWidth: 480,
-      minHeight: 420,
-      parent: parent ?? undefined,
-      modal: false,
-      show: false,
-      alwaysOnTop: true,
-      autoHideMenuBar: true,
-      title: 'Question du modèle',
-      webPreferences: {
-        preload: join(__dirname, '../preload/index.js'),
-        contextIsolation: true,
-        sandbox: false
-      }
-    })
-    questionWindows.set(question.id, win)
-    // Lu ici : `webContents` n'est plus accessible une fois la fenêtre fermée.
-    const pageId = win.webContents.id
-    questionsParPage.set(pageId, question)
-    win.on('closed', () => {
-      questionsParPage.delete(pageId)
-      // Une fenêtre enfant `alwaysOnTop` qui apparaît/disparaît peut laisser la fenêtre parente avec
-      // des métriques périmées (contenu rogné). C'est un chemin déclenché PAR LE MODÈLE, pas par
-      // l'utilisateur → on force le relayout du parent à sa fermeture.
-      relayoutMainWindow?.()
-      if (!questionWindows.delete(question.id)) return
-      try {
-        modelQuestions.resolve(question.id, 'attend pour l’instant')
-      } catch {
-        // La réponse a déjà été transmise juste avant la fermeture.
-      }
-    })
-    win.once('ready-to-show', () => {
-      presentAutomationWindow(win, headlessTestInstance, { focus: true, flash: true })
-    })
-    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-      win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#model-question`)
-    } else {
-      win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'model-question' })
-    }
   }
   // fix-ok: la fenetre detachee etait centree sur la souris sans tenir compte de l ecran (bord = hors ecran) ; mesure par les tests placerFenetreDetachee de view-tabs.test.ts
   function openViewWindow(view: AppDestination, screenX: number, screenY: number): void {
@@ -498,7 +430,6 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     mainWindow.on('restore', forceRelayout)
     mainWindow.on('maximize', forceRelayout)
     mainWindow.on('unmaximize', forceRelayout)
-    relayoutMainWindow = forceRelayout
 
     /*
      * LE GEL DE LA FENETRE, vu de l'EXTERIEUR. Le battement de `gel-main` ne surveille que le
@@ -649,12 +580,9 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     createWindow,
     showMainWindow,
     setupTray,
-    openQuestionWindow,
     openViewWindow,
     rendererLocation,
     estEnFermeture: () => isQuitting,
-    questionWindows,
-    questionDeLaPage: (pageId) => questionsParPage.get(pageId) ?? null,
     refleterRunsVivants,
     fenetrePrincipale: () => mainWindowVivante
   }

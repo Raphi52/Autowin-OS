@@ -227,7 +227,6 @@ import {
   behaviourRendererOptions
 } from './ipc/ipc-senders'
 import { createWindowing } from './app/window'
-import { ModelQuestionHub, type ModelQuestion } from './modeles/model-questions'
 import { claudeExeEnCours, maybeUpdateClaudeCli } from './providers/claude-cli-update'
 import { hydraterClesFournisseurs } from './app/env-reload'
 import {
@@ -1161,7 +1160,6 @@ const pilot = new AgentPilot(
   // Sa ligne de coût porte le fil du tour et la décision du contrôle (deux-lectures-appel.ts).
   lecteurDeDeuxLectures(os)
 )
-const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
 /**
  * La mascotte du bureau (« Bille · pastille ») : la bille au-dessus de l'horloge qui dit
@@ -1187,18 +1185,14 @@ const fenetres = createWindowing({
   jalonDemarrage,
   automationInstanceMode,
   isolatedTestInstance,
-  headlessTestInstance,
-  modelQuestions
+  headlessTestInstance
 })
 const {
   createWindow,
   setupTray,
   showMainWindow,
-  openQuestionWindow,
   openViewWindow,
   rendererLocation,
-  questionWindows,
-  questionDeLaPage,
   refleterRunsVivants
 } = fenetres
 /** Raccourci clavier global : posé au démarrage, libéré à la fermeture (sinon il reste capté). */
@@ -1482,55 +1476,6 @@ function syncRuntimeTopology(topology: AgentTopology): void {
   })
 }
 
-/**
- * Pose une question du modele a l'utilisateur.
- *
- * CAUSE RACINE d'un tour suspendu (mesuree le 2026-07-29) : cette fonction s'appuyait sur le
- * WebContents CAPTURE au lancement du tour. Fenetre fermee ⇒ `BrowserWindow.fromWebContents(sender)`
- * rend `null`, aucune fenetre de question ne s'ouvre, et la promesse ne se resout JAMAIS — le tour
- * restait bloque indefiniment (constate : 7,4 Ko produits apres la fermeture, puis 4 minutes de
- * silence, aucun `done`). Le travail n'etait pas perdu (journal + reprise) mais le tour ne se
- * cloturait pas.
- *
- * Desormais : on cible une fenetre VIVANTE, et s'il n'y en a aucune on REFUSE la question au lieu
- * d'attendre. Le pilote sait deja traiter ce cas — il injecte la reponse et poursuit en autonomie —
- * donc un tour qui tourne en tray se termine au lieu de rester suspendu.
- */
-function askModelQuestion(
-  sender: Electron.WebContents,
-  source: 'chat' | 'loop',
-  question: ModelQuestion,
-  context?: string,
-  signal?: AbortSignal
-): Promise<string> {
-  let pendingId: string | undefined
-  // Fenetre d'accueil de la question : celle d'origine si elle vit encore, sinon N'IMPORTE quelle
-  // fenetre ouverte. Aucune ⇒ personne ne peut repondre : on ne bloque pas le tour pour autant.
-  const originWindow = sender.isDestroyed() ? null : BrowserWindow.fromWebContents(sender)
-  const host = originWindow ?? BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null
-  if (!host) {
-    return Promise.resolve(
-      'Impossible de te poser la question : aucune fenêtre ouverte (le tour se poursuit en arrière-plan). ' +
-        'Continue de façon autonome avec une hypothèse raisonnable et signale-la dans ta réponse.'
-    )
-  }
-  const answer = modelQuestions.ask(
-    source,
-    question,
-    (pending) => {
-      pendingId = pending.id
-      openQuestionWindow(host, pending)
-    },
-    context,
-    signal
-  )
-  return answer.finally(() => {
-    if (!signal?.aborted || !pendingId) return
-    const win = questionWindows.get(pendingId)
-    questionWindows.delete(pendingId)
-    if (win && !win.isDestroyed()) win.close()
-  })
-}
 /** Ledger d'activité in-app : chaque action d'agent laisse une trace consultable. */
 /** Journaux de tour : racine initialisée avant l'hydratation des conversations. */
 // Racine des journaux de SORTIE BRUTE des CLI (mode détaché opt-in AUTOWIN_DETACHED_RUNS=1) :
@@ -1916,7 +1861,6 @@ function contexteIpcChat() {
     appDataRoot,
     appelsChatReconnusAuChargement,
     applyFabricSummaries,
-    askModelQuestion,
     behaviourAccess,
     brainInboxWorker,
     brainSearchCoordinator,
@@ -1943,7 +1887,6 @@ function contexteIpcChat() {
     ledger,
     mascotteDuBureau,
     modelCatalog,
-    modelQuestions,
     notifiedTaskAlerts,
     notifyWatchdogWorkflowIncident,
     openViewWindow,
@@ -1962,8 +1905,6 @@ function contexteIpcChat() {
     profiles,
     providerStateStore,
     publicationsEnVol,
-    questionDeLaPage,
-    questionWindows,
     rattacherLaBrancheAuxFiches,
     refleterRunsVivants,
     repriseDesFilsActive,

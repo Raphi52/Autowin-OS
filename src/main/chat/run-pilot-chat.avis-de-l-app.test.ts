@@ -71,7 +71,6 @@ describe('historique du tour — avis de l’app marqués', () => {
       isolatedTestInstance: false,
       broadcast: vi.fn(),
       drainPendingDirectives: () => [],
-      askModelQuestion: vi.fn(),
       notifyWatchdogWorkflowIncident: vi.fn(),
       watchdogEngine: () => undefined
     }) as unknown as RunPilotChatDeps

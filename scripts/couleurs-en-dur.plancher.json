@@ -42,7 +42,6 @@
   "src/renderer/src/components/HumanJson.css": 14,
   "src/renderer/src/components/JugesPanel.css": 22,
   "src/renderer/src/components/ModelActivityLogPane.css": 67,
-  "src/renderer/src/components/ModelQuestionPopup.css": 15,
   "src/renderer/src/components/ModelQuotaIndicator.css": 61,
   "src/renderer/src/components/ObservatoryView.css": 174,
   "src/renderer/src/components/OrchestrationBudgetSettings.css": 1,

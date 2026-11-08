@@ -1348,7 +1348,6 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     '.slash-palette',
     '.slash-detail',
     '.graph-settings-popover',
-    '.model-question-popup',
     // La carte de confirmation du fil (supprimer / renommer) prend le meme cadre.
     '.delete-confirm-card'
   ]

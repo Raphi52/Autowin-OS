@@ -9,7 +9,6 @@ vi.mock('./components/TicketsView', () => ({ TicketsView: () => null }))
 vi.mock('./components/TaskManagerView', () => ({ TaskManagerView: () => null }))
 vi.mock('./components/AgentStudioView', () => ({ AgentStudioView: () => null }))
 vi.mock('./components/KnowledgeView', () => ({ KnowledgeView: () => null }))
-vi.mock('./components/ModelQuestionPopup', () => ({ ModelQuestionPopup: () => null }))
 
 const settingsProps: Array<{ section: string }> = []
 vi.mock('./components/SettingsView', () => ({

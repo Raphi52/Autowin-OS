@@ -5,7 +5,7 @@ import { langueCourante } from '../langue'
  * TEXTES — APERÇUS D’ARTEFACTS ET BANDEAUX DE L’APP (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : les aperçus d’artefacts (vidéo, HTML, 3D, archive, police, diagramme, pile), Markdown et blocs
- * de données du fil, UpdateBanner, ModelQuestionPopup, et les durées « il y a… » (`depuis.ts`).
+ * de données du fil, UpdateBanner, et les durées « il y a… » (`depuis.ts`).
  *
  * Une table par groupe d'écrans pour que les lots de traduction, menés en même temps, n'écrivent
  * jamais dans le même fichier. Règles communes, vérifiées par `tables.test.ts` : le FRANÇAIS fait
@@ -225,20 +225,7 @@ export const TEXTES_FR = {
   'maj.faireReparerAria': 'Faire réparer le blocage de mise à jour',
   'maj.faireReparerAide':
     "Ouvre une conversation et pré-remplit un prompt pour que l'agent résolve ce blocage, puis relance la mise à jour",
-  'maj.faireReparer': 'Faire réparer',
-
-  // ModelQuestionPopup (« Loop Builder » et « Chat », noms de vues, restent en dur)
-  'question.echecEnvoi': "La réponse n'a pas pu être envoyée : {erreur}. Réessaie.",
-  'question.introuvable': 'Cette question n’a pas pu s’afficher.',
-  'question.introuvableAide':
-    'Passer revient à ne pas répondre : le travail qui attendait s’arrête.',
-  'question.titre': 'Le modèle a besoin de toi',
-  'question.reponseLibre': 'Réponse libre',
-  'question.placeholder': 'Répondre au modèle…',
-  'question.raccourcis': 'Ctrl + Entrée pour envoyer · Échap pour passer',
-  'question.passer': 'Passer',
-  'question.transmission': 'Transmission…',
-  'question.repondre': 'Répondre et reprendre'
+  'maj.faireReparer': 'Faire réparer'
 } as const
 
 export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
@@ -424,18 +411,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'maj.faireReparerAria': 'Have the update blocker repaired',
   'maj.faireReparerAide':
     'Opens a conversation and pre-fills a prompt so the agent resolves this blocker, then restarts the update',
-  'maj.faireReparer': 'Get it repaired',
-
-  'question.echecEnvoi': 'The answer could not be sent: {erreur}. Try again.',
-  'question.introuvable': 'This question could not be displayed.',
-  'question.introuvableAide': 'Skipping counts as no answer: the work that was waiting stops.',
-  'question.titre': 'The model needs you',
-  'question.reponseLibre': 'Free answer',
-  'question.placeholder': 'Answer the model…',
-  'question.raccourcis': 'Ctrl + Enter to send · Esc to skip',
-  'question.passer': 'Skip',
-  'question.transmission': 'Sending…',
-  'question.repondre': 'Answer and resume'
+  'maj.faireReparer': 'Get it repaired'
 }
 
 /** Clé → raison pour laquelle son anglais reste identique au français. */

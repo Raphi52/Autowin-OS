@@ -69,7 +69,6 @@ import type { RunEntry } from '../main/dashboards/runs-scan'
 import type { CapabilityItem } from '../main/gardes/capability-controls'
 import type { SkillRegistryItem } from '../main/skills/skill-registry'
 import type { BehaviourFile } from '../main/behaviour/behaviour-files'
-import type { PendingModelQuestion } from '../main/modeles/model-questions'
 import type { ImportedModel } from '../main/modeles/models'
 import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
 import type { ProviderDisplayStatus, ProviderStatus } from '../main/providers/provider-status'
@@ -558,8 +557,6 @@ interface ChatApi {
   coffreReimporter: () => Promise<ReponseGesteCoffre>
   enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }) => Promise<BrainPersoState>
   resetBrainPerso: () => Promise<BrainPersoState>
-  pendingModelQuestion: () => Promise<PendingModelQuestion | null>
-  answerModelQuestion: (id: string, answer: string) => Promise<{ ok: true }>
   toolUsage: () => Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   >

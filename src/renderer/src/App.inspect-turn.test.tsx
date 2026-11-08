@@ -29,7 +29,6 @@ vi.mock('./components/AgentStudioView', () => ({
 }))
 vi.mock('./components/CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./components/BehaviourView', () => ({ BehaviourView: () => null }))
-vi.mock('./components/ModelQuestionPopup', () => ({ ModelQuestionPopup: () => null }))
 
 import { MainApp } from './App'
 

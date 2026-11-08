@@ -91,7 +91,6 @@ describe('tour de chat — la réponse enregistrée porte le tour diffusé en di
       isolatedTestInstance: false,
       broadcast: vi.fn(),
       drainPendingDirectives: () => [],
-      askModelQuestion: vi.fn(),
       notifyWatchdogWorkflowIncident: vi.fn(),
       watchdogEngine: () => undefined
     }) as unknown as RunPilotChatDeps

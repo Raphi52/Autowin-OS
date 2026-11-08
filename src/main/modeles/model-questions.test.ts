@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { ModelQuestionHub, parseModelQuestion } from './model-questions'
+import { describe, expect, it } from 'vitest'
+import { parseModelQuestion } from './model-questions'
 import { buildChatPilotagePrompt } from '../consignes/chat-pilotage-prompt'
 import { CATALOG } from '../commands/commands'
 import { CONSTITUTION } from '../consignes/constitution'
@@ -49,32 +49,5 @@ describe('model questions', () => {
         '<question>{"text":"Quel token CSS utiliser ?","options":[],"reason":"secret-or-personal-data"}</question>'
       )
     ).toBeNull()
-  })
-
-  it('route la réponse vers la bonne question', async () => {
-    const hub = new ModelQuestionHub()
-    const notify = vi.fn()
-    const answer = hub.ask(
-      'loop',
-      { text: 'Choix ?', options: ['A'], reason: 'material-ambiguity' },
-      notify,
-      'tour-1'
-    )
-    const id = notify.mock.calls[0][0].id as string
-    hub.resolve(id, 'A')
-    await expect(answer).resolves.toBe('A')
-  })
-  it('rejects a pending question when its signal is aborted', async () => {
-    const hub = new ModelQuestionHub()
-    const controller = new AbortController()
-    const answer = hub.ask(
-      'chat',
-      { text: 'Choix ?', options: ['A'], reason: 'external-effect' },
-      vi.fn(),
-      'tour-1',
-      controller.signal
-    )
-    controller.abort('conversation-deleted')
-    await expect(answer).rejects.toThrow('conversation-deleted')
   })
 })
