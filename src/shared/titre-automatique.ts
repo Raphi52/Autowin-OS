@@ -15,7 +15,7 @@
  *    `origineTitre: 'utilisateur'`, posé par `ConversationStore.rename`.
  */
 import { estRelanceSansObjet } from './relance-sans-objet'
-import { avecMarqueurDeMoment, empreinte } from './titre-sans-homonyme'
+import { avecMarqueurDeMoment, compacter, empreinte } from './titre-sans-homonyme'
 
 /** Le titre posé sur un fil créé d'avance (fenêtre mosaïque, ouverture directe), avant tout message. */
 export const TITRE_PROVISOIRE = 'Nouvelle conversation'
@@ -28,8 +28,6 @@ export const TITRE_CONVERSATION_MAX = 80
 
 /** D'où vient le titre : posé par l'app d'après un message, ou donné par l'utilisateur. */
 export type OrigineTitre = 'auto' | 'utilisateur'
-
-const compacter = (texte: string): string => texte.replace(/\s+/g, ' ').trim()
 
 /** Le titre repris d'un message : 80 caractères, coupé au dernier espace pour ne pas trancher un mot. */
 export function titreDepuisMessage(source: string): string {

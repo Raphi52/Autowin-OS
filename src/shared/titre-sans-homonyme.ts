@@ -17,11 +17,13 @@
  */
 
 import { replierComplet } from './mots'
+import { deuxChiffres } from './deux-chiffres'
 
 /** Longueur max d'un titre, comme `conversation-demandee.ts` et la barre laterale. */
 export const LONGUEUR_TITRE = 42
 
-const compacter = (texte: string): string => texte.replace(/\s+/g, ' ').trim()
+/** Les blancs (retours à la ligne compris) repliés en un espace, sans blancs aux bords. */
+export const compacter = (texte: string): string => texte.replace(/\s+/g, ' ').trim()
 
 /** Meme comparaison que le store : insensible a la casse, aux accents et a la ponctuation finale. */
 export const empreinte = (titre: string): string =>
@@ -32,8 +34,6 @@ export function titreCourt(source: string): string {
   const compact = compacter(source)
   return compact.length > LONGUEUR_TITRE ? `${compact.slice(0, LONGUEUR_TITRE)}…` : compact
 }
-
-const deuxChiffres = (n: number): string => String(n).padStart(2, '0')
 
 /** « 12/09 09:41 » — le repere qui permet de retrouver LE fil qu'on cherche. */
 export function marqueurDeMoment(quand: Date): string {

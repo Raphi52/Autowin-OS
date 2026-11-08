@@ -18,21 +18,17 @@ import { BlocHtmlInteractif } from './BlocHtmlInteractif'
 import { BlocDonnees } from './BlocDonnees'
 import { PropositionDeFils } from './PropositionDeFils'
 import { splitFinalSummary, type FinalSummaryParts } from './markdown-cloture'
-import { formaterNombre, langueCourante } from '../langue'
+import { formaterNombre } from '../langue'
 import {
-  traduireArtefactsEtBandeaux,
-  useTextesArtefactsEtBandeaux,
-  type CleArtefactsEtBandeaux
+  texteArtefactsEtBandeaux as texte,
+  useTextesArtefactsEtBandeaux
 } from '../textes-ecrans/artefacts-et-bandeaux'
 
 /**
- * Les aides de rendu ci-dessous ne sont pas des composants : elles lisent la langue au moment de
+ * Les aides de rendu ci-dessous ne sont pas des composants : `texte` lit la langue au moment de
  * l'appel. `Markdown` s'abonne à la langue (`useTextesArtefactsEtBandeaux`) pour être redessiné
  * quand elle change, sinon `memo` garderait la bulle dans l'ancienne langue.
  */
-const texte = (cle: CleArtefactsEtBandeaux, valeurs?: Record<string, string | number>): string =>
-  traduireArtefactsEtBandeaux(cle, langueCourante(), valeurs)
-
 type MarkdownProps = {
   text: string
   /** Fence ouverte dans un fragment texte précédent, séparé visuellement par une carte d'action. */

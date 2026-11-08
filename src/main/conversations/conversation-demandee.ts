@@ -12,6 +12,8 @@
  * deterministe, testable, hors du modele.
  */
 
+import { compacter } from '../../shared/titre-sans-homonyme'
+
 /** Titre rendu quand ni l'appelant ni le fil ne fournissent le moindre mot. */
 export const TITRE_PAR_DEFAUT = 'Nouvelle conversation'
 
@@ -26,8 +28,6 @@ export const FENETRE_DOUBLON_MS = 30_000
  * celui que l'utilisateur voit.
  */
 export const LONGUEUR_TITRE = 42
-
-const compacter = (texte: string): string => texte.replace(/\s+/g, ' ').trim()
 
 /**
  * Le titre a POSER : celui demande s'il existe, sinon LES MOTS DE L'UTILISATEUR.

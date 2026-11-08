@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, open, readdir, stat, writeFile } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
+import { deuxChiffres } from '../../shared/deux-chiffres'
 
 export interface FichierTranscript {
   nom: string
@@ -30,8 +31,6 @@ export interface SessionTranscript {
   nom: string
   chemin: string
 }
-
-const deuxChiffres = (n: number): string => String(n).padStart(2, '0')
 
 /** Le dossier des enregistrements, dérivé des données de l'application. */
 export function dossierTranscripts(userData: string): string {

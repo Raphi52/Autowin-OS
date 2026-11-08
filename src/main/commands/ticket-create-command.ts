@@ -39,7 +39,8 @@ export type TicketCreateDecision =
     }
   | { allowed: false; reason: string }
 
-const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
+/** Un argument texte nettoyé de ses bords ; vide pour tout ce qui n'est pas une chaîne. */
+export const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
 
 /** Nettoie et valide la FORME de la demande du modèle. Ne touche pas à la cible. */
 export function decideTicketCreate(args: TicketCreateArgs): TicketCreateDecision {

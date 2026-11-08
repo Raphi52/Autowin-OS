@@ -1,5 +1,6 @@
 import { langueCourante } from '../langue'
 import { traduireAccueil } from '../textes-ecrans/accueil'
+import { deuxChiffres } from '../../../shared/deux-chiffres'
 
 /**
  * Le widget « Enregistrements », côté DÉCISIONS : tout ce qui se prouve sans micro ni disque.
@@ -33,8 +34,6 @@ export function formaterTaille(octets: number): string {
   }
   return traduireAccueil('taille.mo', langue, { n: Math.round(octets / 100_000) / 10 })
 }
-
-const deuxChiffres = (n: number): string => String(n).padStart(2, '0')
 
 /** Une durée pour un humain : on lit d'abord les minutes, pas les millisecondes. */
 export function formaterDuree(ms: number): string {

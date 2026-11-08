@@ -5,8 +5,7 @@
  */
 import { estLigneDEtape, lireLigneDEtape, type Etape } from '../../../shared/etapes-du-tour'
 import { estLigneDeChantier, type Chantier } from '../../../shared/chantier-du-tour'
-import { langueCourante } from '../langue'
-import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
+import { texteChatDecisions as tx } from '../textes-ecrans/chat-decisions'
 import { lireLigneDErreur } from '../../../shared/erreur-d-action'
 import { estMarqueDeLignesOmises } from '../../../shared/chat-turn'
 import { dureeLisible } from '../../../shared/duree-lisible'
@@ -182,12 +181,6 @@ export function sousCommandes(commande: string): string[] {
  * Le signe de vie COURANT, tel que la seconde ligne du bloc plie l'affiche : une tache s'y lit par
  * ce qu'elle fait (« Run the new trace event tests »), jamais par « tache de fond en cours - … ».
  */
-/** Le texte d'une clé dans la langue de l'interface (traduction anglaise). */
-const tx = (
-  cle: Parameters<typeof traduireChatDecisions>[0],
-  valeurs?: Parameters<typeof traduireChatDecisions>[2]
-): string => traduireChatDecisions(cle, langueCourante(), valeurs)
-
 /*
  * Les mots « tache de fond », « en cours », « terminee », « en echec » ci-dessous sont ceux que le
  * journal du principal ÉCRIT : ils se relisent en français. Seuls les mots qu'AJOUTE cet écran se

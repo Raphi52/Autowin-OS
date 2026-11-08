@@ -21,7 +21,7 @@
  * service — ici on ne fait que valider la FORME de la demande du modèle.
  */
 import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../../shared/tickets'
-import { resolveTicketCreateSource } from './ticket-create-command'
+import { resolveTicketCreateSource, text } from './ticket-create-command'
 
 /** Taille de page par défaut : assez pour juger, assez petit pour ne pas noyer le contexte. */
 const DEFAULT_PAGE_SIZE = 25
@@ -42,8 +42,6 @@ export interface TicketSearchArgs {
 export type TicketSearchDecision =
   | { allowed: true; request: Omit<TicketListRequest, 'source'>; sourceId?: string }
   | { allowed: false; reason: string }
-
-const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
 
 /** Nettoie et valide la FORME de la demande. Ne touche pas à la cible. */
 export function decideTicketSearch(args: TicketSearchArgs): TicketSearchDecision {

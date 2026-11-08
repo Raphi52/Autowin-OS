@@ -1,4 +1,5 @@
-import { tableDeTextes } from '../textes'
+import { tableDeTextes, type ValeursDeTexte } from '../textes'
+import { langueCourante } from '../langue'
 
 /**
  * TEXTES — CHAT — DÉCISIONS ET BLOCS DU FIL (traduction anglaise, 2026-10-27).
@@ -568,3 +569,11 @@ export const { useTextes: useTextesChatDecisions, traduire: traduireChatDecision
   TEXTES_FR,
   TEXTES_EN
 )
+
+/** Hors composant : le texte dans la langue COURANTE, lue au moment de l'appel. */
+export function texteChatDecisions(
+  cle: Parameters<typeof traduireChatDecisions>[0],
+  valeurs?: ValeursDeTexte
+): string {
+  return traduireChatDecisions(cle, langueCourante(), valeurs)
+}

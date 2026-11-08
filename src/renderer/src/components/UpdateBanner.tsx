@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { depuis } from './depuis'
 import { type IncomingCommit, type UpdateStrategy } from '../../../shared/update-contract'
-import { langueCourante } from '../langue'
 import {
-  traduireArtefactsEtBandeaux,
+  texteArtefactsEtBandeaux as texte,
   useTextesArtefactsEtBandeaux,
   type CleArtefactsEtBandeaux
 } from '../textes-ecrans/artefacts-et-bandeaux'
@@ -66,10 +65,6 @@ const AIDES_SUR_MAIN: Partial<Record<UpdateStrategy, CleArtefactsEtBandeaux>> = 
   merge: 'maj.aide.merge-main',
   rebase: 'maj.aide.rebase-main'
 }
-
-/** Un texte de la table, dans la langue du moment de l'appel (hors rendu : messages d'échec). */
-const texte = (cle: CleArtefactsEtBandeaux, valeurs?: Record<string, string | number>): string =>
-  traduireArtefactsEtBandeaux(cle, langueCourante(), valeurs)
 
 const UPDATE_STRATEGY_GLYPHS: Record<UpdateStrategy, string> = {
   'fast-forward': '⇧',

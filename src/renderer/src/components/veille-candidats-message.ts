@@ -12,19 +12,13 @@ import { porteUnSignalDeRisque } from '../../../shared/signaux-de-risque'
 import { ligneDuLot, type RangDuLot } from '../../../shared/selection-scout'
 import { DEMANDE_MAX, FICHIERS_MAX, type SelectionAPlanifier } from '../../../shared/plan-de-lots'
 import { parseScoutTable } from '../../../shared/scout-table'
-import { langueCourante } from '../langue'
-import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
+import { texteChatDecisions as tx } from '../textes-ecrans/chat-decisions'
 
 /*
  * Ce que l'ÉCRAN dit des pistes (voie, motif, plan) suit la langue de l'interface (traduction
  * anglaise) ; les PROMPTS rédigés plus bas restent en français : ce sont des consignes
  * pour l'agent, que la langue de ses réponses règle à part.
  */
-const tx = (
-  cle: Parameters<typeof traduireChatDecisions>[0],
-  valeurs?: Parameters<typeof traduireChatDecisions>[2]
-): string => traduireChatDecisions(cle, langueCourante(), valeurs)
-
 export interface CandidatAffiche {
   titre: string
   /**

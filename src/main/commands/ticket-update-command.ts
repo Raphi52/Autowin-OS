@@ -1,7 +1,7 @@
 /** Commande agent `ticket_update` : clôturer la boucle avec le fournisseur de tickets. */
 import type { TicketItem, TicketSourceProfile } from '../../shared/tickets'
 import type { TicketUpdateRequest } from '../ticket-providers/provider-contract'
-import { resolveTicketCreateSource } from './ticket-create-command'
+import { resolveTicketCreateSource, text } from './ticket-create-command'
 import { decideTicketGet } from './ticket-get-command'
 
 export interface TicketUpdateArgs {
@@ -26,8 +26,6 @@ export interface TicketUpdateCommandDeps {
 
 export type TicketUpdateOutcome =
   { ok: true; updated: TicketItem; summary: string } | { ok: false; reason: string }
-
-const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
 
 /**
  * Ne retient que les entrées exploitables : une clé qui ressemble à un nom de référence

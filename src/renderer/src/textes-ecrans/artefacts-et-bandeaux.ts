@@ -1,4 +1,5 @@
-import { tableDeTextes } from '../textes'
+import { tableDeTextes, type ValeursDeTexte } from '../textes'
+import { langueCourante } from '../langue'
 
 /**
  * TEXTES — APERÇUS D’ARTEFACTS ET BANDEAUX DE L’APP (traduction anglaise, 2026-10-27).
@@ -445,3 +446,14 @@ export type CleArtefactsEtBandeaux = keyof typeof TEXTES_FR
 
 export const { useTextes: useTextesArtefactsEtBandeaux, traduire: traduireArtefactsEtBandeaux } =
   tableDeTextes(TEXTES_FR, TEXTES_EN)
+
+/**
+ * Hors composant : le texte dans la langue COURANTE, lue au moment de l'appel. Un composant qui
+ * l'affiche s'abonne à la langue (`useTextesArtefactsEtBandeaux`) pour être redessiné quand elle change.
+ */
+export function texteArtefactsEtBandeaux(
+  cle: CleArtefactsEtBandeaux,
+  valeurs?: ValeursDeTexte
+): string {
+  return traduireArtefactsEtBandeaux(cle, langueCourante(), valeurs)
+}

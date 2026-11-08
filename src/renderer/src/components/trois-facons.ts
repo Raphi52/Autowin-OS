@@ -12,14 +12,8 @@ import {
   type ComparaisonDUneFacon,
   type RessemblanceDUneFacon
 } from '../../../shared/essai-trois-facons'
-import { formaterNombre, langueCourante } from '../langue'
-import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
-
-/** Le texte d'une clé dans la langue de l'interface (traduction anglaise). */
-const tx = (
-  cle: Parameters<typeof traduireChatDecisions>[0],
-  valeurs?: Parameters<typeof traduireChatDecisions>[2]
-): string => traduireChatDecisions(cle, langueCourante(), valeurs)
+import { formaterNombre } from '../langue'
+import { texteChatDecisions as tx } from '../textes-ecrans/chat-decisions'
 
 // La 3e façon est la plus CRÉATIVE (choix utilisateur, 2026-10-22) : « une approche
 // différente des deux plus évidentes » obligeait la branche à deviner ce que font les deux autres,

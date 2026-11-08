@@ -7,9 +7,8 @@
  */
 import type { ArtifactKind, ChatArtifact } from '../../../shared/artifacts'
 import { isChatMediaUrl } from '../../../shared/chat-media'
-import { langueCourante } from '../langue'
 import {
-  traduireArtefactsEtBandeaux,
+  texteArtefactsEtBandeaux as texte,
   type CleArtefactsEtBandeaux
 } from '../textes-ecrans/artefacts-et-bandeaux'
 
@@ -41,10 +40,6 @@ const LABELS: Record<ArtifactKind, { cle: CleArtefactsEtBandeaux } | string> = {
   executable: { cle: 'artefact.type.executable' },
   binary: { cle: 'artefact.type.binary' }
 }
-
-/** Lu dans la langue courante au moment de l'appel : l'appelant se redessine quand elle change. */
-const texte = (cle: CleArtefactsEtBandeaux, valeurs?: Record<string, string | number>): string =>
-  traduireArtefactsEtBandeaux(cle, langueCourante(), valeurs)
 
 /**
  * Le libellé ne doit pas AFFIRMER une génération que rien ne prouve : une image publiée par un

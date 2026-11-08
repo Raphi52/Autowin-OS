@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_TICKET_SOURCE, type TicketItem, type TicketSourceProfile } from '../../shared/tickets'
-import { decideTicketCreate, resolveTicketCreateSource } from './ticket-create-command'
+import { decideTicketCreate, resolveTicketCreateSource, text } from './ticket-create-command'
 
 /**
  * COMMANDE AGENT « ticket_create ».
@@ -200,5 +200,16 @@ describe('création indisponible', () => {
 
     expect(outcome.ok).toBe(false)
     if (!outcome.ok) expect(outcome.reason).toContain('403 Forbidden')
+  })
+})
+
+/*
+ * Une seule version du nettoyage d'un argument texte des commandes de tickets (créer, chercher,
+ * mettre à jour) : elle vivait en trois copies.
+ */
+describe('text — un argument texte nettoyé', () => {
+  it('rend la chaîne sans ses bords, et une chaîne vide pour tout le reste', () => {
+    expect(text('  titre  ')).toBe('titre')
+    for (const valeur of [undefined, null, 3, true, {}, ['x']]) expect(text(valeur)).toBe('')
   })
 })
