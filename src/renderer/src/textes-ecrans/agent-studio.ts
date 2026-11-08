@@ -16,7 +16,7 @@ import { tableDeTextes } from '../textes'
  * RESTENT EN DUR, hors de cette table (lot « Agent Studio ») :
  *  - les mots déjà identiques dans les deux langues, écrits une fois dans le composant :
  *    « ORCHESTRATION », « Agent Studio », « Workflows », « Models », les noms de panneaux
- *    « Scouts », « Frame », « Terrain », « Judges » (noms des phases du moteur), « Phases »,
+ *    « Scouts », « Frame », « Judges » (noms des phases du moteur), « Phases »,
  *    « Agents », « Agent N », « Angle », « Effort », « Quorum » ;
  *  - `'annulé'` (WorkflowProfilesView) : la raison qu'envoie le processus principal quand
  *    l'utilisateur ferme la boîte d'export ou d'import — le code la COMPARE, elle ne s'affiche pas ;
@@ -89,7 +89,7 @@ export const TEXTES_FR = {
   'topo.autorite.titre': 'Autorité',
   'topo.autorite.main': 'La configuration est validée et persistée par le main process.',
   'topo.autorite.fanout':
-    'Scouts, Frame, Terrain et Judges : tous les modèles déposés s’exécutent (fan-out + agrégation). Orchestrateur et Sous-agents : seul le premier slot alimente le runtime.',
+    'Scouts, Frame et Judges : tous les modèles déposés s’exécutent (fan-out + agrégation). Orchestrateur et Sous-agents : seul le premier slot alimente le runtime.',
   'topo.orchestrateur.titre': 'Orchestrateur',
   'topo.orchestrateur.description': 'Un seul modèle pilote et consolide.',
   'topo.sousAgents.titre': 'Sous-agents',
@@ -99,12 +99,10 @@ export const TEXTES_FR = {
   'topo.panels.note': 'Les sorties restent distinctes avant synthèse.',
   'topo.scout.description': 'Plusieurs lectures indépendantes du même front.',
   'topo.frame.description': 'Plusieurs modèles cadrent la même tâche ; angles fusionnés.',
-  'topo.terrain.description':
-    'Plusieurs modèles préparent le harnais et les preuves ; sorties fusionnées.',
   'topo.judge.description': 'Plusieurs challenges indépendants avant verdict.',
   'topo.runtime.titre': 'Runtime actuel',
   'topo.runtime.detail':
-    '**Scouts, Frame, Terrain et Judges** : déposez-y plusieurs modèles — ils s’exécutent en parallèle puis l’orchestrateur agrège (union des sorties pour Scouts/Frame/Terrain, quorum de vote pour Judges). **Orchestrateur et Sous-agents** : seul le premier slot alimente le runtime (fan-out des sous-agents pas encore branché).',
+    '**Scouts, Frame et Judges** : déposez-y plusieurs modèles — ils s’exécutent en parallèle puis l’orchestrateur agrège (union des sorties pour Scouts/Frame, quorum de vote pour Judges). **Orchestrateur et Sous-agents** : seul le premier slot alimente le runtime (fan-out des sous-agents pas encore branché).',
   'topo.runtime.workflow':
     '**Workflows** : un workflow (onglet Workflows) qui place ses propres agents sur une étape passe avant ces blocs, pour cette étape seulement.',
 
@@ -115,6 +113,8 @@ export const TEXTES_FR = {
   'topo.couvre.horsChamp': 'Ne couvre pas',
   'topo.couvre.plusieurs': 'Plusieurs modèles',
   'topo.couvre.vide': 'Bloc vide',
+  'topo.couvre.skills': 'Skills qui lancent des sous-agents',
+  'topo.couvre.modeleSkills': 'Modèle de ces sous-agents',
   'topo.couvre.orchestrateur.couvre':
     'Le modèle qui **te répond dans le Chat**, dans chaque fil qui n’a pas choisi le sien. Changer de modèle dans l’en-tête d’un chat change aussi ce bloc.',
   'topo.couvre.orchestrateur.pendant':
@@ -125,6 +125,10 @@ export const TEXTES_FR = {
     'Le modèle qui **fait le travail** lancé depuis le chat : l’étape **build** (modifier puis prouver), **clean** (nettoyage avant le contrôle final), et toute étape dont le bloc ci-dessous est **vide**.',
   'topo.couvre.sousAgents.plusieurs': '**Pas encore** : seul le premier emplacement travaille.',
   'topo.couvre.sousAgents.vide': 'L’**orchestrateur** fait le travail lui-même.',
+  'topo.couvre.sousAgents.skills':
+    '**/arena** (un par bras du banc) · **/scout** (un par angle) · **/steal** (un par couche de recherche) · **/frame** et **/draft** (pistes et variantes générées en parallèle) · **/remake** (angles en parallèle, puis travaux enfants) · **/kaizen** (6 à 9 angles, dans un run seulement) · **/judge** (juges en parallèle hors de l’app ; dans l’app, l’un après l’autre).',
+  'topo.couvre.sousAgents.modeleSkills':
+    'Le modèle **qui joue la skill** (celui du chat ou de l’étape en cours) : Autowin ne leur transmet **pas** le modèle de ce bloc.',
   'topo.couvre.scout.couvre':
     'L’étape **scout** : explorer une cible (code, projet, outil) et rendre une courte liste de **pistes d’amélioration**, avant de choisir quoi faire.',
   'topo.couvre.scout.plusieurs':
@@ -133,10 +137,6 @@ export const TEXTES_FR = {
     'L’étape **frame** : cadrer **quoi faire et comment** — le vrai besoin, les critères de réussite, l’approche retenue.',
   'topo.couvre.frame.plusieurs':
     'Chacun cadre la même demande **en parallèle** ; l’orchestrateur fusionne les cadrages.',
-  'topo.couvre.terrain.couvre':
-    'L’étape **terrain**, jouée **seulement quand tu la demandes** : écrire la procédure pas à pas que suivra l’exécution, avec pour chaque pas la preuve attendue (test, code de sortie, capture).',
-  'topo.couvre.terrain.plusieurs':
-    'Chacun écrit sa procédure **en parallèle** ; l’orchestrateur les fusionne.',
   'topo.couvre.judge.couvre':
     'L’étape **judge**, la dernière : relire le résultat **en adversaire** et dire s’il est vraiment bon avant de l’annoncer fini.',
   'topo.couvre.judge.plusieurs':
@@ -317,7 +317,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.autorite.titre': 'Authority',
   'topo.autorite.main': 'The configuration is validated and persisted by the main process.',
   'topo.autorite.fanout':
-    'Scouts, Frame, Terrain and Judges: every model dropped there runs (fan-out + aggregation). Orchestrator and Sub-agents: only the first slot feeds the runtime.',
+    'Scouts, Frame and Judges: every model dropped there runs (fan-out + aggregation). Orchestrator and Sub-agents: only the first slot feeds the runtime.',
   'topo.orchestrateur.titre': 'Orchestrator',
   'topo.orchestrateur.description': 'A single model drives and consolidates.',
   'topo.sousAgents.titre': 'Sub-agents',
@@ -327,12 +327,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.panels.note': 'Outputs stay separate until the synthesis.',
   'topo.scout.description': 'Several independent readings of the same front.',
   'topo.frame.description': 'Several models frame the same task; angles merged.',
-  'topo.terrain.description':
-    'Several models prepare the harness and the evidence; outputs merged.',
   'topo.judge.description': 'Several independent challenges before the verdict.',
   'topo.runtime.titre': 'Current runtime',
   'topo.runtime.detail':
-    '**Scouts, Frame, Terrain and Judges**: drop several models there — they run in parallel, then the orchestrator aggregates (union of outputs for Scouts/Frame/Terrain, voting quorum for Judges). **Orchestrator and Sub-agents**: only the first slot feeds the runtime (sub-agent fan-out not wired yet).',
+    '**Scouts, Frame and Judges**: drop several models there — they run in parallel, then the orchestrator aggregates (union of outputs for Scouts/Frame, voting quorum for Judges). **Orchestrator and Sub-agents**: only the first slot feeds the runtime (sub-agent fan-out not wired yet).',
   'topo.runtime.workflow':
     '**Workflows**: a workflow (Workflows tab) that places its own agents on a step takes precedence over these blocks, for that step only.',
 
@@ -342,6 +340,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.couvre.horsChamp': 'Does not cover',
   'topo.couvre.plusieurs': 'Several models',
   'topo.couvre.vide': 'Empty block',
+  'topo.couvre.skills': 'Skills that launch sub-agents',
+  'topo.couvre.modeleSkills': 'Model of those sub-agents',
   'topo.couvre.orchestrateur.couvre':
     'The model that **answers you in the Chat**, in every thread that has not picked its own. Changing the model in a chat header changes this block too.',
   'topo.couvre.orchestrateur.pendant':
@@ -352,6 +352,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     'The model that **does the work** started from the chat: the **build** step (change, then prove), **clean** (tidy-up before the final check), and any step whose block below is **empty**.',
   'topo.couvre.sousAgents.plusieurs': '**Not yet**: only the first slot works.',
   'topo.couvre.sousAgents.vide': 'The **orchestrator** does the work itself.',
+  'topo.couvre.sousAgents.skills':
+    '**/arena** (one per bench arm) · **/scout** (one per angle) · **/steal** (one per research layer) · **/frame** and **/draft** (leads and variants generated in parallel) · **/remake** (angles in parallel, then child jobs) · **/kaizen** (6 to 9 angles, in a run only) · **/judge** (judges in parallel outside the app; inside the app, one after the other).',
+  'topo.couvre.sousAgents.modeleSkills':
+    'The model **that runs the skill** (the chat’s or the current step’s): Autowin does **not** pass them this block’s model.',
   'topo.couvre.scout.couvre':
     'The **scout** step: explore a target (code, project, tool) and return a short list of **improvement leads**, before choosing what to do.',
   'topo.couvre.scout.plusieurs':
@@ -360,10 +364,6 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     'The **frame** step: settle **what to do and how** — the real need, the success criteria, the chosen approach.',
   'topo.couvre.frame.plusieurs':
     'Each one frames the same request **in parallel**; the orchestrator merges the framings.',
-  'topo.couvre.terrain.couvre':
-    'The **terrain** step, run **only when you ask for it**: write the step-by-step procedure the execution will follow, with the expected proof for each step (test, exit code, capture).',
-  'topo.couvre.terrain.plusieurs':
-    'Each one writes its procedure **in parallel**; the orchestrator merges them.',
   'topo.couvre.judge.couvre':
     'The **judge** step, the last one: review the result **as an adversary** and say whether it is really good before it is announced as done.',
   'topo.couvre.judge.plusieurs':

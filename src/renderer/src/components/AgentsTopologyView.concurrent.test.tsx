@@ -123,7 +123,8 @@ afterEach(() => {
 })
 
 describe('AgentsTopologyView concurrent persistence', () => {
-  it('ordonne les quatre panels Scout, Frame, Terrain, Judge dans la grille 2×2', async () => {
+  // Terrain n'a plus de panneau : la skill a quitté le kit, l'utilisateur a demandé de retirer son bloc.
+  it('ordonne les trois panels Scout, Frame, Judge, sans panneau Terrain', async () => {
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
       models: async () => models,
       topology: async () => topology,
@@ -138,8 +139,9 @@ describe('AgentsTopologyView concurrent persistence', () => {
     const targets = [...container.querySelectorAll('.topology-parallel > .topology-panel')].map(
       (panel) => panel.getAttribute('data-target')
     )
-    expect(targets).toEqual(['scout', 'frame', 'terrain', 'judge'])
-    expect(container.querySelector('[data-target="terrain"] h3')?.textContent).toBe('Terrain')
+    expect(targets).toEqual(['scout', 'frame', 'judge'])
+    expect(container.querySelector('[data-target="terrain"]')).toBeNull()
+    expect(container.textContent).not.toContain('Terrain')
   })
 
   it('shows only dynamically loaded models in the Agent Studio library', async () => {

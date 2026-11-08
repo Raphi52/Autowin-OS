@@ -7,6 +7,7 @@ import { traduireAgentStudio, useTextesAgentStudio } from '../textes-ecrans/agen
 import { libraryModels } from './model-library'
 import { shortModelLabel } from './model-display-label'
 import { Spinner } from './Spinner'
+import { CeQueCaCouvre } from './CeQueCaCouvre'
 
 type ImportedModel = {
   id: string
@@ -45,14 +46,22 @@ const FANOUT_ACTIVE: ReadonlySet<Target> = new Set<Target>(['scout', 'frame', 't
 type CleAgentStudio = Parameters<ReturnType<typeof useTextesAgentStudio>['t']>[0]
 
 /**
+ * Les panneaux montrés. Terrain n'en a plus : la skill a quitté le kit et l'étape ne se joue que
+ * nommée (`task-regime.ts`). Sa liste reste dans la topologie enregistrée — le processus principal
+ * la lit encore —, l'écran ne propose simplement plus d'y déposer un modèle.
+ */
+type CibleAffichee = Exclude<Target, 'terrain'>
+
+/**
  * Ce que couvre chaque panneau : une paire (intitulé, explication) par ligne. Chaque fait est lu
  * dans le processus principal, pas supposé — un bloc vide se replie sur `subagents[0]` puis sur
  * l'orchestrateur (`runtimeRoleSlots`), toute étape sauf judge tombe sur les sous-agents
- * (`bindingDeRepliPourPhase`), terrain ne joue que nommé (`task-regime.ts`), le quorum par défaut des
- * juges est la majorité (`quorum.ts`). Changer l'un de ces comportements, c'est changer ce texte.
+ * (`bindingDeRepliPourPhase`), le quorum par défaut des juges est la majorité (`quorum.ts`), et les
+ * sous-agents qu'une skill lance d'elle-même ne reçoivent que le `--model` de l'agent qui la joue
+ * (`appendClaudeSelectionArgs`). Changer l'un de ces comportements, c'est changer ce texte.
  */
 const COUVERTURE: Readonly<
-  Record<Target, ReadonlyArray<readonly [CleAgentStudio, CleAgentStudio]>>
+  Record<CibleAffichee, ReadonlyArray<readonly [CleAgentStudio, CleAgentStudio]>>
 > = {
   orchestrator: [
     ['topo.couvre.couvre', 'topo.couvre.orchestrateur.couvre'],
@@ -62,7 +71,9 @@ const COUVERTURE: Readonly<
   subagents: [
     ['topo.couvre.couvre', 'topo.couvre.sousAgents.couvre'],
     ['topo.couvre.plusieurs', 'topo.couvre.sousAgents.plusieurs'],
-    ['topo.couvre.vide', 'topo.couvre.sousAgents.vide']
+    ['topo.couvre.vide', 'topo.couvre.sousAgents.vide'],
+    ['topo.couvre.skills', 'topo.couvre.sousAgents.skills'],
+    ['topo.couvre.modeleSkills', 'topo.couvre.sousAgents.modeleSkills']
   ],
   scout: [
     ['topo.couvre.couvre', 'topo.couvre.scout.couvre'],
@@ -72,11 +83,6 @@ const COUVERTURE: Readonly<
   frame: [
     ['topo.couvre.couvre', 'topo.couvre.frame.couvre'],
     ['topo.couvre.plusieurs', 'topo.couvre.frame.plusieurs'],
-    ['topo.couvre.vide', 'topo.couvre.panel.vide']
-  ],
-  terrain: [
-    ['topo.couvre.couvre', 'topo.couvre.terrain.couvre'],
-    ['topo.couvre.plusieurs', 'topo.couvre.terrain.plusieurs'],
     ['topo.couvre.vide', 'topo.couvre.panel.vide']
   ],
   judge: [
@@ -391,7 +397,7 @@ export function AgentsTopologyView({
     description,
     accent
   }: {
-    target: Target
+    target: CibleAffichee
     title: string
     description: string
     accent: string
@@ -427,17 +433,15 @@ export function AgentsTopologyView({
           </div>
           <b>{slots.length}</b>
         </header>
-        <div className="topology-couvre" data-testid={`topology-couvre-${target}`}>
-          <span className="topology-couvre-titre">{t('topo.couvre.titre')}</span>
-          <dl>
-            {COUVERTURE[target].map(([intitule, explication]) => (
-              <div key={intitule}>
-                <dt>{t(intitule)}</dt>
-                <dd>{riche(t(explication), 'b')}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
+        <CeQueCaCouvre
+          id={`topologie-${target}`}
+          testId={`topology-couvre-${target}`}
+          titre={t('topo.couvre.titre')}
+          lignes={COUVERTURE[target].map(([intitule, explication]) => ({
+            intitule: t(intitule),
+            explication: t(explication)
+          }))}
+        />
         <div className="topology-slots">
           {slots.map((slot, index) => {
             const model = modelsById.get(slot.modelId)
@@ -822,7 +826,7 @@ export function AgentsTopologyView({
         <div className="topology-parallel">
           {renderTargetPanel({
             target: 'scout',
-            // « Scouts », « Frame », « Terrain », « Judges » : les noms des phases du moteur.
+            // « Scouts », « Frame », « Judges » : les noms des phases du moteur.
             title: 'Scouts',
             description: t('topo.scout.description'),
             accent: 'pink'
@@ -832,12 +836,6 @@ export function AgentsTopologyView({
             title: 'Frame',
             description: t('topo.frame.description'),
             accent: 'amber'
-          })}
-          {renderTargetPanel({
-            target: 'terrain',
-            title: 'Terrain',
-            description: t('topo.terrain.description'),
-            accent: 'cyan'
           })}
           {renderTargetPanel({
             target: 'judge',

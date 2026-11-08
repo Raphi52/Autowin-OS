@@ -208,6 +208,19 @@ export const TEXTES_FR = {
     'S’applique au prochain choix de workflow, aux deux lectures, au rangement du premier message et à l’arbitrage d’une dérive.',
   'routeur.petites.nonRegle': 'Non réglé : Haiku par défaut, en effort low.',
   'routeur.petites.revenir': 'Revenir au défaut (Haiku)',
+  'routeur.petites.couvre.titre': 'Ce que ça couvre',
+  'routeur.petites.couvre.couvre': 'Couvre',
+  'routeur.petites.couvre.pendant': 'Pendant un travail',
+  'routeur.petites.couvre.horsChamp': 'Ne couvre pas',
+  'routeur.petites.couvre.nonRegle': 'Non réglé',
+  'routeur.petites.couvre.texteCouvre':
+    'Les **choix courts** à une seule réponse, sans outil : **choisir le workflow** d’une demande dans ta liste, les **deux lectures** de chaque message (la lecture retenue, et une question seulement si deux lectures sont à égalité), le **rangement du premier message** d’un fil dans son projet.',
+  'routeur.petites.couvre.textePendant':
+    'Il **arbitre une dérive** (continuer ou s’arrêter), **relit à froid le cadrage** avant le build, **écrit le message de commit** quand l’app publie seule un fil fini, et **condense une note du Brain** avant de la donner au fil.',
+  'routeur.petites.couvre.texteHorsChamp':
+    'Les **réponses du chat** et l’écriture d’un **nouveau workflow** (Orchestrateur), le travail lui-même (**Sous-agents**).',
+  'routeur.petites.couvre.texteNonRegle':
+    '**Haiku** en effort low quand le chat est sur Claude ; sinon le **modèle du chat**, en effort low.',
 
   // — RouterView : carte d'un provider et comptes Claude
   'routeur.dernierTest': 'Dernier test : {statut}',
@@ -489,6 +502,19 @@ export const TEXTES_EN: Record<CleSettings, string> = {
     'Applies to the next workflow choice, to the two readings, to the filing of the first message and to drift arbitration.',
   'routeur.petites.nonRegle': 'Not set: Haiku by default, at low effort.',
   'routeur.petites.revenir': 'Back to the default (Haiku)',
+  'routeur.petites.couvre.titre': 'What it covers',
+  'routeur.petites.couvre.couvre': 'Covers',
+  'routeur.petites.couvre.pendant': 'During a job',
+  'routeur.petites.couvre.horsChamp': 'Does not cover',
+  'routeur.petites.couvre.nonRegle': 'Not set',
+  'routeur.petites.couvre.texteCouvre':
+    'The **short choices** with a single answer and no tool: **picking the workflow** of a request from your list, the **two readings** of each message (the reading kept, and a question only when two readings are tied), **filing the first message** of a thread under its project.',
+  'routeur.petites.couvre.textePendant':
+    'It **arbitrates a drift** (carry on or stop), **re-reads the framing cold** before the build, **writes the commit message** when the app publishes a finished thread on its own, and **condenses a Brain note** before handing it to the thread.',
+  'routeur.petites.couvre.texteHorsChamp':
+    'The **chat answers** and writing a **new workflow** (Orchestrator), the work itself (**Sub-agents**).',
+  'routeur.petites.couvre.texteNonRegle':
+    '**Haiku** at low effort when the chat runs on Claude; otherwise the **chat model**, at low effort.',
 
   'routeur.dernierTest': 'Last test: {statut}',
   'routeur.test': 'Testing…',

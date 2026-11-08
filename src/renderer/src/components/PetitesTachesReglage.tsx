@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './RouterView.css'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
+import { CeQueCaCouvre } from './CeQueCaCouvre'
 import type { OrchestratorProviderStatus } from './OrchestratorModelSelector'
 import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
 import { useTextesSettings } from '../textes-ecrans/settings'
@@ -118,6 +119,31 @@ export function PetitesTachesReglage({
         <h3>{t('routeur.petites.titre')}</h3>
         <small>{t('routeur.petites.aide')}</small>
       </header>
+      {/* Même `id` dans les deux écrans : replier ici replie aussi l'autre. Les usages listés sont
+          les appels de `bindingDesPetitesTaches` dans le processus principal. */}
+      <CeQueCaCouvre
+        id="petites-taches"
+        testId={`${testId}-couvre`}
+        titre={t('routeur.petites.couvre.titre')}
+        lignes={[
+          {
+            intitule: t('routeur.petites.couvre.couvre'),
+            explication: t('routeur.petites.couvre.texteCouvre')
+          },
+          {
+            intitule: t('routeur.petites.couvre.pendant'),
+            explication: t('routeur.petites.couvre.textePendant')
+          },
+          {
+            intitule: t('routeur.petites.couvre.horsChamp'),
+            explication: t('routeur.petites.couvre.texteHorsChamp')
+          },
+          {
+            intitule: t('routeur.petites.couvre.nonRegle'),
+            explication: t('routeur.petites.couvre.texteNonRegle')
+          }
+        ]}
+      />
       <OrchestratorModelSelector
         busy={false}
         catalogLoaded={catalogueFourni ? Boolean(catalogLoaded) : catalogue !== null}

@@ -31,6 +31,7 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(async () => {
+  window.localStorage.clear()
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -63,6 +64,8 @@ afterEach(async () => {
   container.remove()
 })
 
+const CIBLES = ['orchestrator', 'subagents', 'scout', 'frame', 'judge']
+
 const bloc = (cible: string): HTMLElement => {
   const trouve = container.querySelector<HTMLElement>(`[data-testid="topology-couvre-${cible}"]`)
   if (!trouve) throw new Error(`aucun bloc « ce que ça couvre » pour ${cible}`)
@@ -71,7 +74,7 @@ const bloc = (cible: string): HTMLElement => {
 
 describe('Agents Studio — ce que couvre chaque rôle', () => {
   it('chaque panneau a son bloc, rangé dans le panneau qu’il explique', () => {
-    for (const cible of ['orchestrator', 'subagents', 'scout', 'frame', 'terrain', 'judge']) {
+    for (const cible of CIBLES) {
       expect(bloc(cible).closest(`[data-target="${cible}"]`)).not.toBeNull()
       expect(bloc(cible).textContent).toContain('Ce que ça couvre')
     }
@@ -91,16 +94,48 @@ describe('Agents Studio — ce que couvre chaque rôle', () => {
   })
 
   it('un panel vide renvoie aux sous-agents, et le juge vide prévient de l’auto-jugement', () => {
-    for (const cible of ['scout', 'frame', 'terrain']) {
+    for (const cible of ['scout', 'frame']) {
       expect(bloc(cible).textContent).toContain('Le modèle des Sous-agents fait l’étape seul.')
     }
     expect(bloc('judge').textContent).toContain('juge son propre travail')
-    expect(bloc('terrain').textContent).toContain('seulement quand tu la demandes')
+  })
+
+  it('le panneau Terrain n’existe plus', () => {
+    expect(container.querySelector('[data-target="terrain"]')).toBeNull()
+    expect(container.querySelector('[data-testid="topology-couvre-terrain"]')).toBeNull()
+  })
+
+  it('les sous-agents nomment chaque skill qui lance des sous-agents, et leur vrai modèle', () => {
+    const texte = bloc('subagents').textContent ?? ''
+    for (const skill of [
+      '/arena',
+      '/scout',
+      '/steal',
+      '/frame',
+      '/draft',
+      '/remake',
+      '/kaizen',
+      '/judge'
+    ]) {
+      expect(texte).toContain(skill)
+    }
+    expect(texte).toContain('qui joue la skill')
   })
 
   it('le mot porteur de chaque ligne est en gras', () => {
-    for (const cible of ['orchestrator', 'subagents', 'scout', 'frame', 'terrain', 'judge']) {
+    for (const cible of CIBLES) {
       expect(bloc(cible).querySelectorAll('dd b').length).toBeGreaterThan(0)
     }
+  })
+
+  it('chaque bloc se replie seul, et l’état est retenu sous le nom de son rôle', async () => {
+    const titre = bloc('judge').querySelector('button')
+    expect(titre?.getAttribute('aria-expanded')).toBe('true')
+    await act(async () => titre?.click())
+    expect(bloc('judge').querySelector('dl')).toBeNull()
+    expect(bloc('scout').querySelector('dl')).not.toBeNull()
+    expect(
+      JSON.parse(window.localStorage.getItem('autowin.ceQueCaCouvre.replies') ?? '{}')
+    ).toEqual({ 'topologie-judge': true })
   })
 })

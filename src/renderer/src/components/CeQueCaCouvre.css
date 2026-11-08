@@ -1,0 +1,68 @@
+/* Bloc « Ce que ça couvre » : filet doré à gauche, aucun fond — il se lit comme une note du
+   panneau qui le porte, pas comme un emplacement. Jetons de thème seulement. */
+.ce-que-ca-couvre {
+  margin: 10px 0 12px;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+}
+
+.ce-que-ca-couvre.is-replie {
+  border-left-color: color-mix(in srgb, var(--gold) 25%, transparent);
+}
+
+.ce-que-ca-couvre > .ce-que-ca-couvre-titre {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--gold);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.ce-que-ca-couvre > .ce-que-ca-couvre-titre:hover {
+  text-decoration: underline;
+}
+
+.ce-que-ca-couvre > .ce-que-ca-couvre-titre:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.ce-que-ca-couvre dl {
+  display: grid;
+  gap: 5px;
+  margin: 5px 0 0;
+}
+
+.ce-que-ca-couvre dl > div {
+  display: grid;
+  gap: 1px;
+}
+
+.ce-que-ca-couvre dt {
+  color: var(--text-dim);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ce-que-ca-couvre dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ce-que-ca-couvre dd b {
+  color: var(--gold);
+  font-weight: 600;
+}
