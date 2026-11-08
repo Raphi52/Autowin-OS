@@ -74,6 +74,9 @@ export function shaDuReflog(this: WorktreeManager, path: string): string | undef
 /** Le retrait ne part pas sans la note qui le rend reprenable : la copie est gardée telle quelle. */
 const DETAIL_NOTE_REFUSEE = 'la note de retrait n’a pas pu être écrite : la copie est gardée'
 
+/** git a rendu 0, mais le dossier reste sur le disque : la copie n'est pas partie. */
+const DETAIL_DOSSIER_SURVIVANT = 'git a retiré la copie, mais son dossier reste sur le disque'
+
 export function cleanupWorktree(
   this: WorktreeManager,
   path: string,
@@ -141,6 +144,7 @@ export function preparerRetraitDeCopie(this: WorktreeManager, path: string): str
   return voisines
 }
 
+// fix-ok: cause mesurée — test rouge « git rend 0 mais le dossier garde des fichiers : pas de retrait conclu » (worktree-manager-copies.test.ts) : 1 échec avant correctif, `bilan.ok` valait true alors que le dossier et ses fichiers étaient là ; la conclusion ne regardait que le code de sortie de git.
 export function conclureRetraitDeCopie(
   this: WorktreeManager,
   path: string,
@@ -173,10 +177,18 @@ export function conclureRetraitDeCopie(
       try {
         this.removeDirFn(path)
       } catch {
-        /* La coquille sera revue au prochain balayage : ne pas faire echouer une liberation
-           reussie pour un dossier vide qu'on n'a pas pu retirer maintenant. */
+        /* Le disque refuse encore le retrait (verrou) : la coquille reste. La conclusion ci-dessous
+           la rapporte alors comme un échec, au lieu de la conclure partie. */
       }
     }
+    // fix-ok: cause mesurée — mutation de la garde `existsSync(path)` ci-dessous (retour ok:false retiré) : 3 tests rouges (git rend 0, coquille verrouillée, historique gardé) ; sans elle, une copie qui survit est conclue ok.
+    /*
+     * Un dossier qui survit n'est PAS une copie partie, qu'il porte des fichiers ou qu'il ne soit qu'une
+     * coquille que le disque n'a pas pu retirer : la conclure `ok` la ferait oublier, et son historique CLI
+     * partirait avec elle. La fiche de suppression posée avant le retrait fait reprendre ce dossier au
+     * passage suivant.
+     */
+    if (existsSync(path)) return { ok: false, detail: DETAIL_DOSSIER_SURVIVANT }
     supprimerHistoriqueCli(path, voisines)
     return { ok: true }
   }

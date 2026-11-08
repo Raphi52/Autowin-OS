@@ -1,10 +1,19 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre, supprimerArbreAsync } from '../fichiers/fs-supprimer'
+import { encoderCheminCli, racinesHistoriqueCliPour } from './historique-cli-copie'
+import { DOSSIER_DES_FICHES_DE_SUPPRESSION } from './worktree-manager-copies'
 import { WorktreeManager } from './worktree-manager'
 import { roots, tempRepo } from './worktree-manager.test-helpers'
+
+/* Le faux home des tests d'historique : `os.homedir` rend `faux.home` quand il est posé. */
+const faux = vi.hoisted(() => ({ home: undefined as string | undefined }))
+vi.mock('node:os', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('node:os')>()
+  return { ...reel, homedir: () => faux.home ?? reel.homedir() }
+})
 
 /*
  * LA SUPPRESSION COUPÉE NE REPRENAIT JAMAIS. Constat du 08/11 : 22 copies d'agent sans `.git`,
@@ -61,7 +70,11 @@ function copie(racine: string, id: string): string {
  * Git simulé. `worktree remove` reproduit la panne mesurée : il retire le lien `.git` D'ABORD, puis
  * échoue. Le dossier reste, sans lien — l'état des 22 copies du 08/11.
  */
-function gitFaux(base: string, inscrites: Set<string>): (repo: string, args: string[]) => Sortie {
+function gitFaux(
+  base: string,
+  inscrites: Set<string>,
+  retrait: 'echec' | 'reussiteQuiLaisseLeDossier' = 'echec'
+): (repo: string, args: string[]) => Sortie {
   const commun = join(base, '.git')
   return (repo, args) => {
     if (args[0] === 'rev-parse' && args.includes('--show-toplevel')) {
@@ -74,7 +87,13 @@ function gitFaux(base: string, inscrites: Set<string>): (repo: string, args: str
       return reussi([...inscrites].map((c) => `worktree ${c}\n`).join(''))
     }
     if (args[0] === 'worktree' && args[1] === 'remove') {
-      rmSync(join(args[args.length - 1] ?? '', '.git'), { force: true })
+      const chemin = args[args.length - 1] ?? ''
+      rmSync(join(chemin, '.git'), { force: true })
+      if (retrait === 'reussiteQuiLaisseLeDossier') {
+        // git lit sa propre réussite : l'enregistrement part, les fichiers restent sur le disque.
+        inscrites.delete(chemin)
+        return reussi('')
+      }
       return { code: 1, stdout: '', stderr: 'Impossible de retirer : fichier verrouillé (simulé)' }
     }
     if (args[0] === 'worktree' && args[1] === 'prune') {
@@ -108,9 +127,10 @@ function gestionnaire(
   base: string,
   racine: string,
   inscrites: Set<string>,
-  verrou: { actif: boolean }
+  verrou: { actif: boolean },
+  retrait: 'echec' | 'reussiteQuiLaisseLeDossier' = 'echec'
 ): WorktreeManager {
-  const git = gitFaux(base, inscrites)
+  const git = gitFaux(base, inscrites, retrait)
   return new WorktreeManager({
     baseRepo: base,
     worktreeRoot: racine,
@@ -242,5 +262,139 @@ describe('suppression coupée : les garde-fous tiennent', () => {
     await wm.sweepAbandonedAgentCopiesAsync()
 
     expect(existsSync(join(chemin, 'src', 'travail.txt'))).toBe(true)
+  })
+})
+
+/*
+ * GIT RENVOIE 0, LE DOSSIER SURVIT. `git worktree remove` rend 0 dès que l'enregistrement est parti,
+ * même si des fichiers restent sur le disque. Ce cas ne doit JAMAIS être conclu `ok` : la copie est
+ * encore là, son historique CLI aussi, et la fiche de suppression doit faire reprendre le dossier.
+ */
+
+// fix-ok: cause mesurée — le faux home n'était pas vérifié : sans le mock de `node:os`, les 2 tests d'historique rendent « expected 'C:\Users\<le vrai home>' » (mutation mesurée) ; le retrait d'une coquille verrouillée est gardé : sans la garde de worktree-manager-cycle.ts:190, 3 tests rouges (mutation mesurée).
+/**
+ * Un faux `~/.claude` : le CLI range l'historique d'une copie sous `projects/<chemin encodé>`.
+ * Le faux home passe par le mock de `node:os` ci-dessus, pas par les variables d'environnement : sur ce
+ * poste (win32, vitest 3.2.7, pool `threads`), modifier `USERPROFILE` ou `HOME` dans un test ne change
+ * pas `os.homedir()` (sonde mesurée le 08/11, fichier jetable supprimé).
+ * La garde ci-dessous vérifie que le faux home est bien LU, par le test et par le module testé ; sans
+ * cela, le test lirait le VRAI `~/.claude` et passerait pour une mauvaise raison.
+ */
+function avecFauxHome<T>(corps: (home: string) => T): T {
+  const home = mkdtempSync(join(tmpdir(), 'autowin-home-'))
+  roots.push(home)
+  faux.home = home
+  try {
+    expect(homedir()).toBe(home)
+    expect(racinesHistoriqueCliPour(join(home, 'copie'))[0]).toBe(join(home, '.claude', 'projects'))
+    return corps(home)
+  } finally {
+    faux.home = undefined
+  }
+}
+
+/** Pose un historique CLI pour `chemin` sous le faux home, et rend le dossier posé. */
+function poserHistorique(home: string, chemin: string): string {
+  const dossier = join(home, '.claude', 'projects', encoderCheminCli(chemin))
+  mkdirSync(dossier, { recursive: true })
+  writeFileSync(join(dossier, 'session.jsonl'), '{}')
+  return dossier
+}
+
+// fix-ok: cause mesurée — rouge avant correctif (3 échecs sur 4, le jumeau passe) : `conclureRetraitDeCopie` rendait ok sur le seul code 0 de git (src/main/store/worktree-manager-cycle.ts:153), range l'historique CLI d'une copie qui survit (cycle.ts:180), et `finirBalayageParLeDisque` (src/main/store/worktree-manager-copies.ts) ne range jamais l'historique après un retrait par le disque.
+describe('retrait conclu seulement quand le dossier est parti', () => {
+  it('git rend 0 mais le dossier garde des fichiers : pas de retrait conclu, la fiche reste, le passage suivant reprend', () => {
+    const { base, racine } = depot()
+    const chemin = copie(racine, 'run-git-zero')
+    const verrou = { actif: true }
+    const wm = gestionnaire(base, racine, new Set([chemin]), verrou, 'reussiteQuiLaisseLeDossier')
+
+    const bilan = wm.cleanupWorktree(chemin, true)
+
+    expect(bilan.ok).toBe(false)
+    expect(existsSync(join(chemin, 'src', 'travail.txt'))).toBe(true)
+    expect(existsSync(join(racine, DOSSIER_DES_FICHES_DE_SUPPRESSION, 'run-git-zero.json'))).toBe(
+      true
+    )
+
+    verrou.actif = false
+    const reprises = wm.sweepAbandonedAgentCopies()
+
+    expect(existsSync(chemin)).toBe(false)
+    expect(reprises).toContain('run-git-zero')
+  })
+
+  it('jumeau accepté : git rend 0 et le dossier ne garde qu’une coquille vide, il est retiré et conclu ok', () => {
+    const { base, racine } = depot()
+    const chemin = join(racine, 'agent__run-coquille')
+    mkdirSync(chemin, { recursive: true })
+    writeFileSync(join(chemin, '.git'), 'gitdir: simulé')
+    const wm = gestionnaire(
+      base,
+      racine,
+      new Set([chemin]),
+      { actif: false },
+      'reussiteQuiLaisseLeDossier'
+    )
+
+    expect(wm.cleanupWorktree(chemin, true).ok).toBe(true)
+    expect(existsSync(chemin)).toBe(false)
+  })
+
+  it('coquille vide que le disque refuse de retirer : pas de retrait conclu, la fiche reste, le passage suivant la retire', () => {
+    const { base, racine } = depot()
+    const chemin = join(racine, 'agent__run-coquille-verrouillee')
+    mkdirSync(chemin, { recursive: true })
+    writeFileSync(join(chemin, '.git'), 'gitdir: simulé')
+    const verrou = { actif: true }
+    const wm = gestionnaire(base, racine, new Set([chemin]), verrou, 'reussiteQuiLaisseLeDossier')
+
+    const bilan = wm.cleanupWorktree(chemin, true)
+
+    expect(bilan.ok).toBe(false)
+    expect(existsSync(chemin)).toBe(true)
+    expect(
+      existsSync(join(racine, DOSSIER_DES_FICHES_DE_SUPPRESSION, 'run-coquille-verrouillee.json'))
+    ).toBe(true)
+
+    verrou.actif = false
+    const reprises = wm.sweepAbandonedAgentCopies()
+
+    expect(existsSync(chemin)).toBe(false)
+    expect(reprises).toContain('run-coquille-verrouillee')
+  })
+
+  it('git rend 0, le dossier survit : l’historique CLI de la copie n’est pas rangé avec elle', () => {
+    avecFauxHome((home) => {
+      const { base, racine } = depot()
+      const chemin = copie(racine, 'run-garde-historique')
+      const wm = gestionnaire(
+        base,
+        racine,
+        new Set([chemin]),
+        { actif: true },
+        'reussiteQuiLaisseLeDossier'
+      )
+      const historique = poserHistorique(home, chemin)
+
+      wm.cleanupWorktree(chemin, true)
+
+      expect(existsSync(chemin)).toBe(true)
+      expect(existsSync(historique)).toBe(true)
+    })
+  })
+
+  it('copie que git ne connaît plus, retirée par le disque : son historique CLI part avec elle', () => {
+    avecFauxHome((home) => {
+      const { base, racine } = depot()
+      const chemin = copie(racine, 'run-hors-git')
+      const wm = gestionnaire(base, racine, new Set<string>(), { actif: false })
+      const historique = poserHistorique(home, chemin)
+
+      expect(prive(wm).balayerLeChemin(chemin)).toBe(true)
+
+      expect(existsSync(chemin)).toBe(false)
+      expect(existsSync(historique)).toBe(false)
+    })
   })
 })
