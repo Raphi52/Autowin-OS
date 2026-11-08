@@ -35,7 +35,7 @@
  * inutile coûte un tour à l'utilisateur ; un contrôle en panne ne doit jamais bloquer un run.
  */
 import type { ReponseAsk } from './ask-options'
-import { DEBUT_LECTURE_RETENUE } from '../../shared/lecture-retenue'
+import { DEBUT_LECTURE_RETENUE, DEBUT_PRECISION_DE_TACHE } from '../../shared/lecture-retenue'
 import { VOCABULAIRE_AUTOWIN } from '../consignes/vocabulaire-autowin'
 
 /**
@@ -372,7 +372,7 @@ export function tacheAvecLectureRetenue(tache: string, retenue: string, ecartee?
   return tache.includes(precision) ? tache : `${tache.trimEnd()}\n\n${precision}`
 }
 
-const DEBUT_PRECISION = "Compréhension de la demande, annoncée à l'utilisateur : "
+const DEBUT_PRECISION = DEBUT_PRECISION_DE_TACHE
 
 /**
  * La tâche SANS cette précision : ce que l'utilisateur a tapé. Tout ce qui lit la demande pour y

@@ -7,6 +7,7 @@ import type { OrchestrationStep } from '../orchestration/orchestrator'
 import { ensureAutowinAppData } from '../app/app-data'
 import type { RunClosureObservation, RunFileStatus } from '../../shared/run-execution'
 import { MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared/relance-sans-objet'
+import { DEBUT_PRECISION_DE_TACHE } from '../../shared/lecture-retenue'
 import { ATTENTE_DE_PUBLICATION } from '../../shared/run-blocked'
 import { rootDodLabels, rootRequirementChecks } from '../gardes/root-execution-contract'
 import type { ExecutionEvidence } from '../providers/types'
@@ -122,8 +123,12 @@ export function slugify(task: string): string {
   // rien : il prenait deux des six mots du libellé (`go-cible-contextualisee-traite-trois`).
   // Seul le marqueur EXACT est retiré, en majuscules : un sujet qui parle de la cible
   // contextualisée garde ses mots.
+  // Même chose pour l'en-tête de la compréhension ajouté à la tâche : il prenait trois des six
+  // mots, et des travaux sans rapport finissaient tous en `fix-comprehension-demande-annoncee-faire`.
   const tokens = task
     .split(MARQUEUR_CIBLE_CONTEXTUALISEE)
+    .join(' ')
+    .split(DEBUT_PRECISION_DE_TACHE)
     .join(' ')
     .toLowerCase()
     .normalize('NFD')

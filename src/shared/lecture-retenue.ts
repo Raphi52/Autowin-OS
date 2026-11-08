@@ -12,6 +12,11 @@ export const FLUX_LECTURE_RETENUE = 'lectures:retenue'
  *  compréhension par le modèle ») : le modèle lit ce mot, et le reprend s'il en parle. */
 export const DEBUT_LECTURE_RETENUE = 'Compréhension : '
 
+/** Début de la précision ajoutée à la TÂCHE d'un travail (`tacheAvecLectureRetenue`,
+ *  `src/main/chat/deux-lectures.ts`). Partagé pour que le nom du dossier du travail (`slugify`,
+ *  `src/main/runs/conv-runs.ts`) l'ignore : ces mots ne disent rien du sujet. */
+export const DEBUT_PRECISION_DE_TACHE = "Compréhension de la demande, annoncée à l'utilisateur : "
+
 /** Le début écrit : les fils de cette époque le portent encore dans leur texte. */
 const ANCIENS_DEBUTS = ['Lecture retenue : ']
 
