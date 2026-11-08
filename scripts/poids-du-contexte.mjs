@@ -12,16 +12,15 @@
  *
  * Calibrage : la taille réelle de ce qui entre entre deux étapes est connue (écart des compteurs
  * `input + cache_creation + cache_read` du modèle). Elle est répartie sur les blocs visibles de
- * l'intervalle au prorata de leurs caractères : les rappels invisibles ajoutés par le CLI ou les
- * hooks se retrouvent donc dans le bloc qu'ils accompagnent. La réflexion est comptée : mesuré le
- * 2026-11-08 sur 80 sessions, la compter rend le même rapport caractères/token (1,74) que les
- * intervalles sans réflexion (1,90) ; l'exclure le fait tomber à 1,27.
+ * l'intervalle : la réflexion à ses tokens exacts (lus en fin de message), le reste au prorata des
+ * caractères — les rappels invisibles ajoutés par le CLI ou les hooks se retrouvent donc dans le
+ * bloc qu'ils accompagnent.
  *
  * Dollars : au prix officiel du modèle de chaque session (`PRIX`). Un bloc est écrit en mémoire
  * de relecture (cache) à sa première lecture, puis relu au prix de relecture à chaque étape
  * suivante ; le socle prend le partage réel de sa première étape. Ce que le modèle écrit (sortie)
- * forme sa propre ligne. Contrôle : sur les sessions non reprises, le calcul retrouve la facture
- * du CLI (mesuré le 2026-11-08 : Opus et Sonnet à l'identique, Haiku à 0,2 % près).
+ * forme sa propre ligne. Contrôle : sur chaque session qui a un bilan, le calcul retrouve la facture
+ * du CLI (mesuré le 2026-11-08 sur 95 % des dollars : écart de 0,0 à 0,4 % selon le modèle).
  *
  * Lecture seule. Usage :
  *   node scripts/poids-du-contexte.mjs [--data <dossier>] [--derniers N | --tous]
@@ -104,7 +103,7 @@ const texteDuResultat = (contenu) => {
 }
 
 // Une image compte pour environ 1 600 tokens (doc Anthropic, image de 1092×1092) ; ramenée en
-// caractères au rapport mesuré, pour entrer dans le même prorata que le texte.
+// caractères au rapport mesuré hors réflexion (1,9 par token), pour entrer dans le même prorata.
 const CARACTERES_PAR_IMAGE = 1600 * 1.9
 
 /**
@@ -158,37 +157,58 @@ export function analyserSession(lignes) {
   let debutMs
   let finMs
   let modele
-  let factureLocale
+  const bilans = [] // { local, cumul } de chaque `result`
   let sortie = 0
+  let finsOrphelines = 0
+  let lignesIllisibles = 0
+  let reflexionsPlafonnees = 0
 
   const fermer = (bs, fin) => {
     for (const b of bs) if (b.fin === undefined) b.fin = fin
   }
 
   for (const l of lignes) {
-    if (!l || l[0] !== '{' || l.startsWith('{"type":"stream_event')) continue
+    if (!l || l[0] !== '{') continue
+    // Du flux, seule la fin de message compte : elle porte la sortie EXACTE de l'étape et sa part
+    // de réflexion (mesuré le 2026-11-08 : leur somme égale le total du bilan dans 503 sessions sur
+    // 504 ; les événements `assistant`, eux, n'en portent qu'un début). Elle se rattache à son étape
+    // par l'identifiant du message, jamais par sa place.
+    if (l.startsWith('{"type":"stream_event')) {
+      if (!l.includes('"message_delta"')) continue
+      try {
+        const e = JSON.parse(l)
+        if (e.parent_tool_use_id || !e.event || e.event.type !== 'message_delta' || !e.event.usage)
+          continue
+        const etape = etapes.length ? etapes[etapes.length - 1] : undefined
+        if (!etape || etape.id !== e.api_message_id) {
+          finsOrphelines++
+          continue
+        }
+        etape.sortie = e.event.usage.output_tokens || 0
+        const detail = e.event.usage.output_tokens_details || {}
+        etape.reflexion = Math.min(etape.sortie, detail.thinking_tokens || 0)
+      } catch {
+        finsOrphelines++
+      }
+      continue
+    }
     let j
     try {
       j = JSON.parse(l)
     } catch {
+      // Souvent la dernière ligne d'un processus tué : comptée, jamais devinée.
+      lignesIllisibles++
       continue
     }
     if (j.type === 'system' && j.subtype === 'init') session = true
-    // Le bilan du CLI en fin de session. Ses tokens ET son coût (`modelUsage`, `total_cost_usd`)
-    // sont CUMULÉS sur toute la conversation reprise (mesuré le 2026-11-08 : 72 M tokens relus au
-    // bilan pour 459 000 dans ce passage) : ils ne mesurent pas la session. Seule la sortie
-    // (`usage`) est locale. Quand la session n'a PAS été reprise, bilan et passage coïncident :
-    // son coût devient le contrôle indépendant du calcul en dollars ci-dessous.
+    // Le bilan du CLI (un par tour, parfois plusieurs par fichier). `modelUsage` et
+    // `total_cost_usd` sont CUMULÉS sur toute la conversation reprise (mesuré le 2026-11-08 :
+    // 72 M tokens relus au bilan pour 459 000 dans ce passage) ; `model_usage_since_last_result`
+    // est LOCAL au tour. Son coût est le contrôle indépendant du calcul en dollars ci-dessous, et
+    // l'écart entre les deux dit si le fil a été repris.
     if (j.type === 'result' && j.usage) {
-      sortie = j.usage.output_tokens || 0
-      const bilan = Object.values(j.modelUsage || {})
-      if (
-        bilan.length === 1 &&
-        typeof bilan[0].costUSD === 'number' &&
-        bilan[0].cacheReadInputTokens === j.usage.cache_read_input_tokens &&
-        bilan[0].outputTokens === j.usage.output_tokens
-      )
-        factureLocale = bilan[0].costUSD
+      sortie += j.usage.output_tokens || 0
+      bilans.push({ local: j.model_usage_since_last_result || {}, cumul: j.modelUsage || {} })
     }
     if (j.parent_tool_use_id) continue
     const quand = j.timestamp ? Date.parse(j.timestamp) : NaN
@@ -241,12 +261,37 @@ export function analyserSession(lignes) {
           } else {
             // Un contexte qui rétrécit sans être résumé (effacement côté API) : compté pour être vu.
             if (delta < 0) retrecissements++
-            const car = enAttente.reduce((s, b) => s + b.car, 0)
             const reel = Math.max(0, delta)
+            // La réflexion de l'étape d'avant pèse ses tokens EXACTS, lus en fin de message : le texte
+            // enregistré n'en est qu'un résumé. Mesuré le 2026-11-08 sur 5 809 intervalles : ainsi
+            // comptée, le reste retombe à 1,92 caractère par token, comme les intervalles sans
+            // réflexion (1,88) ; comptée par son résumé, il tombe à 1,70. Le reste se répartit au
+            // prorata des caractères.
+            const precedente = etapes[k - 1]
+            let aPartager = enAttente
+            let reste = reel
+            if (precedente.reflexion !== undefined) {
+              const pensees = enAttente.filter((b) => b.categorie === 'réflexion')
+              aPartager = enAttente.filter((b) => b.categorie !== 'réflexion')
+              // Une réflexion plus grosse que l'écart réel ne laisse rien aux autres blocs : comptée.
+              if (precedente.reflexion > reel) reflexionsPlafonnees++
+              const exacte = Math.min(precedente.reflexion, reel)
+              if (exacte > 0 && !pensees.length) {
+                const b = { categorie: 'réflexion', outil: '', car: 0, tokens: 0 }
+                blocs.push(b)
+                enAttente.push(b)
+                pensees.push(b)
+              }
+              const carPensees = pensees.reduce((s, b) => s + b.car, 0)
+              for (const b of pensees)
+                b.tokens = carPensees ? (exacte * b.car) / carPensees : exacte / pensees.length
+              reste = reel - exacte
+            }
+            const car = aPartager.reduce((s, b) => s + b.car, 0)
             if (car > 0) {
-              for (const b of enAttente) b.tokens = (reel * b.car) / car
-            } else if (reel > 0) {
-              const b = { categorie: 'non attribué', outil: '', car: 0, tokens: reel, debut: k }
+              for (const b of aPartager) b.tokens = (reste * b.car) / car
+            } else if (reste > 0) {
+              const b = { categorie: 'non attribué', outil: '', car: 0, tokens: reste }
               blocs.push(b)
               enAttente.push(b)
             }
@@ -283,6 +328,7 @@ export function analyserSession(lignes) {
         }
         if (b && b.car > 0) {
           b.tokens = 0
+          b.etape = etapes.length - 1
           blocs.push(b)
           enAttente.push(b)
         }
@@ -346,6 +392,7 @@ export function analyserSession(lignes) {
   const prix = prixDuModele(modele)
   let etapesUsd
   let sortieUsd
+  const sortieParType = {}
   if (prix) {
     const mult = etapes.map((e) => prix.multiplicateur(e.ctx))
     const payeEtape = etapes.map(
@@ -366,10 +413,66 @@ export function analyserSession(lignes) {
       const suivantes = b.tokens * prix.relecture * (multRelu[b.fin + 1] - multRelu[b.debut + 1])
       b.usd = premiere + suivantes
     }
-    // Les tokens écrits par le modèle ne sont comptés qu'au total de la session : leur palier
-    // Haiku est pris à la moyenne des étapes.
+    // SORTIE, étape par étape, au palier de son étape. La réflexion y a son compte EXACT (fin de
+    // message) ; le reste se partage entre texte et appels d'outils au prorata des caractères —
+    // une ESTIMATION. Ce qu'aucune fin de message n'a porté (étape coupée) reste « non attribuée »,
+    // pris sur le total du bilan au palier moyen.
+    const ajouter = (type, usd) => {
+      if (usd > 0) sortieParType[type] = (sortieParType[type] || 0) + usd
+    }
+    const parEtape = new Map()
+    for (const b of blocs) {
+      if (b.etape === undefined || b.categorie === 'réflexion') continue
+      const x = parEtape.get(b.etape) || []
+      x.push(b)
+      parEtape.set(b.etape, x)
+    }
+    sortieUsd = 0
+    let sortieLue = 0
+    etapes.forEach((e, k) => {
+      if (e.sortie === undefined) return
+      sortieLue += e.sortie
+      const prixEtape = prix.sortie * mult[k]
+      sortieUsd += e.sortie * prixEtape
+      ajouter('réflexion', (e.reflexion || 0) * prixEtape)
+      const reste = (e.sortie - (e.reflexion || 0)) * prixEtape
+      const ecrits = parEtape.get(k) || []
+      const car = ecrits.reduce((s, b) => s + b.car, 0)
+      if (!car) return ajouter('non attribuée', reste)
+      for (const b of ecrits)
+        ajouter(
+          b.categorie === "texte de l'agent" ? b.categorie : "appels d'outils",
+          (reste * b.car) / car
+        )
+    })
     const multMoyen = mult.reduce((s, m) => s + m, 0) / mult.length
-    sortieUsd = sortie * prix.sortie * multMoyen
+    const manquante = Math.max(0, sortie - sortieLue) * prix.sortie * multMoyen
+    sortieUsd += manquante
+    ajouter('non attribuée', manquante)
+  }
+
+  // Le contrôle et la reprise, lus sur les bilans : coût LOCAL du modèle de la session (le seul que
+  // ce calcul couvre ; les autres modèles du bilan sont des appels annexes du CLI), et reprise quand
+  // le cumul du premier tour dépasse déjà son coût local.
+  let factureLocale
+  let annexesUsd = 0
+  let reprise
+  // Un bilan sans coût local pour ce modèle (autre CLI, autre nom) ne contrôle rien : la facture
+  // reste inconnue plutôt que de valoir 0. La reprise compare TOUS les modèles : un tour d'avant
+  // joué sur un autre modèle reste de l'historique.
+  const coutDe = (u) => (u && typeof u.costUSD === 'number' ? u.costUSD : undefined)
+  const somme = (usage) => Object.values(usage || {}).reduce((s, u) => s + (coutDe(u) ?? 0), 0)
+  if (modele && bilans.some((b) => coutDe(b.local[modele]) !== undefined)) {
+    factureLocale = 0
+    for (const { local } of bilans)
+      for (const [m, u] of Object.entries(local)) {
+        if (coutDe(u) === undefined) continue
+        if (m === modele) factureLocale += u.costUSD
+        else annexesUsd += u.costUSD
+      }
+    const premier = bilans[0]
+    if (Object.keys(premier.local).length && Object.keys(premier.cumul).length)
+      reprise = somme(premier.cumul) - somme(premier.local) > 1e-6
   }
   return {
     etapes: etapes.length,
@@ -379,11 +482,22 @@ export function analyserSession(lignes) {
     debutMs,
     finMs,
     modele,
-    // Facturé par le CLI pour une session non reprise : contrôle de etapesUsd + sortieUsd.
+    // Facturé par le CLI pour ce passage, au modèle de la session : contrôle de etapesUsd + sortieUsd.
     factureLocale,
-    sortie,
+    annexesUsd,
+    // true : le fil a été repris, son socle porte l'historique des tours d'avant ; undefined : inconnu.
+    reprise,
+    sortie: Math.max(
+      sortie,
+      etapes.reduce((s, e) => s + (e.sortie || 0), 0)
+    ),
+    etapesSansFin: etapes.filter((e) => e.sortie === undefined).length,
+    finsOrphelines,
+    lignesIllisibles,
+    reflexionsPlafonnees,
     etapesUsd,
     sortieUsd,
+    sortieParType,
     blocs: relus
   }
 }
@@ -393,7 +507,48 @@ const quantile = (valeurs, f) => {
   return trie.length ? trie[Math.min(trie.length - 1, Math.floor(trie.length * f))] : 0
 }
 
-export const SORTIE = 'écrit par le modèle (sortie)'
+export const SORTIE = 'écrit par le modèle'
+
+const lecturesVides = () => ({
+  total: 0,
+  entieres: 0,
+  grosses: 0,
+  usdGrosses: 0,
+  usdToutes: 0,
+  lignes: []
+})
+
+/** Les lectures de fichier d'un ensemble de sessions, et leur part des dollars de cet ensemble. */
+function mesurerLectures(sessions, seuilLignes) {
+  const l = { Read: lecturesVides(), terminal: lecturesVides() }
+  let usd = 0
+  for (const s of sessions) {
+    if (s.etapesUsd === undefined) continue
+    usd += s.etapesUsd + s.sortieUsd
+    for (const b of s.blocs) {
+      const x = b.lecture && l[b.lecture]
+      if (!x) continue
+      x.total++
+      x.lignes.push(b.lignes)
+      x.usdToutes += b.usd
+      if (b.entier) x.entieres++
+      if (b.entier && b.lignes > seuilLignes) {
+        x.grosses++
+        x.usdGrosses += b.usd
+      }
+    }
+  }
+  const resume = (x) => ({
+    total: x.total,
+    entieres: x.entieres,
+    grosses: x.grosses,
+    partUsdGrosses: usd ? x.usdGrosses / usd : 0,
+    partUsdToutes: usd ? x.usdToutes / usd : 0,
+    medianeLignes: quantile(x.lignes, 0.5),
+    p90Lignes: quantile(x.lignes, 0.9)
+  })
+  return { sessions: sessions.length, usd, Read: resume(l.Read), terminal: resume(l.terminal) }
+}
 
 /** Agrège des sessions analysées en un tableau par type de contenu, plus le détail des lectures. */
 export function agreger(sessions, seuilLignes = 350) {
@@ -407,24 +562,19 @@ export function agreger(sessions, seuilLignes = 350) {
   let compactions = 0
   let retrecissements = 0
   let sansPrix = 0
+  let annexes = 0
+  let etapesSansFin = 0
+  let finsOrphelines = 0
+  let lignesIllisibles = 0
+  let reflexionsPlafonnees = 0
   let usdBlocs = 0
   let usdEtapes = 0
   let usdSortie = 0
-  let sortieTokens = 0
   const grille = {}
   let debutMs
   let finMs
-  const vide = () => ({
-    total: 0,
-    entieres: 0,
-    grosses: 0,
-    usdGrosses: 0,
-    usdToutes: 0,
-    lignes: []
-  })
-  const lectures = { Read: vide(), terminal: vide() }
   const sortiesLongues = { nombre: 0, usd: 0 }
-  const socles = []
+  const socles = { reprises: [], nonReprises: [], inconnues: [] }
   const cumuler = (m, cle, entres, r, usd) => {
     const x = m.get(cle) || { nom: cle, entres: 0, relu: 0, usd: 0 }
     x.entres += entres
@@ -439,15 +589,25 @@ export function agreger(sessions, seuilLignes = 350) {
     mesureRelu += s.contexteRelu
     modeles[s.modele || '?'] = (modeles[s.modele || '?'] || 0) + 1
     const socle = s.blocs.find((b) => b.categorie === SOCLE)
-    if (socle) socles.push(socle.tokens)
+    if (socle) {
+      const rang =
+        s.reprise === true ? 'reprises' : s.reprise === false ? 'nonReprises' : 'inconnues'
+      socles[rang].push(socle.tokens)
+    }
     if (s.debutMs !== undefined && !(s.debutMs >= debutMs)) debutMs = s.debutMs
     if (s.finMs !== undefined && !(s.finMs <= finMs)) finMs = s.finMs
     const avecPrix = s.etapesUsd !== undefined
     if (avecPrix) {
       usdEtapes += s.etapesUsd
       usdSortie += s.sortieUsd
-      sortieTokens += s.sortie
+      for (const [type, usd] of Object.entries(s.sortieParType || {}))
+        cumuler(parType, `${SORTIE} — ${type}`, 0, 0, usd)
     } else sansPrix++
+    annexes += s.annexesUsd || 0
+    etapesSansFin += s.etapesSansFin || 0
+    finsOrphelines += s.finsOrphelines || 0
+    lignesIllisibles += s.lignesIllisibles || 0
+    reflexionsPlafonnees += s.reflexionsPlafonnees || 0
     if (avecPrix && typeof s.factureLocale === 'number') {
       const x = grille[s.modele] || { calcule: 0, facture: 0, sessions: 0 }
       x.calcule += s.etapesUsd + s.sortieUsd
@@ -467,35 +627,15 @@ export function agreger(sessions, seuilLignes = 350) {
         sortiesLongues.nombre++
         sortiesLongues.usd += usd
       }
-      const l = b.lecture && lectures[b.lecture]
-      if (l) {
-        l.total++
-        l.lignes.push(b.lignes)
-        l.usdToutes += usd
-        if (b.entier) l.entieres++
-        if (b.entier && b.lignes > seuilLignes) {
-          l.grosses++
-          l.usdGrosses += usd
-        }
-      }
     }
   }
-  if (usdSortie > 0) cumuler(parType, SORTIE, sortieTokens, 0, usdSortie)
   const usd = usdBlocs + usdSortie
   const part = (x) => (usd ? x / usd : 0)
   const parts = (m) =>
     [...m.values()]
       .map((x) => ({ ...x, partRelu: relu ? x.relu / relu : 0, partUsd: part(x.usd) }))
       .sort((x, y) => y.usd - x.usd || y.relu - x.relu)
-  const resume = (l) => ({
-    total: l.total,
-    entieres: l.entieres,
-    grosses: l.grosses,
-    partUsdGrosses: part(l.usdGrosses),
-    partUsdToutes: part(l.usdToutes),
-    medianeLignes: quantile(l.lignes, 0.5),
-    p90Lignes: quantile(l.lignes, 0.9)
-  })
+  const controle = Object.values(grille).reduce((s, g) => s + g.calcule, 0)
   return {
     sessions: sessions.length,
     modeles,
@@ -511,19 +651,39 @@ export function agreger(sessions, seuilLignes = 350) {
     mesureRelu,
     usd,
     // Contrôles des dollars : (1) les blocs se partagent ce que les étapes ont payé pour lire ;
-    // (2) sur les sessions non reprises, le calcul retrouve ce que le CLI a facturé.
+    // (2) sur les sessions qui ont un bilan, le calcul retrouve ce que le CLI a facturé — `partControlee`
+    // dit quelle part des dollars ce second contrôle couvre.
     controleUsd: {
       blocs: usdBlocs,
       etapes: usdEtapes,
       grille,
+      partControlee: part(controle),
+      annexes,
+      etapesSansFin,
+      finsOrphelines,
+      lignesIllisibles,
+      reflexionsPlafonnees,
       sansPrix
     },
     seuilLignes,
-    socle: { mediane: quantile(socles, 0.5), p90: quantile(socles, 0.9) },
+    socle: {
+      mediane: quantile([...socles.reprises, ...socles.nonReprises, ...socles.inconnues], 0.5),
+      nonReprises: {
+        nombre: socles.nonReprises.length,
+        mediane: quantile(socles.nonReprises, 0.5)
+      },
+      reprises: { nombre: socles.reprises.length, mediane: quantile(socles.reprises, 0.5) }
+    },
     types: parts(parType),
     outils: parts(parOutil),
     terminal: parts(parFamille),
-    lectures: { Read: resume(lectures.Read), terminal: resume(lectures.terminal) },
+    lectures: mesurerLectures(sessions, seuilLignes),
+    // Les seules sessions où TOUTES les lectures sont visibles : sans reprise, le socle ne porte
+    // aucune lecture d'un tour d'avant. C'est là que le plafond d'une prise sur les lectures se lit.
+    lecturesNonReprises: mesurerLectures(
+      sessions.filter((s) => s.reprise === false),
+      seuilLignes
+    ),
     sortiesLongues: { nombre: sortiesLongues.nombre, partUsd: part(sortiesLongues.usd) }
   }
 }
@@ -549,46 +709,50 @@ export function rapport(a) {
         `${m} (${g.sessions} sessions) ${dollars(g.calcule)} pour ${dollars(g.facture)}, écart ${ecart(g.calcule, g.facture)}`
     )
     .join(', ')
+  const heures = a.debut && a.fin ? (Date.parse(a.fin) - Date.parse(a.debut)) / 3600000 : 0
   l.push(`# Ce qui remplit le contexte relu — ${a.sessions} sessions, ${milliers(a.etapes)} étapes`)
   l.push('')
   l.push(`Période : du ${jour(a.debut)} au ${jour(a.fin)} (UTC). Modèles : ${modeles}.`)
+  if (heures < 72)
+    l.push(
+      `**Échantillon court** (${Math.round(heures)} h, ce que \`run-stdout\` garde encore) : les parts dépendent des tâches de cette période ; relancer sur d'autres jours avant de généraliser.`
+    )
   l.push(
-    `Socle de départ (consignes, définitions d'outils, historique repris, message) : médiane **${milliers(a.socle.mediane)} tokens** par session, 9 sur 10 sous ${milliers(a.socle.p90)}.`
+    `Socle de départ (consignes, définitions d'outils, historique repris, message) : médiane **${milliers(a.socle.mediane)} tokens** — ${milliers(a.socle.nonReprises.mediane)} sur les ${a.socle.nonReprises.nombre} sessions neuves, ${milliers(a.socle.reprises.mediane)} sur les ${a.socle.reprises.nombre} fils repris (l'écart est l'historique).`
   )
   l.push(
     `Contexte relu : **${milliers(a.relu)} tokens** (compteurs du modèle : ${milliers(a.mesureRelu)}). Compactions : ${a.compactions}, rétrécissements sans résumé : ${a.retrecissements}.`
   )
   l.push(
-    `Coût calculé : **${dollars(a.usd)}**. Contrôles : sur les sessions non reprises, le calcul retrouve la facture du CLI — ${grilleTexte || 'aucune session'} ; les blocs se partagent ${dollars(c.blocs)} des ${dollars(c.etapes)} payés pour lire (écart ${ecart(c.blocs, c.etapes)}).${c.sansPrix ? ` ${c.sansPrix} sessions d'un modèle sans prix connu : comptées en tokens seulement.` : ''}`
+    `Coût calculé : **${dollars(a.usd)}**. Contrôles : sur les sessions qui ont un bilan (${pct(c.partControlee)} des dollars), le calcul retrouve la facture du CLI — ${grilleTexte || 'aucune session'} ; les blocs se partagent ${dollars(c.blocs)} des ${dollars(c.etapes)} payés pour lire (écart ${ecart(c.blocs, c.etapes)}).${c.sansPrix ? ` ${c.sansPrix} sessions d'un modèle sans prix connu : comptées en tokens seulement.` : ''} Hors calcul : ${dollars(c.annexes)} d'appels annexes du CLI à un autre modèle. Étapes sans fin de message : ${c.etapesSansFin} ; fins de message sans étape : ${c.finsOrphelines} ; lignes illisibles : ${c.lignesIllisibles} ; réflexions plus grosses que l'écart réel : ${c.reflexionsPlafonnees}.`
   )
   l.push('')
   l.push('| Type de contenu | Tokens entrés | Tokens relus | Part relue | Part des dollars |')
   l.push('|---|---:|---:|---:|---:|')
   for (const t of a.types) {
-    l.push(
-      `| ${t.nom} | ${milliers(t.entres)} | ${milliers(t.relu)} | ${pct(t.partRelu)} | **${pct(t.partUsd)}** |`
-    )
+    const entres = t.nom.startsWith(SORTIE) ? '—' : milliers(t.entres)
+    const relus = t.nom.startsWith(SORTIE) ? '—' : milliers(t.relu)
+    l.push(`| ${t.nom} | ${entres} | ${relus} | ${pct(t.partRelu)} | **${pct(t.partUsd)}** |`)
   }
   l.push('')
-  l.push('## Le terminal, par usage (appel et sortie)')
+  l.push(
+    `Ce que le modèle écrit : la réflexion est comptée exactement ; le partage du reste entre texte et appels d'outils est une **estimation** au prorata des caractères.`
+  )
+  l.push('')
+  l.push('## Le terminal, par usage (appel et sortie relus)')
   l.push('')
   for (const f of a.terminal) l.push(`- ${f.nom} : **${pct(f.partUsd)}** des dollars`)
   l.push('')
-  l.push('## Outils qui coûtent le plus')
+  l.push('## Outils qui coûtent le plus (relus)')
   l.push('')
   for (const o of a.outils.slice(0, 8)) l.push(`- \`${o.nom}\` : ${pct(o.partUsd)}`)
   l.push('')
   l.push('## Lectures de fichier')
   l.push('')
-  const sources = [
-    ['outil Read', a.lectures.Read],
-    ['terminal (cat, sed -n, head…)', a.lectures.terminal]
-  ]
-  for (const [nom, r] of sources) {
-    l.push(
-      `- ${nom} : ${r.total} lectures (${pct(r.partUsdToutes)} des dollars), ${r.entieres} du fichier entier ; lignes rendues : médiane ${r.medianeLignes}, 9 sur 10 sous ${r.p90Lignes}. Entières de plus de ${n} lignes : **${r.grosses}**, ${pct(r.partUsdGrosses)} des dollars.`
-    )
-  }
+  const ligneLectures = (nom, r) =>
+    `- ${nom} : ${r.total} lectures (${pct(r.partUsdToutes)} des dollars), ${r.entieres} du fichier entier ; lignes rendues : médiane ${r.medianeLignes}, 9 sur 10 sous ${r.p90Lignes}. Entières de plus de ${n} lignes : **${r.grosses}**, ${pct(r.partUsdGrosses)} des dollars.`
+  l.push(ligneLectures('outil Read', a.lectures.Read))
+  l.push(ligneLectures('terminal (cat, sed -n, head…)', a.lectures.terminal))
   l.push(
     `- Sorties de terminal de plus de ${n} lignes, tous usages : **${a.sortiesLongues.nombre}**, ${pct(a.sortiesLongues.partUsd)} des dollars.`
   )
@@ -596,20 +760,32 @@ export function rapport(a) {
   l.push('## Gain maximal par prise (méthode JetBrains : part des dollars × réduction promise)')
   l.push('')
   const partDe = (nom) => (a.types.find((t) => t.nom === nom) || { partUsd: 0 }).partUsd
-  const { Read, terminal } = a.lectures
-  const bas = (Read.partUsdGrosses + terminal.partUsdGrosses) * 0.9
-  const haut = (Read.partUsdToutes + terminal.partUsdToutes) * 0.9
+  const shunt = (x) => ({
+    bas: (x.Read.partUsdGrosses + x.terminal.partUsdGrosses) * 0.9,
+    haut: (x.Read.partUsdToutes + x.terminal.partUsdToutes) * 0.9
+  })
+  const tout = shunt(a.lectures)
+  const neuves = shunt(a.lecturesNonReprises)
   l.push(
-    `- Confier à un lecteur moins cher les grosses lectures (−90 %, shunt) : **${pct(bas)}** pour les lectures entières de plus de ${n} lignes, **${pct(haut)}** au plus si TOUTES les lectures passaient par lui — avant le coût du lecteur et des étapes en plus. Les lectures des tours précédents d'un fil repris sont dans le socle, hors de ce compte.`
+    `- Confier à un lecteur moins cher les grosses lectures (−90 %, shunt), avant le coût du lecteur et des étapes en plus :`
+  )
+  l.push(
+    `  - sur les ${a.lecturesNonReprises.sessions} sessions neuves, où toutes les lectures sont visibles : **${pct(neuves.bas)}** pour les lectures entières de plus de ${n} lignes, **${pct(neuves.haut)}** au plus si TOUTES les lectures passaient par lui ;`
+  )
+  l.push(
+    `  - sur toutes les sessions : au moins ${pct(tout.bas)} et ${pct(tout.haut)} (les lectures des tours d'avant d'un fil repris sont dans le socle, hors de ce compte).`
   )
   l.push(
     `- Compresser de 70 % toutes les sorties du terminal (rtk) : au plus **${pct(partDe('Bash / PowerShell') * 0.7)}**.`
   )
   l.push(
-    `- Raccourcir de 65 % le texte de l'agent (caveman) : au plus **${pct(partDe("texte de l'agent") * 0.65)}** relu, plus sa part de la sortie.`
+    `- Raccourcir de 65 % le texte de l'agent (caveman) : au plus **${pct((partDe("texte de l'agent") + partDe(`${SORTIE} — texte de l'agent`)) * 0.65)}** (relu et écrit).`
   )
   l.push(
-    `- Alléger de 30 % le socle de départ (consignes, outils, historique repris) : au plus **${pct(partDe(SOCLE) * 0.3)}**.`
+    `- Écrire 15 % de code en moins (Ponytail) : au plus **${pct((partDe('Edit / Write') + partDe(`${SORTIE} — appels d'outils`)) * 0.15)}** (appels d'édition relus et tous les appels écrits — majorant).`
+  )
+  l.push(
+    `- Alléger de 30 % le socle de départ : au plus **${pct(partDe(SOCLE) * 0.3)}** — consignes et outils d'un côté, historique repris de l'autre : deux leviers différents.`
   )
   return l.join('\n')
 }
