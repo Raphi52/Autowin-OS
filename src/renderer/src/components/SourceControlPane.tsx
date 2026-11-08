@@ -7,6 +7,7 @@ import { ProjectPane } from './ProjectPane'
 import { DiffView } from './DiffView'
 import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
 import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
+import { repartirNotesAppel, type NoteAppel } from './brain-appel-notes'
 import {
   composerRelecture,
   type CommentaireRelecture,
@@ -867,8 +868,27 @@ export function SourceControlPane({
               <div className="sc-clean">{t('sc.brain.aucun')}</div>
             ) : (
               visibleBrainTraces.map((trace, index) => {
-                const retained =
-                  trace.navigation?.candidates.filter((candidate) => candidate.retained) ?? []
+                const { transmises, ecartees } = repartirNotesAppel(trace)
+                const listeNotes = (notes: NoteAppel[], ecartee: boolean): React.JSX.Element => (
+                  <ul className={`sc-brain-sources${ecartee ? ' is-ecartee' : ''}`}>
+                    {notes.map((note) => (
+                      <li key={note.path} title={note.path}>
+                        <span className="sc-brain-chemin">{note.path}</span>
+                        {note.proximite !== undefined && (
+                          <span
+                            className="sc-brain-proximite"
+                            title={t('sc.brain.proximite.titre')}
+                          >
+                            {formaterNombre(note.proximite, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )
                 return (
                   <article
                     className="sc-brain-call"
@@ -897,26 +917,36 @@ export function SourceControlPane({
                         {trace.status === 'unavailable'
                           ? t('sc.brain.indisponible')
                           : trace.found === false
-                            ? t('sc.brain.aucunResultat')
+                            ? ecartees.length > 0
+                              ? t('sc.brain.rienDAssezProche')
+                              : t('sc.brain.aucunResultat')
                             : trace.found === true
                               ? t('sc.brain.resultatTrouve')
                               : t('sc.brain.resultatInconnu')}
                       </span>
                       <span>
-                        {t('sc.brain.caracteres', { n: formaterNombre(trace.injectedChars) })}
+                        {trace.injectedChars > 0
+                          ? t('sc.brain.caracteres', { n: formaterNombre(trace.injectedChars) })
+                          : t('sc.brain.rienTransmis')}
                       </span>
-                      {retained.length > 0 && (
-                        <span>{t('sc.brain.sources', { n: retained.length })}</span>
-                      )}
                     </footer>
-                    {retained.length > 0 && (
-                      <ul className="sc-brain-sources">
-                        {retained.map((candidate) => (
-                          <li key={candidate.path} title={candidate.path}>
-                            {candidate.path}
-                          </li>
-                        ))}
-                      </ul>
+                    {transmises.length > 0 && (
+                      <>
+                        <div className="sc-brain-groupe">
+                          {t('sc.brain.transmises', { n: transmises.length })}
+                        </div>
+                        {listeNotes(transmises, false)}
+                      </>
+                    )}
+                    {/* Repliées : jusqu'à 23 notes écartées sous un seul appel noyaient celle
+                        réellement transmise. Le compte suffit à dire que le Brain a trouvé. */}
+                    {ecartees.length > 0 && (
+                      <details className="sc-brain-ecartees">
+                        <summary className="sc-brain-groupe" title={t('sc.brain.ecartees.titre')}>
+                          {t('sc.brain.ecartees', { n: ecartees.length })}
+                        </summary>
+                        {listeNotes(ecartees, true)}
+                      </details>
                     )}
                   </article>
                 )

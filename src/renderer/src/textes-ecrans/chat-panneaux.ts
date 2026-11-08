@@ -128,8 +128,14 @@ export const TEXTES_FR = {
   'sc.brain.aucunResultat': 'Aucun résultat',
   'sc.brain.resultatTrouve': 'Résultat trouvé',
   'sc.brain.resultatInconnu': 'Résultat historique inconnu',
+  'sc.brain.rienDAssezProche': 'Rien d’assez proche',
   'sc.brain.caracteres': '{n} caractères transmis',
-  'sc.brain.sources': '{n} source(s) retenue(s)',
+  'sc.brain.rienTransmis': 'Rien transmis à l’agent',
+  'sc.brain.transmises': 'Transmises à l’agent · {n}',
+  'sc.brain.ecartees': 'Trouvées, non transmises · {n}',
+  'sc.brain.ecartees.titre':
+    'Le Brain les a trouvées, mais le tri ne les a pas gardées : pas parmi les plus proches de la demande, ou déjà montrées dans ce fil. Cliquer pour les afficher.',
+  'sc.brain.proximite.titre': 'Proximité avec la demande (0 à 1)',
   // SourceControlPane.tsx — vue « Git »
   'sc.branche': 'Branche',
   // Un seul interrupteur, qui porte les deux accords (publier, puis /git sur le reste).
@@ -569,8 +575,14 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'sc.brain.aucunResultat': 'No result',
   'sc.brain.resultatTrouve': 'Result found',
   'sc.brain.resultatInconnu': 'Unknown historical result',
+  'sc.brain.rienDAssezProche': 'Nothing close enough',
   'sc.brain.caracteres': '{n} characters sent',
-  'sc.brain.sources': '{n} source(s) kept',
+  'sc.brain.rienTransmis': 'Nothing sent to the agent',
+  'sc.brain.transmises': 'Sent to the agent · {n}',
+  'sc.brain.ecartees': 'Found, not sent · {n}',
+  'sc.brain.ecartees.titre':
+    'The Brain found them, but the filter did not keep them: not among the closest to the request, or already shown in this thread. Click to show them.',
+  'sc.brain.proximite.titre': 'Closeness to the request (0 to 1)',
   // SourceControlPane.tsx — vue « Git »
   'sc.branche': 'Branch',
   'sc.publicationAuto': 'Auto-publish',

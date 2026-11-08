@@ -369,6 +369,60 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Deux groupes sous chaque appel : ce que l'agent a reçu, puis ce que le Brain a trouvé sans
+   que ce soit transmis — atténué, pour qu'on ne le lise pas comme envoyé. */
+.sc-brain-groupe {
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sc-brain-groupe + .sc-brain-sources {
+  margin-top: 3px;
+}
+.sc-brain-ecartees > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.sc-brain-ecartees > summary::-webkit-details-marker {
+  display: none;
+}
+.sc-brain-ecartees > summary::before {
+  content: '▸ ';
+}
+.sc-brain-ecartees[open] > summary::before {
+  content: '▾ ';
+}
+.sc-brain-ecartees > summary:hover {
+  color: var(--text);
+}
+.sc-brain-sources li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.sc-brain-chemin {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sc-brain-sources:not(.is-ecartee) .sc-brain-chemin {
+  color: var(--text);
+}
+.sc-brain-sources.is-ecartee li {
+  opacity: 0.6;
+}
+.sc-brain-proximite {
+  flex: none;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.sc-brain-sources.is-ecartee .sc-brain-proximite {
+  color: var(--text-dim);
+}
 
 /* Variante D : le bouton du bloc des changements passe en or plein. */
 .sc-diff-action {

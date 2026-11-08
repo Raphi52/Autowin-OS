@@ -952,6 +952,77 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.textContent).not.toContain('Aucun résultat')
   })
 
+  it('notes trouvées mais trop éloignées : dit que rien n’est transmis et les montre écartées', async () => {
+    const candidat = (path: string, rank: number, denseCos: number): Record<string, unknown> => ({
+      path,
+      rank,
+      denseCos,
+      type: 'lesson',
+      retained: true
+    })
+    mockApi(GIT, undefined, [
+      {
+        timestamp: '2026-11-08T08:07:00.000Z',
+        conversationId: 'conv-a',
+        turnId: '9a766be7-9e59',
+        kind: 'pousse',
+        point: 'chat-titres-du-tour',
+        query: 'il me faudrait un daily kaizen',
+        found: false,
+        status: 'found',
+        injectedChars: 0,
+        navigation: {
+          query: 'q',
+          minDense: 0,
+          candidates: [
+            candidat('knowledge/domain/parcours.md', 1, 0.3199),
+            candidat('knowledge/preferences/publier.md', 5, 0.3485)
+          ]
+        }
+      },
+      {
+        timestamp: '2026-11-08T08:09:00.000Z',
+        conversationId: 'conv-a',
+        kind: 'pousse',
+        point: 'chat-titres-du-tour',
+        query: 'seuil des notes proches',
+        found: true,
+        status: 'found',
+        injectedChars: 80,
+        notes: ['knowledge/decisions/seuil.md'],
+        navigation: {
+          query: 'q',
+          minDense: 0,
+          candidates: [
+            candidat('knowledge/decisions/seuil.md', 1, 0.52),
+            candidat('knowledge/lessons/autre.md', 4, 0.41)
+          ]
+        }
+      }
+    ])
+
+    await render()
+    await act(async () => {
+      ;(container.querySelector('[data-testid="sc-repo-brain"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const [vide, servi] = [...container.querySelectorAll('[data-testid="sc-brain-trace"]')].map(
+      (el) => el.textContent ?? ''
+    )
+    expect(vide).toContain('Rien d’assez proche')
+    expect(vide).toContain('Rien transmis à l’agent')
+    expect(vide).toContain('Trouvées, non transmises · 2')
+    expect(vide).not.toContain('Transmises à l’agent')
+    expect(vide).not.toContain('0 caractères transmis')
+    expect(vide).not.toContain('retenue')
+    expect(vide).toMatch(/0,35/)
+    expect(servi).toContain('80 caractères transmis')
+    expect(servi).toContain('Transmises à l’agent · 1')
+    expect(servi).toContain('Trouvées, non transmises · 1')
+  })
+
   it('ignore la réponse Projet obsolète après un changement de conversation', async () => {
     mockApi(GIT)
     let resolveA!: (value: GitReadResult) => void
