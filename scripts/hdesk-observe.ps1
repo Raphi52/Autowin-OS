@@ -33,6 +33,20 @@ if ([string]::IsNullOrWhiteSpace($Output)) {
 
 $resultat = [AutowinHdeskShot]::Capture($nomBureau, $Output)
 if ($resultat.Error) { throw $resultat.Error }
+# CAPTURE NOTEE (captures.jsonl, meme format que scripts/bureau-cache-registre.mjs) : le fil ne
+# recopie pas cette image quand l'agent l'ouvre, l'onglet Bureaux caches montre deja le bureau.
+# Une panne d'ecriture ne fait jamais echouer la capture.
+try {
+  $registreCaptures = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'autowin-hdesk'
+  New-Item -ItemType Directory -Path $registreCaptures -Force | Out-Null
+  $journalCaptures = Join-Path $registreCaptures 'captures.jsonl'
+  $ligneCapture = [pscustomobject]@{ chemin = [IO.Path]::GetFullPath($Output); id = $InstanceId; quand = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json -Compress
+  [IO.File]::AppendAllText($journalCaptures, "$ligneCapture`n", (New-Object Text.UTF8Encoding $false))
+  if ((Get-Item -LiteralPath $journalCaptures).Length -gt 262144) {
+    $gardees = @(Get-Content -LiteralPath $journalCaptures -Encoding UTF8 | Select-Object -Last 200)
+    [IO.File]::WriteAllText($journalCaptures, (($gardees -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+  }
+} catch { }
 [pscustomobject]@{
   instanceId = $InstanceId; desktop = $nomBureau; width = $resultat.Width; height = $resultat.Height
   fenetres = $resultat.Windows; fenetresDessinees = $resultat.Painted

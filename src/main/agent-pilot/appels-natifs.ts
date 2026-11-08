@@ -17,6 +17,7 @@ import type { ExecutionDeCommande } from './commandes-du-tour'
 import type { EtatDuTour } from './etat-du-tour'
 import type { PilotEventVariant } from './evenements'
 import { commandResultSucceeded, motifDepotMemoireNonAbouti } from './issue-des-commandes'
+import { imageDOutilMontreeDansLeFil } from '../bureau/captures-de-bureau-cache'
 
 export interface AppelsNatifsDuTour {
   comptabiliserCommande: (
@@ -140,6 +141,8 @@ export function appelsNatifsDuTour(entree: {
     let indexCapture = 0
     for (const piece of r.attachments ?? []) {
       if (piece.kind !== 'image' || !piece.content) continue
+      // Capture d'un bureau caché : l'onglet Bureaux cachés la montre en direct, pas le fil.
+      if (!imageDOutilMontreeDansLeFil(nom)) continue
       emit({
         kind: 'artifact',
         iteration: etat.iterationNatif,

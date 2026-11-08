@@ -17,12 +17,16 @@ describe('AgentPilot — la capture qui valide est VUE par l’utilisateur', () 
     content: 'YWJj'
   }
 
-  function pilote(attachments: unknown[]): {
+  function pilote(
+    attachments: unknown[],
+    commande = 'desktop_observe'
+  ): {
     events: Array<{
       kind: string
       artifact?: { mimeType?: string; content?: string; kind?: string }
     }>
     run: () => Promise<unknown>
+    envois: () => Message[][]
   } {
     let tour = 0
     const registry = {
@@ -35,9 +39,7 @@ describe('AgentPilot — la capture qui valide est VUE par l’utilisateur', () 
           tour += 1
           return {
             text:
-              tour === 1
-                ? '<cmd>{"name":"desktop_observe","args":{}}</cmd>'
-                : 'La vue est correcte.',
+              tour === 1 ? `<cmd>{"name":"${commande}","args":{}}</cmd>` : 'La vue est correcte.',
             provider: 'codex',
             systemInjected: true
           } as SendResult
@@ -47,13 +49,14 @@ describe('AgentPilot — la capture qui valide est VUE par l’utilisateur', () 
     }
     const roles = { getBinding: vi.fn(() => ({ provider: 'codex', model: 'gpt-test' })) }
     const bus = {
-      catalog: vi.fn(() => [{ name: 'desktop_observe', description: 'capture', args: {} }]),
+      catalog: vi.fn(() => [{ name: commande, description: 'capture', args: {} }]),
       snapshotForPrompt: vi.fn(async () => ({ tab: 'chat' })),
       exec: vi.fn(async () => ({ ok: true, data: 'vu', attachments }))
     }
     const events: Array<{ kind: string; artifact?: Record<string, unknown> }> = []
     return {
       events,
+      envois: () => registry.send.mock.calls.map((appel) => appel[1]),
       run: () =>
         new AgentPilot(registry as never, roles as never, bus as never).chat(
           [{ role: 'user', content: 'verifie le front' }],
@@ -89,5 +92,21 @@ describe('AgentPilot — la capture qui valide est VUE par l’utilisateur', () 
     ])
     await run()
     expect(events.find((event) => event.kind === 'artifact')).toBeUndefined()
+  })
+
+  /**
+   * « dans le chat je vois des screenshots que tu prends en bureau caché […] je veux qu'ils
+   * apparaissent dans l'onglet Bureaux cachés ». L'image part toujours au modèle IA ; seule la carte
+   * du fil disparaît.
+   */
+  it('ne montre PAS dans le fil la capture d’un bureau caché, mais la donne au modèle', async () => {
+    const { events, run, envois } = pilote([capture], 'bureau_cache_observer')
+    await run()
+    expect(events.find((event) => event.kind === 'artifact')).toBeUndefined()
+    const envoyees = envois()
+      .slice(1)
+      .flat()
+      .flatMap((message) => message.attachments ?? [])
+    expect(envoyees).toContainEqual(expect.objectContaining({ kind: 'image', content: 'YWJj' }))
   })
 })

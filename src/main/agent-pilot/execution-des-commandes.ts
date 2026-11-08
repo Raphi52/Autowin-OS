@@ -28,6 +28,7 @@ import type { ContexteDuTour } from './contexte-du-tour'
 import { commandResultSucceeded, failedOrchestrationOutcome } from './issue-des-commandes'
 import type { IterationDuTour } from './iteration-du-tour'
 import type { OrderedPilotToken } from './jetons-de-commande'
+import { imageDOutilMontreeDansLeFil } from '../bureau/captures-de-bureau-cache'
 
 export async function executerLesCommandes(
   tour: ContexteDuTour,
@@ -265,6 +266,8 @@ export async function executerLesCommandes(
      */
     for (const piece of r.attachments ?? []) {
       if (piece.kind !== 'image' || !piece.content) continue
+      // Capture d'un bureau caché : l'onglet Bureaux cachés la montre en direct, pas le fil.
+      if (!imageDOutilMontreeDansLeFil(token.name)) continue
       emit({
         kind: 'artifact',
         iteration: i,

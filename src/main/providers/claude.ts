@@ -78,6 +78,7 @@ import {
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { addedLineFingerprints, exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
+import { estCaptureDeBureauCache } from '../bureau/captures-de-bureau-cache'
 import { claudeCompteDuFil, withClaudeAccountEnv } from './claude-accounts'
 import { envDuCoffre } from './cles-du-coffre'
 import { coutDuTourDepuisCumul } from './claude-session-cost'
@@ -2139,7 +2140,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // Aucun Electron lancé par l'agent n'ouvre sa boîte d'erreur chez l'utilisateur.
           ...envFiletElectronAgent(modAutowin, process.env),
           // Tour de chantier : le CLI ne le tue pas 10 min après son tour (voir `ENV_CHANTIER`).
-          ...(args.includes(OUTIL_WORKFLOW) ? ENV_CHANTIER : {})
+          ...(args.includes(OUTIL_WORKFLOW) ? ENV_CHANTIER : {}),
+          // Le fil du chat, pour qu'un bureau caché ouvert par un script (ui-capture) rejoigne son
+          // onglet Bureaux cachés. Pas AUTOWIN_CONVERSATION_ID : le hook des agents y lit « étape de
+          // run », et livrerait alors autrement les messages des autres fils.
+          ...(opts.conversationId?.trim()
+            ? { AUTOWIN_FIL_DU_CHAT: opts.conversationId.trim() }
+            : {})
         },
         execution?.agentEnv
       )
@@ -2333,6 +2340,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         .map((attachment) => base64Fingerprint(attachment.content))
     )
     const collectArtifacts = (content: unknown, tool?: string, sourcePath?: string): void => {
+      // Capture d'un bureau caché ouverte par `Read` : le modèle la voit, l'onglet Bureaux cachés
+      // montre le bureau en direct ; le fil ne la recopie pas.
+      if (tool === 'Read' && estCaptureDeBureauCache(sourcePath)) return
       const nouveaux = claudeContentArtifacts(content, tool, sourcePath).filter(
         (artifact) =>
           !artifact.mimeType?.startsWith('image/') ||

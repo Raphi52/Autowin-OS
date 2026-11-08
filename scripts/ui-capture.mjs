@@ -148,6 +148,7 @@ import {
   retirerSemence,
   semerConversation
 } from './semer-conversation.mjs'
+import { noterCapture } from './bureau-cache-registre.mjs'
 
 /** Vrai quand ce fichier est LANCE en CLI, faux quand un test l'importe pour ses fonctions pures. */
 const lanceEnCli = Boolean(process.argv[1] && process.argv[1].endsWith('ui-capture.mjs'))
@@ -776,6 +777,17 @@ export const demandeDeConversation = (argv) => {
  */
 export const ENV_CONVERSATION_SEMEE = 'AUTOWIN_CAPTURE_CONVERSATION_SEMEE'
 
+/**
+ * Le bureau caché ou tourne l'enfant, pose par la capture qui l'a lance. Ses images sont notees
+ * (`captures.jsonl`) : le fil ne les recopie pas quand l'agent les ouvre, l'onglet Bureaux caches
+ * a montre le bureau. Absente (fenetre reelle, `--port` a la main) : rien n'est note.
+ */
+export const ENV_BUREAU_CACHE = 'AUTOWIN_BUREAU_CACHE_ID'
+const noterSiBureauCache = (fichier) => {
+  const id = process.env[ENV_BUREAU_CACHE]
+  if (id) noterCapture(fichier, { id })
+}
+
 /** Clé de la conversation rouverte au démarrage (`derniere-conversation.ts`, renderer). */
 export const CLE_DERNIERE_CONVERSATION = 'autowin.chat.derniereConversation'
 
@@ -977,7 +989,11 @@ const main = async () => {
       {
         stdio: 'inherit',
         windowsHide: true,
-        env: demande?.id ? { ...process.env, [ENV_CONVERSATION_SEMEE]: demande.id } : process.env
+        env: {
+          ...process.env,
+          [ENV_BUREAU_CACHE]: instanceId,
+          ...(demande?.id ? { [ENV_CONVERSATION_SEMEE]: demande.id } : {})
+        }
       }
     )
     if (semence?.ok) {
@@ -2117,6 +2133,7 @@ const main = async () => {
       })()`)
       mkdirSync(dirname(sortie), { recursive: true })
       writeFileSync(sortie, Buffer.from(String(planche).split(',')[1], 'base64'))
+      noterSiBureauCache(sortie)
     }
 
     const verdictM = verdictMouvement({ selecteur: selecteurMouvement, occurrences })
@@ -2174,6 +2191,7 @@ const main = async () => {
   if (fluxOuvert) await envoyer('Page.stopScreencast').catch(() => {})
   mkdirSync(dirname(sortie), { recursive: true })
   writeFileSync(sortie, Buffer.from(capture.data, 'base64'))
+  noterSiBureauCache(sortie)
   const octetsPng = statSync(sortie).size
   await restaurerVue()
   socket.close()

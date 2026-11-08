@@ -50,6 +50,7 @@ import {
 import { dirname, join, relative } from 'node:path'
 import { racineDepot } from './racine-depot.mjs'
 import { portsEnEcouteSysteme } from './port-libre.mjs'
+import { filDeLAgent, inscrireFiche, retirerFiche } from './bureau-cache-registre.mjs'
 
 /**
  * La commande PowerShell du lanceur, pour une action donnee. Pure.
@@ -726,6 +727,42 @@ export function reserverInstance({
   return { port, racineInstances }
 }
 
+/**
+ * LA FICHE DE L'ONGLET « BUREAUX CACHÉS » pour l'instance prête : libellé tiré du script lancé, fil de
+ * l'agent, numéro de l'application lu dans la réponse du lanceur. Sans elle, ce bureau restait
+ * « travail non relié » et l'onglet du fil ne s'ouvrait pas. Pure.
+ */
+export function ficheDuBureauPret({ instanceId, enfant, sortieDemarrage, env = process.env }) {
+  const script = enfant.find((a) => /\.(mjs|js|cjs)$/i.test(a)) ?? ''
+  const nom =
+    script
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/\.(mjs|js|cjs)$/i, '') || 'instance'
+  let pret = {}
+  for (const ligne of String(sortieDemarrage ?? '')
+    .split(/\r?\n/)
+    .reverse()) {
+    if (!ligne.trim().startsWith('{')) continue
+    try {
+      pret = JSON.parse(ligne)
+      break
+    } catch {
+      // Ligne non JSON : on remonte.
+    }
+  }
+  return {
+    id: instanceId,
+    travail:
+      nom === 'ui-capture' ? 'Capture d’interface Autowin (ui-capture)' : `Autowin caché (${nom})`,
+    conversationId: filDeLAgent(env),
+    ...(typeof pret.pid === 'number' ? { pid: pret.pid } : {}),
+    ...(typeof pret.executable === 'string' && pret.executable
+      ? { executable: pret.executable }
+      : {})
+  }
+}
+
 async function main() {
   const racine = racineDepot()
   const { instanceId, portDemande, attendreMs, codeDev, rendererUrl, enfant } = decouperArguments(
@@ -778,6 +815,7 @@ async function main() {
   const arreter = () => {
     if (arrete) return
     arrete = true
+    retirerFiche(instanceId)
     const stop = lanceur('Stop')
     if (stop.status !== 0)
       console.error(`[instance-headless] arret imparfait : ${stop.stderr || stop.stdout}`)
@@ -801,6 +839,8 @@ async function main() {
     process.exit(4)
   }
   console.error(`[instance-headless] instance « ${instanceId} » prete sur le port ${port}`)
+  // Le bureau existe maintenant : sa fiche peut paraître sans être purgée comme bureau fermé.
+  inscrireFiche(ficheDuBureauPret({ instanceId, enfant, sortieDemarrage: demarrage.stdout }))
 
   const code = await new Promise((resoudre) => {
     const fils = spawn(process.execPath, argumentsEnfantAvecPort(enfant.slice(1), port), {

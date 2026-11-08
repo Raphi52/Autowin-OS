@@ -373,6 +373,65 @@ describe('ClaudeCliAdapter — sorties artefact stream-json', () => {
     ])
   })
 
+  it('ne recopie pas dans le fil une capture de bureau caché ouverte par Read', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { noterCapture } = await import('../../../scripts/bureau-cache-registre.mjs')
+    const appData = mkdtempSync(join(tmpdir(), 'claude-capture-hdesk-'))
+    const avant = process.env.LOCALAPPDATA
+    process.env.LOCALAPPDATA = appData
+    try {
+      const capture = join(appData, 'studio-sombre.png')
+      noterCapture(capture, { id: 'ui-capture-9' })
+      spawnCapture.stdoutEvents = [
+        {
+          type: 'assistant',
+          message: {
+            model: 'claude-opus-test',
+            content: [
+              { type: 'tool_use', id: 'lecture-2', name: 'Read', input: { file_path: capture } }
+            ]
+          }
+        },
+        {
+          type: 'user',
+          message: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'lecture-2',
+                content: [
+                  {
+                    type: 'image',
+                    source: { type: 'base64', media_type: 'image/png', data: 'ZGVm' }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        { type: 'result', result: 'vu', session_id: 'artifact-session', is_error: false }
+      ]
+      const { ClaudeCliAdapter } = await import('./claude')
+      const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([
+        { role: 'user', content: 'Regarde la capture' }
+      ])
+      let diffusees = 0
+      let step = await gen.next()
+      while (!step.done) {
+        diffusees += step.value.artifacts?.length ?? 0
+        step = await gen.next()
+      }
+      expect(diffusees).toBe(0)
+      expect(step.value.artifacts ?? []).toEqual([])
+    } finally {
+      if (avant === undefined) delete process.env.LOCALAPPDATA
+      else process.env.LOCALAPPDATA = avant
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+
   it('conserve une image Claude différente même si le tour contient une image utilisateur', async () => {
     spawnCapture.stdoutEvents = [
       {

@@ -3,6 +3,7 @@ import {
   argumentsEnfantAvecPort,
   commandeLanceur,
   decouperArguments,
+  ficheDuBureauPret,
   pidVivant,
   restesAramasser
 } from './avec-instance-headless.mjs'
@@ -129,5 +130,43 @@ describe('ui-capture sur instance dediee', () => {
       'a.png'
     ])
     expect(args).not.toContain('--instance-dediee')
+  })
+})
+
+describe('fiche du bureau caché de l instance', () => {
+  it('relie le bureau de ui-capture au fil du chat, avec le numero de son application', () => {
+    const fiche = ficheDuBureauPret({
+      instanceId: 'ui-capture-77',
+      enfant: ['node', String.raw`D:\depot\scripts\ui-capture.mjs`, '--view', 'chat'],
+      sortieDemarrage: [
+        'trace',
+        JSON.stringify({
+          instanceId: 'ui-capture-77',
+          status: 'ready',
+          pid: 4242,
+          executable: String.raw`C:\e\electron.exe`
+        }),
+        ''
+      ].join('\r\n'),
+      env: { AUTOWIN_FIL_DU_CHAT: 'conv-1713' }
+    })
+    expect(fiche).toEqual({
+      id: 'ui-capture-77',
+      travail: 'Capture d’interface Autowin (ui-capture)',
+      conversationId: 'conv-1713',
+      pid: 4242,
+      executable: String.raw`C:\e\electron.exe`
+    })
+  })
+
+  it('sans fil connu ni reponse lisible, la fiche nomme quand meme le travail', () => {
+    expect(
+      ficheDuBureauPret({
+        instanceId: 'sonde-1',
+        enfant: ['node', 'scripts/sonde-vue.mjs'],
+        sortieDemarrage: 'pas de json',
+        env: {}
+      })
+    ).toEqual({ id: 'sonde-1', travail: 'Autowin caché (sonde-vue)', conversationId: undefined })
   })
 })
