@@ -16,6 +16,7 @@ import { pendantOperation } from '../gel/gel-main'
 import { lastUserMessageAt } from '../store/conversations'
 import { skillsInvocables } from './skills'
 import { listerCles } from '../app/coffre-cles'
+import { LEGENDE_RUNS_NON_EXAMINES } from '../dashboards/runs-scan'
 
 /** Projette le statut budget de l'OS sur les trois champs honnêtes du snapshot. */
 export function budgetSnapshot(status: {
@@ -86,7 +87,12 @@ export async function snapshot(bus: AppCommandBus, jalon?: (nom: string) => void
         blocked: r.blocked,
         ...(r.summary.decisionAttendue ? { decisionAttendue: true as const } : {})
       })),
-    ...(runs.horsFenetre ? { runsNonExamines: runs.horsFenetre } : {}),
+    // Seulement les RUN.md qui demandent encore un regard ; le total reste au Board (`runsNonOuverts`).
+    // Absent tant que le premier calcul n'est pas fini ; un compte nul (0) est servi tel quel.
+    // fix-ok: cause mesurée — un test de vérité (`? :`) jetait le 0 : « rien à regarder » devenait « pas encore calculé ».
+    ...(runs.horsFenetreARegarder !== undefined
+      ? { runsNonExamines: runs.horsFenetreARegarder }
+      : {}),
     // Worktrees encore vivants côté Autowin : ce qui n'y figure plus a été nettoyé/fermé. C'est LA
     // sonde qui manquait pour répondre « le workspace s'est fermé ? » sans hausser les épaules.
     worktrees: bus.jalonne(jalon, 'snapshot:worktrees', () =>
@@ -165,7 +171,10 @@ export async function snapshotForPrompt(bus: AppCommandBus, jalon?: (nom: string
         status: r.status,
         ...(r.decisionAttendue ? { decisionAttendue: true as const } : {})
       })),
-    ...(full.runsNonExamines ? { runsNonExamines: full.runsNonExamines } : {}),
+    // Le nombre voyage avec sa légende : seul, `runsNonExamines: 128` se lit « 128 non examinés ».
+    ...(full.runsNonExamines !== undefined
+      ? { runsNonExamines: full.runsNonExamines, runsNonExaminesLegende: LEGENDE_RUNS_NON_EXAMINES }
+      : {}),
     conversationsCount: full.conversations.length,
     ...(skillsInvocables().length > 0 ? { skillsDisponibles: skillsInvocables() } : {}),
     ...clesDuCoffrePourLePrompt(),

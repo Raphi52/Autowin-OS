@@ -224,7 +224,7 @@ export interface CarteDesBesoins {
    * RUN.md que le scan borné n'a PAS ouverts : présent, il dit que la liste des runs bloqués est
    * PARTIELLE — une liste courte n'y prouve pas l'absence d'autres blocages.
    */
-  runsNonExamines?: number
+  runsNonOuverts?: number
   calculeeA: number
   /** Durée du calcul dans le processus principal, pour voir s'il devient trop lourd. */
   dureeMs: number

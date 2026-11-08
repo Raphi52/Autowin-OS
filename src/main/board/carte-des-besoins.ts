@@ -215,7 +215,7 @@ export function assemblerLaCarte(entree: {
   conversations: readonly ConversationPourLaCarte[]
   demandesParConversation: ReadonlyMap<string, readonly DemandeDeLaCarte[]>
   runs: readonly RunPourLaCarte[]
-  runsNonExamines?: number
+  runsNonOuverts?: number
   /** Le dépôt de la barre du haut : même repli que la barre latérale pour un fil sans dossier. */
   dossierParDefaut?: string
   /** `besoins.jsonl` relu (lot 2) ; absent = aucune demande journalisée. */
@@ -352,7 +352,7 @@ export function assemblerLaCarte(entree: {
     conversationsLues: entree.conversations.length,
     demandeurs: [...demandeurs.values()].sort((a, b) => b.demandes - a.demandes),
     demandesJournalisees: journalisees,
-    ...(entree.runsNonExamines ? { runsNonExamines: entree.runsNonExamines } : {}),
+    ...(entree.runsNonOuverts ? { runsNonOuverts: entree.runsNonOuverts } : {}),
     calculeeA: entree.calculeeA,
     dureeMs: entree.dureeMs
   }
@@ -493,7 +493,8 @@ export function creerCalculateurDeCarte(deps: {
       conversations,
       demandesParConversation,
       runs,
-      ...(runs.horsFenetre ? { runsNonExamines: runs.horsFenetre } : {}),
+      // fix-ok: cause mesurée — `horsFenetre` est le total des RUN.md non ouverts par la borne, pas le compte à regarder : le Board le garde sous `runsNonOuverts`, et `runsNonExamines` ne désigne plus que le compte du chat.
+      ...(runs.horsFenetre ? { runsNonOuverts: runs.horsFenetre } : {}),
       ...(dossierParDefaut ? { dossierParDefaut } : {}),
       ...(journal ? { journal } : {}),
       ...(liens ? { liens } : {}),

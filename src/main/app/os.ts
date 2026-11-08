@@ -1851,7 +1851,9 @@ export class AutowinOS {
    * p95 1 288 ms / max 19 250 ms par tour le 2026-08-28. Le geste explicite de l'utilisateur
    * (Observatoire) garde `listRuns()`, lui, intact.
    */
-  async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }> & { horsFenetre?: number }> {
+  async runsWithGate(): Promise<
+    Array<RunEntry & { blocked: boolean }> & { horsFenetre?: number; horsFenetreARegarder?: number }
+  > {
     /*
      * LA RACINE OÙ AUTOWIN ÉCRIT, PAS SEULEMENT CELLE DU KIT. `runsRoot()` (`~/.claude/runs`) n'existe
      * pas sur le poste : `get_state`, l'état du prompt et le contexte des orchestrations voyaient
@@ -1860,9 +1862,10 @@ export class AutowinOS {
      */
     const fenetre = await scanRunsPourSnapshot([convRunsRoot(), runsRoot()])
     // `horsFenetre` suit la liste : sans lui, un run bloqué plus ancien que la borne disparaît en silence.
+    // `horsFenetreARegarder` : le compte de ceux qui demandent un regard (chat), distinct du total.
     return Object.assign(
       fenetre.map((r) => ({ ...r, blocked: isBlocked(r.summary) })),
-      { horsFenetre: fenetre.horsFenetre }
+      { horsFenetre: fenetre.horsFenetre, horsFenetreARegarder: fenetre.horsFenetreARegarder }
     )
   }
   kaizenPatterns(jsonl: string): ReturnType<typeof recurrentPatterns> {

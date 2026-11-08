@@ -7,6 +7,7 @@
  * import d'electron ni de commands.ts à l'exécution) : le branchement est fait par commands.ts.
  */
 import type { AppSnapshot } from '../commands/commands'
+import { LEGENDE_RUNS_NON_EXAMINES } from '../dashboards/runs-scan'
 
 export interface ArgsEtat {
   sections?: string | string[]
@@ -139,7 +140,13 @@ export function etatPourOutil(etat: AppSnapshot, args: ArgsEtat = {}): Record<st
       ...(filtre ? { conversationsCorrespondantes: correspondantes.length } : {}),
       runsListes: etat.runs.length,
       runsBloques: runsBloques.length,
-      ...(etat.runsNonExamines ? { runsNonExamines: etat.runsNonExamines } : {}),
+      // fix-ok: cause mesurée — le compteur partait sans légende (test rouge « expected 'undefined' to contain 'rien à regarder' ») : un 0 nu ne disait pas « rien à regarder » à l'agent.
+      ...(etat.runsNonExamines !== undefined
+        ? {
+            runsNonExamines: etat.runsNonExamines,
+            runsNonExaminesLegende: LEGENDE_RUNS_NON_EXAMINES
+          }
+        : {}),
       worktrees: etat.worktrees.length,
       travauxNonPublies: etat.travauxNonPublies.length,
       providers: etat.providers.length
