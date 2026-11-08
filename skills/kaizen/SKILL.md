@@ -4,10 +4,10 @@ description: >-
   Boucle d'amélioration continue sur le COMPORTEMENT de Claude : transforme une session (par défaut
   la COURANTE), une conversation Autowin (ou plusieurs, ou une période : « kaizen hier », « la
   semaine ») ou une INSTRUCTION INJECTÉE en éditions VÉRIFIÉES et
-  AUTO-APPLIQUÉES sur le levier qui CAUSE le défaut — skills, prompts injectés par Autowin, reste de
+  AUTO-APPLIQUÉES sur le levier qui CAUSE le défaut — skills, prompts injectés, reste de
   son code, outils, garde-fous, docs, Brain (§ « Tes leviers »). FINIR LA TÂCHE D'ABORD, puis
-  LOCALISER la cible, AUDITER par lentilles comportementales en parallèle, DÉFINIR le comportement
-  visé, CONSOLIDER en UNE cause racine localisée, ÉNONCER puis INTÉGRER les éditions soi-même et
+  LOCALISER la cible, AUDITER par lentilles en parallèle, DÉFINIR le comportement
+  visé, CONSOLIDER en UNE cause racine localisée, ÉNONCER puis INTÉGRER les éditions et
   prouver la NON-RÉCURRENCE par rejeu (§ Procédure). Déclencher sur « kaizen this session », «
   analyse les defauts dans les comportements / injections », « audite tout Autowin ». PAS pour la
   QUALITÉ d'un livrable (→ `judge`), un défaut de code isolé (→ `build`) ni un besoin neuf (→
