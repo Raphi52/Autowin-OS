@@ -158,8 +158,8 @@ export function dossierDeLectureDuFil(
  *
  * LE PASSAGE SE FAIT AU DÉBUT D'UN TOUR, jamais au milieu : un fil déjà commencé y passe à son tour
  * suivant, un fil neuf à son premier. Le dossier rangé DEVIENT la copie (le dossier rangé et le
- * dossier de travail ne diffèrent jamais). Changer de dossier change la clé de session
- * (`session-du-tour.ts`) : ce tour part sans reprise de session, avec l'historique du fil.
+ * dossier de travail ne diffèrent jamais). Le passage garde la session de l'agent : elle est
+ * recopiée sous la copie au tour (`session-du-tour.ts`, `suivreSessionVersCopie`).
  *
  * Seuls les fils du dépôt partagé (rangés dedans, ou sans dossier) sont concernés. Un fil rangé
  * ailleurs — un autre projet, la copie d'un essai, celle d'un retour à un tour — ne change pas.
@@ -272,9 +272,12 @@ export async function preparerLeDossierDuTour(entree: {
     return 'refusee'
   }
   entree.passer({ chemin: ouverte.chemin, depot: depotPartage })
-  // Changer de dossier fait repartir l'agent de l'historique du fil (`session-du-tour.ts`) : dit en clair.
+  // fix-ok: cause mesurée — l'ancienne annonce « repart de l'historique » ne tenait que parce que la clé
+  // de session contenait le dossier de travail (session-du-tour.ts) : changer de dossier faisait oublier
+  // la session. Mesuré sur le CLI Claude 2.1.319 : une session se reprend par son identifiant depuis un
+  // autre dossier (réponse ANANAS-7, exit 0). La session suit donc le fil dans sa copie, au tour.
   entree.annoncer(
-    `📂 Ce fil travaille maintenant dans sa propre copie de ${basename(depotPartage)} (${ouverte.chemin}) : ses changements entrent dans ${basename(depotPartage)} à la fin de chaque tour. L'agent repart de l'historique du fil.`
+    `📂 Ce fil travaille maintenant dans sa propre copie de ${basename(depotPartage)} (${ouverte.chemin}) : ses changements entrent dans ${basename(depotPartage)} à la fin de chaque tour.`
   )
   return 'ouverte'
 }

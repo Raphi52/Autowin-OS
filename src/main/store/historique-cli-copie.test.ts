@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, existsSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   encoderCheminCli,
   planHistoriqueCliASupprimer,
   racinesHistoriqueCliPour,
+  suivreSessionVersCopie,
   supprimerHistoriqueCli
 } from './historique-cli-copie'
 
@@ -79,5 +80,68 @@ describe('supprimerHistoriqueCli', () => {
     expect(supprimerHistoriqueCli(COPIE, [], [join(tmpdir(), 'autowin-inexistant-xyz')])).toEqual(
       []
     )
+  })
+})
+
+describe('suivreSessionVersCopie', () => {
+  const SOURCE = join('D:', 'AutoWinOS')
+  const VERS = join(SOURCE, '.autowin-data', 'autowin-os', 'retours-de-tour', 'essai__conv-S-1')
+  const SID = '3cd742bb-8548-4ae9-8b2f-7038dd27af57'
+  const projets = (config: string, cwd: string): string =>
+    join(config, 'projects', encoderCheminCli(cwd))
+
+  /** Pose la session du CLI sous le dossier de son cwd, comme le CLI la range. */
+  const poser = (config: string, cwd: string, contenu: string): void => {
+    mkdirSync(projets(config, cwd), { recursive: true })
+    writeFileSync(join(projets(config, cwd), `${SID}.jsonl`), contenu, 'utf8')
+  }
+
+  it('copie le .jsonl et le dossier des sorties d’outils sous le dossier de la copie', () => {
+    const config = mkdtempSync(join(tmpdir(), 'cfg-suivi-'))
+    poser(config, SOURCE, 'tour 1')
+    mkdirSync(join(projets(config, SOURCE), SID, 'tool-results'), { recursive: true })
+    writeFileSync(join(projets(config, SOURCE), SID, 'tool-results', 'r.txt'), 'sortie', 'utf8')
+
+    expect(
+      suivreSessionVersCopie({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
+    ).toBe('suivie')
+    expect(readFileSync(join(projets(config, VERS), `${SID}.jsonl`), 'utf8')).toBe('tour 1')
+    expect(readFileSync(join(projets(config, VERS), SID, 'tool-results', 'r.txt'), 'utf8')).toBe(
+      'sortie'
+    )
+  })
+
+  it('la source fait foi : une copie déjà posée est remplacée, la source reste intacte', () => {
+    const config = mkdtempSync(join(tmpdir(), 'cfg-suivi-'))
+    poser(config, SOURCE, 'tour 1 et 2')
+    poser(config, VERS, 'ancienne version')
+
+    expect(
+      suivreSessionVersCopie({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
+    ).toBe('suivie')
+    expect(readFileSync(join(projets(config, VERS), `${SID}.jsonl`), 'utf8')).toBe('tour 1 et 2')
+    expect(readFileSync(join(projets(config, SOURCE), `${SID}.jsonl`), 'utf8')).toBe('tour 1 et 2')
+  })
+
+  it('aucune session sous l’ancien dossier → absente, et rien n’est posé', () => {
+    const config = mkdtempSync(join(tmpdir(), 'cfg-suivi-'))
+    expect(
+      suivreSessionVersCopie({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
+    ).toBe('absente')
+    expect(existsSync(projets(config, VERS))).toBe(false)
+  })
+
+  it('identifiant qui n’est pas un UUID → absente, aucun chemin composé avec lui', () => {
+    const config = mkdtempSync(join(tmpdir(), 'cfg-suivi-'))
+    poser(config, SOURCE, 'tour 1')
+    expect(
+      suivreSessionVersCopie({
+        configDir: config,
+        depuis: SOURCE,
+        vers: VERS,
+        sessionId: `../${SID}`
+      })
+    ).toBe('absente')
+    expect(existsSync(projets(config, VERS))).toBe(false)
   })
 })

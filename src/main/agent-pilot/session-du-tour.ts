@@ -1,13 +1,20 @@
 // Reprise de session CLI d'un tour de chat : clé de session (modèle, compte, dossier, compactions,
 // poids du fil), session connue, session périmée oubliée. Sortie telle quelle de AgentPilot.chat()
 // (lot 2).
+import { resolve } from 'node:path'
 import { loadConvActivity } from '../activity/conv-activity'
 import { coupesParPoids } from '../chat/chat-session-poids'
 import { compactionsAbouties } from '../chat/chat-turn-messages'
-import { claudeActiveAccountId, claudeCompteDuFil } from '../providers/claude-accounts'
+import { memeCheminSurDisque } from '../fichiers/meme-chemin'
+import {
+  claudeAccountEnv,
+  claudeActiveAccountId,
+  claudeCompteDuFil
+} from '../providers/claude-accounts'
 import type { ProviderRegistry } from '../providers/registry'
 import type { Message } from '../providers/types'
 import type { RoleBinding } from '../profil/roles'
+import { suivreSessionVersCopie } from '../store/historique-cli-copie'
 
 export type SessionDuTour = {
   /** Clé de session pour un compte donné. */
@@ -18,6 +25,32 @@ export type SessionDuTour = {
   providerResumes: boolean
   /** Session reprise au DÉBUT du tour, figée : elle décide de l'amputation du prompt. */
   resumeSessionId: string | undefined
+}
+
+/** Le fil travaille dans sa copie : la copie et le dossier d'où elle vient (voir `bascule-dossier`). */
+export type CopieDuFilDuChat = { chemin: string; depot: string; dossierAvant?: string }
+
+/**
+ * LA COPIE DU FIL, pour le tour. Branché au démarrage (`index.ts`), comme le compte du fil : sans ce
+ * branchement, aucun passage n'est reconnu et la session ne suit pas le fil. Par défaut il ne rend
+ * RIEN : un module non configuré garde le comportement d'avant.
+ */
+let copieDuFilDuChat: (conversationId: string) => CopieDuFilDuChat | null = () => null
+
+export function configureCopieDuFilDuChat(
+  provider: (conversationId: string) => CopieDuFilDuChat | null
+): void {
+  copieDuFilDuChat = provider
+}
+
+/** La copie du fil, ou `null` : un fournisseur en panne ne doit jamais casser un tour. */
+function copieDuFil(conversationId: string | undefined): CopieDuFilDuChat | null {
+  if (!conversationId) return null
+  try {
+    return copieDuFilDuChat(conversationId)
+  } catch {
+    return null
+  }
 }
 
 export function sessionDuTour(entree: {
@@ -95,10 +128,13 @@ export function sessionDuTour(entree: {
    * suivant repart sur le fil aplati d'Autowin — bulles finales + resultats d'action resumes.
    */
   const coupesPoids = conversationId ? coupesParPoids(loadConvActivity(conversationId)) : 0
+  // La clé d'un dossier donné : le passage dans la copie la calcule pour le dossier d'AVANT.
+  const cleAvecDossier = (dossier: string, compte: string | undefined): string =>
+    `${provider}:${binding.model ?? ''}:${compte ?? ''}:${dossier}:c${compactions}:w${coupesPoids}`
   // Une FONCTION du compte : un tour qui bascule de compte en cours de route range sa
   // nouvelle session sous le compte qui l'a RÉELLEMENT ouverte, pas sous celui du départ.
   const cleDeSession = (compte: string | undefined): string =>
-    `${provider}:${binding.model ?? ''}:${compte ?? ''}:${workspaceDeSession}:c${compactions}:w${coupesPoids}`
+    cleAvecDossier(workspaceDeSession, compte)
   // Le compte choisi pour le fil prime sur celui de l'application : le compte actif peut
   // bouger sous ce fil sans que sa session cesse d'être la bonne.
   const compteDuTour = (): string | undefined =>
@@ -117,10 +153,50 @@ export function sessionDuTour(entree: {
    * Mesuré le 2026-08-04 sur 90 fils : 0 appel réellement repris, 31 prompts amputés.
    */
   const providerResumes = registry.honoursSessionResume?.(provider) ?? false
-  const resumeSessionId = providerResumes && known?.key === sessionKey ? known.sessionId : undefined
+  /**
+   * Le dossier de config du compte qui a ouvert la session, comme le registre le lance : le compte
+   * du fil s'il en a un (même si son dossier est celui par défaut), sinon le compte actif.
+   */
+  const configDuCompte = (): string | undefined => {
+    const compteDuFil = claudeCompteDuFil(conversationId)
+    return (compteDuFil ? compteDuFil.env : claudeAccountEnv()).CLAUDE_CONFIG_DIR || undefined
+  }
+  /**
+   * LE PASSAGE DANS LA COPIE GARDE LA SESSION.
+   *
+   * Le fil passe de son dossier d'avant à SA copie au début de son tour (`bascule-dossier-conversation`).
+   * Le dossier fait partie de la clé : sans ce cas, la session est oubliée et l'agent relit tout le fil.
+   * Si la session a été ouverte sous le dossier d'avant et que le fil est bien dans sa copie, elle est
+   * recopiée sous la copie et reprise là. Tout autre changement de dossier garde la règle d'avant.
+   * Seuls les fournisseurs qui reprennent leur session sont concernés : les autres renvoient le fil
+   * entier de toute façon.
+   * fix-ok: cause mesurée — la clé de session contient le dossier (`cleAvecDossier`) et tout
+   * changement de clé oublie la session (bloc « known.key !== sessionKey ») : le passage perdait la
+   * reprise (test rouge mesuré, `resumeSessionId` undefined au lieu de 'sess-1'). Le correctif garde la
+   * session quand le fil passe de son dossier d'avant à sa copie, et seulement là.
+   */
+  const sessionSuivieVersLaCopie = (): boolean => {
+    const copie = copieDuFil(conversationId)
+    if (!known || !copie || !memeCheminSurDisque(copie.chemin, workspaceDeSession)) return false
+    const dossierAvant = resolve(copie.dossierAvant ?? copie.depot)
+    if (memeCheminSurDisque(dossierAvant, workspaceDeSession)) return false
+    if (known.key !== cleAvecDossier(dossierAvant, compteAuDepart)) return false
+    return (
+      suivreSessionVersCopie({
+        configDir: configDuCompte(),
+        depuis: dossierAvant,
+        vers: workspaceDeSession,
+        sessionId: known.sessionId
+      }) === 'suivie'
+    )
+  }
+  const suivie = providerResumes && known ? sessionSuivieVersLaCopie() : false
+  const resumeSessionId =
+    providerResumes && (known?.key === sessionKey || suivie) ? known?.sessionId : undefined
   // Un détour par un autre provider/modèle ajoute des échanges absents de l'ancienne session.
   // Elle devient donc définitivement périmée, même si l'utilisateur revient ensuite au binding initial.
-  if (conversationId && known && known.key !== sessionKey) {
+  // Une session suivie dans la copie n'est PAS périmée : elle n'a fait que changer de dossier.
+  if (conversationId && known && known.key !== sessionKey && !suivie) {
     chatSessions.delete(conversationId)
     // Le disque doit oublier AUSSI : une entree perimee y survivrait au redemarrage et ferait
     // reprendre une session ouverte sous un autre binding.

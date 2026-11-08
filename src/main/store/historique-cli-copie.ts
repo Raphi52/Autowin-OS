@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
@@ -126,6 +126,53 @@ export function supprimerHistoriqueCli(
     }
   }
   return supprimes
+}
+
+/** Ce qu'il advient de la session d'un fil au passage dans sa copie (voir `suivreSessionVersCopie`). */
+export type SuiviDeSession = 'suivie' | 'absente' | 'echec'
+
+/**
+ * LA SESSION SUIT LE FIL DANS SA COPIE. Le CLI cherche une session sous le dossier de SON cwd. Un fil
+ * qui passe dans sa copie change de cwd : sans recopie, la reprise ne trouve plus rien et l'agent
+ * relit tout le fil. On pose donc, sous le dossier de la copie, la session du fil : son `.jsonl` et
+ * son dossier `<session>/` (sorties d'outils trop longues).
+ *
+ * LA SOURCE FAIT FOI, ET ELLE ÉCRASE. La clé de session pointe encore sur l'ancien dossier : le
+ * dernier tour réussi sous cette clé est donc celui de la source. Une copie déjà posée sous la copie
+ * ne contient que des tours échoués (un passage réessayé), ou une version ancienne : la garder
+ * ferait reprendre une session périmée. La source n'est jamais modifiée.
+ *
+ * Rend `absente` (rien à suivre : le CLI n'a pas écrit cette session sous l'ancien dossier, ou
+ * l'identifiant est invalide), `suivie`, ou `echec` (la session n'est pas posée : le tour repart
+ * sans reprise, comme avant ce mécanisme).
+ */
+export function suivreSessionVersCopie(entree: {
+  configDir?: string
+  depuis: string
+  vers: string
+  sessionId: string
+}): SuiviDeSession {
+  // Un identifiant de session est un UUID : rien d'autre ne doit composer un chemin.
+  if (!/^[A-Za-z0-9-]+$/.test(entree.sessionId)) return 'absente'
+  const projets = join(entree.configDir || join(homedir(), '.claude'), 'projects')
+  const source = join(projets, encoderCheminCli(entree.depuis))
+  const cible = join(projets, encoderCheminCli(entree.vers))
+  const fichier = `${entree.sessionId}.jsonl`
+  if (source === cible) return existsSync(join(cible, fichier)) ? 'suivie' : 'absente'
+  if (!existsSync(join(source, fichier))) return 'absente'
+  try {
+    mkdirSync(cible, { recursive: true })
+    if (existsSync(join(source, entree.sessionId))) {
+      cpSync(join(source, entree.sessionId), join(cible, entree.sessionId), {
+        recursive: true,
+        force: true
+      })
+    }
+    copyFileSync(join(source, fichier), join(cible, fichier))
+    return 'suivie'
+  } catch {
+    return 'echec'
+  }
 }
 
 /** Copies de travail encore présentes sous la même racine — elles revendiquent leur historique. */

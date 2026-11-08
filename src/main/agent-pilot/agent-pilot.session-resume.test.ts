@@ -1,14 +1,20 @@
-import { mkdtempSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from './agent-pilot'
+import { configureCopieDuFilDuChat } from './session-du-tour'
 import { configureAutowinAppDataBase } from '../app/app-data'
-import { configureClaudeActiveAccountId } from '../providers/claude-accounts'
 import {
+  configureClaudeAccountEnv,
+  configureClaudeActiveAccountId
+} from '../providers/claude-accounts'
+import {
+  copieOuTravailleLeFil,
   dossierDeTravailDuTour,
   preparerLeDossierDuTour
 } from '../conversations/bascule-dossier-conversation'
+import { encoderCheminCli } from '../store/historique-cli-copie'
 import { ConversationStore } from '../store/conversations'
 import type { Message, SendOptions, SendResult, StreamChunk } from '../providers/types'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
@@ -364,30 +370,58 @@ describe('chat() — le dossier de travail fait partie de l’identite de sessio
     // en cassant la reprise pour TOUT LE MONDE — le levier de cout disparaitrait en silence.
     expect(captured[1].options.resumeSessionId).toBe('sess-1')
   })
+})
 
-  /*
-   * LE PASSAGE D'UN FIL DANS SA COPIE, au début de son tour suivant : son dossier rangé devient la
-   * copie, donc le dossier du tour aussi. La session de l'outil, rangée sous l'ancien dossier, n'est
-   * pas reprise ; le fil repart avec son historique. Le dossier vient ici du VRAI magasin et de la
-   * VRAIE résolution du tour, comme dans l'app, pas d'une variable posée à la main.
-   * fix-ok: cause mesurée — rouge sur le code d'avant (`preparerLeDossierDuTour` absent), vert
-   * ensuite ; la 3e édition n'est que la mise en forme signalée par `npx prettier --check`.
-   */
-  it('un fil passé dans sa copie entre deux tours → PAS de resume, historique du fil envoyé', async () => {
-    const captured: Captured[] = []
-    const store = new ConversationStore(() => 1000)
-    const DEPOT = join('D:', 'AutoWinOS')
-    const COPIE = join(DEPOT, '.autowin-data', 'autowin-os', 'retours-de-tour', 'essai__conv-P-5-1')
-    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
-    const dossierDuTour = (conversationId?: string): string =>
-      dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
+/*
+ * UN FIL QUI PASSE DANS SA COPIE GARDE LA MÉMOIRE DE SON AGENT. Le CLI range sa session sous le
+ * dossier de son cwd (`projects/<cwd encodé>/<session>.jsonl`). Au passage, la session est recopiée
+ * sous le dossier de la copie et reprise là : l'agent ne relit pas le fil. Seul un passage dans SA
+ * copie le fait ; un changement de dossier ordinaire garde la règle d'avant (session oubliée).
+ * Le CLI réel est simulé ici : chaque appel AJOUTE une ligne à sa session, sous le cwd de l'appel.
+ * fix-ok: cause mesurée — la clé de session de `session-du-tour.ts` contient le dossier, et toute
+ * session dont la clé change est oubliée : le passage perdait la reprise
+ * (rouge mesuré : resumeSessionId undefined, attendu 'sess-1'). Le faux CLI écrit à chaque appel, donc
+ * son fichier existe après le tour 2 même sans copie : la preuve est l'absence de la ligne du tour 1.
+ */
+describe('chat() — un fil qui passe dans sa copie garde la session de l’outil', () => {
+  const DEPOT = join('D:', 'AutoWinOS')
+  const COPIE = join(DEPOT, '.autowin-data', 'autowin-os', 'retours-de-tour', 'essai__conv-P-6-1')
+  const envInitial = process.env[AUTOWIN_WORKSPACE_ENV]
+  let config = ''
+
+  beforeEach(() => {
+    configureAutowinAppDataBase(mkdtempSync(join(tmpdir(), 'aos-sessfil-')))
+    config = mkdtempSync(join(tmpdir(), 'aos-cfg-'))
+    configureClaudeAccountEnv(() => ({ CLAUDE_CONFIG_DIR: config }))
+  })
+  afterEach(() => {
+    configureAutowinAppDataBase(undefined)
+    configureClaudeAccountEnv(() => ({}))
+    configureCopieDuFilDuChat(() => null)
+    if (envInitial === undefined) delete process.env[AUTOWIN_WORKSPACE_ENV]
+    else process.env[AUTOWIN_WORKSPACE_ENV] = envInitial
+  })
+
+  const fichierDeSession = (cwd: string): string =>
+    join(config, 'projects', encoderCheminCli(cwd), 'sess-1.jsonl')
+
+  /** Un pilote dont le fournisseur reprend (ou non) sa session, et écrit (ou non) la sienne. */
+  function pilote(
+    captured: Captured[],
+    opts: { reprend: boolean; ecrit: boolean; dossierDuTour: (conversationId?: string) => string }
+  ): AgentPilot {
     const registry = {
       send: vi.fn(async (_p: string, messages: Message[], options: SendOptions) => {
         captured.push({ options, content: messages.at(-1)?.content ?? '' })
+        if (opts.ecrit) {
+          const dossier = join(config, 'projects', encoderCheminCli(options.workspaceCwd ?? ''))
+          mkdirSync(dossier, { recursive: true })
+          appendFileSync(join(dossier, 'sess-1.jsonl'), `tour ${captured.length}\n`, 'utf8')
+        }
         return { text: 'ok', sessionId: 'sess-1' } as SendResult
       }),
       describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' })),
-      honoursSessionResume: vi.fn(() => true)
+      honoursSessionResume: vi.fn(() => opts.reprend)
     }
     const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }
     const bus = {
@@ -396,17 +430,19 @@ describe('chat() — le dossier de travail fait partie de l’identite de sessio
       exec: vi.fn()
     }
     type Parametres = ConstructorParameters<typeof AgentPilot>
-    const p = new AgentPilot(
+    return new AgentPilot(
       registry as unknown as Parametres[0],
       roles as unknown as Parametres[1],
       bus as unknown as Parametres[2],
       undefined,
       () => '',
-      dossierDuTour
+      opts.dossierDuTour
     )
-    await p.chat(history('le code secret est 4417'), () => {}, undefined, 1, id)
+  }
 
-    await preparerLeDossierDuTour({
+  /** Le même passage que `passerLeFilDansSaCopie` (ipc/chat.ts), sur le VRAI magasin. */
+  const passerDansLaCopie = (store: ConversationStore, id: string): Promise<unknown> =>
+    preparerLeDossierDuTour({
       fil: store.get(id),
       depotPartage: DEPOT,
       actif: true,
@@ -420,6 +456,18 @@ describe('chat() — le dossier de travail fait partie de l’identite de sessio
       annoncer: () => {},
       dossierExiste: () => true
     })
+
+  it('passage dans la copie → la session est reprise, le fil n’est pas renvoyé, et la session suit sous la copie', async () => {
+    const captured: Captured[] = []
+    const store = new ConversationStore(() => 1000)
+    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
+    configureCopieDuFilDuChat((conversationId) => copieOuTravailleLeFil(store.get(conversationId)))
+    const dossierDuTour = (conversationId?: string): string =>
+      dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
+    const p = pilote(captured, { reprend: true, ecrit: true, dossierDuTour })
+
+    await p.chat(history('le code secret est 4417'), () => {}, undefined, 1, id)
+    await passerDansLaCopie(store, id)
     await p.chat(
       history('le code secret est 4417', 'noté', 'quel est le code ?'),
       () => {},
@@ -431,7 +479,82 @@ describe('chat() — le dossier de travail fait partie de l’identite de sessio
     expect(captured).toHaveLength(2)
     expect(captured[0].options.workspaceCwd).toBe(DEPOT)
     expect(captured[1].options.workspaceCwd).toBe(COPIE)
+    expect(captured[1].options.resumeSessionId).toBe('sess-1')
+    expect(captured[1].content).toContain('quel est le code ?')
+    expect(captured[1].content).not.toContain('le code secret est 4417')
+    // Le CLI cherchera la session sous le dossier de la copie : c'est là qu'elle doit se trouver.
+    expect(readFileSync(fichierDeSession(COPIE), 'utf8')).toContain('tour 1')
+  })
+
+  it('passage dans la copie sans session à reprendre (rien d’écrit ou purgée) → fil complet, sans reprise', async () => {
+    const captured: Captured[] = []
+    const store = new ConversationStore(() => 1000)
+    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
+    configureCopieDuFilDuChat((conversationId) => copieOuTravailleLeFil(store.get(conversationId)))
+    const dossierDuTour = (conversationId?: string): string =>
+      dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
+    const p = pilote(captured, { reprend: true, ecrit: false, dossierDuTour })
+
+    await p.chat(history('le code secret est 4417'), () => {}, undefined, 1, id)
+    await passerDansLaCopie(store, id)
+    await p.chat(
+      history('le code secret est 4417', 'noté', 'quel est le code ?'),
+      () => {},
+      undefined,
+      1,
+      id
+    )
+
     expect(captured[1].options.resumeSessionId).toBeUndefined()
     expect(captured[1].content).toContain('le code secret est 4417')
+    expect(existsSync(fichierDeSession(COPIE))).toBe(false)
+  })
+
+  it('changement de dossier HORS copie → rien n’est recopié, fil complet (la règle d’avant tient)', async () => {
+    process.env[AUTOWIN_WORKSPACE_ENV] = join('E:', 'GIT', 'Autowin-OS')
+    const captured: Captured[] = []
+    const p = pilote(captured, { reprend: true, ecrit: true, dossierDuTour: () => '' })
+
+    await p.chat(history('premier message'), () => {}, undefined, 1, 'conv-HORS')
+    process.env[AUTOWIN_WORKSPACE_ENV] = join('E:', 'AutoWin-Temp')
+    await p.chat(
+      history('premier message', 'ma reponse', 'deuxieme message'),
+      () => {},
+      undefined,
+      1,
+      'conv-HORS'
+    )
+
+    expect(captured[1].options.resumeSessionId).toBeUndefined()
+    expect(captured[1].content).toContain('premier message')
+    // Le CLI écrit bien sa ligne du tour 2 là ; ce qu'on refuse, c'est la copie de l'ANCIENNE session.
+    expect(readFileSync(fichierDeSession(join('E:', 'AutoWin-Temp')), 'utf8')).not.toContain(
+      'tour 1'
+    )
+  })
+
+  it('Codex, Grok, agy (ne reprennent pas leur session) → rien à suivre : fil complet, aucune copie de session', async () => {
+    const captured: Captured[] = []
+    const store = new ConversationStore(() => 1000)
+    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
+    configureCopieDuFilDuChat((conversationId) => copieOuTravailleLeFil(store.get(conversationId)))
+    const dossierDuTour = (conversationId?: string): string =>
+      dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
+    const p = pilote(captured, { reprend: false, ecrit: true, dossierDuTour })
+
+    await p.chat(history('le code secret est 4417'), () => {}, undefined, 1, id)
+    await passerDansLaCopie(store, id)
+    await p.chat(
+      history('le code secret est 4417', 'noté', 'quel est le code ?'),
+      () => {},
+      undefined,
+      1,
+      id
+    )
+
+    expect(captured[1].options.resumeSessionId).toBeUndefined()
+    expect(captured[1].content).toContain('le code secret est 4417')
+    // Aucune copie de l'ancienne session : la ligne du tour 1 n'est pas dans le dossier de la copie.
+    expect(readFileSync(fichierDeSession(COPIE), 'utf8')).not.toContain('tour 1')
   })
 })

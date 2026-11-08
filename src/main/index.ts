@@ -317,8 +317,10 @@ import {
 import { creerSuiviDesPublications } from './git/publications-en-vol'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './app/journal-arrets'
 import {
+  copieOuTravailleLeFil,
   dossierDeLectureDuFil
 } from './conversations/bascule-dossier-conversation'
+import { configureCopieDuFilDuChat } from './agent-pilot/session-du-tour'
 import { lecteurDeDeuxLectures } from './chat/deux-lectures-appel'
 import { creerMascotteDuBureau } from './mascotte/mascotte-fenetre'
 import { brancherAffichageSession } from './chat/affichage-session'
@@ -1251,6 +1253,13 @@ configureClaudeCompteDuFil((conversationId) => {
   const choisi = os.conversations.get(conversationId)?.claudeAccountId
   return choisi ? claudeAccounts.compteDuFil(choisi) : undefined
 })
+// La copie du fil voyage avec le tour : quand le fil vient de passer dans sa copie, sa session est
+// recopiée sous elle (sans ce cablage, le passage ne se reconnaît jamais et la session est oubliée).
+// fix-ok: cause mesurée — le défaut `() => null` de session-du-tour.ts ne reconnaît aucun passage ;
+// le test de reprise, qui branche le fournisseur comme ce fichier, passe au vert avec ce câblage.
+configureCopieDuFilDuChat((conversationId) =>
+  copieOuTravailleLeFil(os.conversations.get(conversationId))
+)
 // Rotation d'abonnement : quand le quota du compte actif est epuise, le registre demande une bascule
 // vers un compte encore vivant. Sans ce cablage, la rotation existerait sans jamais se declencher.
 configureClaudeAccountRotation((walled) => claudeAccounts.rotateAwayFrom(walled))
