@@ -11,6 +11,7 @@
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
+import { controleDeSeparation } from '../git/controle-de-separation'
 import { avancerLaBaseDuFil, lireLaBaseDuFil, type AvanceeDeLaBase } from '../git/photo-du-code'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import type { FinalizeResult } from '../store/worktree-manager'
@@ -100,6 +101,12 @@ export type ResultatGarder =
       passage?: string
       /** Porte d'un fil : la base avancée jusqu'à `passage`, ou pourquoi elle n'a pas bougé. */
       base?: AvanceeDeLaBase
+      /**
+       * Porte d'un fil : le contrôle des noms d'entreprise n'a pas pu tourner, le passage est
+       * entré quand même. L'appelant doit le montrer ; le pré-envoi vers GitHub refusera tant que
+       * le profil n'est pas corrigé.
+       */
+      avertissement?: string
     }
   | { ok: true; etat: 'en-attente'; fichiers: string[]; detail: string }
   | { ok: true; etat: 'differe'; fichiers: string[]; detail: string }
@@ -326,6 +333,17 @@ export async function garderLeTravailDuFil(entree: {
     }
   const titre = typeof entree.titre === 'function' ? entree.titre(fichiers) : entree.titre
   const messageDuCommit = `${titre.trim()}\n\n${ligneDePorte(conversationId)}`
+  // fix-ok: src/main/orchestration/garder-un-essai.ts — cause mesurée : `commit-tree` ne lance aucun crochet, ce passage entrait dans main sans contrôle de séparation.
+  const separation = await controleDeSeparation({
+    copie,
+    base,
+    arbre,
+    message: messageDuCommit,
+    git
+  })
+  if (!separation.ok) return { ok: false, raison: separation.raison, fichiers }
+  // fix-ok: src/main/orchestration/garder-un-essai.ts — cause mesurée : l'avertissement partait en console.warn, que le fil ne voit pas ; le résultat n'en portait rien (test rouge : résultat sans avertissement).
+  const avertissement = separation.avertissement
   const passage = (
     await git(['commit-tree', arbre, '-p', base, '-m', messageDuCommit], copie, { env: AUTEUR })
   ).trim()
@@ -356,5 +374,5 @@ export async function garderLeTravailDuFil(entree: {
     vers: passage,
     runGit: git
   })
-  return { ...issue, passage, base: avancee }
+  return { ...issue, passage, base: avancee, ...(avertissement ? { avertissement } : {}) }
 }

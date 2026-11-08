@@ -643,7 +643,24 @@ export function finalizeSansSecours(
     }
   }
 
-  const { sha, committed } = this.commitCopyIfDirty(agentId, path, options.task)
+  // Le commit de la copie passe par le crochet du dépôt : son refus est une issue bloquée, pas une
+  // exception. Le travail reste dans la copie, et rien n'est publié.
+  let commitDeCopie: { sha: string; committed: boolean }
+  try {
+    commitDeCopie = this.commitCopyIfDirty(agentId, path, options.task)
+  } catch (erreur) {
+    // fix-ok: src/main/store/worktree-manager-finalisation.ts — cause mesurée : le try enveloppait aussi `git add`, un verrou d’index était étiqueté refus du crochet.
+    // Seul le refus du `git commit` est une issue bloquée ; un autre échec de la copie remonte.
+    if (!(erreur instanceof RefusDuCommitDeCopie)) throw erreur
+    return {
+      outcome: 'blocked',
+      agentId,
+      files: [],
+      reason: 'commit-refused',
+      detail: `Commit de la copie refusé, rien n’a été publié : ${causeDuCommitDeCopie(erreur.erreurGit)}`
+    }
+  }
+  const { sha, committed } = commitDeCopie
   const baseSha = this.git(this.baseRepo, ['rev-parse', 'HEAD'])
   options.onPrepared?.(sha, baseSha)
   // La copie n'a rien apporté au-delà de la base → rien à fusionner ; on range.
@@ -1204,9 +1221,35 @@ export function commitCopyIfDirty(
   if (dirty) {
     this.git(path, ['add', '-A'])
     const message = messageCommitAgent(agentId, task)
-    this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', message])
+    try {
+      this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', message])
+    } catch (erreur) {
+      throw new RefusDuCommitDeCopie(erreur)
+    }
   }
   return { sha: this.git(path, ['rev-parse', 'HEAD']), committed: dirty }
+}
+
+/**
+ * Le `git commit` d'une copie a échoué : le crochet du dépôt refuse, ou l'identité manque. Porte la
+ * sortie de git ; distingue ce cas d'un échec de `git add`, qui n'est pas un refus.
+ */
+class RefusDuCommitDeCopie extends Error {
+  readonly erreurGit: unknown
+  constructor(erreurGit: unknown) {
+    super('commit de copie refusé')
+    this.erreurGit = erreurGit
+  }
+}
+
+/**
+ * La cause que git donne lui-même, sa sortie d'erreur. La ligne de commande de l'erreur n'est pas
+ * reprise : elle contient le titre du commit.
+ */
+function causeDuCommitDeCopie(erreur: unknown): string {
+  const sortie =
+    typeof erreur === 'object' && erreur !== null && 'stderr' in erreur ? String(erreur.stderr) : ''
+  return sortie.replace(/\s+/g, ' ').trim() || 'git n’a pas donné de cause'
 }
 
 /**

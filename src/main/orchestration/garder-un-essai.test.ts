@@ -269,6 +269,79 @@ describe('garderLeTravailDuFil — la porte d’un fil en copie vers main', () =
     expect(publication.ouvertes).toEqual([])
   })
 
+  /**
+   * Un profil FICTIF d'entreprise sur le poste, exclu de git comme un vrai `entreprise/` : la porte
+   * le lit depuis le dépôt principal, et le passage ne doit pas le porter.
+   */
+  function avecProfilDEntreprise(repo: string): void {
+    mkdirSync(join(repo, '.git', 'info'), { recursive: true })
+    writeFileSync(join(repo, '.git', 'info', 'exclude'), 'entreprise/\n')
+    mkdirSync(join(repo, 'entreprise', 'acme'), { recursive: true })
+    writeFileSync(
+      join(repo, 'entreprise', 'acme', 'identite.json'),
+      JSON.stringify({ termesInterdits: [{ motif: 'zorglub' }] })
+    )
+  }
+
+  it('un passage qui porte un terme d’entreprise est refusé au commit : rien n’entre dans main, la base ne bouge pas', async () => {
+    const { repo, copie, base } = await filEnCopie()
+    avecProfilDEntreprise(repo)
+    const mainAvant = (await git(repo, 'rev-parse', 'main')).trim()
+    writeFileSync(join(copie, 'a.txt'), 'le serveur zorglub\n')
+    const publication = publicationReelle(repo)
+
+    const garde = await garderLeTravailDuFil({
+      copie,
+      conversationId: 'conv-1',
+      titre: 'feat(a): change la ligne 1 (conv-1)',
+      publication,
+      runId: 'porte-test-separation-1'
+    })
+
+    expect(garde).toMatchObject({ ok: false })
+    if (garde.ok) return
+    expect(garde.raison).toContain('a.txt')
+    expect((await git(repo, 'rev-parse', 'main')).trim()).toBe(mainAvant)
+    expect(await lireLaBaseDuFil({ dossier: copie, conversationId: 'conv-1' })).toBe(base)
+    expect(publication.ouvertes).toEqual([])
+  })
+
+  it('profil mal formé : le travail propre passe, et le résultat porte l’avertissement', async () => {
+    const { repo, copie } = await filEnCopie()
+    avecProfilDEntreprise(repo)
+    writeFileSync(join(repo, 'entreprise', 'acme', 'identite.json'), '{ pas du json')
+    const mainAvant = (await git(repo, 'rev-parse', 'main')).trim()
+    travaillerDansLaCopie(copie)
+
+    const garde = await garderLeTravailDuFil({
+      copie,
+      conversationId: 'conv-1',
+      titre: 'feat(a): change la ligne 1 (conv-1)',
+      publication: publicationReelle(repo),
+      runId: 'porte-test-separation-3'
+    })
+
+    expect(garde).toMatchObject({ ok: true, etat: 'publie', fichiers: ['a.txt', 'b.txt', 'c.txt'] })
+    expect((await git(repo, 'rev-parse', 'main')).trim()).not.toBe(mainAvant)
+    expect(garde).toMatchObject({ avertissement: expect.stringContaining('mal formé') })
+  })
+
+  it('jumeau accepté : le même travail, sans terme, passe avec le même profil sur le poste', async () => {
+    const { repo, copie } = await filEnCopie()
+    avecProfilDEntreprise(repo)
+    travaillerDansLaCopie(copie)
+
+    const garde = await garderLeTravailDuFil({
+      copie,
+      conversationId: 'conv-1',
+      titre: 'feat(a): change la ligne 1 (conv-1)',
+      publication: publicationReelle(repo),
+      runId: 'porte-test-separation-2'
+    })
+
+    expect(garde).toMatchObject({ ok: true, etat: 'publie', fichiers: ['a.txt', 'b.txt', 'c.txt'] })
+  })
+
   it('base disparue : refus avec la raison, jamais la copie entière publiée', async () => {
     const { repo, copie } = await filEnCopie()
     travaillerDansLaCopie(copie)

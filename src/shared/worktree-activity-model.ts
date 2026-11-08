@@ -70,6 +70,8 @@ export interface WorktreeAgentActivity {
     | 'ignored-deliverables'
     | 'post-publish-change'
     | 'retry-exhausted'
+    /** Le commit de la copie a été refusé (par exemple par le contrôle des noms d'entreprise). */
+    | 'commit-refused'
   /** Contexte durable du bureau, affiché par le Hub A2. */
   task?: string
   /**

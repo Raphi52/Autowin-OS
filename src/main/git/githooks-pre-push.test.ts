@@ -185,8 +185,9 @@ describe('.githooks/pre-push — aucun nom ni terme d entreprise vers GitHub', (
 
   it('refuse un fichier qui contient un terme interdit, et nomme le fichier', () => {
     const { local, publicNu } = depots()
-    avecProfil(local)
+    // fix-ok: githooks-pre-push.test.ts — le crochet de commit refuse ce commit dès qu'il voit le profil (mesuré : « git commit -q -m note → 1 », nom acme[0]) ; le commit se fait donc avant le profil, et le pré-envoi reste le filet.
     commit(local, { 'docs/note.md': 'voir le serveur zorglub\n' }, 'note')
+    avecProfil(local)
 
     const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
 
@@ -208,12 +209,12 @@ describe('.githooks/pre-push — aucun nom ni terme d entreprise vers GitHub', (
 
   it('refuse un terme ajouté puis retiré dans les commits envoyés : il part dans l historique', () => {
     const { local, publicNu } = depots()
-    avecProfil(local)
     commit(local, { 'a.txt': 'a\n' }, 'base')
     gitOk(local, ['push', '-q', 'github', 'HEAD:refs/heads/travail'])
     const publie = refDistante(publicNu, 'travail')
     commit(local, { 'a.txt': 'zorglub\n' }, 'ajout')
     commit(local, { 'a.txt': 'a\n' }, 'retrait')
+    avecProfil(local)
 
     const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
 
@@ -235,8 +236,8 @@ describe('.githooks/pre-push — aucun nom ni terme d entreprise vers GitHub', (
 
   it('refuse un chemin qui porte le nom de l entreprise', () => {
     const { local, publicNu } = depots()
-    avecProfil(local)
     commit(local, { 'docs/acme-notes.md': 'notes\n' }, 'notes')
+    avecProfil(local)
 
     const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
 
@@ -247,8 +248,8 @@ describe('.githooks/pre-push — aucun nom ni terme d entreprise vers GitHub', (
 
   it('laisse passer le terme vers le dépôt interne : seul GitHub est public', () => {
     const { local, interneNu } = depots()
-    avecProfil(local)
     const sha = commit(local, { 'docs/note.md': 'zorglub\n' }, 'note')
+    avecProfil(local)
 
     const r = git(local, ['push', 'origin', 'HEAD:refs/heads/travail'])
 

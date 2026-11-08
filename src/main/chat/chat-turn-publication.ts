@@ -811,9 +811,14 @@ async function passerLaPorte(
       : rapport(input, { status: 'skipped', reason: 'porte-refusee', detail: issue.raison })
   if (issue.etat !== 'publie')
     return rapport(input, { status: 'skipped', reason: 'porte-en-attente', detail: issue.detail })
+  // Ce que la porte dit de plus : le contrôle des noms n'a pas pu tourner, ou la base n'a pas avancé.
+  const dePlus = [
+    issue.avertissement,
+    issue.base && !issue.base.ok ? issue.base.raison : undefined
+  ].filter((texte): texte is string => Boolean(texte))
   return rapport(input, {
     status: 'committed',
     files: issue.fichiers.length,
-    ...(issue.base && !issue.base.ok ? { detail: issue.base.raison } : {})
+    ...(dePlus.length ? { detail: dePlus.join(' ') } : {})
   })
 }

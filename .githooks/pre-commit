@@ -1,13 +1,37 @@
 #!/bin/sh
 # Garde-fou : un commit ne supprime pas un module que le reste du commit importe encore.
-# Mesuré le 2026-10-17 (conv-318, commit 06c5ede1) : `git add <3 fichiers> && git commit` dans
+# Constat du 2026-10-17 : `git add <3 fichiers> && git commit` dans
 # l'arbre partagé a emporté les suppressions stagées d'une autre session sans leurs importeurs ;
 # HEAD ne compilait plus. Détail et règle : scripts/garde-commit-module-supprime.mjs.
 # Testé par src/main/git/githooks-pre-commit.test.ts. Échappatoire native et visible : --no-verify.
 # Le défaut naît de l'index PARTAGÉ du checkout principal : une copie de travail d'agent a son propre
 # index, et ses commits automatiques (worktree-manager, commitCopyIfDirty) ne doivent pas changer.
-# Les copies d'« Essaie 3 façons » (`essai__*`, photo-du-code.ts) aussi : chacune a son index (conv-1583).
+# Les copies d'« Essaie 3 façons » (`essai__*`, photo-du-code.ts) aussi : chacune a son index.
 # De même la copie de travail de chaque fil (`copies-de-fil/<fil>`, photo-du-code.ts).
+#
+# Les noms et termes d'entreprise vont à l'inverse : ils se contrôlent pour TOUTES les copies, avant le
+# tri ci-dessous. Le commit d'une copie part ensuite vers GitHub, et le pré-envoi ne voit que les objets
+# envoyés, donc trop tard : le nom serait déjà dans l'historique. Seuls les fichiers que ce commit ajoute
+# ou modifie comptent. Un contrôle qui ne peut pas tourner ne refuse jamais un commit : le pré-envoi, lui,
+# refuse dans ce cas.
+# fix-ok: le tri des copies sortait avant tout contrôle des noms d'entreprise ; le contrôle passe désormais avant le tri.
+garde_separation="$(dirname "$0")/../scripts/separation-avant-push.mjs"
+if command -v node >/dev/null 2>&1 && [ -f "$garde_separation" ]; then
+  node "$garde_separation" --index
+  code=$?
+  if [ "$code" = 1 ]; then exit 1; fi
+  # fix-ok: .githooks/pre-commit — cause mesurée : au code 2, le script avait déjà écrit son avertissement, et le crochet le répétait.
+  # Code 2 : le script a dit lui-même pourquoi il n'a pas pu contrôler, en un seul message. Le crochet ne parle
+  # que pour un code inattendu (arrêt par signal, par exemple).
+  case "$code" in
+    0 | 2) ;;
+    *) printf '\n  ⚠️  Contrôle des noms d entreprise non fait pour ce commit (code %s).\n  Le pré-envoi vers GitHub le refera : rien ne part sans lui.\n\n' "$code" >&2 ;;
+  esac
+else
+  printf '\n  ⚠️  node ou scripts/separation-avant-push.mjs introuvable : contrôle des noms d entreprise non fait pour ce commit.\n  Le pré-envoi vers GitHub le refera : rien ne part sans lui.\n\n' >&2
+fi
+
+# Le reste ne vaut que pour le dépôt partagé : le contrôle des modules et des couleurs passe outre les copies.
 case "$(git rev-parse --show-toplevel 2>/dev/null)" in
   */agent__* | */integration__* | */essai__* | */copies-de-fil/* | */.quarantine/*) exit 0 ;;
 esac
@@ -16,7 +40,7 @@ garde="$(dirname "$0")/../scripts/garde-commit-module-supprime.mjs"
 if [ -f "$garde" ]; then
   node "$garde" || exit 1
 fi
-# Second garde-fou : une interface nouvelle suit les thèmes (conv-1386, 2026-10-31). Pas d'intégration
+# Second garde-fou, né d'un constat du 2026-10-31 : une interface nouvelle suit les thèmes. Pas d'intégration
 # continue ici et un agent ne joue que les tests de ses fichiers : sans le commit, rien ne le verrait.
 couleurs="$(dirname "$0")/../scripts/couleurs-en-dur.mjs"
 [ -f "$couleurs" ] || exit 0

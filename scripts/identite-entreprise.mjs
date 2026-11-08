@@ -85,7 +85,7 @@ export function identiteBrain(env = process.env, racine = RACINE_DEPOT) {
  * le dossier principal du depot quand `racine` est une copie liee (`git worktree add`), sinon
  * `undefined` (version publique : aucun profil nulle part).
  *
- * Pourquoi (conv-1457, 2026-11-03) : les copies des runs et de `verify` sont des copies liees, et
+ * Pourquoi (2026-11-03) : les copies des runs et de `verify` sont des copies liees, et
  * `entreprise/`, ignore par git, n'y est pas. La garde `separation-entreprise.test.ts` y chargeait
  * 0 nom et 0 terme et passait au vert sans rien chercher ; ce vert a laisse partir un terme sur la
  * version publique. Le dossier principal est le parent du depot git partage (`--git-common-dir`).
@@ -233,7 +233,7 @@ export function termesDesProfils(racine = RACINE_DEPOT) {
 
 /**
  * Une image intégrée (`data:<type>;base64,<octets>`) est un binaire écrit en lettres : elle n'est pas
- * lue, comme une image en fichier ne l'est pas. Mesure du 2026-11-02 (conv-1429) : les images WebP de
+ * lue, comme une image en fichier ne l'est pas. Mesure du 2026-11-02 : les images WebP de
  * `src/renderer/src/assets/quartier/donnees.json` portaient par hasard les quatre lettres d'un terme.
  * Seule la charge base64 disparaît : le texte autour, et un `data:` sans `;base64,`, restent lus.
  */
@@ -267,7 +267,7 @@ export function texteDuFichier(octets) {
 /**
  * Premier nom d'entreprise (`nomsDesProfils`) present dans `octets`, ou `undefined` : en UTF-8/ASCII
  * (casse ignoree) et en UTF-16LE, l'encodage des scripts PowerShell. Meme regle pour la garde
- * `separation-entreprise.test.ts` et le hook `.githooks/pre-push` (conv-1457).
+ * `separation-entreprise.test.ts` et le hook `.githooks/pre-push`.
  */
 export function nomTrouve(octets, noms) {
   const minuscule = octets.toString('latin1').toLowerCase()
@@ -283,6 +283,23 @@ export function nomTrouve(octets, noms) {
 export function termeTrouve(texte, termes) {
   if (texte === undefined) return undefined
   return termes.find((terme) => terme.regex.test(texte))
+}
+
+/**
+ * Une faute dans un chemin, un message de commit ou un contenu (octets), ou `undefined`. Un nom
+ * d'entreprise (casse ignoree) ou un terme interdit. Source unique de la regle : le crochet
+ * `.githooks/pre-commit`, le pre-envoi et le controle des commits poses par l'app s'en servent tous.
+ */
+export function fauteDeSeparation(texteOuOctets, noms, termes) {
+  if (typeof texteOuOctets === 'string') {
+    const minuscules = texteOuOctets.toLowerCase()
+    if (noms.some((nom) => minuscules.includes(nom))) return 'nom d entreprise'
+    const terme = termeTrouve(texteOuOctets, termes)
+    return terme && `${terme.profil}[${terme.rang}] ${terme.sujet}`.trim()
+  }
+  if (nomTrouve(texteOuOctets, noms)) return 'nom d entreprise'
+  const terme = termeTrouve(texteDuFichier(texteOuOctets), termes)
+  return terme && `${terme.profil}[${terme.rang}] ${terme.sujet}`.trim()
 }
 
 /** Reglage : le nom NEUTRE d'abord, son ancien nom (profil) en secours. Vide = absent. */

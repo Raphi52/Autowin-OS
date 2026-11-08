@@ -1532,6 +1532,39 @@ describe('fil passé en copie — la porte vers la branche locale, jamais une br
     expect(corps.trimEnd().split('\n').at(-1)).toBe('Porte: conv-A')
   })
 
+  it('profil mal formé : le tour entre quand même, et son rapport dit que le contrôle n’a pas pu tourner', async () => {
+    const { repo, copie, porte } = await filEnCopie()
+    appendFileSync(join(repo, '.git', 'info', 'exclude'), 'entreprise/\n')
+    mkdirSync(join(repo, 'entreprise', 'acme'), { recursive: true })
+    writeFileSync(join(repo, 'entreprise', 'acme', 'identite.json'), '{ pas du json')
+    const debut = await photographierDebutDeTour(copie, realGit, DEBUT)
+    writeFileSync(join(copie, 'mine.ts'), 'export const a = 1\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0002',
+      request: 'ajoute la constante a',
+      debut,
+      runGit: gitEspion().runGit,
+      traces: [
+        trace(copie, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ],
+      porte
+    })
+
+    expect(report?.project).toMatchObject({
+      status: 'committed',
+      files: 1,
+      detail: expect.stringContaining('mal formé')
+    })
+    expect((await run('git', ['show', 'travail:mine.ts'], { cwd: repo })).stdout).toBe(
+      'export const a = 1\n'
+    )
+  })
+
   it('copie dont la base a disparu : refus nommé, rien de poussé ni de commité', async () => {
     const { repo, copie, porte } = await filEnCopie()
     await run('git', ['update-ref', '-d', 'refs/autowin/base-de-fil/conv-A'], { cwd: repo })

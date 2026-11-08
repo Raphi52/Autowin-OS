@@ -1,6 +1,7 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre, supprimerArbreAsync } from '../fichiers/fs-supprimer'
 import { encoderCheminCli, racinesHistoriqueCliPour } from './historique-cli-copie'
@@ -396,5 +397,107 @@ describe('retrait conclu seulement quand le dossier est parti', () => {
       expect(existsSync(chemin)).toBe(false)
       expect(existsSync(historique)).toBe(false)
     })
+  })
+})
+
+/*
+ * La préservation committe le travail d'une copie avant de la libérer. Ce commit passe par le crochet du
+ * dépôt, comme tout commit : un nom d'entreprise y est refusé, la copie reste en place, et rien n'entre
+ * dans la branche de récupération. Le dépôt est réel (git et son crochet) ; le profil est fictif et non
+ * commité, comme sur le poste, où `entreprise/` est ignoré par git.
+ */
+const CROCHET_DU_DEPOT = join(__dirname, '../../../.githooks')
+const PROFIL_FICTIF = JSON.stringify({
+  nom: 'Acme',
+  termesInterdits: [{ motif: 'zorglub', ignorerCasse: true }]
+})
+
+const gitVrai = (cwd: string, ...args: string[]): string =>
+  execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+
+function depotAvecCrochet(): { base: string; worktreeRoot: string } {
+  const base = tempRepo()
+  gitVrai(base, 'config', 'core.hooksPath', CROCHET_DU_DEPOT)
+  mkdirSync(join(base, 'entreprise', 'acme'), { recursive: true })
+  writeFileSync(join(base, 'entreprise', 'acme', 'identite.json'), PROFIL_FICTIF)
+  const racine = mkdtempSync(join(tmpdir(), 'autowin-preservation-crochet-'))
+  roots.push(racine)
+  const worktreeRoot = join(racine, 'copies')
+  mkdirSync(worktreeRoot, { recursive: true })
+  return { base, worktreeRoot }
+}
+
+/** Une copie d'agent avec un travail non committé, créée comme le fait git. */
+function copieAvecTravail(base: string, worktreeRoot: string, id: string, contenu: string): string {
+  const copie = join(worktreeRoot, `agent__${id}`)
+  gitVrai(base, 'worktree', 'add', '-q', '--detach', copie, 'HEAD')
+  mkdirSync(join(copie, 'src'), { recursive: true })
+  writeFileSync(join(copie, 'src', 'travail.ts'), contenu)
+  return copie
+}
+
+describe('préservation d’une copie : le crochet du dépôt contrôle son commit', () => {
+  it('REFUSE de préserver un travail qui porte le nom d’un profil : rien n’est committé, la copie reste', () => {
+    const { base, worktreeRoot } = depotAvecCrochet()
+    const copie = copieAvecTravail(base, worktreeRoot, 'run-nom-1', '// ACME\nexport const n = 1\n')
+
+    const issue = new WorktreeManager({ baseRepo: base, worktreeRoot } as never).preserverEtLiberer(
+      'run-nom-1'
+    )
+
+    expect(issue).toEqual({ outcome: 'refuse', detail: 'le travail n’a pas pu être préservé' })
+    expect(existsSync(join(copie, 'src', 'travail.ts'))).toBe(true)
+    // La branche de récupération est restée sur HEAD : aucun commit n'a été créé.
+    expect(gitVrai(base, 'rev-parse', 'autowin/recovery/run-nom-1')).toBe(
+      gitVrai(base, 'rev-parse', 'HEAD')
+    )
+  })
+
+  it('REFUSE de même par la forme asynchrone du balayage horaire', async () => {
+    const { base, worktreeRoot } = depotAvecCrochet()
+    const copie = copieAvecTravail(base, worktreeRoot, 'run-nom-2', '// ACME\nexport const n = 1\n')
+
+    const issue = await new WorktreeManager({
+      baseRepo: base,
+      worktreeRoot
+    } as never).preserverEtLibererAsync('run-nom-2')
+
+    expect(issue.outcome).toBe('refuse')
+    expect(existsSync(join(copie, 'src', 'travail.ts'))).toBe(true)
+    expect(gitVrai(base, 'rev-parse', 'autowin/recovery/run-nom-2')).toBe(
+      gitVrai(base, 'rev-parse', 'HEAD')
+    )
+  })
+
+  it('le balayage horaire garde une copie refusée et en note la cause au registre des blocages', async () => {
+    const { base, worktreeRoot } = depotAvecCrochet()
+    const copie = copieAvecTravail(base, worktreeRoot, 'run-nom-3', '// ACME\nexport const n = 1\n')
+    const wm = new WorktreeManager({
+      baseRepo: base,
+      worktreeRoot,
+      nowFn: () => Date.now() + 30 * UN_JOUR_MS
+    } as never)
+
+    await wm.sweepAbandonedAgentCopiesAsync()
+
+    expect(existsSync(join(copie, 'src', 'travail.ts'))).toBe(true)
+    expect(wm.blocagesDeBalayage()).toEqual([
+      { path: resolve(copie), echecs: 1, detail: 'le travail n’a pas pu être préservé' }
+    ])
+  })
+
+  it('jumeau accepté : le même travail sans nom passe le crochet, est committé, et la copie est libérée', () => {
+    const { base, worktreeRoot } = depotAvecCrochet()
+    const copie = copieAvecTravail(base, worktreeRoot, 'run-propre-1', 'export const n = 1\n')
+
+    const issue = new WorktreeManager({ baseRepo: base, worktreeRoot } as never).preserverEtLiberer(
+      'run-propre-1'
+    )
+
+    expect(issue.outcome).toBe('preserve-et-libere')
+    expect(existsSync(copie)).toBe(false)
+    expect(gitVrai(base, 'show', 'autowin/recovery/run-propre-1:src/travail.ts')).toBe(
+      'export const n = 1'
+    )
   })
 })

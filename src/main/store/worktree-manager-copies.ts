@@ -164,7 +164,7 @@ function preserverPuisLiberer(
     const teteAvant = this.tryGitFn(path, ['rev-parse', 'HEAD'])
     if (teteAvant.code === 0) this.mettreAlAbriSiDivergente(branche, teteAvant.stdout.trim())
     // `switch -C` : on se place sur la branche de recuperation SANS toucher aux fichiers, puis on
-    // committe. Un echec ici interrompt tout — mieux vaut garder la copie que perdre le travail.
+    // committe, crochet compris : un nom d'entreprise y fait refuser le commit. Un echec ici interrompt tout — mieux vaut garder la copie que perdre le travail.
     if (this.tryGitFn(path, ['switch', '-C', branche]).code !== 0) {
       return { outcome: 'refuse', detail: 'la branche de récupération n’a pas pu être créée' }
     }
@@ -173,7 +173,6 @@ function preserverPuisLiberer(
     }
     const commit = this.tryGitFn(path, [
       'commit',
-      '--no-verify',
       '-m',
       `autowin: travail préservé de la copie ${agentId}`
     ])
@@ -409,7 +408,12 @@ export function deciderBalayageDUneCopie(this: WorktreeManager, entry: Dirent): 
   if (!candidate || this.ownershipIssue(candidate.path)) return undefined
   const decision = deciderApresAppartenance.call(this, candidate)
   if (decision?.etape !== 'preserver') return decision
-  return conclurePreservation(decision.agentId, this.preserverEtLiberer(decision.agentId))
+  return conclurePreservation.call(
+    this,
+    decision.agentId,
+    candidate.path,
+    this.preserverEtLiberer(decision.agentId)
+  )
 }
 
 /**
@@ -428,17 +432,30 @@ export async function deciderBalayageDUneCopieAsync(
   if (this.hasActiveProcesses(candidate.agentId)) return undefined
   const decision = deciderApresAppartenance.call(this, candidate)
   if (decision?.etape !== 'preserver') return decision
-  return conclurePreservation(
+  return conclurePreservation.call(
+    this,
     decision.agentId,
+    candidate.path,
     await this.preserverEtLibererAsync(decision.agentId)
   )
 }
 
-/** Une copie preservee puis liberee est traitee ; tout autre issue la laisse en place. */
-function conclurePreservation(agentId: string, issue: IssueDePreservation): DecisionDeBalayage {
-  return issue.outcome === 'preserve-et-libere' || issue.outcome === 'libere'
-    ? { etape: 'fait', agentId }
-    : undefined
+/**
+ * Une copie preservee puis liberee est traitee ; tout autre issue la laisse en place. Un refus est
+ * note au registre des blocages : sans cela, le balayage horaire reessaie la copie sans laisser de trace.
+ */
+// fix-ok: src/main/store/worktree-manager-copies.ts — cause mesurée : `conclurePreservation` rendait `undefined` sans noter le refus de préservation, le balayage horaire retentait la copie en silence.
+function conclurePreservation(
+  this: WorktreeManager,
+  agentId: string,
+  path: string,
+  issue: IssueDePreservation
+): DecisionDeBalayage {
+  if (issue.outcome === 'preserve-et-libere' || issue.outcome === 'libere')
+    return { etape: 'fait', agentId }
+  if (issue.outcome === 'refuse')
+    this.noterEchecDeBalayage(path, issue.detail ?? 'la préservation de la copie a été refusée')
+  return undefined
 }
 
 type CopieCandidate = { agentId: string; path: string; ageMs: number }
@@ -495,10 +512,10 @@ function deciderApresAppartenance(
     // Elle retient du travail : la marge LARGE d'origine s'applique, inchangee.
     if (!(ageMs >= ABANDONED_AGENT_MIN_AGE_MS)) return undefined
     /*
-     * SAUF LA COPIE DE `verify` (2026-10-24) : ses fichiers sales sont un MIROIR du
-     * depot, recopie a chaque verification (`synchroniserBureauDeVerification`). Les preserver
-     * creait `autowin/recovery/command-verify-conv-1048` — 2 899 lignes, aucune neuve. Elle suit
-     * donc la garde du HEAD ci-dessous : un commit qu'aucune reference ne tient reste rattache.
+     * SAUF LA COPIE DE `verify` : ses fichiers sales sont un MIROIR du depot, recopie a chaque
+     * verification (`synchroniserBureauDeVerification`). La preserver ne mettrait de cote qu'un
+     * miroir, sans aucune modification neuve. Elle suit donc la garde du HEAD ci-dessous : un commit
+     * qu'aucune reference ne tient reste rattache.
      * La marge de 24 h, elle, demeure : `verify` ne pose aucun lease, l'age seul protege un test
      * en cours.
      */

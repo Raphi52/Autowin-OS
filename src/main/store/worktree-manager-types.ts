@@ -89,7 +89,12 @@ export type FinalizeResult =
       outcome: 'blocked'
       agentId: string
       files: string[]
-      reason: 'base-dirty' | 'base-in-progress' | 'merge-failed' | 'ignored-deliverables'
+      reason:
+        | 'base-dirty'
+        | 'base-in-progress'
+        | 'merge-failed'
+        | 'ignored-deliverables'
+        | 'commit-refused'
       /** Les fichiers remontés diagnostiquent la base ; conserver la provenance agent déjà suivie. */
       preserveAgentFiles?: boolean
       /**

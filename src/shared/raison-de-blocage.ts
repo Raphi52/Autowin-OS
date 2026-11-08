@@ -42,7 +42,9 @@ const SENS_DU_CODE: Record<string, string> = {
   'base-dirty': 'des fichiers non committés de la base bloquent la publication',
   'base-in-progress': 'une opération git est déjà en cours dans la base',
   'merge-failed': 'la fusion dans la base a été refusée',
-  'ignored-deliverables': 'la copie porte un fichier nommé un par un dans .gitignore'
+  'ignored-deliverables': 'la copie porte un fichier nommé un par un dans .gitignore',
+  // fix-ok: src/shared/raison-de-blocage.ts — cause mesurée : le libellé accusait le contrôle du dépôt pour tout échec du git commit, identité absente comprise. Neutre à dessein.
+  'commit-refused': 'Git n’a pas enregistré le commit de la copie'
 }
 
 /** Le sens en clair d'un code de blocage (`base-dirty`…), ou `undefined` pour un code inconnu. */

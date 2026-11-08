@@ -1520,6 +1520,12 @@ const BLOCAGES: Record<string, LectureDuBlocage> = {
     action: 'déplace-le ou retire-le pour que le reste publie',
     repriseArmee: true
   },
+  // fix-ok: src/shared/orchestration-outcome.ts — cause mesurée : le libellé accusait « le contrôle du dépôt » pour tout échec du git commit de la copie, identité absente comprise.
+  'commit-refused': {
+    cause: 'Git n’a pas enregistré le commit de la copie',
+    action: 'lis la cause donnée par Git, corrige-la, puis republie à la main depuis Worktrees',
+    repriseArmee: false
+  },
   conflict: {
     cause: 'un conflit de contenu réel',
     action: 'à toi d’arbitrer : aucune reprise automatique ne décidera à ta place',
