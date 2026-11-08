@@ -956,7 +956,9 @@ export function noterFinDeTour(
   // Un `orchestrate` en échec clôt le tour sur son seul message d'échec : rien n'a été livré.
   const orchestrationRatee = !mur && echecOrchestration !== ''
   const blocage =
-    issue.ok && !mur && !orchestrationRatee ? blocageDeclare(reponseVisible(issue.texte)) : undefined
+    issue.ok && !mur && !orchestrationRatee
+      ? blocageDeclare(reponseVisible(issue.texte))
+      : undefined
   const reussi = issue.ok && !blocage && !mur && !orchestrationRatee
   if (rattrapage) {
     // Un rattrapage qui ne réussit pas laisse le lot tel quel : son échec d'origine reste la raison.
@@ -1229,6 +1231,46 @@ export function relancerLot(
   return { ok: true, plan: { ...p, statut: 'en-cours', raison: undefined } }
 }
 
+/**
+ * LE VERDICT DU CHEF SUR UN LOT EN ÉCHEC (2026-11-08, demande de l'utilisateur). Un lot qui se déclare
+ * bloqué par un rouge qui n'est pas le sien a pourtant fini son travail : le chef, réveillé, le
+ * vérifie. Sans ce geste, son verdict restait dans sa réponse et le tableau gardait « échec » avec
+ * « Relancer », offert à l'utilisateur pour refaire un travail fini. La preuve du chef devient la
+ * raison du lot. Aucun tour n'est compté : rien n'est lancé. Mêmes suites qu'un rattrapage
+ * (`noterFinDeTour`) : un plan bloqué par ce seul lot repart, un plan arrêté par le plafond le reste.
+ */
+export function validerLot(
+  plan: PlanDeLots,
+  rang: number,
+  preuve: unknown,
+  maintenant: number
+): { ok: true; plan: PlanDeLots } | { ok: false; erreur: string } {
+  const lot = plan.lots.find((l) => l.rang === rang)
+  if (!lot)
+    return { ok: false, erreur: `lot ${rang} inconnu : le plan a ${plan.lots.length} lots.` }
+  if (lot.etat !== 'echec')
+    return {
+      ok: false,
+      erreur: `le lot ${rang} est ${LIBELLE_ETAT[lot.etat]} : seul un lot en échec se valide.`
+    }
+  const texte = typeof preuve === 'string' ? preuve.replace(/\s+/g, ' ').trim() : ''
+  if (!texte)
+    return {
+      ok: false,
+      erreur:
+        '« preuve » attendue : ce que tu as vérifié sur le travail du lot (commande et code de sortie, fichier lu).'
+    }
+  const fait = avecLot(plan, rang, {
+    etat: 'fait',
+    raison: `validé par le chef : ${texte}`.slice(0, RAISON_MAX),
+    fin: maintenant
+  })
+  return {
+    ok: true,
+    plan: statutApres(plan.statut === 'bloque' ? { ...fait, statut: 'en-cours' } : fait)
+  }
+}
+
 export interface BilanDuPlan {
   total: number
   faits: number
@@ -1430,6 +1472,9 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
               ]
             : []),
           '- un lot en échec dont la cause se corrige : relance-le avec plan_de_lots (action « relancer », lot N) ; sinon dis-le ;',
+          // Sans ce geste, le chef concluait « son travail est bon » dans sa réponse, et le tableau
+          // gardait « échec » et « Relancer » pour l'utilisateur (`validerLot`).
+          '- un lot en échec dont le travail est pourtant bon (bloqué par un rouge qui n’est pas le sien, par exemple) : vérifie-le, puis passe-le « fait » avec plan_de_lots (action « valider », lot N, preuve : ce que tu as vérifié) — aucun tour compté ;',
           '- une décision qui vaut pour les lots à venir : note-la (action « noter ») ; du travail qui manque au chantier : ajoute des lots (action « ajouter ») plutôt qu’un second plan ;',
           '- les lots suivants partent seuls : n’en lance aucun à la main ;',
           '- quand le plan est terminé ou arrêté, rends à l’utilisateur le bilan assemblé : ce qui est fait, avec quelle preuve, ce qui reste.',

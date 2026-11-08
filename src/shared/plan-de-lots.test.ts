@@ -30,6 +30,7 @@ import {
   relancerLot,
   reprendrePlan,
   statutApresLancements,
+  validerLot,
   type PlanDeLots
 } from './plan-de-lots'
 
@@ -599,6 +600,64 @@ describe('décisions de dépôt, relance, reprise et redémarrage', () => {
     const refus = relancerLot(quota.plan, 1)
     expect(refus.ok).toBe(false)
     if (!refus.ok) expect(refus.erreur).toMatch(/limite de quota/)
+  })
+})
+
+/*
+ * LE CHEF VALIDE UN LOT EN ÉCHEC (2026-11-08) : un lot qui se déclare bloqué par un rouge qui n'est
+ * pas le sien a pourtant fini son travail. Le chef le vérifie ; son verdict doit changer le tableau,
+ * sinon « Relancer » reste offert à l'utilisateur pour un travail déjà fait.
+ */
+describe('validerLot — le verdict du chef', () => {
+  const PREUVE = '69/69 tests verts dans sa copie, typage code 0 ; le rouge vient d’un autre fil.'
+  const bloqueParLeLot1 = (): PlanDeLots => {
+    let p = lancerCeQuiPart(
+      planAccepte({ parallele: 1, lots: [lot(1), { ...lot(2), apres: [1] }] })
+    )
+    p = noterFinDeTour(
+      p,
+      'conv-110',
+      { ok: true, texte: 'Fait.\n⚠️ Non résolu : un test de thème reste rouge, sans lien.' },
+      3000
+    ).plan
+    expect(p.statut).toBe('bloque')
+    return p
+  }
+
+  it('lot en échec validé : fait, la preuve pour raison, aucun tour compté, le dépendant peut partir', () => {
+    const p = bloqueParLeLot1()
+    const r = validerLot(p, 1, PREUVE, 4000)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.plan.lots[0]).toMatchObject({
+      etat: 'fait',
+      raison: `validé par le chef : ${PREUVE}`,
+      fin: 4000
+    })
+    expect(r.plan.toursLances).toBe(p.toursLances)
+    expect(r.plan.statut).toBe('en-cours')
+    expect(lotsAPartir(r.plan)).toEqual([2])
+    expect(bilanDuPlan(r.plan).faits).toBe(1)
+    expect(relancerLot(r.plan, 1).ok).toBe(false)
+  })
+
+  it('refuse un lot qui n’est pas en échec, un lot inconnu, une preuve vide ; borne la preuve', () => {
+    const p = bloqueParLeLot1()
+    const aFaire = validerLot(p, 2, PREUVE, 4000)
+    expect(aFaire.ok).toBe(false)
+    if (!aFaire.ok) expect(aFaire.erreur).toMatch(/lot 2 est à faire/)
+    expect(validerLot(p, 9, PREUVE, 4000).ok).toBe(false)
+    const vide = validerLot(p, 1, '  ', 4000)
+    expect(vide.ok).toBe(false)
+    if (!vide.ok) expect(vide.erreur).toMatch(/preuve/)
+    const longue = validerLot(p, 1, 'x'.repeat(1000), 4000)
+    expect(longue.ok).toBe(true)
+    if (longue.ok) expect(longue.plan.lots[0].raison?.length).toBe(300)
+  })
+
+  it('le réveil du chef lui donne ce geste pour un lot en échec dont le travail est bon', () => {
+    const p = bloqueParLeLot1()
+    expect(promptDeReveil(p, [1])).toMatch(/action « valider », lot N, preuve/)
   })
 })
 

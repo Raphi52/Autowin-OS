@@ -31,6 +31,7 @@ import {
   statutApresLancements,
   suiteDeLOrdreAuLot,
   suivreLesPublications,
+  validerLot,
   type ActiviteDeRun,
   type IssueDuTour,
   type LotDuPlan,
@@ -581,8 +582,27 @@ export class CoordinateurDesPlans {
       if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
       return { ok: true, plan: resume(r.plan), detail: r.detail }
     }
+    if (action === 'valider') {
+      const vu = this.planDuFil(chef)
+      // Un lot ne se déclare pas fait lui-même : le verdict appartient au chef, qui l'a vérifié.
+      if (!vu || vu.role !== 'chef')
+        throw new Error('plan_de_lots : seul le fil chef valide un lot de son plan.')
+      const rang = Number(args.lot)
+      if (!Number.isInteger(rang) || rang < 1)
+        throw new Error('plan_de_lots : « lot » — numéro du lot à valider attendu (1, 2…).')
+      const r = validerLot(vu.plan, rang, args.preuve, this.#maintenant())
+      if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
+      this.#poser(r.plan)
+      await this.#lancerLesSuivants(r.plan.id)
+      const apres = this.#plan(r.plan.id) ?? r.plan
+      return {
+        ok: true,
+        plan: resume(apres),
+        detail: `lot ${rang} validé : « fait » dans le tableau, sans tour compté. ${bilanDuPlan(apres).texte}`
+      }
+    }
     throw new Error(
-      `plan_de_lots : action « ${action} » inconnue. Actions : deposer, etat, relancer, noter, ajouter.`
+      `plan_de_lots : action « ${action} » inconnue. Actions : deposer, etat, relancer, valider, noter, ajouter.`
     )
   }
 

@@ -204,17 +204,22 @@ export const CATALOG: CommandSpec[] = [
      */
     name: 'plan_de_lots',
     description:
-      "Mener une tâche LONGUE en plusieurs fils, depuis TON fil (le chef). Action « deposer » : un plan de 2 à 20 lots (vise 3 à 8 : un lot coûte un tour) sur des fichiers séparés, estimés d'une lecture ciblée ; un lot qui a besoin du RÉSULTAT d'un autre l'attend par « apres » ; un prérequis en échec le bloque jusqu'à sa relance. Le plan PART AUSSITÔT déposé, sans clic de l'utilisateur (il peut l'arrêter) : ne dépose qu'un plan prêt, dis pourquoi tu découpes et rends la main. L'app ouvre un fil par lot (3 à la fois au plus), te réveille à chaque fin de lot : vérifie, relance un lot en échec (« relancer »), fais le bilan. Chaque lot reçoit sa demande, le « contexte », les décisions notées et la liste des autres lots ; « modele » : haiku ou sonnet pour un lot simple. Action « noter » (chef OU lot) : une décision pour les lots en cours et à venir. Action « ajouter » (chef) : des lots en plus, pas un second plan. Action « etat » : le tableau. Un fil de lot ne dépose pas de plan.",
+      "Mener une tâche LONGUE en plusieurs fils, depuis TON fil (le chef). Action « deposer » : un plan de 2 à 20 lots (vise 3 à 8 : un lot coûte un tour) sur des fichiers séparés, estimés d'une lecture ciblée ; un lot qui a besoin du RÉSULTAT d'un autre l'attend par « apres » ; un prérequis en échec le bloque jusqu'à sa relance. Le plan PART AUSSITÔT déposé, sans clic de l'utilisateur (il peut l'arrêter) : ne dépose qu'un plan prêt, dis pourquoi tu découpes et rends la main. L'app ouvre un fil par lot (3 à la fois au plus), te réveille à chaque fin de lot : vérifie, relance (« relancer ») ou valide (« valider ») un échec, fais le bilan. Chaque lot reçoit sa demande, le « contexte », les décisions notées et la liste des autres lots ; « modele » : haiku ou sonnet pour un lot simple. Action « noter » (chef OU lot) : une décision pour les lots en cours et à venir. Action « ajouter » (chef) : des lots en plus, pas un second plan. Action « etat » : le tableau. Un fil de lot ne dépose pas de plan.",
     args: {
       action:
-        'deposer|etat|relancer|noter|ajouter (défaut : deposer si « plan » est donné, sinon etat)',
+        'deposer|etat|relancer|valider|noter|ajouter (défaut : deposer si « plan » est donné, sinon etat)',
       plan: 'pour deposer — { "titre", "contexte" (le but, les décisions et contraintes déjà prises, comment les lots s’emboîtent : 80 à 3 000 caractères), "parallele" (défaut 3), "plafondTours" (TOTAL des tours du plan ENTIER, relances comprises, PAS un nombre par lot — défaut : 2 × le nombre de lots ; au moins le nombre de lots, sinon le plan est refusé), "lots": [ { "titre", "demande" (le message autoporté que recevra le fil, une commande /build en tête est reconnue), "fichiers": [chemins prévus], "apres": [numéros des lots à attendre — facultatif, sans cycle], "modele" (facultatif ; absent = le modèle du fil) } ] } ; pour ajouter — { "lots": [ mêmes champs ] }, rangs à la suite, « apres » peut viser un lot déjà là',
-      lot: 'pour relancer — le numéro du lot (1, 2…)',
+      lot: 'pour relancer ou valider — le numéro du lot (1, 2…)',
+      preuve:
+        'pour valider — ce que tu as vérifié du travail du lot (commande, code de sortie) ; il passe « fait »',
       decision:
         'pour noter — la décision en une phrase (300 caractères au plus), ex. « le module s’appelle carte-du-plan.ts »'
     },
     argsTypes: {
-      action: { type: 'string', enum: ['deposer', 'etat', 'relancer', 'noter', 'ajouter'] },
+      action: {
+        type: 'string',
+        enum: ['deposer', 'etat', 'relancer', 'valider', 'noter', 'ajouter']
+      },
       plan: {
         type: 'object',
         properties: {
@@ -241,9 +246,10 @@ export const CATALOG: CommandSpec[] = [
         required: ['lots']
       },
       lot: { type: 'integer', minimum: 1 },
-      decision: { type: 'string', maxLength: 300 }
+      decision: { type: 'string', maxLength: 300 },
+      preuve: { type: 'string', maxLength: 300 }
     },
-    argsFacultatifs: ['action', 'plan', 'lot', 'decision'],
+    argsFacultatifs: ['action', 'plan', 'lot', 'decision', 'preuve'],
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
