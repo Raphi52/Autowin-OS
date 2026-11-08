@@ -366,6 +366,53 @@
   font-size: 11px;
 }
 
+/* Ce que couvre le rôle : filet doré à gauche, aucun fond — le bloc se lit comme une note du
+   panneau, pas comme un emplacement où déposer un modèle. Jetons de thème seulement. */
+.topology-couvre {
+  margin: 10px 0 12px;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+}
+
+.topology-couvre-titre {
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.topology-couvre dl {
+  display: grid;
+  gap: 5px;
+  margin: 5px 0 0;
+}
+
+.topology-couvre dl > div {
+  display: grid;
+  gap: 1px;
+}
+
+.topology-couvre dt {
+  color: var(--text-dim);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.topology-couvre dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.topology-couvre dd b {
+  color: var(--gold);
+  font-weight: 600;
+}
+
 .topology-slots {
   display: grid;
   gap: 8px;

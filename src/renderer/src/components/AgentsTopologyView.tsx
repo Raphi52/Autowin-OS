@@ -41,6 +41,50 @@ type Target = 'orchestrator' | 'subagents' | 'scout' | 'frame' | 'terrain' | 'ju
 
 /** Cibles dont le fan-out multi-modèles EST branché au runtime (≥2 slots → dupliqué + agrégé). */
 const FANOUT_ACTIVE: ReadonlySet<Target> = new Set<Target>(['scout', 'frame', 'terrain', 'judge'])
+
+type CleAgentStudio = Parameters<ReturnType<typeof useTextesAgentStudio>['t']>[0]
+
+/**
+ * Ce que couvre chaque panneau : une paire (intitulé, explication) par ligne. Chaque fait est lu
+ * dans le processus principal, pas supposé — un bloc vide se replie sur `subagents[0]` puis sur
+ * l'orchestrateur (`runtimeRoleSlots`), toute étape sauf judge tombe sur les sous-agents
+ * (`bindingDeRepliPourPhase`), terrain ne joue que nommé (`task-regime.ts`), le quorum par défaut des
+ * juges est la majorité (`quorum.ts`). Changer l'un de ces comportements, c'est changer ce texte.
+ */
+const COUVERTURE: Readonly<
+  Record<Target, ReadonlyArray<readonly [CleAgentStudio, CleAgentStudio]>>
+> = {
+  orchestrator: [
+    ['topo.couvre.couvre', 'topo.couvre.orchestrateur.couvre'],
+    ['topo.couvre.pendant', 'topo.couvre.orchestrateur.pendant'],
+    ['topo.couvre.horsChamp', 'topo.couvre.orchestrateur.horsChamp']
+  ],
+  subagents: [
+    ['topo.couvre.couvre', 'topo.couvre.sousAgents.couvre'],
+    ['topo.couvre.plusieurs', 'topo.couvre.sousAgents.plusieurs'],
+    ['topo.couvre.vide', 'topo.couvre.sousAgents.vide']
+  ],
+  scout: [
+    ['topo.couvre.couvre', 'topo.couvre.scout.couvre'],
+    ['topo.couvre.plusieurs', 'topo.couvre.scout.plusieurs'],
+    ['topo.couvre.vide', 'topo.couvre.panel.vide']
+  ],
+  frame: [
+    ['topo.couvre.couvre', 'topo.couvre.frame.couvre'],
+    ['topo.couvre.plusieurs', 'topo.couvre.frame.plusieurs'],
+    ['topo.couvre.vide', 'topo.couvre.panel.vide']
+  ],
+  terrain: [
+    ['topo.couvre.couvre', 'topo.couvre.terrain.couvre'],
+    ['topo.couvre.plusieurs', 'topo.couvre.terrain.plusieurs'],
+    ['topo.couvre.vide', 'topo.couvre.panel.vide']
+  ],
+  judge: [
+    ['topo.couvre.couvre', 'topo.couvre.judge.couvre'],
+    ['topo.couvre.plusieurs', 'topo.couvre.judge.plusieurs'],
+    ['topo.couvre.vide', 'topo.couvre.judge.vide']
+  ]
+}
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
 
 const DRAG_TYPE = 'application/x-autowin-model'
@@ -383,6 +427,17 @@ export function AgentsTopologyView({
           </div>
           <b>{slots.length}</b>
         </header>
+        <div className="topology-couvre" data-testid={`topology-couvre-${target}`}>
+          <span className="topology-couvre-titre">{t('topo.couvre.titre')}</span>
+          <dl>
+            {COUVERTURE[target].map(([intitule, explication]) => (
+              <div key={intitule}>
+                <dt>{t(intitule)}</dt>
+                <dd>{riche(t(explication), 'b')}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
         <div className="topology-slots">
           {slots.map((slot, index) => {
             const model = modelsById.get(slot.modelId)
@@ -793,7 +848,11 @@ export function AgentsTopologyView({
         </div>
         <div className="topology-runtime-limit">
           <b>{t('topo.runtime.titre')}</b>
-          <span>{riche(t('topo.runtime.detail'), 'b')}</span>
+          <span>
+            {riche(t('topo.runtime.detail'), 'b')}
+            <br />
+            {riche(t('topo.runtime.workflow'), 'b')}
+          </span>
         </div>
       </main>
     </div>

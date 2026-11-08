@@ -105,6 +105,45 @@ export const TEXTES_FR = {
   'topo.runtime.titre': 'Runtime actuel',
   'topo.runtime.detail':
     '**Scouts, Frame, Terrain et Judges** : déposez-y plusieurs modèles — ils s’exécutent en parallèle puis l’orchestrateur agrège (union des sorties pour Scouts/Frame/Terrain, quorum de vote pour Judges). **Orchestrateur et Sous-agents** : seul le premier slot alimente le runtime (fan-out des sous-agents pas encore branché).',
+  'topo.runtime.workflow':
+    '**Workflows** : un workflow (onglet Workflows) qui place ses propres agents sur une étape passe avant ces blocs, pour cette étape seulement.',
+
+  // — Ce que couvre chaque rôle : un bloc par panneau (AgentsTopologyView) —
+  'topo.couvre.titre': 'Ce que ça couvre',
+  'topo.couvre.couvre': 'Couvre',
+  'topo.couvre.pendant': 'Pendant un travail',
+  'topo.couvre.horsChamp': 'Ne couvre pas',
+  'topo.couvre.plusieurs': 'Plusieurs modèles',
+  'topo.couvre.vide': 'Bloc vide',
+  'topo.couvre.orchestrateur.couvre':
+    'Le modèle qui **te répond dans le Chat**, dans chaque fil qui n’a pas choisi le sien. Changer de modèle dans l’en-tête d’un chat change aussi ce bloc.',
+  'topo.couvre.orchestrateur.pendant':
+    'Il **découpe** un gros chantier en morceaux menés en parallèle, et il **fusionne** les propositions quand un bloc ci-dessous a plusieurs modèles.',
+  'topo.couvre.orchestrateur.horsChamp':
+    'Les **petites tâches** (bloc en haut de page) et l’exécution des étapes (**Sous-agents**).',
+  'topo.couvre.sousAgents.couvre':
+    'Le modèle qui **fait le travail** lancé depuis le chat : l’étape **build** (modifier puis prouver), **clean** (nettoyage avant le contrôle final), et toute étape dont le bloc ci-dessous est **vide**.',
+  'topo.couvre.sousAgents.plusieurs': '**Pas encore** : seul le premier emplacement travaille.',
+  'topo.couvre.sousAgents.vide': 'L’**orchestrateur** fait le travail lui-même.',
+  'topo.couvre.scout.couvre':
+    'L’étape **scout** : explorer une cible (code, projet, outil) et rendre une courte liste de **pistes d’amélioration**, avant de choisir quoi faire.',
+  'topo.couvre.scout.plusieurs':
+    'Chacun explore **en parallèle, sous un angle différent** ; l’orchestrateur réunit leurs pistes.',
+  'topo.couvre.frame.couvre':
+    'L’étape **frame** : cadrer **quoi faire et comment** — le vrai besoin, les critères de réussite, l’approche retenue.',
+  'topo.couvre.frame.plusieurs':
+    'Chacun cadre la même demande **en parallèle** ; l’orchestrateur fusionne les cadrages.',
+  'topo.couvre.terrain.couvre':
+    'L’étape **terrain**, jouée **seulement quand tu la demandes** : écrire la procédure pas à pas que suivra l’exécution, avec pour chaque pas la preuve attendue (test, code de sortie, capture).',
+  'topo.couvre.terrain.plusieurs':
+    'Chacun écrit sa procédure **en parallèle** ; l’orchestrateur les fusionne.',
+  'topo.couvre.judge.couvre':
+    'L’étape **judge**, la dernière : relire le résultat **en adversaire** et dire s’il est vraiment bon avant de l’annoncer fini.',
+  'topo.couvre.judge.plusieurs':
+    'Chaque juge rend son avis seul ; le verdict suit la **majorité**, sauf seuil réglé dans un workflow.',
+  'topo.couvre.judge.vide':
+    'Le modèle des **Sous-agents** juge son propre travail : mets ici **un autre modèle** pour un vrai contrôle.',
+  'topo.couvre.panel.vide': 'Le modèle des **Sous-agents** fait l’étape seul.',
 
   // — Workflows : liste des profils (WorkflowProfilesView) —
   'wf.cout': '{montant} $',
@@ -294,6 +333,44 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.runtime.titre': 'Current runtime',
   'topo.runtime.detail':
     '**Scouts, Frame, Terrain and Judges**: drop several models there — they run in parallel, then the orchestrator aggregates (union of outputs for Scouts/Frame/Terrain, voting quorum for Judges). **Orchestrator and Sub-agents**: only the first slot feeds the runtime (sub-agent fan-out not wired yet).',
+  'topo.runtime.workflow':
+    '**Workflows**: a workflow (Workflows tab) that places its own agents on a step takes precedence over these blocks, for that step only.',
+
+  'topo.couvre.titre': 'What it covers',
+  'topo.couvre.couvre': 'Covers',
+  'topo.couvre.pendant': 'During a job',
+  'topo.couvre.horsChamp': 'Does not cover',
+  'topo.couvre.plusieurs': 'Several models',
+  'topo.couvre.vide': 'Empty block',
+  'topo.couvre.orchestrateur.couvre':
+    'The model that **answers you in the Chat**, in every thread that has not picked its own. Changing the model in a chat header changes this block too.',
+  'topo.couvre.orchestrateur.pendant':
+    'It **splits** a large job into pieces run in parallel, and it **merges** the proposals when a block below has several models.',
+  'topo.couvre.orchestrateur.horsChamp':
+    'The **small tasks** (block at the top of the page) and running the steps (**Sub-agents**).',
+  'topo.couvre.sousAgents.couvre':
+    'The model that **does the work** started from the chat: the **build** step (change, then prove), **clean** (tidy-up before the final check), and any step whose block below is **empty**.',
+  'topo.couvre.sousAgents.plusieurs': '**Not yet**: only the first slot works.',
+  'topo.couvre.sousAgents.vide': 'The **orchestrator** does the work itself.',
+  'topo.couvre.scout.couvre':
+    'The **scout** step: explore a target (code, project, tool) and return a short list of **improvement leads**, before choosing what to do.',
+  'topo.couvre.scout.plusieurs':
+    'Each one explores **in parallel, from a different angle**; the orchestrator gathers their leads.',
+  'topo.couvre.frame.couvre':
+    'The **frame** step: settle **what to do and how** — the real need, the success criteria, the chosen approach.',
+  'topo.couvre.frame.plusieurs':
+    'Each one frames the same request **in parallel**; the orchestrator merges the framings.',
+  'topo.couvre.terrain.couvre':
+    'The **terrain** step, run **only when you ask for it**: write the step-by-step procedure the execution will follow, with the expected proof for each step (test, exit code, capture).',
+  'topo.couvre.terrain.plusieurs':
+    'Each one writes its procedure **in parallel**; the orchestrator merges them.',
+  'topo.couvre.judge.couvre':
+    'The **judge** step, the last one: review the result **as an adversary** and say whether it is really good before it is announced as done.',
+  'topo.couvre.judge.plusieurs':
+    'Each judge gives its opinion alone; the verdict follows the **majority**, unless a threshold is set in a workflow.',
+  'topo.couvre.judge.vide':
+    'The **Sub-agents** model judges its own work: put **another model** here for a real check.',
+  'topo.couvre.panel.vide': 'The **Sub-agents** model runs the step alone.',
 
   'wf.cout': '${montant}',
   'wf.arene.aucune': 'Arena: no measurement recorded',
