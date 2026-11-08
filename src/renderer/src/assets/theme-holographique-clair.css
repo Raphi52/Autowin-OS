@@ -727,7 +727,19 @@
 /* QUESTION A COTE : pas de rose, comme la saisie juste dessous. Le rose de ce theme est reserve a
    ce qui est actif ; le panneau le prenait pour son titre et pour le bord du champ au focus, et
    tranchait sur la saisie noire a cadre or. Le titre prend le texte des titres de panneau, le champ
-   le contour de la recherche : gris au repos, blanc pendant la saisie, sans halo. */
+   le contour de la recherche : gris au repos, blanc pendant la saisie, sans halo.
+   Le panneau lui-meme porte l'habit de la saisie (regle `.chat > .composer`, plus bas) : noir
+   profond opaque, cadre or qui coule vers le blanc, memes coins. Pose au-dessus d'elle, il se lit
+   comme une seconde saisie, pas comme une carte de verre grise. Meme double fond que la saisie :
+   le noir rogne a l'interieur (padding-box), le cadre dessous sur la boite du bord. */
+:root[data-theme='holographique-clair'] .question-a-cote {
+  border: 1px solid transparent;
+  border-radius: var(--nv-rond);
+  background:
+    linear-gradient(#f6f5f9, #f6f5f9) padding-box,
+    var(--nv-cadre-coule) border-box;
+  background-origin: border-box;
+}
 :root[data-theme='holographique-clair'] .question-a-cote-titre {
   color: var(--text);
 }
