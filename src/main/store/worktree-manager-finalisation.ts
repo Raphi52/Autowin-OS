@@ -646,7 +646,8 @@ export function finalizeSansSecours(
   const { sha, committed } = this.commitCopyIfDirty(agentId, path, options.task)
   const baseSha = this.git(this.baseRepo, ['rev-parse', 'HEAD'])
   options.onPrepared?.(sha, baseSha)
-  if (sha === baseSha) {
+  // La copie n'a rien apporté au-delà de la base → rien à fusionner ; on range.
+  const rangerUneCopieSansApport = (): FinalizeResult => {
     const lateCommit = this.headAdvance(path, sha)
     if (lateCommit.advanced) {
       return {
@@ -667,7 +668,6 @@ export function finalizeSansSecours(
         detail: 'La copie a reçu de nouveaux fichiers avant son nettoyage.'
       }
     }
-    // La copie n'a rien apporté au-delà de la base → rien à fusionner ; on range.
     const agentCleanup = this.cleanupAgentWorktree(agentId, path, sha)
     if (agentCleanup.advanced) {
       return {
@@ -689,6 +689,7 @@ export function finalizeSansSecours(
     }
     return { outcome: 'nothing', agentId }
   }
+  if (sha === baseSha) return rangerUneCopieSansApport()
 
   // Une copie dont le commit est INCONNU de cette base ne peut pas y être fusionnée : copie
   // laissée par un autre dépôt (le dossier de copies est partagé entre workspaces), ou objets
@@ -709,6 +710,18 @@ export function finalizeSansSecours(
   const agentFiles = parseNullSeparatedPaths(
     this.git(this.baseRepo, ['diff', '--name-only', '-z', `${baseSha}...${sha}`])
   )
+  /*
+   * AUCUN FICHIER À PUBLIER = RIEN À FUSIONNER, même si `sha` n'est plus égal à HEAD.
+   *
+   * Cas réel : l'agent a écrit directement dans la base, sa copie est restée vide, et la base a
+   * avancé entre-temps (publication d'un autre fil). Le commit de la copie est alors CONTENU dans
+   * HEAD sans lui être égal : il n'y a rien à fusionner. Aller jusqu'à la publication mettait le
+   * garde de `preparePublishHooks` devant une liste de fichiers VIDE ; or `git status --` sans
+   * chemin couvre tout l'arbre, donc le moindre fichier non commité d'un autre fil faisait refuser
+   * la transaction (`base-in-progress`, « update aborted by the reference-transaction hook »), et
+   * le refus se répétait à chaque reprise. Mesuré du 05 au 07/11 : 13 refus sur 40.
+   */
+  if (agentFiles.length === 0) return rangerUneCopieSansApport()
   const blockingDirtyFiles = this.blockingDirtyFiles(agentFiles)
   if (blockingDirtyFiles.length > 0) {
     return {
