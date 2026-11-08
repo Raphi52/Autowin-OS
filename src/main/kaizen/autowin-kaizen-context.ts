@@ -565,6 +565,9 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
 const MARQUEUR_DEBUT = '=== DOSSIER DE PREUVE AUTOWIN OS ==='
 const MARQUEUR_FIN = '=== FIN DU DOSSIER ==='
 
+/** Le dossier joint : un dossier multiple range chaque conversation dans `dossiers`. */
+type DossierJoint = Partial<KaizenSnapshot> & { dossiers?: Array<Partial<KaizenSnapshot>> }
+
 export interface AppuiSourcesNeuves {
   /** Le contrôle a-t-il un sens ici : tâche kaizen AVEC un dossier qui porte au moins une des 3 sources. */
   applicable: boolean
@@ -583,7 +586,7 @@ export interface AppuiSourcesNeuves {
   la lecture, et le controle se desactivait sans le dire. On essaie donc les occurrences de la plus
   tardive vers la plus precoce, jusqu'a une lecture valide.
 */
-function lireDossierJoint(task: string): Partial<KaizenSnapshot> | undefined {
+function lireDossierJoint(task: string): DossierJoint | undefined {
   const debut = task.indexOf(MARQUEUR_DEBUT)
   if (debut < 0) return undefined
   const corps = debut + MARQUEUR_DEBUT.length
@@ -622,11 +625,15 @@ export function exigenceAppuiSourcesNeuves(task: string, sortie: string): AppuiS
   const vide: AppuiSourcesNeuves = { applicable: false, identifiants: [], cites: [], manque: false }
   const snapshot = lireDossierJoint(task)
   if (!snapshot) return vide
-  const identifiants = [
-    ...(snapshot.promptCalls ?? []).map((call) => call.turnId),
-    ...(snapshot.turnEvents ?? []).map((event) => event.turnId),
-    ...(snapshot.saisies ?? []).map((saisie) => String(saisie.ts))
-  ].filter((valeur): valeur is string => typeof valeur === 'string' && valeur.trim().length > 0)
+  // Un dossier multiple range chaque conversation dans `dossiers` : toutes ses sources sont citables.
+  const sources = [snapshot, ...(snapshot.dossiers ?? [])]
+  const identifiants = sources
+    .flatMap((source) => [
+      ...(source.promptCalls ?? []).map((call) => call.turnId),
+      ...(source.turnEvents ?? []).map((event) => event.turnId),
+      ...(source.saisies ?? []).map((saisie) => String(saisie.ts))
+    ])
+    .filter((valeur): valeur is string => typeof valeur === 'string' && valeur.trim().length > 0)
   const uniques = [...new Set(identifiants)]
   if (uniques.length === 0) return vide
   const cites = uniques.filter((identifiant) => sortie.includes(abreger(identifiant)))
@@ -734,12 +741,8 @@ export function localiserMessageCite(
   }
 }
 
-/** Transforme /kaizen en dossier de preuve borné, sans source ni instruction Claude. */
-export function buildAutowinKaizenTask(
-  request: string,
-  evidence: AutowinKaizenEvidence,
-  avisCible?: string
-): string {
+/** Le dossier d'une conversation, avant l'ajustement au budget : une entrée par élément, jamais coupée au milieu. */
+function snapshotDe(evidence: AutowinKaizenEvidence): KaizenSnapshot {
   const messages = evidence.conversation.messages.slice(-MESSAGE_LIMIT).map((message) => ({
     ts: new Date(message.ts).toISOString(),
     role: message.role,
@@ -784,50 +787,67 @@ export function buildAutowinKaizenTask(
     turnEvents: (evidence.turnEvents ?? []).slice(-TURN_EVENT_TOTAL_LIMIT),
     saisies: (evidence.saisies ?? []).slice(-SAISIE_LIMIT)
   }
+  return snapshot
+}
 
-  const entete = `${clipped(request.trim(), REQUEST_CAP) || '/kaizen'}
-${avisCible ? `\n⚠️ CIBLE DU DOSSIER : ${clipped(avisCible, 600)}\n` : ''}
-${MARQUEUR_DEBUT}
-`
-  const pied =
-    `
-${MARQUEUR_FIN}
-` +
-    `Audite cette conversation et les mécanismes Autowin qui l'ont produite. ` +
-    /*
-      Cette phrase ordonnait l'inverse de la phase kaizen elle-même (`phase-briefs.ts` : « les
-      éditions elles-mêmes, APPLIQUÉES… kaizen n'attend aucun accord humain »). Lue en DERNIER, elle
-      gagnait : l'utilisateur recevait une liste de propositions au lieu de corrections.
-    */
-    `Applique ensuite toi-même les corrections que les preuves justifient : un commit par édition, ` +
-    `annoncé et vérifié par un signal hors-modèle, pour que chacune reste annulable d'un seul revert.` +
-    /*
-      Cette phrase était ABSENTE, et le défaut a été mesuré : le dossier joignait bien
-      les appels modèle, le journal des tours et les saisies, mais les corrections rendues portaient
-      toutes sur le mécanisme qui FABRIQUE le dossier — aucune sur un fait lu dedans. L'exigence est
-      posée ici (l'en-tête et le pied sont déduits du budget AVANT l'ajustement : ils ne sont jamais
-      rognés) et elle est CONTRÔLÉE hors modèle par `exigenceAppuiSourcesNeuves`, parce qu'une
-      exigence seulement écrite avait déjà été écrite, puis non tenue.
-    */
-    /*
-      TROIS SOURCES VIDES → PAS D'EXIGENCE (kaizen, tour
-      9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f, 2026-10-29). Le dossier avait promptCalls,
-      turnEvents et saisies vides ; le pied exigeait quand même une citation « sinon un contrôle
-      refuse le rendu », alors que `exigenceAppuiSourcesNeuves` rend `applicable: false` sur ce
-      même dossier (rien à citer). Une exigence impossible pousse à citer n'importe quoi ou à un
-      commit de pure forme (commit qui n'ajoutait qu'un `fix-ok`). Le texte dit
-      donc ce que le contrôle fait vraiment. Décidé sur les listes AVANT l'ajustement au budget,
-      qui ne vide jamais les trois.
-    */
-    (snapshot.promptCalls.length || snapshot.turnEvents.length || snapshot.saisies.length
+/** Une ligne d'alerte en tête du dossier : chaque point qui n'entre pas dans le dossier y est dit. */
+function ligneAlerte(texte: string): string {
+  return `\n⚠️ ${texte}\n`
+}
+
+/*
+  Le pied du dossier : la consigne d'audit et l'exigence de citation. Il se décide sur les listes AVANT
+  l'ajustement au budget, qui ne vide jamais les trois sources. Le contrôle hors modèle
+  (exigenceAppuiSourcesNeuves) rend « non applicable » quand elles sont toutes vides : le texte le dit donc.
+  `pluriel` : le dossier porte plusieurs conversations.
+*/
+function piedDuDossier(
+  sources: { promptCalls: number; turnEvents: number; saisies: number },
+  pluriel: boolean
+): string {
+  const audit = pluriel
+    ? 'Audite ces conversations et les mécanismes Autowin qui les ont produites. '
+    : "Audite cette conversation et les mécanismes Autowin qui l'ont produite. "
+  const exigence =
+    sources.promptCalls + sources.turnEvents + sources.saisies > 0
       ? ` AU MOINS UNE de ces corrections doit s'appuyer sur les appels modèle (promptCalls), le ` +
-        `journal des tours (turnEvents) ou les saisies (saisies) de ce dossier, et CITER l'identifiant ` +
-        `exact qui l'établit : le \`turnId\` de l'appel ou du tour, ou l'horodatage \`ts\` de la saisie. ` +
+        `journal des tours (turnEvents) ou les saisies (saisies) ${pluriel ? 'de ces dossiers' : 'de ce dossier'}, ` +
+        `et CITER l'identifiant exact qui l'établit : le \`turnId\` de l'appel ou du tour, ou l'horodatage \`ts\` de la saisie. ` +
         `Sans cette citation, un contrôle hors modèle refuse le rendu.`
-      : ` Ce dossier ne contient aucun appel modèle, aucun tour ni aucune saisie (promptCalls, ` +
+      : ` ${pluriel ? 'Ces dossiers ne contiennent' : 'Ce dossier ne contient'} aucun appel modèle, aucun tour ni aucune saisie (promptCalls, ` +
         `turnEvents et saisies sont vides) : aucune citation n'en est exigée, et aucun contrôle ne ` +
         `la réclame. Cherche les traces toi-même (\`.autowin-data/autowin-os/turn-journals/<conv>/\`, ` +
-        `\`cost.jsonl\`) et cite les identifiants que tu y lis.`)
+        `\`cost.jsonl\`) et cite les identifiants que tu y lis.`
+  return (
+    `\n${MARQUEUR_FIN}\n` +
+    audit +
+    `Applique ensuite toi-même les corrections que les preuves justifient : un commit par édition, ` +
+    `annoncé et vérifié par un signal hors-modèle, pour que chacune reste annulable d'un seul revert.` +
+    exigence
+  )
+}
+
+/** Transforme /kaizen en dossier de preuve borné, sans source ni instruction Claude. */
+export function buildAutowinKaizenTask(
+  request: string,
+  evidence: AutowinKaizenEvidence,
+  avisCible?: string,
+  alertes: readonly string[] = []
+): string {
+  const snapshot = snapshotDe(evidence)
+  const entete = `${clipped(request.trim(), REQUEST_CAP) || '/kaizen'}
+${avisCible ? ligneAlerte(`CIBLE DU DOSSIER : ${clipped(avisCible, 600)}`) : ''}${alertes.map((alerte) => ligneAlerte(alerte)).join('')}
+${MARQUEUR_DEBUT}
+`
+  // L'en-tête et le pied se déduisent du budget AVANT l'ajustement : ils ne sont jamais rognés.
+  const pied = piedDuDossier(
+    {
+      promptCalls: snapshot.promptCalls.length,
+      turnEvents: snapshot.turnEvents.length,
+      saisies: snapshot.saisies.length
+    },
+    false
+  )
   const budget = TOTAL_CAP - entete.length - pied.length - TRONCATURE_MARGE
   const retires = ajusterAuBudget(snapshot, budget)
   // Ce qui a été retiré est DIT : un dossier amputé en silence se lit comme un dossier complet.
@@ -836,35 +856,206 @@ ${MARQUEUR_FIN}
   return `${entete}${JSON.stringify(snapshot)}${pied}`
 }
 
-/**
- * Conversation NOMMEE dans `/kaizen conv-61 …`. Sans elle, le dossier etait construit sur la
- * conversation ou la commande est tapee : tour 93905e01-f715-4aab-aff8-40c7216dfc0c
- * (2026-10-02), a recu le dossier elle-meme (promptCalls, turnEvents, saisies vides)
- * au lieu de celui vise par l'utilisateur.
- *
- * La cible s'ecrit comme on PARLE, pas seulement `conv-N` colle a la commande : tour
- * 1dd28b24-4274-44a4-a9f5-2a36005f6afd (saisie ts 2026-10-10T08:26:55.163Z), « /kaizen dans le
- * dernier tour de la conv 150 … » a recu le dossier (promptCalls, turnEvents, saisies
- * vides). On prend la PREMIERE mention `conv N` / `conv-N` / `conversation N` de la phrase ;
- * l'appelant retombe sur la conversation courante si elle n'existe pas.
- *
- * Le NUMÉRO SEUL en tête compte aussi (kaizen, tour 9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f,
- * 2026-10-29) : « /kaizen 1263 le petit modele de l'app a parlé de dialogue … » a reçu le dossier
- * elle-même, vide (« Aucune conversation n'est nommée »), alors que la scène était.
- * L'utilisateur désigne ses conversations ainsi (« 1256 pk cette conv paralélise
- * pas tout »). Seulement le PREMIER mot, et jamais une quantité (« 3 fois », « 1/10 ») ;
- * une mention `conv N` dans la phrase reste prioritaire.
- */
-const NUMERO_SEUL_EN_TETE =
-  /^\/kaizen\s+(?:la\s+)?(\d{1,6})(?=[\s,:;]|$)(?!\s+(?:fois|x|%|min(?:utes?)?|h|heures?|s|sec(?:ondes?)?|jours?|tours?|messages?|lignes?|fichiers?|commits?|euros?)\b)/i
+/** Plafond de conversations nommées dans une même demande /kaizen : au-delà, leur dossier n'est pas construit. */
+export const CONVERSATIONS_KAIZEN_MAX = 5
 
-export function kaizenNamedConversationId(task: string): string | undefined {
+/*
+  Un nombre nu ne désigne une conversation qu'à partir de trois chiffres : dans « la conversation
+  nommée 2 bugs », le 2 n'est pas une conversation. Une mention « conv » suivie d'un numéro garde ce
+  numéro, quelle qu'en soit la longueur.
+*/
+const CHIFFRES_MIN_NOMBRE_NU = 3
+
+const UNITE_DE_QUANTITE =
+  'fois|x|%|min(?:utes?)?|h|heures?|s|sec(?:ondes?)?|jours?|tours?|messages?|lignes?|fichiers?|commits?|euros?'
+
+/*
+  La tête de liste : après « /kaizen » (et « la » ou « les », facultatifs), des conversations (`conv N`,
+  `conv-N`) ou des nombres nus, séparés par des espaces, des virgules ou « et ». Elle s'arrête au premier
+  mot qui n'en est pas un. Un nombre suivi d'une unité (« 3 fois ») ou d'une fraction (« 1/10 ») n'en fait
+  pas partie. Seule la tête désigne par nombre nu : un nombre au milieu d'une phrase (« le tour 1263 »)
+  ne désigne aucune conversation.
+*/
+const ELEMENT_DE_LISTE = String.raw`(?:conv(?:ersation)?[\s-]*(?:n°\s*|#\s*)?\d+|\d+(?!\s*(?:${UNITE_DE_QUANTITE})\b))(?![\w/-]|\.\d)`
+const TETE_DE_LISTE = new RegExp(
+  String.raw`^\/kaizen(?=\s|$)(?:\s+(?:la|les)(?=\s))?((?:[\s,]*(?:et\s+)?${ELEMENT_DE_LISTE})+)`,
+  'i'
+)
+const ELEMENT_NOMME = /conv(?:ersation)?[\s-]*(?:n°\s*|#\s*)?(\d+)|(\d+)/gi
+const MENTION_CONVERSATION = /\bconv(?:ersation)?[\s-]*(?:n°\s*|#\s*)?(\d+)\b/gi
+
+export interface ConversationsNommees {
+  /** Au plus CONVERSATIONS_KAIZEN_MAX, dans l'ordre où la demande les écrit. */
+  retenues: string[]
+  /** Nommées au-delà du plafond : leur dossier n'est pas construit, la tâche le dit. */
+  ecartees: string[]
+  /** Nombres nus de tête lus comme des nombres, pas comme des conversations. */
+  numerosNus: string[]
+  /** Nombres nus de tête (trois chiffres ou plus) remplacés par une mention « conv N » : non retenus, et dits. */
+  numerosEcartes: string[]
+}
+
+/**
+ * Les conversations nommées d'une demande /kaizen, dans l'ordre où la demande les écrit : le plafond écarte
+ * les dernières, jamais les premières. La lecture écartée n'est jamais lue (sansPrecisionDeLecture).
+ *
+ * Chaque mention « conv N » de la tête vise sa conversation. Sans telle mention en tête, la première
+ * mention « conv N » de la phrase vise seule une conversation : elle remplace alors les nombres nus de
+ * tête (trois chiffres ou plus), qui ne sont pas retenus et vont dans numerosEcartes. Une mention de
+ * contexte, après une tête qui nomme une conversation, ne s'ajoute à rien.
+ */
+export function conversationsNommees(task: string): ConversationsNommees {
   const tache = sansPrecisionDeLecture(task).trim()
-  if (!/^\/kaizen(?=\s|$)/i.test(tache)) return undefined
-  const numero =
-    /\bconv(?:ersation)?[\s-]*(?:n°\s*|#\s*)?(\d+)\b/i.exec(tache)?.[1] ??
-    NUMERO_SEUL_EN_TETE.exec(tache)?.[1]
-  return numero ? `conv-${numero}` : undefined
+  if (!/^\/kaizen(?=\s|$)/i.test(tache))
+    return { retenues: [], ecartees: [], numerosNus: [], numerosEcartes: [] }
+  // La liste de tête finit la correspondance : son décalage dans la demande en découle.
+  const tete = TETE_DE_LISTE.exec(tache)
+  const liste = tete?.[1] ?? ''
+  const decalage = tete ? tete.index + tete[0].length - liste.length : 0
+  const numerosNus: string[] = []
+  // Chaque mention garde sa position dans la demande : c'est elle qui fixe l'ordre.
+  const enTete: Array<{ rang: number; id: string; explicite: boolean }> = []
+  for (const m of liste.matchAll(ELEMENT_NOMME)) {
+    const rang = decalage + (m.index ?? 0)
+    if (m[1]) enTete.push({ rang, id: `conv-${m[1]}`, explicite: true })
+    else if ((m[2] ?? '').length >= CHIFFRES_MIN_NOMBRE_NU)
+      enTete.push({ rang, id: `conv-${m[2]}`, explicite: false })
+    else numerosNus.push(m[2] ?? '')
+  }
+  let trouvees = enTete
+  const numerosEcartes: string[] = []
+  if (!enTete.some((t) => t.explicite)) {
+    // fix-ok: cause mesurée — une tête de nombres nus (trois chiffres ou plus) était remplacée par la première mention « conv N » de la phrase sans que le nombre soit dit ; il va désormais dans numerosEcartes (test : /kaizen 1263 le lien de conv 150).
+    const premiere = [...tache.matchAll(MENTION_CONVERSATION)][0]
+    if (premiere) {
+      numerosEcartes.push(...enTete.map((t) => t.id.slice('conv-'.length)))
+      trouvees = [{ rang: premiere.index ?? 0, id: `conv-${premiere[1]}`, explicite: true }]
+    }
+  }
+  const toutes = [...new Set(trouvees.sort((a, b) => a.rang - b.rang).map((t) => t.id))]
+  return {
+    retenues: toutes.slice(0, CONVERSATIONS_KAIZEN_MAX),
+    ecartees: toutes.slice(CONVERSATIONS_KAIZEN_MAX),
+    numerosNus,
+    numerosEcartes
+  }
+}
+
+/** La première conversation nommée de la demande, s'il y en a une. */
+export function kaizenNamedConversationId(task: string): string | undefined {
+  return conversationsNommees(task).retenues[0]
+}
+
+/** La ligne qui dit quels nombres nus ont été lus comme des nombres, pas comme des conversations. */
+export function avisNumerosNus(numerosNus: readonly string[]): string | undefined {
+  if (numerosNus.length === 0) return undefined
+  return (
+    'Nombres lus comme des nombres, pas comme des conversations (moins de trois chiffres) : ' +
+    numerosNus.map((numero) => `« ${numero} »`).join(', ') +
+    '.'
+  )
+}
+
+/** La ligne qui dit quels nombres de tête ont été remplacés par une mention « conv N » de la phrase. */
+export function avisNumerosEcartes(numeros: readonly string[]): string | undefined {
+  if (numeros.length === 0) return undefined
+  return (
+    'Nombres en tête non retenus, la mention « conv N » de la phrase l’emporte : ' +
+    numeros.map((numero) => `« ${numero} »`).join(', ') +
+    '.'
+  )
+}
+
+/** Un dossier de conversation nommée, avec l'écart de cible à dire en tête. */
+interface DossierNomme {
+  evidence: AutowinKaizenEvidence
+  avisCible?: string
+}
+
+export interface RequeteKaizenPlusieurs {
+  /** La demande telle que l'utilisateur l'a tapée : elle ouvre le dossier. */
+  requestedTask: string
+  /** La tâche sans la lecture écartée : c'est là que les conversations nommées sont lues. */
+  tache: string
+  conversations: readonly Conversation[]
+  obtenir: (id: string) => Conversation | undefined
+  /** Preuves d'une conversation ; par défaut, celles que l'app range sur ce poste. */
+  collecter?: (conversation: Conversation) => AutowinKaizenEvidence
+}
+
+/* `{"dossiers":[]}` plus une virgule entre deux dossiers : ce que l'enveloppe ajoute au budget. */
+const ENVELOPPE_MULTIPLE = 32
+
+/**
+ * Le dossier d'un /kaizen qui nomme plusieurs conversations : un dossier par conversation, réunis dans UN
+ * seul objet JSON, que le contrôle hors modèle lit en entier. Le plafond global se partage entre les
+ * dossiers. Ce qui n'entre pas est dit en tête : conversations au-delà du plafond, introuvables, nombres
+ * nus lus comme des nombres.
+ */
+export function buildAutowinKaizenTaskPlusieurs(requete: RequeteKaizenPlusieurs): string {
+  const collecter =
+    requete.collecter ??
+    ((conversation: Conversation) => collectAutowinKaizenEvidence(conversation))
+  const nommees = conversationsNommees(requete.tache)
+  const dossiers: DossierNomme[] = []
+  const dejaPris = new Set<string>()
+  const introuvables: string[] = []
+  for (const id of nommees.retenues) {
+    const conversation = requete.obtenir(id)
+    if (!conversation) {
+      introuvables.push(id)
+      continue
+    }
+    // La citation de message désigne le dossier : une phrase écrite ailleurs le déplace, et c'est dit.
+    const cible = localiserMessageCite(requete.tache, id, requete.conversations)
+    const source = requete.obtenir(cible.conversationId) ?? conversation
+    // Deux noms qui mènent à la même conversation ne donnent qu'un dossier.
+    if (dejaPris.has(source.id)) continue
+    dejaPris.add(source.id)
+    dossiers.push({ evidence: collecter(source), avisCible: cible.avis })
+  }
+  const demande = clipped(requete.requestedTask.trim(), REQUEST_CAP) || '/kaizen'
+  const avisDossiers = dossiers.flatMap((dossier) =>
+    dossier.avisCible ? [ligneAlerte(`CIBLE DU DOSSIER : ${clipped(dossier.avisCible, 600)}`)] : []
+  )
+  const alertes = [
+    avisNumerosNus(nommees.numerosNus),
+    introuvables.length > 0
+      ? `Conversations nommées introuvables, sans dossier : ${introuvables.join(', ')}.`
+      : undefined,
+    nommees.ecartees.length > 0
+      ? `Conversations nommées au-delà de ${CONVERSATIONS_KAIZEN_MAX} : leur dossier n'est pas construit, ` +
+        `fais une demande /kaizen distincte pour elles : ${nommees.ecartees.join(', ')}.`
+      : undefined
+  ].filter((alerte): alerte is string => alerte !== undefined)
+  const tete = `${demande}\n${avisDossiers.join('')}${alertes.map((alerte) => ligneAlerte(alerte)).join('')}\n`
+  if (dossiers.length === 0)
+    return `${tete}Aucun dossier de preuve : aucune conversation nommée n'a pu être lue.`
+  const snapshots = dossiers.map((dossier) => snapshotDe(dossier.evidence))
+  const sources = snapshots.reduce(
+    (somme, snapshot) => ({
+      promptCalls: somme.promptCalls + snapshot.promptCalls.length,
+      turnEvents: somme.turnEvents + snapshot.turnEvents.length,
+      saisies: somme.saisies + snapshot.saisies.length
+    }),
+    { promptCalls: 0, turnEvents: 0, saisies: 0 }
+  )
+  const entete = `${tete}${MARQUEUR_DEBUT}\n`
+  const pied = piedDuDossier(sources, true)
+  // Chaque dossier garde sa part du plafond ; la marge couvre l'enveloppe, les virgules et `troncature`.
+  const parDossier = Math.floor(
+    (TOTAL_CAP -
+      entete.length -
+      pied.length -
+      ENVELOPPE_MULTIPLE -
+      snapshots.length * (TRONCATURE_MARGE + 1)) /
+      snapshots.length
+  )
+  for (const snapshot of snapshots) {
+    const retires = ajusterAuBudget(snapshot, parDossier)
+    if (Object.keys(retires).length > 0) snapshot.troncature = retires
+  }
+  return `${entete}${JSON.stringify({ dossiers: snapshots })}${pied}`
 }
 
 interface ConversationDatee {
