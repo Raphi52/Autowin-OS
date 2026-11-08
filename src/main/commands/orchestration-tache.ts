@@ -7,10 +7,13 @@ import { estRelanceSansObjet, MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared
 import { estUneRepriseAutomatique } from '../chat/relance-taches-de-fond'
 import { classifyRegime } from '../orchestration/task-regime'
 import {
-  kaizenNamedConversationId,
+  conversationsNommees,
+  avisNumerosEcartes,
+  avisNumerosNus,
   kaizenConversationParCommande,
   localiserMessageCite,
   buildAutowinKaizenTask,
+  buildAutowinKaizenTaskPlusieurs,
   collectAutowinKaizenEvidence
 } from '../kaizen/autowin-kaizen-context'
 import { piecesJointesDuDernierTour } from '../store/pieces-jointes-orchestration'
@@ -76,8 +79,11 @@ export function composerTacheDOrchestration(
   const conversation = bus.os.conversations.get(convId)
   // fix-ok: tour 93905e01-f715-4aab-aff8-40c7216dfc0c — le dossier etait construit depuis la conversation courante, jamais depuis conv-N nomme dans la commande.
   // `/kaizen conv-61 …` vise, pas la conversation ou la commande est tapee.
-  const kaizenNamedId = kaizenNamedConversationId(authoritativeTask)
-  const kaizenNamed = kaizenNamedId ? bus.os.conversations.get(kaizenNamedId) : undefined
+  // fix-ok: on lit TOUTES les conversations de la tête de liste, dans l'ordre de la demande : un identifiant unique laisse les autres sans dossier (conversationsNommees, autowin-kaizen-context.ts).
+  const nommees = conversationsNommees(authoritativeTask)
+  const kaizenNamed = nommees.retenues[0]
+    ? bus.os.conversations.get(nommees.retenues[0])
+    : undefined
   // Ni conversation nommee ni analyse Auto-Kaizen : une COMMANDE citee (« /draft ne me render
   // pas… ») designe la derniere conversation ou elle a ete tapee. Conv-314, tour
   // f5733ff5-07ff-4c61-8dc3-c4d75fad8f32 : dossier construit sur la conversation du /kaizen
@@ -105,15 +111,33 @@ export function composerTacheDOrchestration(
     kaizenCible && kaizenEvidenceConversation
       ? (bus.os.conversations.get(kaizenCible.conversationId) ?? kaizenEvidenceConversation)
       : kaizenEvidenceConversation
+  // Plusieurs conversations nommées : un dossier par conversation, réunis dans une seule tâche.
+  const dossiersNommes =
+    kaizenDemande && nommees.retenues.length > 1
+      ? buildAutowinKaizenTaskPlusieurs({
+          requestedTask,
+          tache: authoritativeTask,
+          conversations: bus.os.conversations.list(),
+          obtenir: (id) => bus.os.conversations.get(id)
+        })
+      : undefined
+  // Un nombre nu écarté se dit dans la tâche : sinon on ne sait pas pourquoi il ne désigne rien.
+  // fix-ok: cause mesurée — le chemin à une conversation ne passait que l'avis des nombres nus (avisNumerosNus) ; un nombre de tête remplacé par une mention « conv N » (numerosEcartes) n'était dit nulle part.
+  const alertesNombres = [
+    avisNumerosNus(nommees.numerosNus),
+    avisNumerosEcartes(nommees.numerosEcartes)
+  ].filter((alerte): alerte is string => alerte !== undefined)
   const rawTask =
-    kaizenDemande && kaizenDossier
+    dossiersNommes ??
+    (kaizenDemande && kaizenDossier
       ? buildAutowinKaizenTask(
           requestedTask,
           collectAutowinKaizenEvidence(kaizenDossier),
           // L'avis de la citation prime : il dit si le dossier a ete deplace ailleurs.
-          kaizenCible?.avis ?? kaizenParCommande?.avis
+          kaizenCible?.avis ?? kaizenParCommande?.avis,
+          alertesNombres
         )
-      : requestedTask
+      : requestedTask)
   /*
    * L'IMAGE JOINTE ENTRE DANS LE PIPELINE — elle n'y entrait pas.
    *
