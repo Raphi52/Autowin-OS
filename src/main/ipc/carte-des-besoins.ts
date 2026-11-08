@@ -26,6 +26,7 @@
 import { ipcMain } from 'electron'
 import { assertTrustedRendererSender } from './ipc-senders'
 import { creerCalculateurDeCarte, type ConversationPourLaCarte } from '../board/carte-des-besoins'
+import { arriveesDuPoste } from '../board/arrivees-du-poste'
 import { creerIdentitesEnCache, type EntreeDuJournal } from '../board/journal-des-besoins'
 import {
   creerLiensWorkItems,
@@ -167,6 +168,7 @@ export function registerCarteDesBesoinsIpc({
     }
   }
   const calculateur = creerCalculateurDeCarte({
+    arrivee: () => arriveesDuPoste(() => os.executionWorkspace),
     lireConversations,
     lireRuns: () => os.runsWithGate(),
     dossierParDefaut: () => os.executionWorkspace,

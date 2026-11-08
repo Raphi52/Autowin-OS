@@ -1826,7 +1826,9 @@ Le fil reprend ensuite normalement.`
   const mesureDesEcarts = creerMesureDesEcarts({
     racine: app.getPath('userData'),
     lireLaCarte: boardDuPoste.lireLaCarte,
-    lireLignes: fichesDeDemande.lignes
+    lireLignes: fichesDeDemande.lignes,
+    // Une fiche qui contredit le Board suit son état : la mesure ne fait que constater sinon.
+    resynchroniser: fichesDeDemande.resynchroniser
   })
   /*
    * Les branches nées avant le rattachement (les « façon 1/3 », seules

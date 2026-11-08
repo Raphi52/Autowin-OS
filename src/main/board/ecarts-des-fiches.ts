@@ -2,7 +2,8 @@
  * LA MESURE DES ÉCARTS entre les RUN.md légers et le Board (2026-11-01).
  *
  * Demande : « ne touche pas encore au Board et ajoute une mesure des écarts avec son état actuel ».
- * Le Board reste la référence : ce module le lit, il ne le change pas. Son bilan dit s'il est sûr de
+ * Le Board reste la référence : la mesure le lit, et ne fait suivre aux fiches que SON état
+ * (`resynchroniser`), jamais l'inverse. Son bilan dit s'il est sûr de
  * le faire reposer un jour sur les fiches.
  *
  * L'ÉTAT D'UNE FICHE EST CALCULÉ PAR LE MÊME CODE QUE LE BOARD : comparés à l'écriture, ils seraient
@@ -17,7 +18,11 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { CarteDesBesoins, DemandeDeLaCarte, StatutDemande } from '../../shared/carte-des-besoins'
 import type { NatureDuBesoin } from '../../shared/ligne-besoin'
-import { DOSSIER_DES_FICHES, type LigneDeFiche } from './fiches-de-demande'
+import {
+  DOSSIER_DES_FICHES,
+  type EcartAResynchroniser,
+  type LigneDeFiche
+} from './fiches-de-demande'
 import { cleDuJournal } from './journal-des-besoins'
 
 export const FICHIER_DES_ECARTS = 'ecarts.json'
@@ -88,11 +93,18 @@ function compterParValeursDistinctes(
 const plusDeUne = (groupes: ReadonlyMap<string, ReadonlySet<string>>): number =>
   [...groupes.values()].filter((groupe) => groupe.size > 1).length
 
-export function mesurerLesEcarts(entree: {
+interface EntreeDeLaMesure {
   demandes: readonly DemandeDeLaCarte[]
   lignes: readonly LigneDeFiche[]
   calculeA: number
-}): BilanDesEcarts {
+}
+
+export function mesurerLesEcarts(entree: EntreeDeLaMesure): BilanDesEcarts {
+  return comparer(entree).bilan
+}
+
+/** Le bilan ET la liste complète des écarts : le bilan ne garde que le détail, la suite en a besoin. */
+function comparer(entree: EntreeDeLaMesure): { bilan: BilanDesEcarts; ecarts: EcartDEtat[] } {
   const { demandes, lignes } = entree
   const parMessage = new Map(
     lignes.map((ligne) => [cleDuJournal(ligne.conversationId, ligne.messageId), ligne])
@@ -144,7 +156,7 @@ export function mesurerLesEcarts(entree: {
       })
   }
 
-  return {
+  const bilan: BilanDesEcarts = {
     v: 1,
     calculeA: entree.calculeA,
     depuis,
@@ -168,6 +180,7 @@ export function mesurerLesEcarts(entree: {
       compterParValeursDistinctes(lignes.map((l) => [l.fiche, l.conversationId]))
     )
   }
+  return { bilan, ecarts }
 }
 
 /** La mesure de fin de tour : au plus une par délai, sans jamais retarder ni casser un tour. */
@@ -178,6 +191,8 @@ export function creerMesureDesEcarts(deps: {
   maintenant?: () => number
   delaiMs?: number
   attendre?: (fn: () => void, ms: number) => void
+  /** Fait suivre aux fiches l'état du Board ; sans lui, la mesure ne corrige rien. */
+  resynchroniser?: (ecarts: readonly EcartAResynchroniser[]) => Promise<number>
 }): { planifier: () => void; mesurer: () => Promise<BilanDesEcarts> } {
   const maintenant = deps.maintenant ?? Date.now
   const delaiMs = deps.delaiMs ?? DELAI_DE_MESURE_MS
@@ -190,11 +205,19 @@ export function creerMesureDesEcarts(deps: {
 
   async function mesurer(): Promise<BilanDesEcarts> {
     const [carte, lignes] = await Promise.all([deps.lireLaCarte(), deps.lireLignes()])
-    const bilan = mesurerLesEcarts({
-      demandes: carte.projets.flatMap((projet) => projet.demandes),
-      lignes,
-      calculeA: maintenant()
-    })
+    const demandes = carte.projets.flatMap((projet) => projet.demandes)
+    const premiere = comparer({ demandes, lignes, calculeA: maintenant() })
+    let bilan = premiere.bilan
+    // fix-ok: cause mesurée — la mesure ne faisait que compter : une fiche écrite à la fin du tour ne
+    // suivait jamais l'état du Board, donc un écart restait éternellement (ecarts.json 08/11 : 10 écarts).
+    // Le Board fait foi : on fait suivre son état aux fiches, puis on recalcule sur des fiches justes.
+    if (deps.resynchroniser && premiere.ecarts.length > 0) {
+      const corrigees = await deps.resynchroniser(premiere.ecarts)
+      if (corrigees > 0) {
+        const relues = await deps.lireLignes()
+        bilan = comparer({ demandes, lignes: relues, calculeA: maintenant() }).bilan
+      }
+    }
     const dossier = join(deps.racine, DOSSIER_DES_FICHES)
     await mkdir(dossier, { recursive: true })
     await writeFile(

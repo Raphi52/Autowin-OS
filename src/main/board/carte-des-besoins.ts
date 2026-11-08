@@ -36,6 +36,7 @@ import type {
 } from '../../shared/carte-des-besoins'
 import { dossierDeLectureDuFil } from '../conversations/bascule-dossier-conversation'
 import { cleDuJournal, type EntreeDuJournal, type IdentiteGit } from './journal-des-besoins'
+import { arbitrerParLArrivee, type ArriveeDuTour } from './arrivee-sur-main'
 import {
   etatVide,
   lierLesDemandesDuFil,
@@ -100,12 +101,28 @@ export function filPourLaCarte(messages: readonly MessageStockePourLaCarte[]): M
   })
 }
 
-/** Les demandes RÉELLES d'un fil : ni le compactage, ni l'étape « à venir » proposée par l'agent. */
-export function demandesDuFil(conversation: ConversationPourLaCarte): DemandeDeLaCarte[] {
+/**
+ * Les demandes RÉELLES d'un fil : ni le compactage, ni l'étape « à venir » proposée par l'agent.
+ * `arrivee` dit si le travail d'un tour est arrivé sur main ; sans lui, l'état est celui du fil.
+ */
+export function demandesDuFil(
+  conversation: ConversationPourLaCarte,
+  arrivee?: ArriveeDuTour
+): DemandeDeLaCarte[] {
   const { etapes } = carteDuFil({ fil: filPourLaCarte(conversation.messages) })
   const demandes: DemandeDeLaCarte[] = []
   for (const etape of etapes) {
     if (etape.rang === null || etape.compactage || etape.statut === 'a-venir') continue
+    // fix-ok: cause mesurée — sans l'heure de la demande, le fil ne pouvait pas dire si un commit était
+    // postérieur à la demande ; `etape.debut` vaut l'horodatage du message (mesuré sur le rejeu : 1793972302227).
+    const decision = arbitrerParLArrivee(
+      conversation,
+      etape.rang,
+      etape.statut,
+      etape.constat,
+      etape.debut,
+      arrivee
+    )
     // Les work items que le prompt NOMME : lus ici, avec le fil, pour rester en cache
     // avec lui ; le lien lui-même est posé à l'assemblage, d'après `liens-work-items.jsonl`.
     const texte = conversation.messages[etape.rang]?.content
@@ -117,8 +134,8 @@ export function demandesDuFil(conversation: ConversationPourLaCarte): DemandeDeL
       ...(etape.messageId ? { messageId: etape.messageId } : {}),
       titre: etape.titre,
       ...(etape.texte ? { texte: etape.texte } : {}),
-      statut: etape.statut,
-      constat: borner(etape.constat, MAX_CONSTAT),
+      statut: decision.statut,
+      constat: borner(decision.constat, MAX_CONSTAT),
       ...(etape.debut === undefined ? {} : { debut: etape.debut }),
       ...(references.length ? { references } : {})
     })
@@ -376,10 +393,15 @@ export function creerCalculateurDeCarte(deps: {
    */
   lireFiches?: () => Promise<ReadonlyMap<string, string>>
   calculerDemandes?: (conversation: ConversationPourLaCarte) => DemandeDeLaCarte[]
+  /** Lit, au moment du calcul, si le travail d'un tour est arrivé sur main (`arrivee-sur-main.ts`). */
+  arrivee?: () => ArriveeDuTour
   ceder?: () => Promise<void>
   maintenant?: () => number
 }): { calculer: () => Promise<CarteDesBesoins> } {
-  const calculerDemandes = deps.calculerDemandes ?? demandesDuFil
+  const calculerDemandes =
+    deps.calculerDemandes ??
+    ((conversation: ConversationPourLaCarte): DemandeDeLaCarte[] =>
+      demandesDuFil(conversation, deps.arrivee?.()))
   const ceder = deps.ceder ?? (() => new Promise<void>((resolve) => setImmediate(resolve)))
   const maintenant = deps.maintenant ?? Date.now
   const memoire = new Map<string, { empreinte: string; demandes: DemandeDeLaCarte[] }>()
