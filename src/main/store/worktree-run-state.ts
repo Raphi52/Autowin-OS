@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import type { WorktreeFileChange } from '../../shared/worktree-activity-model'
+import { dossierDeCopieDeTache, nomCopieAgentHeritee } from '../copies/chemins-de-copies'
 import { cheminsEnCoursDans, deposerFichier, depotEnCours } from '../gel/ecriture-hors-fil'
 
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
@@ -141,9 +142,13 @@ function isOptionalText(value: unknown): boolean {
   return value === undefined || typeof value === 'string'
 }
 
-function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRecord {
+function isRecord(
+  value: unknown,
+  cheminAttendu: (runId: string) => string | null
+): value is WorktreeRunRecord {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<WorktreeRunRecord>
+  const attendu = typeof candidate.runId === 'string' ? cheminAttendu(candidate.runId) : null
   const validVerdict =
     typeof candidate.verdict === 'string' && VERDICTS.has(candidate.verdict as WorktreeRunVerdict)
   const validPublication =
@@ -169,8 +174,8 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
     typeof candidate.agentName === 'string' &&
     candidate.agentName.trim().length > 0 &&
     typeof candidate.worktreePath === 'string' &&
-    canonicalPath(candidate.worktreePath) ===
-      canonicalPath(join(worktreeRoot, `agent__${candidate.runId}`)) &&
+    attendu !== null &&
+    canonicalPath(candidate.worktreePath) === canonicalPath(attendu) &&
     (candidate.worktreeAvailable === undefined ||
       typeof candidate.worktreeAvailable === 'boolean') &&
     isSafeBranch(candidate.baseBranch) &&
@@ -247,7 +252,13 @@ export class WorktreeRunStateStore {
 
   constructor(
     root: string,
-    private readonly repoId: string
+    private readonly repoId: string,
+    /**
+     * Sans option, les copies restent sous `root`, là où elles sont. Avec `racineCopiesDeTaches`,
+     * elles sont attendues sous la racine unique : à n'activer qu'une fois la copie déplacée, sinon
+     * le bureau paraîtrait absent alors qu'il est là.
+     */
+    private readonly options: { racineCopiesDeTaches?: string } = {}
   ) {
     this.worktreeRoot = root
     this.stateRoot = join(root, '.runs')
@@ -308,7 +319,7 @@ export class WorktreeRunStateStore {
     try {
       const parsed = this.rebaserCheminHerite(JSON.parse(texte) as unknown, runId)
       if (
-        !isRecord(parsed, this.worktreeRoot) ||
+        !isRecord(parsed, (id) => this.cheminAttendu(id)) ||
         parsed.repoId !== this.repoId ||
         parsed.runId !== runId
       )
@@ -340,7 +351,7 @@ export class WorktreeRunStateStore {
   save(record: WorktreeRunRecord): void {
     this.assertRunId(record.runId)
     const localRecord = { ...record, repoId: this.repoId }
-    if (!isRecord(localRecord, this.worktreeRoot)) {
+    if (!isRecord(localRecord, (id) => this.cheminAttendu(id))) {
       throw new Error(`Manifeste de bureau invalide: ${record.runId}`)
     }
     // `ecarter` : l'ancienne version passe en `.bak` avant d'être remplacée, comme l'écriture d'avant.
@@ -376,11 +387,23 @@ export class WorktreeRunStateStore {
     if (!parsed || typeof parsed !== 'object') return parsed
     const candidat = parsed as { worktreePath?: unknown }
     if (typeof candidat.worktreePath !== 'string') return parsed
-    const attendu = join(this.worktreeRoot, `agent__${runId}`)
+    const attendu = this.cheminAttendu(runId)
+    if (attendu === null) return parsed
     if (canonicalPath(candidat.worktreePath) === canonicalPath(attendu)) return parsed
-    const dernierSegment = candidat.worktreePath.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
-    if (dernierSegment !== `agent__${runId}`) return parsed
+    const dernierSegment = candidat.worktreePath
+      .replace(/[\\/]+$/, '')
+      .split(/[\\/]/)
+      .pop()
+    if (dernierSegment !== nomCopieAgentHeritee(runId)) return parsed
     return { ...(parsed as object), worktreePath: attendu }
+  }
+
+  // fix-ok: isRecord et rebaserCheminHerite codaient en dur `worktreeRoot/agent__<runId>` ; les tests de la racine unique restaient rouges tant que ce chemin était seul accepté.
+  /** Où la copie de ce run doit se trouver, selon la racine active (voir le constructeur). */
+  private cheminAttendu(runId: string): string | null {
+    const racine = this.options.racineCopiesDeTaches
+    if (racine !== undefined) return dossierDeCopieDeTache(racine, runId)
+    return join(this.worktreeRoot, nomCopieAgentHeritee(runId))
   }
 
   private blocked(runId: string): WorktreeRunRecord {

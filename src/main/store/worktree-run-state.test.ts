@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -137,5 +137,146 @@ describe('WorktreeRunStateStore', () => {
       verdict: 'unknown',
       publication: 'blocked'
     })
+  })
+})
+
+const REPO_REEL = '5a94588848d48682'
+const RUN_REEL = 'run-0f53aab5f9e7-1'
+
+/**
+ * Copie fidèle d'un état réel `.runs/*.json` (version 1, publication bloquée après une fusion
+ * refusée). Seuls changent la demande (`task`) et les noms des 85 fichiers exclus, remplacés par
+ * des noms neutres : leur nombre et le drapeau `excludedDirtyFilesTruncated` restent ceux du
+ * fichier. `worktreePath` est fourni par chaque test.
+ */
+function etatVersion1Reel(runId: string, worktreePath: string): WorktreeRunRecord {
+  return {
+    version: 1,
+    repoId: REPO_REEL,
+    runId,
+    agentName: 'Agent',
+    role: 'build',
+    task: 'tâche anonymisée',
+    conversationId: 'conv-1575',
+    turnId: 'e6a25890-07ef-4f08-b2ae-8a3503f22575',
+    worktreePath,
+    worktreeAvailable: true,
+    baseBranch: 'main',
+    baseSha: '2ec16d76de5893019ad435d45930b1520c12d295',
+    sourceSha: '2ec16d76de5893019ad435d45930b1520c12d295',
+    canonicalBaseRef: 'origin/main',
+    excludedDirtyFiles: Array.from({ length: 85 }, (_, i) => `src/main/fichier-${i + 1}.ts`),
+    excludedDirtyFileCount: 85,
+    excludedDirtyFilesTruncated: false,
+    verdict: 'green',
+    publication: 'blocked',
+    files: [],
+    publishedSha: 'b8ceae1d0b9a1075c25c874ddc8d43333d8b0138',
+    publicationAgentSha: '44045840c57c3123ada0c588782fadeadcc25f3a',
+    publicationBaseSha: '6ae802ee907b16c0099a0ffdfb9fdd3a0045f9ac',
+    causalPublicationDeliveredAtMs: 1793871874609,
+    attentionReason: 'merge-failed',
+    detail:
+      'La copie D:\\AutoWinOS\\.autowin-data\\autowin-os\\worktrees\\5a94588848d48682\\agent__run-0f53aab5f9e7-1 n’est pas une racine de travail : git remonte sur d:/autowinos (arbre partagé) — aucune écriture n’y est faite.',
+    retryCount: 0,
+    createdAtMs: 1793868028323,
+    updatedAtMs: 1794131145608
+  }
+}
+
+function ecrireEtatBrut(racine: string, etat: WorktreeRunRecord): string {
+  mkdirSync(join(racine, '.runs'), { recursive: true })
+  const chemin = join(racine, '.runs', `${etat.runId}.json`)
+  writeFileSync(chemin, JSON.stringify(etat, null, 2))
+  return chemin
+}
+
+describe('racine unique des copies : relecture d’un état version 1', () => {
+  it('rend un état hérité sous la nouvelle racine, sans toucher aux autres champs', () => {
+    const donnees = tempRoot()
+    const ancienne = join(donnees, 'worktrees', REPO_REEL)
+    const nouvelle = join(donnees, 'copies-de-taches')
+    const etat = etatVersion1Reel(RUN_REEL, join(ancienne, `agent__${RUN_REEL}`))
+    ecrireEtatBrut(ancienne, etat)
+
+    const lu = new WorktreeRunStateStore(ancienne, REPO_REEL, {
+      racineCopiesDeTaches: nouvelle
+    }).get(RUN_REEL)
+    expect(lu).toEqual({ ...etat, worktreePath: join(nouvelle, RUN_REEL) })
+  })
+
+  it('lit sans réécrire le fichier : relire ne déplace rien sur le disque', () => {
+    const donnees = tempRoot()
+    const ancienne = join(donnees, 'worktrees', REPO_REEL)
+    const nouvelle = join(donnees, 'copies-de-taches')
+    const chemin = ecrireEtatBrut(
+      ancienne,
+      etatVersion1Reel(RUN_REEL, join(ancienne, `agent__${RUN_REEL}`))
+    )
+    const avant = readFileSync(chemin, 'utf8')
+
+    new WorktreeRunStateStore(ancienne, REPO_REEL, { racineCopiesDeTaches: nouvelle }).get(RUN_REEL)
+    expect(readFileSync(chemin, 'utf8')).toBe(avant)
+  })
+
+  it('sans nouvelle racine, le même état reste sous l’ancienne : rien ne bouge avant le déménagement', () => {
+    const donnees = tempRoot()
+    const ancienne = join(donnees, 'worktrees', REPO_REEL)
+    const etat = etatVersion1Reel(RUN_REEL, join(ancienne, `agent__${RUN_REEL}`))
+    ecrireEtatBrut(ancienne, etat)
+
+    expect(new WorktreeRunStateStore(ancienne, REPO_REEL).get(RUN_REEL)).toEqual(etat)
+  })
+
+  it('une écriture sous la nouvelle racine se relit à l’identique', () => {
+    const donnees = tempRoot()
+    const ancienne = join(donnees, 'worktrees', REPO_REEL)
+    const nouvelle = join(donnees, 'copies-de-taches')
+    const options = { racineCopiesDeTaches: nouvelle }
+    const etat = etatVersion1Reel(RUN_REEL, join(nouvelle, RUN_REEL))
+    new WorktreeRunStateStore(ancienne, REPO_REEL, options).save(etat)
+
+    expect(new WorktreeRunStateStore(ancienne, REPO_REEL, options).get(RUN_REEL)).toEqual(etat)
+  })
+
+  it('un état déjà sous la nouvelle racine sur disque est laissé intact', () => {
+    const donnees = tempRoot()
+    const ancienne = join(donnees, 'worktrees', REPO_REEL)
+    const nouvelle = join(donnees, 'copies-de-taches')
+    const etat = etatVersion1Reel(RUN_REEL, join(nouvelle, RUN_REEL))
+    ecrireEtatBrut(ancienne, etat)
+
+    expect(
+      new WorktreeRunStateStore(ancienne, REPO_REEL, { racineCopiesDeTaches: nouvelle }).get(
+        RUN_REEL
+      )
+    ).toEqual(etat)
+  })
+
+  it('un chemin qui désigne un autre bureau reste illisible, même sous la nouvelle racine', () => {
+    const donnees = tempRoot()
+    const ancienne = join(donnees, 'worktrees', REPO_REEL)
+    const nouvelle = join(donnees, 'copies-de-taches')
+    ecrireEtatBrut(
+      ancienne,
+      etatVersion1Reel(RUN_REEL, join(ancienne, 'agent__run-UN-AUTRE-BUREAU'))
+    )
+
+    expect(
+      new WorktreeRunStateStore(ancienne, REPO_REEL, { racineCopiesDeTaches: nouvelle }).get(
+        RUN_REEL
+      )
+    ).toMatchObject({ publication: 'blocked', attentionReason: 'state-unreadable' })
+  })
+
+  it('une écriture sous l’ancienne racine est refusée une fois la nouvelle racine active', () => {
+    const donnees = tempRoot()
+    const ancienne = join(donnees, 'worktrees', REPO_REEL)
+    const nouvelle = join(donnees, 'copies-de-taches')
+    const store = new WorktreeRunStateStore(ancienne, REPO_REEL, { racineCopiesDeTaches: nouvelle })
+
+    expect(() =>
+      store.save(etatVersion1Reel(RUN_REEL, join(ancienne, `agent__${RUN_REEL}`)))
+    ).toThrow('Manifeste de bureau invalide')
   })
 })
