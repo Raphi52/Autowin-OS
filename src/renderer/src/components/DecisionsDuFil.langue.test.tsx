@@ -1,18 +1,15 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { AskDecisionBlock } from './AskDecision'
-import { ComparaisonDesFacons } from './ComparaisonDesFacons'
 import { ThinkingBlock } from './ThinkingBlock'
 import { appliquerLangue } from '../langue'
-import type { ComparaisonDUneFacon } from '../../../shared/essai-trois-facons'
 
 /**
  * LES DÉCISIONS DU FIL SUIVENT LA LANGUE (traduction anglaise, lot « Chat — décisions et
- * blocs du fil »). Entrée qui doit faire échouer ce test : un libellé de la question `ask`, de la
- * carte de comparaison des façons ou du bloc Raisonnement / Actions / Étapes laissé en dur en
- * français, un composant qui ne se redessine pas quand la langue change, ou un retour au français
+ * blocs du fil »). Entrée qui doit faire échouer ce test : un libellé de la question `ask` ou du
+ * bloc Raisonnement / Actions / Étapes laissé en dur en français, un composant qui ne se redessine pas quand la langue change, ou un retour au français
  * qui ne rend pas le texte d'avant mot pour mot.
  */
 beforeAll(() => {
@@ -31,35 +28,6 @@ const DECISION = {
   ]
 }
 
-const LIGNES: ComparaisonDUneFacon[] = [
-  {
-    id: 'B1',
-    ok: true,
-    bilan: { etat: 'fini', vertes: 2, rouges: 0 },
-    ecart: {
-      ok: true,
-      fichiers: [
-        { chemin: 'a.ts', ajouts: 8, retraits: 2 },
-        { chemin: 'b.ts', ajouts: 2, retraits: 0 }
-      ],
-      ajouts: 10,
-      retraits: 2
-    },
-    ressemblance: { etat: 'mesuree', avec: 2, part: 0.4, identique: false }
-  },
-  {
-    id: 'B2',
-    ok: true,
-    bilan: { etat: 'en-cours', vertes: 0, rouges: 0 },
-    ecart: { ok: true, fichiers: [], ajouts: 0, retraits: 0 }
-  }
-]
-
-const FACONS = [
-  { id: 'B1', titre: 'Sujet — façon 1/2', rang: 1 },
-  { id: 'B2', titre: 'Sujet — façon 2/2', rang: 2 }
-]
-
 const JOURNAL = [
   'Étape #1 à faire · Lire le code du bloc',
   'Étape #2 à faire · Écrire le test',
@@ -76,19 +44,11 @@ beforeEach(() => {
   hote = document.createElement('div')
   document.body.appendChild(hote)
   racine = createRoot(hote)
-  ;(window as unknown as { api?: unknown }).api = {
-    conversationComparerLesFacons: vi.fn().mockResolvedValue(LIGNES),
-    costBreakdown: vi.fn(async (_dimension: string, id: string) =>
-      id === 'B1' ? [{ costUsd: 0.75, unpricedCalls: 0 }] : []
-    ),
-    conversationGarderEssai: vi.fn()
-  }
 })
 
 afterEach(async () => {
   await act(async () => racine.unmount())
   hote.remove()
-  delete (window as unknown as { api?: unknown }).api
   appliquerLangue('fr')
 })
 
@@ -97,7 +57,6 @@ async function monterLesDecisions(): Promise<void> {
     racine.render(
       <>
         <AskDecisionBlock decision={DECISION} onPick={() => {}} />
-        {createElement(ComparaisonDesFacons, { facons: FACONS, signature: 's1' })}
         <ThinkingBlock
           text="Je relis le composant avant de toucher au test."
           done={false}
@@ -114,15 +73,12 @@ async function monterLesDecisions(): Promise<void> {
 }
 
 const texte = (): string => hote.textContent ?? ''
-const facon = (id: string): string => hote.querySelector(`[data-facon="${id}"]`)?.textContent ?? ''
 
 describe('décisions du fil — langue', () => {
   it('bascule en anglais sans être remontées, puis reviennent au français mot pour mot', async () => {
     await monterLesDecisions()
     expect(texte()).toContain('recommandé')
     expect(texte()).toContain('ou écrivez autre chose dans le composer')
-    expect(texte()).toContain('Comparer les 2 façons')
-    expect(facon('B1')).toContain('2 fichiers · +10 −2')
     expect(texte()).toContain('Étapes')
     const francais = texte()
 
@@ -131,20 +87,10 @@ describe('décisions du fil — langue', () => {
     expect(texte()).toContain('recommended')
     expect(texte()).toContain('or write something else in the composer')
     expect(texte()).toContain('on a line to answer')
-    // Carte de comparaison des façons
-    expect(texte()).toContain('Compare the 2 ways')
-    expect(facon('B1')).toContain('Way 1')
-    expect(facon('B1')).toContain('finished')
-    expect(facon('B1')).toContain('2 files · +10 −2')
-    expect(facon('B1')).toContain('2 green')
-    expect(facon('B1')).toContain('0.75 $')
-    expect(facon('B1')).toContain('Keep this one')
-    expect(facon('B2')).toContain('no change')
     // Bloc Raisonnement / Actions / Étapes
     expect(texte()).toContain('Reasoning')
     expect(texte()).toContain('Steps')
     expect(texte()).not.toContain('Raisonnement')
-    expect(texte()).not.toContain('Comparer les')
 
     await act(async () => appliquerLangue('fr'))
     expect(texte()).toBe(francais)

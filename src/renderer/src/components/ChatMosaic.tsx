@@ -45,12 +45,6 @@ export type ChatMosaicWindow = {
 
 export type ChatMosaicProps = {
   fenetres: readonly ChatMosaicWindow[]
-  /**
-   * Un encart sur TOUTE la largeur, au-dessus des fenêtres : la carte de comparaison
-   * d'« Essaie 3 façons » (2026-10-21). Hors de la grille des fenêtres, il ne déplace
-   * aucune d'elles.
-   */
-  entete?: React.ReactNode
   onClose: (id: string) => void
   /** Quitte la mosaique et ouvre CETTE conversation seule dans le fil unique. */
   onOuvrirSeule: (id: string) => void
@@ -469,7 +463,6 @@ function regrouperSuperConvs(
 
 export function ChatMosaic({
   fenetres,
-  entete,
   onClose,
   onOuvrirSeule,
   rendreComposer,
@@ -514,7 +507,6 @@ export function ChatMosaic({
       data-count={visibles.length}
       style={{ gridTemplateColumns: `repeat(${colonnesPour(visibles.length)}, minmax(0, 1fr))` }}
     >
-      {entete}
       {visibles.map((fenetre) =>
         chefs.has(fenetre.id) ? (
           <CaseSuperConv

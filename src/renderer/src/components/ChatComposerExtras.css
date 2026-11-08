@@ -132,8 +132,7 @@
   flex: 1 1 calc(100% - 40px);
 }
 .composer-input-row > .composer-auto,
-.composer-input-row > .attachment-button,
-.composer-input-row > .composer-trois-facons {
+.composer-input-row > .attachment-button {
   order: 1;
 }
 /* JAUGE SUR LE BORD DU CADRE (2026-10-31 : « la barre de quota on peut la mettre au

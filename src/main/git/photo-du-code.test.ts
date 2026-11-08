@@ -18,7 +18,6 @@ import {
   avancerLaBaseDuFil,
   lireLaBaseDuFil,
   ouvrirCopieDeLaPhoto,
-  ouvrirCopiesDEssai,
   ouvrirLaCopieDuFil,
   photoDuTour,
   photographierLeCode as photographierAvecBudgetDuTour,
@@ -259,7 +258,7 @@ describe('ouvrirCopieDeLaPhoto — le code du tour, dans une copie séparée', (
 /*
  * CHEMINS LONGS (2026-10-22). Partout ailleurs, Autowin ouvre ses copies par
  * `git -c core.longpaths=true worktree add` (store/worktree-manager.ts, comparaison-a-la-base.ts) ;
- * « Revenir à ce tour » et « Essaie 3 façons » le faisaient sans. Git pour Windows refuse alors tout
+ * « Revenir à ce tour » et l'ouverture d'une copie de fil le faisaient sans. Git pour Windows refuse alors tout
  * fichier dont le chemin COMPLET dépasse 260 caractères (« Filename too long ») : la copie d'un
  * dépôt aux chemins profonds, ouverte un peu loin de la racine, échouait.
  *
@@ -322,9 +321,9 @@ describe('ouvrirCopieDeLaPhoto — des fichiers à plus de 260 caractères dans 
     expect(lu(fichier)).toBe('au fond\n')
   })
 
-  it('« Essaie 3 façons » : trois copies aux fichiers à plus de 260, chaque copie par core.longpaths', async () => {
+  it('copie de fil aux fichiers à plus de 260 : ouverte par core.longpaths', async () => {
     const { repo, racine } = await depotAuxChemins()
-    const dossierDesRetours = cheminDe(join(racine, 'essais'), 180)
+    const dossierDesCopies = cheminDe(join(racine, 'copies'), 200)
     const vrai = await defaultGitRunner()
     const ajouts: string[][] = []
     const runGit: GitRunner = (args, cwd, options) => {
@@ -332,24 +331,20 @@ describe('ouvrirCopieDeLaPhoto — des fichiers à plus de 260 caractères dans 
       return vrai(args, cwd, options)
     }
 
-    const essai = await ouvrirCopiesDEssai({
+    const copie = await ouvrirLaCopieDuFil({
       dossier: repo,
       conversationId: 'conv-1',
-      dossierDesRetours,
-      nombre: 3,
+      dossierDesCopies,
       quand: 5_000,
       runGit
     })
 
-    expect(essai).toMatchObject({ ok: true })
-    const chemins = (essai as { chemins: string[] }).chemins
-    expect(chemins).toHaveLength(3)
-    for (const chemin of chemins) {
-      expect(join(chemin, ...FICHIER_PROFOND).length).toBeGreaterThan(260)
-      expect(lu(join(chemin, ...FICHIER_PROFOND))).toBe('au fond\n')
-    }
+    expect(copie).toMatchObject({ ok: true })
+    const { chemin } = copie as { chemin: string }
+    expect(join(chemin, ...FICHIER_PROFOND).length).toBeGreaterThan(260)
+    expect(lu(join(chemin, ...FICHIER_PROFOND))).toBe('au fond\n')
     // Hors Windows, aucun chemin n'est « trop long » : ce contrôle garde le correctif partout.
-    expect(ajouts).toHaveLength(3)
+    expect(ajouts).toHaveLength(1)
     for (const args of ajouts) expect(args.slice(0, 2)).toEqual(['-c', 'core.longpaths=true'])
   })
 
@@ -547,8 +542,8 @@ describe('revenirAuCodeDuTour — le bouton « Revenir à ce tour » d’un mess
     expect(lu(join((second as { chemin: string }).chemin, 'a.txt'))).toBe('tour 2\n')
   })
 
-  it('une photo prise ENTRE deux tours (« Essaie 3 façons ») ne remplace pas celle du tour', async () => {
-    // Les copies d'essai photographient sous le même préfixe que les tours (`ouvrirCopiesDEssai`).
+  it('une photo prise ENTRE deux tours (ouverture d’une copie de fil) ne remplace pas celle du tour', async () => {
+    // L'ouverture d'une copie de fil photographie sous le même préfixe que les tours (`ouvrirLaCopieDuFil`).
     const repo = await depot()
     writeFileSync(join(repo, 'a.txt'), 'tour 1\n')
     await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 600 })
@@ -619,34 +614,11 @@ describe('revenirAuCodeDuTour — jamais la photo d’un AUTRE tour', () => {
   })
 })
 
-describe('ouvrirCopiesDEssai — « Essaie 3 façons » : une photo, trois copies séparées', () => {
-  it('trois copies DISTINCTES au même état, le dossier partagé intact', async () => {
-    const repo = await depot()
-    writeFileSync(join(repo, 'a.txt'), 'état au moment de l’essai\n')
-    const statut = await git(repo, 'status', '--porcelain')
-    const essai = await ouvrirCopiesDEssai({
-      dossier: repo,
-      conversationId: 'conv-1',
-      dossierDesRetours: join(repo, '..', 'essais'),
-      nombre: 3,
-      quand: 5_000
-    })
-    expect(essai.ok).toBe(true)
-    const chemins = (essai as { chemins: string[] }).chemins
-    expect(new Set(chemins).size).toBe(3)
-    const lu = (chemin: string): string => readFileSync(chemin, 'utf8').replace(/\r\n/g, '\n')
-    for (const chemin of chemins)
-      expect(lu(join(chemin, 'a.txt'))).toBe('état au moment de l’essai\n')
-    // Une copie modifiée ne touche ni ses sœurs ni le dossier partagé.
-    writeFileSync(join(chemins[0], 'a.txt'), 'façon 1\n')
-    expect(lu(join(chemins[1], 'a.txt'))).toBe('état au moment de l’essai\n')
-    expect(await git(repo, 'status', '--porcelain')).toBe(statut)
-  })
-
-  it('machine chargée : le clic attend sa photo au-delà des 5 s du début de tour', async () => {
-    // 2026-10-21 : garder-un-essai.test.ts est tombé rouge en suite chargée (photo
-    // abandonnée à 5 s, « son dossier n’est pas un dépôt git… »), vert 3 fois sur 3 seul. Git est
-    // ici retenu le temps que l'horloge dépasse 5 s, puis relâché : la photo doit aboutir.
+describe('ouvrirLaCopieDuFil — la photo d’ouverture', () => {
+  it('machine chargée : l’ouverture attend sa photo au-delà des 5 s du début de tour', async () => {
+    // 2026-10-21 : tombé rouge en suite chargée (photo abandonnée à 5 s, « son dossier n’est pas
+    // un dépôt git… »), vert 3 fois sur 3 seul. Git est ici retenu le temps que l'horloge dépasse
+    // 5 s, puis relâché : la photo doit aboutir.
     const repo = await depot()
     const vraiGit = await defaultGitRunner()
     let relacher!: () => void
@@ -659,11 +631,10 @@ describe('ouvrirCopiesDEssai — « Essaie 3 façons » : une photo, trois copie
     }
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
-      const enCours = ouvrirCopiesDEssai({
+      const enCours = ouvrirLaCopieDuFil({
         dossier: repo,
         conversationId: 'conv-1',
-        dossierDesRetours: join(repo, '..', 'essais-lents'),
-        nombre: 2,
+        dossierDesCopies: join(repo, '..', 'copies-lentes'),
         quand: 6_000,
         runGit: lent
       })
@@ -677,16 +648,15 @@ describe('ouvrirCopiesDEssai — « Essaie 3 façons » : une photo, trois copie
   })
 
   it('hors dépôt git : refusé avec la raison, aucune copie', async () => {
-    const hors = mkdtempSync(join(tmpdir(), 'autowin-essai-hors-'))
+    const hors = mkdtempSync(join(tmpdir(), 'autowin-copie-hors-'))
     dossiers.push(hors)
-    const essai = await ouvrirCopiesDEssai({
+    const copie = await ouvrirLaCopieDuFil({
       dossier: hors,
       conversationId: 'conv-1',
-      dossierDesRetours: join(hors, 'essais'),
-      nombre: 3
+      dossierDesCopies: join(hors, 'copies-de-fil')
     })
-    expect(essai).toMatchObject({ ok: false })
-    expect(existsSync(join(hors, 'essais'))).toBe(false)
+    expect(copie).toMatchObject({ ok: false })
+    expect(existsSync(join(hors, 'copies-de-fil'))).toBe(false)
   })
 })
 
@@ -919,10 +889,10 @@ describe('base du fil en copie — elle survit au ménage des photos et avance �
 })
 
 /*
- * LA COPIE D'UN FIL. Un fil d'AutoWinOS travaille dans SA copie, ouverte par le même chemin
- * qu'« Essaie 3 façons » (une photo, une copie détachée), puis sa porte vers main la publie depuis
+ * LA COPIE D'UN FIL. Un fil d'AutoWinOS travaille dans SA copie, ouverte par une photo puis
+ * une copie détachée à cette photo, puis sa porte vers main la publie depuis
  * sa BASE. Les entrées qui font échouer une version fausse :
- *  - un nom de copie que « Garder » ne lit pas : la porte et la carte ne la reconnaîtraient pas ;
+ *  - un nom de copie que le ménage ne lit pas : il ne la reconnaîtrait pas ;
  *  - une copie ouverte sans base : la porte refuserait au premier tour (« base absente ») ;
  *  - une copie sans `node_modules` : le fil ne pourrait lancer aucun test (décision 2-A, lien partagé) ;
  *  - un chemin de 216 caractères : git pour Windows le refuse après coup, la photo déjà prise.

@@ -22,8 +22,7 @@
 import type { CarteDesBesoins } from './carte-des-besoins'
 import { carteDesProjetsPartages } from './board-projets-partages'
 import { canonicalProjectPath, estCheminDeDossier } from './project-path'
-import { nomDeCopieDEssai } from './essai-trois-facons'
-import { nomDeCopieDeFil } from './copie-du-fil'
+import { ancienNomDeCopieDeFil, nomDeCopieDeFil } from './copie-du-fil'
 
 /** Au-delà, la liste est refusée : la barre latérale n'a jamais autant de dossiers. */
 export const DOSSIERS_DU_CHAT_MAX = 500
@@ -35,9 +34,7 @@ export const DOSSIERS_DU_CHAT_MAX = 500
  * fil ajoutait sa copie au menu « Ranger dans… » et au Board, par les dossiers des fils.
  */
 export function estDossierDuChat(chemin: string | null | undefined): boolean {
-  return (
-    estCheminDeDossier(chemin) && !nomDeCopieDEssai(chemin ?? undefined) && !nomDeCopieDeFil(chemin)
-  )
+  return estCheminDeDossier(chemin) && !ancienNomDeCopieDeFil(chemin) && !nomDeCopieDeFil(chemin)
 }
 
 /** La clé de comparaison d'un dossier : `d:/x/`, `D:\x` et `D:\X` sont le même dossier Windows. */

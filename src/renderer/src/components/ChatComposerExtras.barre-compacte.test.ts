@@ -73,11 +73,10 @@ describe('barre de prompt compacte', () => {
     expect(bloc).toMatch(/flex:\s*1 1 calc\(100% - 40px\)/)
   })
 
-  it('∞, le trombone et ×3 passent après la question à côté et le micro', () => {
+  it('∞ et le trombone passent après la question à côté et le micro', () => {
     const bloc =
       extras.match(/\.composer-input-row > \.composer-auto,[^{]*\{[^}]*\}/)?.[0] ?? ''
     expect(bloc).toContain('.attachment-button')
-    expect(bloc).toContain('.composer-trois-facons')
     expect(bloc).toMatch(/order:\s*1/)
     expect(bloc).not.toContain('composer-question-a-cote')
     expect(bloc).not.toContain('composer-dictee')
@@ -95,7 +94,7 @@ describe('barre de prompt compacte', () => {
         expect(liste).toContain('.composer-question-a-cote:not(.actif)')
       // Le survol nacré lit ses couleurs sur ces variables, posées bouton par bouton.
       expect(css).toMatch(
-        /:is\(\.composer-auto, \.attachment-button, \.composer-trois-facons, \.composer-question-a-cote, \.composer-dictee\)/
+        /:is\(\.composer-auto, \.attachment-button, \.composer-question-a-cote, \.composer-dictee\)/
       )
     }
   )

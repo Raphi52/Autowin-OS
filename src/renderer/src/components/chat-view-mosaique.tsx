@@ -12,7 +12,6 @@ import {
 import { formatFileSize } from './chat-attachments'
 import { parseBtw } from './chat-view-model'
 import { askEnAttente } from './chat-message-keys'
-import { faconsDuMemeEssai } from './trois-facons'
 import { type ChatMosaicWindow } from './ChatMosaic'
 import { trierParRecenceUtilisateur, searchConversations } from './conversation-search'
 import { canoniserReplis } from './conversation-groups'
@@ -326,33 +325,6 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   }
 
   /** Fenetres de la mosaique, dans l'ordre d'ouverture, avec leur fil peint et leur etat occupe. */
-  /*
-   * « ESSAIE 3 FAÇONS » — LA CARTE DE COMPARAISON (2026-10-21 — idée 6). Elle s'affiche en
-   * haut d'un fil qui est une façon (sa copie s'appelle `essai__…`), et au-dessus de la mosaïque dès
-   * qu'une de ses fenêtres en est une. La signature change quand une façon démarre ou finit un tour :
-   * la carte relit alors l'écart, les vérifications et le coût.
-   * check: ComparaisonDesFacons.test.tsx (7 cas, dont le clic unique qui ne publie rien) et
-   * trois-facons.comparaison.test.ts (regroupement par essai) ; typage vérifié par npm run typecheck.
-   */
-  const faconsDuFilActif = useMemo(
-    () => (activeId ? faconsDuMemeEssai(convs, activeId) : []),
-    [convs, activeId]
-  )
-  const faconsDeLaMosaique = useMemo(() => {
-    for (const id of mosaicIds) {
-      const facons = faconsDuMemeEssai(convs, id)
-      if (facons.length > 0) return facons
-    }
-    return []
-  }, [convs, mosaicIds])
-  const signatureDesFacons = (facons: readonly { id: string }[]): string =>
-    facons
-      .map((facon) => {
-        const conv = convs.find((candidat) => candidat.id === facon.id)
-        return `${facon.id}:${busyConversations.has(facon.id) ? 1 : 0}:${conv?.messageCount ?? ''}:${conv?.lastAssistantStatus ?? ''}`
-      })
-      .join('|')
-
   const fenetresMosaique = useMemo<ChatMosaicWindow[]>(
     () =>
       mosaicIds.map((id) => ({
@@ -652,9 +624,6 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
     resumeAvailable,
     composersMosaiqueRef,
     rendrePiecesJointesEnAttente,
-    faconsDuFilActif,
-    faconsDeLaMosaique,
-    signatureDesFacons,
     fenetresMosaique,
     ouvrirFilMosaiqueStable,
     fermerFenetreStable,

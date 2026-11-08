@@ -158,7 +158,7 @@ export const PLAN = {
     'orchestration-battement', 'orchestration-budget', 'orchestration-context', 'orchestration-lean',
     'orchestration-memoire', 'orchestrator', 'orchestrator-contrats', 'orchestrator-parcours-glouton',
     'orchestrator-parcours-sequentiel', 'orchestrator-run', 'petites-taches-trace', 'pipeline-discipline',
-    'plans-de-lots', 'plans-de-lots-app', 'quorum', 'ressemblance-des-facons', 'task-mutation-classifier',
+    'plans-de-lots', 'plans-de-lots-app', 'quorum', 'task-mutation-classifier',
     'task-regime', 'terrain-a-la-demande'
   ],
   preflight: [

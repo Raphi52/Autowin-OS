@@ -44,12 +44,12 @@ export const LIMITE_OCTETS_PAR_DEFAUT = 5 * 1024 * 1024
 const DELAI_MAX_MS = 5_000
 
 /**
- * « Essaie 3 façons » est un CLIC : l'utilisateur attend ses copies, rien ne part sans elles. Le budget
- * du début de tour (5 s, fait pour ne jamais retenir un tour) faisait échouer le bouton dès que la
- * machine était chargée, avec un message qui accusait le dépôt (2026-10-21 :
- * garder-un-essai.test.ts rouge en suite de 30 fichiers, vert 3 fois sur 3 seul).
+ * L'ouverture d'une copie de fil ATTEND sa photo : rien ne part sans la copie. Le budget du début de
+ * tour (5 s, fait pour ne jamais retenir un tour) la faisait échouer dès que la machine était chargée,
+ * avec un message qui accusait le dépôt (mesuré le 2026-10-21 : rouge en suite de 30 fichiers, vert
+ * 3 fois sur 3 seul).
  */
-const DELAI_PHOTO_ESSAIS_MS = 30_000
+const DELAI_PHOTO_DES_COPIES_MS = 30_000
 
 /** L'auteur des photos : jamais l'identité de l'utilisateur, qui n'a rien commité. */
 const AUTEUR = {
@@ -245,7 +245,7 @@ export async function photographierLeCode(entree: {
  * qu'ensuite, par `beginTurn` (`store/conversations.ts`). Mesuré sur 5 vrais tours : photo 393 à
  * 613 ms avant son message. L'ancienne règle (« la première à partir du message ») ne trouvait donc
  * jamais la photo du tour, et rendait celle du tour SUIVANT dès qu'il y en avait un. La DERNIÈRE de
- * la fenêtre, parce qu'une photo d'« Essaie 3 façons » prise entre deux tours y tombe aussi.
+ * la fenêtre, parce que la photo d'ouverture d'une copie de fil, prise entre deux tours, y tombe aussi.
  */
 export async function photoDuTour(entree: {
   dossier: string
@@ -281,7 +281,7 @@ export async function photoDuTour(entree: {
  * L'ÉCHEC DE LA COPIE EN UNE PHRASE (2026-10-22). L'erreur d'execFile porte
  * `Command failed: git worktree add …` puis TOUTE la sortie de git : en « Filename too long », une
  * ligne par fichier mêlée aux « Updating files: NN% ». L'avis du chat (« Revenir à ce tour »,
- * « Essaie 3 façons ») en faisait un écran entier, la cause noyée dedans. On n'en garde que la
+ * ouverture d'une copie de fil) en faisait un écran entier, la cause noyée dedans. On n'en garde que la
  * cause, en mots courants ; la sortie brute reste dans `cause` de l'erreur levée.
  */
 const CAUSES_D_ECHEC_DE_COPIE: ReadonlyArray<readonly [RegExp, string]> = [
@@ -357,7 +357,7 @@ export async function ouvrirCopieDeLaPhoto(entree: {
      * `core.longpaths` par la LIGNE DE COMMANDE, comme toutes les copies d'Autowin
      * (store/worktree-manager.ts, comparaison-a-la-base.ts), jamais dans la config de l'utilisateur.
      * Sans elle, git pour Windows refuse tout fichier de la copie à plus de 260 caractères
-     * (« Filename too long ») : « Revenir à ce tour » et « Essaie 3 façons » échouaient sur un dépôt
+     * (« Filename too long ») : « Revenir à ce tour » et l'ouverture d'une copie échouaient sur un dépôt
      * aux chemins profonds (2026-10-22).
      */
     await git(
@@ -420,7 +420,7 @@ export async function revenirAuCodeDuTour(entree: {
   return { ok: true, chemin: copie.chemin, deja: copie.deja, quand: photo.quand }
 }
 
-export type CopiesDEssai =
+type CopiesOuvertes =
   { ok: true; quand: number; sha: string; chemins: string[] } | { ok: false; raison: string }
 
 /**
@@ -429,26 +429,6 @@ export type CopiesDEssai =
  * photo déjà rangée et un dossier de copie à moitié créé.
  */
 export const LONGUEUR_MAX_CHEMIN_DE_COPIE = 215
-
-/**
- * « ESSAIE 3 FAÇONS » (2026-10-21) : UNE photo du code maintenant, puis `nombre` copies
- * séparées à cette photo — une par branche du fil. Chaque façon travaille dans la sienne : aucune
- * n'écrit dans le dossier partagé ni dans la copie d'une autre, et rien n'est fusionné ici.
- */
-export async function ouvrirCopiesDEssai(entree: {
-  dossier: string
-  conversationId: string
-  dossierDesRetours: string
-  nombre: number
-  quand?: number
-  runGit?: GitRunner
-}): Promise<CopiesDEssai> {
-  const quand = entree.quand ?? Date.now()
-  const destinations = Array.from({ length: entree.nombre }, (_, index) =>
-    join(entree.dossierDesRetours, `essai__${entree.conversationId}-${quand}-${index + 1}`)
-  )
-  return photographierPuisOuvrir({ ...entree, quand, destinations })
-}
 
 /**
  * UNE photo du code maintenant, puis une copie détachée à cette photo pour chaque destination. Le
@@ -460,7 +440,7 @@ async function photographierPuisOuvrir(entree: {
   quand: number
   destinations: string[]
   runGit?: GitRunner
-}): Promise<CopiesDEssai> {
+}): Promise<CopiesOuvertes> {
   const { quand, destinations } = entree
   const tropLong = destinations.find((chemin) => chemin.length > LONGUEUR_MAX_CHEMIN_DE_COPIE)
   if (tropLong)
@@ -473,7 +453,7 @@ async function photographierPuisOuvrir(entree: {
     conversationId: entree.conversationId,
     quand,
     runGit: entree.runGit,
-    delaiMaxMs: DELAI_PHOTO_ESSAIS_MS
+    delaiMaxMs: DELAI_PHOTO_DES_COPIES_MS
   })
   if (!photo)
     return {
@@ -507,7 +487,7 @@ export type CopieDuFilOuverte =
  *    sans elle. Une base déjà là (copie précédente effacée) avance jusqu'à la nouvelle photo, sinon
  *    le premier passage republierait ce que l'ancienne copie a déjà fait entrer dans main ;
  *  - `node_modules` RELIÉ au dépôt (décision 2-A) : sans lui, le fil ne lance aucun test. Les copies
- *    d'essai n'en ont pas (en-tête de ce fichier) ; celle d'un fil, si. Un lien raté n'empêche pas
+ *    de « Revenir à ce tour » n'en ont pas (en-tête de ce fichier) ; celle d'un fil, si. Un lien raté n'empêche pas
  *    la copie : il est rendu, pour être dit dans le fil.
  * La photo prend le dossier partagé tel quel, travail non commité des autres fils compris : la porte
  * ne publie donc que ce que CE fil a changé depuis.

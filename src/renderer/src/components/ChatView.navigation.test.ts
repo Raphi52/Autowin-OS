@@ -86,12 +86,8 @@ describe('navigation pendant une reponse', () => {
     expect(source.match(/data-testid="composer-send"/g)).toBeNull()
     expect(source).toContain('stopPilotTurn()')
     expect(source).toContain('resumePilotTurn()')
-    // (c18d67b8, 2026-11-04), onQueue enveloppe queueCurrentMessage pour refuser ×3
-    // pendant un tour : l'invariant est que la File du composer appelle bien queueCurrentMessage().
-    const filesDuComposer = [...source.matchAll(/onQueue=\{\(\) => \{[\s\S]*?\n\s*\}\}/g)].map(
-      (m) => m[0]
-    )
-    expect(filesDuComposer.some((bloc) => bloc.includes('queueCurrentMessage()'))).toBe(true)
+    // L'invariant : la File du composer appelle bien queueCurrentMessage().
+    expect(source).toMatch(/onQueue=\{\(\) => queueCurrentMessage\(\)\}/)
     // Le bouton principal ne fait qu une chose a la fois : Reprendre, File, ou Envoyer.
     expect(composerSource).toContain('props.onResume()')
     expect(composerSource).toContain('props.onQueue()')

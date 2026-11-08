@@ -357,17 +357,6 @@ export const TEXTES_FR = {
     "Code remis à son état du début de ce tour dans {chemin}, mais la branche du fil n'a pas pu être rattachée à cette copie ({raison}). Rien n'a été ouvert : elle aurait travaillé dans le dossier partagé.",
   'revenir.fait':
     "Code remis à son état du début de ce tour, dans une copie séparée : {chemin}. Ce fil y travaille ; le dossier partagé n'a pas bougé. Les dépendances (node_modules) n'y sont pas reliées : installe-les avant d'y lancer les tests.",
-  'essai.ecrisDabord': 'Écris d’abord la demande à essayer de 3 façons.',
-  'essai.pendantTour': '×3 éteint : le fil travaille encore. Rien n’est parti — renvoie quand il a fini.',
-  'essai.ouvreDabord': 'Ouvre d’abord le fil où essayer cette demande de 3 façons.',
-  'essai.titre': 'Essai',
-  'essai.refusee': 'façon {rang} ({raison})',
-  'essai.lancee':
-    "{n} façon lancée, chacune dans sa copie séparée : {chemins}. Compare-les dans la mosaïque ; rien n'est fusionné dans le dossier partagé. Coût : {n} tour.",
-  'essai.lancees':
-    "{n} façons lancées, chacune dans sa copie séparée : {chemins}. Compare-les dans la mosaïque ; rien n'est fusionné dans le dossier partagé. Coût : {n} tours.",
-  'essai.nonEnvoyee': "Non envoyée, la branche n'a pas pu être rattachée à sa copie : {refus}.",
-  'essai.nonEnvoyees': "Non envoyées, la branche n'a pas pu être rattachée à sa copie : {refus}.",
   'branche.refusee': 'branche refusée',
   'branche.dossierNonPose': 'dossier de travail non posé',
   'fils.origineIntrouvable': 'fil d’origine introuvable',
@@ -585,9 +574,6 @@ export const TEXTES_FR = {
     'Cette question demande un outil : rien n’a été lancé. Pose-la dans le fil.',
   'question.motif.delai': 'Pas de réponse après deux minutes : la question a été arrêtée.',
   'question.motif.echec': 'La question a échoué : {detail}',
-  'saisie.troisFacons': 'Essaie 3 façons',
-  'saisie.troisFacons.titre':
-    'Bascule Essaie 3 façons : une fois activée, la prochaine demande envoyée part dans 3 branches du fil, chacune dans sa copie séparée du code, ouvertes en mosaïque. Coûte 3 tours.',
   'saisie.arreterReponse': 'Arrêter la réponse',
   'saisie.arreterReponse.titre': 'Arrêter la réponse en cours (indépendant de ce qui est tapé)',
   'saisie.arret': 'Arrêt…',
@@ -936,17 +922,6 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     'Code restored to its state at the start of this turn in {chemin}, but the thread’s branch could not be attached to this copy ({raison}). Nothing was opened: it would have worked in the shared folder.',
   'revenir.fait':
     'Code restored to its state at the start of this turn, in a separate copy: {chemin}. This thread works there; the shared folder has not moved. Dependencies (node_modules) are not linked there: install them before running the tests there.',
-  'essai.ecrisDabord': 'First write the request to try in 3 ways.',
-  'essai.pendantTour': '×3 turned off: this thread is still working. Nothing was sent — send again when it is done.',
-  'essai.ouvreDabord': 'First open the thread where this request should be tried in 3 ways.',
-  'essai.titre': 'Try',
-  'essai.refusee': 'way {rang} ({raison})',
-  'essai.lancee':
-    '{n} way launched, each in its own separate copy: {chemins}. Compare them in the mosaic; nothing is merged into the shared folder. Cost: {n} turn.',
-  'essai.lancees':
-    '{n} ways launched, each in its own separate copy: {chemins}. Compare them in the mosaic; nothing is merged into the shared folder. Cost: {n} turns.',
-  'essai.nonEnvoyee': 'Not sent, the branch could not be attached to its copy: {refus}.',
-  'essai.nonEnvoyees': 'Not sent, the branch could not be attached to its copy: {refus}.',
   'branche.refusee': 'branch refused',
   'branche.dossierNonPose': 'working folder not set',
   'fils.origineIntrouvable': 'original thread not found',
@@ -1161,9 +1136,6 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     'This question needs a tool: nothing was run. Ask it in the thread.',
   'question.motif.delai': 'No answer after two minutes: the question was stopped.',
   'question.motif.echec': 'The question failed: {detail}',
-  'saisie.troisFacons': 'Try 3 ways',
-  'saisie.troisFacons.titre':
-    'Try 3 ways toggle: once on, the next request you send goes into 3 branches of the thread, each in its own separate copy of the code, opened in the mosaic. Costs 3 turns.',
   'saisie.arreterReponse': 'Stop the answer',
   'saisie.arreterReponse.titre': 'Stop the current answer (whatever is typed)',
   'saisie.arret': 'Stopping…',

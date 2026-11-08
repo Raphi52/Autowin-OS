@@ -5,7 +5,12 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
-import { avancerLaBaseDuFil, ouvrirCopiesDEssai, ouvrirLaCopieDuFil } from '../git/photo-du-code'
+import {
+  avancerLaBaseDuFil,
+  ouvrirCopieDeLaPhoto,
+  ouvrirLaCopieDuFil,
+  photographierLeCode
+} from '../git/photo-du-code'
 import {
   CALME_AVANT_MENAGE_MS,
   decisionPourLaCopie,
@@ -281,20 +286,20 @@ describe('menageDesCopiesDeFil — sur un vrai dépôt', () => {
 
   it('retire aussi une copie d’avant, rangée sous retours-de-tour/essai__…', async () => {
     const { repo, retours, copies } = await depot()
-    const ouvertes = await ouvrirCopiesDEssai({
+    // L'ancien rangement : une photo, puis sa copie sous `essai__<fil>-<instant>-1`.
+    const quand = MAINTENANT - 20 * H
+    const photo = await photographierLeCode({ dossier: repo, conversationId: 'conv-5', quand })
+    if (!photo) throw new Error('photo impossible')
+    const { chemin: ancienne } = await ouvrirCopieDeLaPhoto({
       dossier: repo,
-      conversationId: 'conv-5',
-      dossierDesRetours: retours,
-      nombre: 1,
-      quand: MAINTENANT - 20 * H
+      sha: photo.sha,
+      destination: join(retours, `essai__conv-5-${quand}-1`)
     })
-    if (!ouvertes.ok) throw new Error(ouvertes.raison)
-    const ancienne = ouvertes.chemins[0] as string
     await avancerLaBaseDuFil({
       dossier: repo,
       conversationId: 'conv-5',
       depuis: null,
-      vers: ouvertes.sha
+      vers: photo.sha
     })
 
     const bilan = await menageDesCopiesDeFil({

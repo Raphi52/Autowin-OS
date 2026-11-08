@@ -78,8 +78,6 @@ import {
 import { ecouterElementsCibles, type ElementCible } from './alt-clic'
 import { SuppressionConversationsCarte } from './SuppressionConversationsCarte'
 import { departPourModifier } from './modifier-relancer'
-import { demandePourLaFacon, titreDeLaFacon } from './trois-facons'
-import { ComparaisonDesFacons } from './ComparaisonDesFacons'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 // La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
@@ -3755,77 +3753,6 @@ export function ChatView({
     requestAnimationFrame(() => composerRef.current?.focusAt(-1))
   }
   /**
-   * « ESSAIE 3 FAÇONS » (2026-10-21) : la demande tapée part dans TROIS branches du fil,
-   * chacune rattachée à SA copie séparée du code (le main les ouvre à une même photo) et chacune avec
-   * une façon imposée (`trois-facons.ts`). Les trois s'ouvrent en mosaïque pour être comparées. Rien
-   * n'est fusionné dans le dossier partagé : garder une façon reste un geste de l'utilisateur. Chaque
-   * branche est un tour payé — trois fois le coût d'un tour, et l'avis le dit.
-   */
-  // Armé POUR UN FIL : un booléen global restait allumé en changeant de fil, et
-  // l'envoi suivant partait en 3 branches dans un AUTRE fil que celui où ×3 avait été cliqué.
-  const [troisFaconsFil, setTroisFaconsFil] = useState<string | null>(null)
-  const troisFaconsArme = troisFaconsFil !== null && troisFaconsFil === activeId
-  const setTroisFaconsArme = (arme: boolean | ((courant: boolean) => boolean)): void => {
-    const suivant = typeof arme === 'function' ? arme(troisFaconsArme) : arme
-    setTroisFaconsFil(suivant && activeId ? activeId : null)
-  }
-  async function essayerTroisFacons(): Promise<void> {
-    const source = activeRef.current
-    const demande = texteDuComposer().trim()
-    if (!source || !demande) {
-      setAppNotice((current) =>
-        newestNotice(current, {
-          text: source ? texteFil('essai.ecrisDabord') : texteFil('essai.ouvreDabord')
-        })
-      )
-      return
-    }
-    const essai = await window.api.conversationEssaisEnParallele?.(source, 3)
-    if (!essai) return
-    if (!essai.ok) {
-      setAppNotice((current) => newestNotice(current, { text: essai.raison }))
-      return
-    }
-    const filSource = liveMessagesRef.current.get(source) ?? messages
-    const ancre = [...filSource].reverse().find((message) => message.messageId)?.messageId
-    const titre =
-      convsRef.current.find((conversation) => conversation.id === source)?.title ??
-      texteFil('essai.titre')
-    const total = essai.chemins.length
-    // Chaque branche garde SON rang : son titre (« façon 3/3 ») et sa façon imposée restent
-    // d'accord même quand une autre façon n'a pas pu partir.
-    const branches: Array<{ id: string; rang: number }> = []
-    const refusees: string[] = []
-    for (const [rang, chemin] of essai.chemins.entries()) {
-      const branche = await brancheDansLaCopie(source, ancre, chemin, titre)
-      if (!branche.ok) {
-        refusees.push(texteFil('essai.refusee', { rang: rang + 1, raison: branche.raison }))
-        continue
-      }
-      await window.api.conversationsRename?.(branche.id, titreDeLaFacon(titre, rang, total))
-      branches.push({ id: branche.id, rang })
-    }
-    if (branches.length > 0) setDraftInput(composerDraftKeyRef.current, '')
-    const fraiches = (await window.api.conversations()) as Conv[]
-    convsRef.current = fraiches
-    setConvs(fraiches)
-    if (branches.length > 0) setConvViewMode('mosaic')
-    for (const { id, rang } of branches) {
-      await ouvrirDansMosaique(id)
-      void send(demandePourLaFacon(demande, rang, total), { targetConversationId: id })
-    }
-    const lancees = texteFil(branches.length > 1 ? 'essai.lancees' : 'essai.lancee', {
-      n: branches.length,
-      chemins: essai.chemins.join(' · ')
-    })
-    const nonParties = refusees.length
-      ? ` ${texteFil(refusees.length > 1 ? 'essai.nonEnvoyees' : 'essai.nonEnvoyee', {
-          refus: refusees.join(' · ')
-        })}`
-      : ''
-    setAppNotice((current) => newestNotice(current, { text: `${lancees}${nonParties}` }))
-  }
-  /**
    * Une branche du fil NÉE dans sa copie séparée (2026-10-21) : le dossier part AVEC la
    * branche (`fork(…, { dossier })`, ou la création d'un fil neuf quand il n'y a rien à copier), et
    * la réponse est RELUE. Mesuré avant : la branche était créée puis rangée par un second appel dont
@@ -4005,8 +3932,7 @@ export function ChatView({
   })
   useTenirRefAJour(viewRunRef, viewRun)
   const {
-    active, resumeAvailable, composersMosaiqueRef, rendrePiecesJointesEnAttente, faconsDuFilActif,
-    faconsDeLaMosaique, signatureDesFacons, fenetresMosaique, ouvrirFilMosaiqueStable,
+    active, resumeAvailable, composersMosaiqueRef, rendrePiecesJointesEnAttente, fenetresMosaique, ouvrirFilMosaiqueStable,
     fermerFenetreStable, ouvrirSeuleStable, nouvelleFenetreStable, rendreComposerStable,
     repondreAskMosaiqueStable, remplirSaisie, remplirSaisieMosaique, signatureComposerMosaique,
     correspondancesContenu, convStatusFilter, setConvStatusFilter, conversationHits,
@@ -4839,14 +4765,6 @@ export function ChatView({
       {convViewMode === 'mosaic' ? (
         <ChatMosaic
           fenetres={fenetresMosaique}
-          entete={
-            faconsDeLaMosaique.length > 0 ? (
-              <ComparaisonDesFacons
-                facons={faconsDeLaMosaique}
-                signature={signatureDesFacons(faconsDeLaMosaique)}
-              />
-            ) : undefined
-          }
           onClose={fermerFenetreStable}
           onOuvrirSeule={ouvrirSeuleStable}
           rendreComposer={rendreComposerStable}
@@ -5356,16 +5274,6 @@ export function ChatView({
               document.body
             )}
 
-          {activeId && faconsDuFilActif.length > 0 && (
-            <ComparaisonDesFacons
-              facons={faconsDuFilActif}
-              signature={signatureDesFacons(faconsDuFilActif)}
-              onOuvrir={(id) => {
-                const cible = convsRef.current.find((conversation) => conversation.id === id)
-                if (cible && id !== activeId) void loadConv(cible)
-              }}
-            />
-          )}
           <div
             className={`chat-scroll scroll-y chat-scroll--ascenseur${repriseEnCours ? ' chat-scroll--reprise' : ''}`}
             ref={scrollRef}
@@ -5614,28 +5522,8 @@ export function ChatView({
               onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
               onDraftPresence={setBrouillonPresent}
               onBtw={handleBtw}
-              onSend={() => {
-                // Bascule ×3 : un clic ARME le mode, l'envoi suivant part en 3 façons
-                // puis le mode retombe. Avant, chaque clic lançait 3 tours payés : spam.
-                if (troisFaconsArme) {
-                  setTroisFaconsArme(false)
-                  void essayerTroisFacons()
-                  return
-                }
-                void send()
-              }}
-              onQueue={() => {
-                // ×3 pendant un tour : la file l'ignorait en silence et ×3 restait
-                // allumé pour un envoi plus tard. On refuse en clair et on éteint.
-                if (troisFaconsArme) {
-                  setTroisFaconsArme(false)
-                  setAppNotice((current) =>
-                    newestNotice(current, { text: texteFil('essai.pendantTour') })
-                  )
-                  return
-                }
-                queueCurrentMessage()
-              }}
+              onSend={() => void send()}
+              onQueue={() => queueCurrentMessage()}
               onResume={() => void resumePilotTurn()}
               onPaste={(files) => void addFiles(files)}
               attachmentsNode={rendrePiecesJointesEnAttente(
@@ -5757,17 +5645,6 @@ export function ChatView({
                       onBasculer={() => setQuestionACoteOuverte((ouverte) => !ouverte)}
                     />
                   )}
-                  {/* « ESSAIE 3 FAÇONS » : la demande tapée, en trois branches comparées. */}
-                  <button
-                    type="button"
-                    className={`btn composer-trois-facons${troisFaconsArme ? ' actif' : ''}`}
-                    aria-pressed={troisFaconsArme}
-                    onClick={() => setTroisFaconsArme((arme) => !arme)}
-                    aria-label={texteFil('saisie.troisFacons')}
-                    title={texteFil('saisie.troisFacons.titre')}
-                  >
-                    ×3
-                  </button>
                   <input
                     ref={fileInputRef}
                     className="attachment-input"

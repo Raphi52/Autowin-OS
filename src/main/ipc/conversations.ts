@@ -36,10 +36,7 @@ import { guardString } from './ipc-guards'
 import { estCheminDeDossier } from '../../shared/project-path'
 import { removeConversationArtifacts } from '../store/chat-artifact-store'
 import { oublierFaitRetenu, rememberedFacts } from '../brain/session-memory-echo'
-import { ouvrirCopiesDEssai, revenirAuCodeDuTour } from '../git/photo-du-code'
-import { bilanDeLaFacon, ecartDeLEssai, garderLEssai, type EcartDeLEssai } from '../orchestration/garder-un-essai'
-import { ressemblanceDesEcarts } from '../orchestration/ressemblance-des-facons'
-import { nomDeCopieDEssai } from '../../shared/essai-trois-facons'
+import { revenirAuCodeDuTour } from '../git/photo-du-code'
 import type { AutowinOS } from '../app/os'
 import type { ActiveChatTurns } from '../chat/active-chat-turns'
 import { arreterLesTravauxDuFil } from '../gardes/arret-avant-suppression'
@@ -376,119 +373,6 @@ export function registerConversationsIpc({
       }))
     }
   )
-  /*
-   * « ESSAIE 3 FAÇONS » (2026-10-21) : une photo du code maintenant, et une copie
-   * séparée par branche. Deux ou trois, jamais plus : chaque façon est un tour payé.
-   */
-  ipcMain.handle(
-    'os:conversations:essaisEnParallele',
-    async (event, rawId: unknown, rawNombre: unknown) => {
-      assertTrustedRendererSender(event, 'Conversation parallel trials')
-      const id = guardString(rawId, 'id')
-      if (!os.conversations.get(id)) return { ok: false, raison: 'Conversation inconnue.' }
-      const nombre =
-        typeof rawNombre === 'number' && Number.isInteger(rawNombre)
-          ? Math.min(3, Math.max(2, rawNombre))
-          : 3
-      return ouvrirCopiesDEssai({
-        dossier: dossierDuFil(id),
-        conversationId: id,
-        dossierDesRetours: dossierDesRetours(),
-        nombre
-      }).catch((erreur: unknown) => ({
-        ok: false as const,
-        raison: erreur instanceof Error ? erreur.message : String(erreur)
-      }))
-    }
-  )
-  /*
-   * « ESSAIE 3 FAÇONS » : LA CARTE DE COMPARAISON ET « GARDER CELLE-CI » (2026-10-21 —
-   * idée 6). Comparer : pour chaque branche, l'écart de SA copie depuis la photo de l'essai, et le
-   * bilan de son tour (`garder-un-essai.ts`). Garder : cet écart publié par le chemin des copies
-   * (`os.worktrees`, le même que les commandes), avec sa garde des fichiers non commités du dossier
-   * partagé, son attente et son repêchage. Rien n'est écrit dans le dossier partagé d'ici.
-   * check: garder-un-essai.test.ts (11 cas sur de vrais dépôts) et garder-un-essai.bilan.test.ts.
-   */
-  ipcMain.handle('os:conversations:comparerLesFacons', async (event, rawIds: unknown) => {
-    assertTrustedRendererSender(event, 'Conversation trials compare')
-    if (!Array.isArray(rawIds)) throw new Error('IPC ids: tableau attendu')
-    const raisonDe = (erreur: unknown): string =>
-      erreur instanceof Error ? erreur.message : String(erreur)
-    const mesures = await Promise.all(
-      rawIds.slice(0, 6).map(async (brut) => {
-        const id = guardString(brut, 'id')
-        const conversation = os.conversations.get(id)
-        if (!conversation) return { id, connue: false as const }
-        const bilan = bilanDeLaFacon(conversation.messages)
-        const copie = conversation.projectPath ?? ''
-        const ecart: EcartDeLEssai = !copie
-          ? { ok: false, raison: 'Ce fil ne travaille pas dans une copie d’essai.' }
-          : await ecartDeLEssai({ copie, dossierDesRetours: dossierDesRetours() }).catch(
-              (erreur: unknown) => ({ ok: false as const, raison: raisonDe(erreur) })
-            )
-        return { id, connue: true as const, bilan, copie, ecart }
-      })
-    )
-    // Le contrôle de ressemblance (2026-10-22) : chaque façon contre ses voisines de la
-    // même photo — rien ne disait que deux façons avaient rendu le même code.
-    const ressemblances = await ressemblanceDesEcarts(
-      mesures.flatMap((mesure) => (mesure.connue ? [mesure] : []))
-    )
-    return mesures.map((mesure) => {
-      if (!mesure.connue)
-        return { id: mesure.id, ok: false as const, raison: 'Conversation inconnue.' }
-      const { id, bilan, ecart } = mesure
-      return {
-        id,
-        ok: true as const,
-        bilan,
-        // La photo et l'arbre restent ici : l'interface n'a besoin que des fichiers et des lignes.
-        ecart: ecart.ok
-          ? {
-              ok: true as const,
-              fichiers: ecart.fichiers,
-              ajouts: ecart.ajouts,
-              retraits: ecart.retraits
-            }
-          : ecart,
-        ressemblance: ressemblances.get(id) ?? {
-          etat: 'sans-objet' as const,
-          raison: 'non mesurée'
-        }
-      }
-    })
-  })
-  ipcMain.handle('os:conversations:garderEssai', async (event, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Conversation trial keep')
-    const id = guardString(rawId, 'id')
-    const conversation = os.conversations.get(id)
-    if (!conversation?.projectPath)
-      return { ok: false as const, raison: 'Ce fil ne travaille pas dans une copie d’essai.' }
-    const worktrees = os.worktrees
-    if (!worktrees)
-      return {
-        ok: false as const,
-        raison: 'La publication par copie n’est pas disponible dans cette instance.'
-      }
-    const nom = nomDeCopieDEssai(conversation.projectPath)
-    const tache = `feat(essai): garder la façon ${nom?.rang ?? '?'} — ${conversation.title} (${nom?.fil ?? id})`
-    return garderLEssai({
-      copie: conversation.projectPath,
-      dossierDesRetours: dossierDesRetours(),
-      publication: {
-        ouvrir: (runId) =>
-          worktrees.beginAsync(runId, 'Garder une façon', true, {
-            task: tache,
-            role: 'command',
-            conversationId: id
-          }),
-        fermer: (runId, publier) => worktrees.endAsync(runId, { merge: publier })
-      }
-    }).catch((erreur: unknown) => ({
-      ok: false as const,
-      raison: erreur instanceof Error ? erreur.message : String(erreur)
-    }))
-  })
   ipcMain.handle('os:conversations:remove', async (event, rawId: string) => {
     assertTrustedRendererSender(event, 'Conversations')
     const id = guardString(rawId, 'id')

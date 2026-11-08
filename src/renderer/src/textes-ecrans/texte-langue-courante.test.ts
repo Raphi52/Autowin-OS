@@ -25,12 +25,12 @@ describe('texte d’une table dans la langue courante', () => {
 
   it('décisions du fil : suit la langue appliquée', () => {
     appliquerLangue('en')
-    expect(texteChatDecisions('facons.ecart.aucun')).toBe(
-      traduireChatDecisions('facons.ecart.aucun', 'en', undefined)
+    expect(texteChatDecisions('pensee.raisonnement')).toBe(
+      traduireChatDecisions('pensee.raisonnement', 'en', undefined)
     )
     appliquerLangue('fr')
-    expect(texteChatDecisions('facons.ecart.aucun')).toBe(
-      traduireChatDecisions('facons.ecart.aucun', 'fr', undefined)
+    expect(texteChatDecisions('pensee.raisonnement')).toBe(
+      traduireChatDecisions('pensee.raisonnement', 'fr', undefined)
     )
   })
 })

@@ -110,7 +110,6 @@
 :root[data-ecran='telephone'] .composer-input-row > button,
 :root[data-ecran='telephone'] .composer-input-row > .attachment-button,
 :root[data-ecran='telephone'] .composer-input-row > .composer-auto,
-:root[data-ecran='telephone'] .composer-input-row > .composer-trois-facons,
 :root[data-ecran='telephone'] .composer-input-row > .composer-stop {
   min-width: 40px;
   min-height: 40px;

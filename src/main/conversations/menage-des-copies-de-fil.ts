@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, renameSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { nomDeCopieDeFil } from '../../shared/copie-du-fil'
-import { nomDeCopieDEssai } from '../../shared/essai-trois-facons'
+import { ancienNomDeCopieDeFil, nomDeCopieDeFil } from '../../shared/copie-du-fil'
 import { supprimerArbreAsync } from '../fichiers/fs-supprimer'
 import { lireLaBaseDuFil } from '../git/photo-du-code'
 import { CALME_AVANT_PUBLICATION_MS } from '../git/git-apres-fil'
@@ -54,8 +53,8 @@ export interface FilDuMenage {
  * ou l'ancien nom `essai__<fil>-<instant>-<rang>`. `null` pour tout autre dossier.
  */
 function identiteDeLaCopie(copie: string): { fil: string; quand?: number } | null {
-  const essai = nomDeCopieDEssai(copie)
-  if (essai) return { fil: essai.fil, quand: essai.quand }
+  const ancienne = ancienNomDeCopieDeFil(copie)
+  if (ancienne) return { fil: ancienne.fil, quand: ancienne.quand }
   return nomDeCopieDeFil(copie)
 }
 

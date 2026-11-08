@@ -1,129 +1,26 @@
 /**
- * « ESSAIE 3 FAÇONS » : COMPARER LES FAÇONS, PUIS « GARDER CELLE-CI » (2026-10-21 —
- * idée 6 du scout : « une carte compare les écarts, les tests et le coût, et fusionne la gagnante »).
- *
- * Chaque façon travaille dans sa copie séparée, ouverte à une PHOTO du code (`photo-du-code.ts`,
- * `ouvrirCopiesDEssai`). La photo prend le dossier partagé TEL QUEL, travail non commité des autres
- * fils compris. Ce que la façon a changé est donc l'écart entre SA copie et SA photo — jamais entre
- * sa copie et `main`, qui compterait (et publierait) le travail en cours des autres comme le sien.
- *
- * GARDER passe par le chemin de publication d'une copie, celui des commandes (`os.worktrees`,
- * `beginAsync` puis `endAsync(…, { merge: true })`) : une copie NEUVE sur la base, l'écart de la
- * façon fusionné dedans à trois voies (`git merge-tree`, base = la photo), puis la publication
+ * LA PORTE D'UN FIL EN COPIE (`garderLeTravailDuFil`), en fin de tour : ce que la copie du fil porte
+ * depuis la base du fil (`lireLaBaseDuFil`) entre dans main par le chemin de publication d'une copie,
+ * celui des commandes (`os.worktrees`, `beginAsync` puis `endAsync(…, { merge: true })`) : une copie
+ * NEUVE sur la base, l'écart fusionné dedans à trois voies (`git merge-tree`), puis la publication
  * ordinaire — avec sa garde des fichiers non commités du dossier partagé, son attente et son
- * repêchage automatique. Ce module n'écrit RIEN dans le dossier partagé, et n'y lance ni remise de
- * côté, ni retour en arrière, ni extraction de fichiers.
- *
- * LA MÊME PORTE sert le fil qui travaille dans SA copie (`garderLeTravailDuFil`), en fin de tour :
- * base = la base du fil (`lireLaBaseDuFil`), qui avance à chaque passage. Sans elle, la fin de tour
- * d'une copie détachée poussait une branche du tour vers le distant.
+ * repêchage automatique. La base AVANCE à chaque passage. Ce module n'écrit RIEN dans le dossier
+ * partagé, et n'y lance ni remise de côté, ni retour en arrière, ni extraction de fichiers. Sans
+ * cette porte, la fin de tour d'une copie détachée poussait une branche du tour vers le distant.
  */
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
-import {
-  avancerLaBaseDuFil,
-  lireLaBaseDuFil,
-  refDePhoto,
-  type AvanceeDeLaBase
-} from '../git/photo-du-code'
-import { MARQUE_DEMANDE_DESSAI, nomDeCopieDEssai } from '../../shared/essai-trois-facons'
+import { isAbsolute, join, resolve } from 'node:path'
+import { avancerLaBaseDuFil, lireLaBaseDuFil, type AvanceeDeLaBase } from '../git/photo-du-code'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import type { FinalizeResult } from '../store/worktree-manager'
-import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 
-/** L'auteur du commit de la façon : jamais l'identité de l'utilisateur, qui n'a rien commité. */
+/** L'auteur du commit de la porte : jamais l'identité de l'utilisateur, qui n'a rien commité. */
 const AUTEUR = {
   GIT_AUTHOR_NAME: 'Autowin',
   GIT_AUTHOR_EMAIL: 'autowin@localhost',
   GIT_COMMITTER_NAME: 'Autowin',
   GIT_COMMITTER_EMAIL: 'autowin@localhost'
-}
-
-export interface EssaiNomme {
-  fil: string
-  quand: number
-  rang: number
-  /** La référence de la photo de départ, établie une seule fois ici (jamais `null`). */
-  ref: string
-}
-
-/**
- * Une copie d'essai n'est reconnue que DIRECTEMENT dans le dossier des essais, sous le nom que pose
- * `ouvrirCopiesDEssai`. Sans cette garde, le canal publierait l'écart de n'importe quel dossier.
- */
-export function lireNomDEssai(copie: string, dossierDesRetours: string): EssaiNomme | null {
-  if (!copie.trim() || !isAbsolute(copie)) return null
-  if (!memeCheminSurDisque(dirname(resolve(copie)), dossierDesRetours)) return null
-  // Le nom que pose `ouvrirCopiesDEssai`, lu par la même fonction que l'interface.
-  const nom = nomDeCopieDEssai(basename(resolve(copie)))
-  if (!nom) return null
-  // fix-ok: 2026-10-21 — l'écart puis « Garder » relisaient la photo par
-  // `refDePhoto(...) as string` et `lireNomDEssai(...) as EssaiNomme`, deux conversions qui ne
-  // tenaient que par cette garde, invisible au typage. La référence est portée ici, une fois.
-  // Test : garder-un-essai.test.ts (fil avec espace ou `..`, référence portée) — rouge puis vert.
-  const ref = refDePhoto(nom.fil, nom.quand)
-  if (!ref) return null
-  return { ...nom, ref }
-}
-
-export interface BilanDeLaFacon {
-  etat: 'pas-parti' | 'en-cours' | 'fini' | 'echec' | 'arrete'
-  /** Vérifications (`verify`) rendues vertes par la façon. */
-  vertes: number
-  /** Vérifications rouges ou interrompues : aucune n'est passée sous silence. */
-  rouges: number
-}
-
-type MessageDeBranche = {
-  role?: unknown
-  content?: unknown
-  status?: unknown
-  parts?: ReadonlyArray<{ kind?: unknown; name?: unknown; ok?: unknown; interrupted?: unknown }>
-}
-
-/**
- * OÙ EN EST UNE FAÇON, et ce que ses vérifications ont RENDU (un code de sortie, pas ce que l'agent
- * en dit). Une branche porte aussi les messages copiés du fil d'origine : seul ce qui suit la
- * DERNIÈRE demande marquée (`MARQUE_DEMANDE_DESSAI`) est le travail de la façon.
- * check: garder-un-essai.bilan.test.ts — 3 cas rouges avant cette fonction, dont la vérification
- * copiée du fil d'origine qui ne doit pas compter.
- */
-export function bilanDeLaFacon(messages: readonly MessageDeBranche[]): BilanDeLaFacon {
-  let debut = -1
-  for (let rang = messages.length - 1; rang >= 0; rang -= 1) {
-    const message = messages[rang]
-    if (
-      message?.role === 'user' &&
-      typeof message.content === 'string' &&
-      MARQUE_DEMANDE_DESSAI.test(message.content)
-    ) {
-      debut = rang
-      break
-    }
-  }
-  if (debut === -1) return { etat: 'pas-parti', vertes: 0, rouges: 0 }
-  const reponses = messages.slice(debut + 1).filter((message) => message.role === 'assistant')
-  let vertes = 0
-  let rouges = 0
-  for (const reponse of reponses)
-    for (const part of reponse.parts ?? []) {
-      if (part.kind !== 'action' || part.name !== 'verify') continue
-      if (part.ok === true) vertes += 1
-      else if (part.ok === false || part.interrupted === true) rouges += 1
-    }
-  const statut = reponses.at(-1)?.status
-  const etat: BilanDeLaFacon['etat'] =
-    statut === undefined
-      ? 'pas-parti'
-      : statut === 'streaming'
-        ? 'en-cours'
-        : statut === 'completed'
-          ? 'fini'
-          : statut === 'failed'
-            ? 'echec'
-            : 'arrete'
-  return { etat, vertes, rouges }
 }
 
 export interface FichierDeLEcart {
@@ -132,21 +29,6 @@ export interface FichierDeLEcart {
   ajouts: number | null
   retraits: number | null
 }
-
-export type EcartDeLEssai =
-  | {
-      ok: true
-      /** L'essai lu dans le nom de la copie : « Garder » s'en sert sans le relire. */
-      nom: EssaiNomme
-      /** La photo de départ de la façon. */
-      photo: string
-      /** L'arbre de ce que la copie porte maintenant (fichiers ignorés exclus). */
-      arbre: string
-      fichiers: FichierDeLEcart[]
-      ajouts: number
-      retraits: number
-    }
-  | { ok: false; raison: string }
 
 function lireNumstat(sortie: string): FichierDeLEcart[] {
   return sortie
@@ -193,39 +75,6 @@ export async function avecUneCopieDeLIndex<T>(
     return await faire({ env, indexReel })
   } finally {
     rmSync(temporaire, { recursive: true, force: true })
-  }
-}
-
-/** CE QUE LA FAÇON A CHANGÉ depuis sa photo : fichiers et lignes. */
-export async function ecartDeLEssai(entree: {
-  copie: string
-  dossierDesRetours: string
-  runGit?: GitRunner
-}): Promise<EcartDeLEssai> {
-  const nom = lireNomDEssai(entree.copie, entree.dossierDesRetours)
-  if (!nom) return { ok: false, raison: 'Ce dossier n’est pas une copie d’« Essaie 3 façons ».' }
-  const git = entree.runGit ?? (await defaultGitRunner())
-  const photo = (
-    await git(['rev-parse', '--verify', '-q', `${nom.ref}^{commit}`], entree.copie).catch(() => '')
-  ).trim()
-  if (!photo)
-    return {
-      ok: false,
-      raison:
-        'La photo de départ de cet essai n’existe plus (une photo est gardée 14 jours, 10 par fil) : impossible de dire ce que cette façon a changé.'
-    }
-  const arbre = await arbreDeLaCopie(entree.copie, git)
-  const fichiers = lireNumstat(
-    await git(['diff', '--numstat', '--no-renames', '-z', photo, arbre], entree.copie)
-  )
-  return {
-    ok: true,
-    nom,
-    photo,
-    arbre,
-    fichiers,
-    ajouts: fichiers.reduce((somme, fichier) => somme + (fichier.ajouts ?? 0), 0),
-    retraits: fichiers.reduce((somme, fichier) => somme + (fichier.retraits ?? 0), 0)
   }
 }
 
@@ -316,7 +165,7 @@ function traduire(issue: FinalizeResult | undefined, fichiers: string[]): Result
   }
 }
 
-/** Les phrases d'un refus, propres à ce qui passe la porte (une façon d'essai, le travail d'un fil). */
+/** Les phrases d'un refus de la porte. */
 interface TextesDeLaFusion {
   conflit: (fichiers: string) => string
   echec: (cause: string) => string
@@ -413,55 +262,6 @@ async function fusionnerEtPublier(entree: {
   return traduire(await entree.publication.fermer(runId, true), entree.fichiers)
 }
 
-/**
- * « GARDER CELLE-CI » : l'écart de la façon depuis sa photo, fusionné dans une copie neuve de la
- * base, puis publié par le chemin ordinaire.
- */
-export async function garderLEssai(entree: {
-  copie: string
-  dossierDesRetours: string
-  publication: PublicationDUneCopie
-  /** Identité de la copie de publication ; tirée de l'essai et de l'instant par défaut. */
-  runId?: string
-  runGit?: GitRunner
-}): Promise<ResultatGarder> {
-  const ecart = await ecartDeLEssai(entree)
-  if (!ecart.ok) return ecart
-  if (ecart.fichiers.length === 0)
-    return { ok: false, raison: 'Cette façon n’a rien changé au code : il n’y a rien à garder.' }
-  const nom = ecart.nom
-  const git = entree.runGit ?? (await defaultGitRunner())
-  const facon = (
-    await git(
-      [
-        'commit-tree',
-        ecart.arbre,
-        '-p',
-        ecart.photo,
-        '-m',
-        `Autowin — façon ${nom.rang} de l’essai (${nom.fil})`
-      ],
-      entree.copie,
-      { env: AUTEUR }
-    )
-  ).trim()
-  return fusionnerEtPublier({
-    base: ecart.photo,
-    passage: facon,
-    fichiers: ecart.fichiers.map((fichier) => fichier.chemin),
-    publication: entree.publication,
-    runId: entree.runId ?? `essai-${nom.quand}-${nom.rang}-${Date.now().toString(36)}`,
-    git,
-    textes: {
-      conflit: (fichiers) =>
-        `Cette façon change les mêmes lignes que la base depuis l’essai : ${fichiers}. Rien n’a été publié ; la copie de la façon reste là.`,
-      echec: (cause) => `La fusion de cette façon a échoué : ${cause}`,
-      pose: (cause) =>
-        `L’écart de cette façon n’a pas pu être posé dans la copie de publication : ${cause}`
-    }
-  })
-}
-
 /** La ligne finale de chaque commit de la porte : `git log --grep '^Porte: conv-NNN$'` les retrouve. */
 export function ligneDePorte(conversationId: string): string {
   return `Porte: ${conversationId}`
@@ -482,12 +282,12 @@ export function estUnPassageDePorte(runId: string): boolean {
 /**
  * LA PORTE D'UN FIL EN COPIE, en fin de tour : tout ce que la copie porte depuis la base du fil
  * appartient au fil — rien n'est à prouver fichier par fichier. Cet écart entre dans main par la
- * fusion à trois voies de « Garder », puis la base AVANCE jusqu'au commit de ce que la copie portait
+ * fusion à trois voies (`fusionnerEtPublier`), puis la base AVANCE jusqu'au commit de ce que la copie portait
  * (`avancerLaBaseDuFil`, depuis la base lue) : le passage suivant ne publie que ce qui a changé depuis.
  *
  * Refus, sans rien écrire dans main : base disparue (jamais la copie entière à la place — elle
  * emporterait tout ce que main a déjà), aucun changement, conflit avec main.
- * fix-ok: cause mesurée — `garderLEssai` ne lisait que les copies `essai__<fil>-<quand>-<rang>` et leur
+ * fix-ok: cause mesurée — la seule publication par copie ne lisait que les copies d’essai et leur
  * photo ; sans cette porte, la fin de tour d'une copie de fil (détachée) poussait
  * `auto/<fil>-<tour>` vers le distant (rouge de chat-turn-publication.test.ts, `push origin`).
  */

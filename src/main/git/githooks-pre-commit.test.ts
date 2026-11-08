@@ -111,14 +111,13 @@ describe('.githooks/pre-commit : module supprimé encore importé', () => {
   })
 
   /*
-   * « Essaie 3 façons » (2026-11-05) : chaque façon travaille dans sa copie
-   * `retours-de-tour/essai__<fil>-<instant>-<rang>` (`photo-du-code.ts`, `ouvrirCopiesDEssai`), avec
-   * son propre index, comme une copie d'agent. Le hook ne les reconnaissait pas.
+   * L'ancien rangement des copies de fil (2026-11-05) : `retours-de-tour/essai__<fil>-<instant>-<rang>`,
+   * avec son propre index, comme une copie d'agent. Le hook ne les reconnaissait pas.
    */
-  it("ne s'applique pas dans une copie d'« Essaie 3 façons » (son index n'est pas partagé)", () => {
+  it("ne s'applique pas dans une ancienne copie de fil essai__… (son index n'est pas partagé)", () => {
     const { git } = depot('retours-de-tour/essai__conv-1471-1793778602628-1')
     git('rm', '-q', 'src/main/routeur.ts')
-    const r = git('commit', '-q', '-m', 'façon 1')
+    const r = git('commit', '-q', '-m', 'ancienne copie')
     expect(r.status, String(r.stderr)).toBe(0)
   })
 

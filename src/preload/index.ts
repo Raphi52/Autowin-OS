@@ -74,7 +74,6 @@ import type {
   PresencesDesCollegues,
   TenueAgent
 } from '../shared/quartier-presence'
-import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/media/whisper-local'
 import type { EtatDiarisation } from '../main/media/diarisation'
 import type { EtatPiper } from '../main/media/piper-local'
@@ -983,18 +982,6 @@ const api = {
   ): Promise<
     { ok: true; chemin: string; deja: boolean; quand: number } | { ok: false; raison: string }
   > => ipcRenderer.invoke('os:conversations:revenirAuTour', id, messageId),
-  /** « Essaie 3 façons » : une photo du code, une copie séparée par branche. */
-  conversationEssaisEnParallele: (
-    id: string,
-    nombre: number
-  ): Promise<{ ok: true; quand: number; chemins: string[] } | { ok: false; raison: string }> =>
-    ipcRenderer.invoke('os:conversations:essaisEnParallele', id, nombre),
-  /** La carte de comparaison des façons : écart, état du tour, vérifications. */
-  conversationComparerLesFacons: (ids: string[]): Promise<ComparaisonDUneFacon[]> =>
-    ipcRenderer.invoke('os:conversations:comparerLesFacons', ids),
-  /** « Garder celle-ci » : l'écart de la façon publié par le chemin des copies. */
-  conversationGarderEssai: (id: string): Promise<ResultatGarderUneFacon> =>
-    ipcRenderer.invoke('os:conversations:garderEssai', id),
   /**
    * Importe une session Claude Code (référence issue de l'inventaire `activitySessions`)
    * en conversation Autowin. Rend un RÉSUMÉ — le fil complet se recharge par `conversation(id)`.

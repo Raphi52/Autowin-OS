@@ -58,7 +58,6 @@ import type {
   PresencesDesCollegues,
   TenueAgent
 } from '../shared/quartier-presence'
-import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/media/whisper-local'
 import type { EtatPiper } from '../main/media/piper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestration/orchestrator'
@@ -687,15 +686,6 @@ interface ChatApi {
   ) => Promise<Array<{ title: string; body: string; state?: 'depose' | 'inconnu' | 'local' }>>
   /** Retire un fait barré dans le carnet : l'agent ne le relit plus. */
   conversationOublierFait?: (id: string, title: string) => Promise<boolean>
-  /** « Essaie 3 façons » : une photo du code, une copie séparée par branche. */
-  conversationEssaisEnParallele?: (
-    id: string,
-    nombre: number
-  ) => Promise<{ ok: true; quand: number; chemins: string[] } | { ok: false; raison: string }>
-  /** La carte de comparaison des façons : écart, état du tour, vérifications. */
-  conversationComparerLesFacons?: (ids: string[]) => Promise<ComparaisonDUneFacon[]>
-  /** « Garder celle-ci » : l'écart de la façon publié par le chemin des copies. */
-  conversationGarderEssai?: (id: string) => Promise<ResultatGarderUneFacon>
   /** Rouvre le code du début du tour d'un message dans une copie séparée. */
   conversationRevenirAuTour?: (
     id: string,

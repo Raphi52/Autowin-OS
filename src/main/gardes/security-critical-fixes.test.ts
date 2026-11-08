@@ -850,7 +850,12 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:execution-workspace:copie-par-fil` — l'interrupteur « Une copie par fil » des reglages.
     //   L'argument est reduit a `actif === true` (toute autre valeur = eteint) ; ecrit seulement
     //   `copie-par-fil.json` (donnees de l'app), relu au debut du tour suivant. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(306)
+    // MISE A JOUR 2026-11-08 — 306 -> 303, MESURE par ce test (rouge a 303) et NOMME par
+    //   `node scripts/canaux-ipc.mjs HEAD` : aucun ajout, trois retraits, dans `ipc/conversations.ts`
+    //   — le bouton « ×3 » (Essaie 3 façons) est supprimé, Arena fait ce travail :
+    //   `os:conversations:essaisEnParallele`, `…:comparerLesFacons`, `…:garderEssai`.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(303)
     expect(unguarded).toEqual([])
   })
 

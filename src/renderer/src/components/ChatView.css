@@ -5999,34 +5999,6 @@ button.chat-project-dot:disabled {
   stroke: var(--text);
   color: var(--text);
 }
-/* « ESSAIE 3 FAÇONS » (2026-10-21) : la même pastille que le trombone voisin — rond de
-   24 px, trait et contour en --text —, avec son libellé « ×3 » à la place d'une icône. Sans ces
-   deux règles, `.btn` seul en faisait une gélule plus large que ses voisins (capture du jour).
-   24 px et non 32 (2026-10-22 : « le cercle ×3 est plus gros que les autres icônes ») :
-   les 32 px venaient de la règle groupée du trombone, mais la règle « rangée compacte » plus haut
-   ramène trombone et micro à 24 px, et ∞ fait 24 px — le ×3 était le seul rond resté à 32. */
-.composer-input-row > .composer-trois-facons,
-.cosmic-outline .composer-input-row > .composer-trois-facons {
-  display: inline-flex;
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  min-height: 24px;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  align-self: center;
-  padding: 0;
-  border-radius: 999px;
-  box-shadow: none;
-  font-size: 11px;
-  font-weight: 600;
-}
-.composer-input-row > .composer-trois-facons.btn:not(:disabled) {
-  border-color: var(--text);
-  color: var(--text);
-  opacity: 1;
-}
 
 /* CENTRAGE OPTIQUE DU TROMBONE (demande du 2026-09-08) : géométriquement centré, il paraît d'un
    pixel trop bas. On ne bouge que le DESSIN, pas la pastille.
@@ -6480,16 +6452,6 @@ button.chat-project-dot:disabled {
 .msg-lecture-sens {
   color: var(--text);
   font-weight: 600;
-}
-/* ×3 ARMÉ : la bascule posait `.actif` sans aucune règle — le clic ne
-   changeait rien à l'écran, « marche pas ». Doré comme ∞ allumé ; sélecteur plus fort que les
-   règles de rangée des thèmes (:root[data-theme] .composer-input-row > :is(...)). */
-:root .composer-input-row > .composer-trois-facons.actif[aria-pressed='true'],
-:root .composer-input-row > .composer-trois-facons.actif[aria-pressed='true']:hover:not(:disabled) {
-  opacity: 1;
-  color: var(--gold-clair);
-  border-color: color-mix(in srgb, var(--gold) 75%, transparent);
-  background: color-mix(in srgb, var(--gold) 16%, transparent);
 }
 
 /* Bouton ☰ de la liste des conversations : n'existe qu'en version téléphone (affichage-session.css).
