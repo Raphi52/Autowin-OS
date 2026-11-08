@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { sortieFrameAvecCasLimites } from '../orchestration/frame-cas-limites'
-import { OPTION_ARRETER } from '../gates/etendue-repetee'
 import {
   BORNE_CADRAGE,
   BORNE_DEMANDE,
-  consigneDeLaReponse,
+  consigneDeDecisionDuCadrage,
   consigneDeReprise,
+  decisionDuCadrageRepris,
+  ligneDeDecisionDuCadrage,
   ligneDePanneDeRelecture,
   ligneDeRelecture,
   lireRelecture,
   promptDeRelecture,
-  questionDuCadrageRepris,
   relectureAPasser
 } from './relecture-froide'
 
@@ -137,42 +137,38 @@ describe('consigneDeReprise', () => {
     expect(consigne).toContain('- ÉCART: a → b')
     expect(consigne).toContain('- ÉCART: c → d')
     expect(consigne).toContain('`Écart assumé : <raison>`')
-    expect(consigne).toContain('`- Question : <question>')
+    expect(consigne).toContain('tranche toi-même')
+    expect(consigne).toContain('`Décision : <ton choix> — <raison>`')
+    expect(consigne).not.toContain('- Question :')
     expect(consigne).toContain('2 écart(s)')
   })
 })
 
-describe('questionDuCadrageRepris', () => {
+/*
+ * PLUS DE FENÊTRE DE QUESTION (2026-11-08, demande de l'utilisateur) : une question laissée dans le
+ * bilan du cadrage repris n'est posée à personne, sa réponse recommandée devient la décision.
+ */
+describe('decisionDuCadrageRepris', () => {
   const bilan = (question: string): string =>
     `### Bilan de l’étape\n- Verdict : fait — cadrage refait.\n- Fichiers touchés : aucun\n- Preuves : aucune\n- Reste à faire : aucun reste\n- Question : ${question}`
 
-  it('lit la question du bilan dans la forme de la fenêtre', () => {
-    expect(questionDuCadrageRepris(bilan('Tout livrer d’un coup ? → Oui | Non, par lots'))).toEqual(
-      {
-        text: 'Tout livrer d’un coup ?',
-        options: ['Oui', 'Non, par lots'],
-        reason: 'material-ambiguity'
-      }
+  it('retient la réponse recommandée (la première) de la question du bilan', () => {
+    expect(decisionDuCadrageRepris(bilan('Tout livrer d’un coup ? → Oui | Non, par lots'))).toEqual(
+      { question: 'Tout livrer d’un coup ?', reponse: 'Oui' }
     )
   })
 
-  it('jumeau : `aucune`, un bilan absent ou une ligne mal formée ne posent rien', () => {
-    expect(questionDuCadrageRepris(bilan('aucune'))).toBeUndefined()
-    expect(questionDuCadrageRepris('## Besoin\nSans bilan.')).toBeUndefined()
-    expect(questionDuCadrageRepris(bilan('Une question sans réponses ?'))).toBeUndefined()
-  })
-})
-
-describe('consigneDeLaReponse', () => {
-  it('garde une réponse, choisie ou écrite', () => {
-    expect(consigneDeLaReponse(' Non, par lots ')).toBe('Non, par lots')
-    expect(consigneDeLaReponse(OPTION_ARRETER)).toBe(OPTION_ARRETER)
+  it('jumeau : `aucune`, un bilan absent ou une ligne mal formée ne décident rien', () => {
+    expect(decisionDuCadrageRepris(bilan('aucune'))).toBeUndefined()
+    expect(decisionDuCadrageRepris('## Besoin\nSans bilan.')).toBeUndefined()
+    expect(decisionDuCadrageRepris(bilan('Une question sans réponses ?'))).toBeUndefined()
   })
 
-  it('jumeau : sans réponse ou fenêtre fermée, rien n’est transmis', () => {
-    expect(consigneDeLaReponse(undefined)).toBeUndefined()
-    expect(consigneDeLaReponse('   ')).toBeUndefined()
-    expect(consigneDeLaReponse('attend pour l’instant')).toBeUndefined()
+  it('la consigne et la trace portent la question et la réponse retenue', () => {
+    const decision = { question: 'Tout livrer d’un coup ?', reponse: 'Oui' }
+    expect(consigneDeDecisionDuCadrage(decision)).toContain('« Oui »')
+    expect(consigneDeDecisionDuCadrage(decision)).toContain('personne n')
+    expect(ligneDeDecisionDuCadrage(decision)).toContain('tranchée sans pause')
   })
 })
 

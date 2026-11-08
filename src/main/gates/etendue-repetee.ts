@@ -1,18 +1,26 @@
-import type { ModelQuestion } from '../modeles/model-questions'
 import { objectionsDuJuge } from '../juge/objections-juge'
 
 /**
- * OBJECTION D'ÉTENDUE RÉPÉTÉE EN MODE JUSQU'AU VERT → PAUSE ET QUESTION (2026-10-25).
+ * OBJECTION D'ÉTENDUE RÉPÉTÉE EN MODE JUSQU'AU VERT → LE MODÈLE TRANCHE, SANS PAUSE.
  *
  * Mesure (run-ec2036c0932d-1, `activity/conv-1146.jsonl`) : le juge a refusé quatre
  * fois de suite « Ta demande n'est pas remplie. Tu as écrit « full anglais » », et chaque refus
  * relançait une réparation qui traduisait de nouveaux écrans (réparations 4, 8 et 11 : 33 $, 22 $,
- * 16 $). En mode jusqu'au vert, ni le plafond ni l'arrêt sur refus répété ne mordent
- * (`arretDeLaReparation`, stopgate.ts) : rien n'arrêtait la boucle. Or livrer TOUT ou PAR ÉTAPES est
- * un choix de l'utilisateur, pas du juge ni du build.
+ * 16 $), sans que personne ne décide s'il fallait tout livrer ou livrer par étapes.
  *
- * Ce module DÉCIDE et MET EN FORME ; la boucle de réparation (`orchestrator.ts`) pose la question
- * par la fenêtre de question de l'app et attend la réponse — le run est en pause pendant ce temps.
+ * Le run se mettait alors en pause et ouvrait une fenêtre de question. L'utilisateur n'en veut pas
+ * (2026-11-08 : « je veux pas de popup comme ça ; si le modèle est bloqué, on fait une phrase de prise
+ * de décision, peut-être un scout si nécessaire »), et une fenêtre fermée sans réponse ARRÊTAIT le
+ * run pour de bon. Désormais la réparation suivante reçoit l'ordre de trancher elle-même, par une
+ * phrase `Décision :` lisible dans sa sortie, avec un inventaire en lecture seule d'abord si elle ne
+ * sait pas ce qui reste.
+ *
+ * Le coût reste borné sans l'utilisateur : la décision ne remet PAS à zéro le frein du refus
+ * répété (`arretDeLaReparation`, stopgate.ts), qui mord jusqu'au vert. Si la même objection revient
+ * encore après la décision, la boucle s'arrête et le dit.
+ *
+ * PUR : ce module décide et met en forme ; la boucle (`orchestrator-parcours-sequentiel.ts`) pousse
+ * la consigne et la ligne de trace.
  */
 
 /**
@@ -33,9 +41,9 @@ export function objectionDEtendue(texteDuJuge: string): string | undefined {
 /**
  * Deux verdicts du juge D'AFFILÉE portent une objection d'étendue : la même lacune revient, la
  * réparation ne la comble pas d'elle-même. Hors jusqu'au vert, la boucle a déjà ses arrêts. Une seule
- * question par run : la réponse vaut pour la suite.
+ * décision par run : elle vaut pour la suite.
  */
-export function doitDemanderLEtendue(etat: {
+export function doitTrancherLEtendue(etat: {
   jusquAuVert: boolean
   dejaTranchee: boolean
   courante?: string
@@ -44,50 +52,18 @@ export function doitDemanderLEtendue(etat: {
   return etat.jusquAuVert && !etat.dejaTranchee && Boolean(etat.courante && etat.precedente)
 }
 
-export const OPTION_CONTINUER = 'Continuer les réparations jusqu’à couvrir toute la demande'
-export const OPTION_ARRETER =
-  'Arrêter les réparations ici (le travail fait reste dans sa copie, non publié)'
-
-export function questionDEtendue(objection: string): ModelQuestion {
-  return {
-    text:
-      `Le juge refuse encore pour la même raison : une partie de ta demande n'est pas faite.\n« ${objection} »\n` +
-      'Chaque réparation coûte un build complet et un nouveau juge. Tu peux aussi écrire ce que tu veux ' +
-      'couvrir dans ce run : ce sera la consigne des réparations suivantes.',
-    options: [OPTION_CONTINUER, OPTION_ARRETER],
-    reason: 'material-ambiguity'
-  }
+/** Ce que la réparation suivante lit : trancher elle-même, jamais attendre une réponse. */
+export function consigneDeDecisionDEtendue(objection: string): string {
+  return (
+    `DÉCISION À PRENDRE TOI-MÊME — le juge refuse deux fois de suite pour l'étendue de la demande : « ${objection} ». ` +
+    'Personne ne répondra à une question pendant ce travail : ne la pose pas, tranche. ' +
+    'Écris en PREMIÈRE ligne de ta réponse `Décision : <ce que ce passage couvre, ce qu’il laisse, et pourquoi>`. ' +
+    'Couvre toute la demande si ce passage le peut ; sinon le lot le plus utile, et nomme ce qui reste dans ton bilan. ' +
+    "Si tu ne sais pas ce qui reste à couvrir, fais d'abord un inventaire en lecture seule (liste ce qui manque) avant de modifier quoi que ce soit."
+  )
 }
 
-/** Réponse rendue par la fenêtre de question quand on la ferme sans répondre (`window.ts`). */
-export const FENETRE_FERMEE = 'attend pour l’instant'
-
-export type IssueEtendue =
-  { kind: 'continuer' } | { kind: 'consigne'; texte: string } | { kind: 'arreter'; motif: string }
-
-/**
- * Sans réponse (aucune fenêtre, fenêtre fermée), on ARRÊTE : relancer une réparation est
- * justement ce que l'utilisateur ne veut plus subir sans avoir tranché.
- *
- * Cet arrêt est DÉFINITIF, et le motif le dit (2026-10-30). Un run rouge perd son état à
- * la clôture (`onRunSettled`, os.ts) : seule sa copie survit. Le motif promettait
- * pourtant « Le run reste reprenable ». Garder l'état n'est pas la bonne correction : la reprise
- * automatique du démarrage (index.ts) relancerait alors la réparation que personne n'a tranchée.
- */
-export function issueDeLaReponse(reponse: string | undefined): IssueEtendue {
-  const texte = (reponse ?? '').trim()
-  if (texte === OPTION_CONTINUER) return { kind: 'continuer' }
-  if (texte === OPTION_ARRETER)
-    return {
-      kind: 'arreter',
-      motif:
-        'Réparation arrêtée sur ta réponse : le juge refuse encore pour l’étendue de la demande. Le travail fait reste dans sa copie, non publié.'
-    }
-  if (!texte || texte === FENETRE_FERMEE)
-    return {
-      kind: 'arreter',
-      motif:
-        'Réparation arrêtée : le juge refuse encore pour l’étendue de la demande, et la question posée est restée sans réponse. Le run est terminé et ne peut pas être repris : seuls les fichiers déjà modifiés restent dans sa copie, non publiés.'
-    }
-  return { kind: 'consigne', texte }
+/** La ligne de trace : la décision est confiée au modèle, sans pause ni fenêtre. */
+export function ligneDeDecisionDEtendue(objection: string): string {
+  return `Le juge refuse deux fois de suite pour l'étendue de la demande (« ${objection.slice(0, 200)} ») : pas de pause, la réparation suivante tranche elle-même et écrit sa décision.`
 }

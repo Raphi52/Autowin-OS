@@ -3556,17 +3556,8 @@ Le fil reprend ensuite normalement.`
    * est lue par le premier des deux qui atteint son point de drainage, jamais deux fois.
    */
   os.directivesEnAttente = (conversationId) => drainPendingDirectives(conversationId)
-  /*
-   * UN RUN SE MET EN PAUSE POUR TE DEMANDER (2026-10-25) : objection d'étendue répétée en
-   * mode jusqu'au vert (`gates/etendue-repetee.ts`). Même fenêtre de question que `askModelQuestion`,
-   * sur n'importe quelle fenêtre vivante ; aucune fenêtre = aucune réponse, et le run s'arrête au lieu
-   * de relancer une réparation.
-   */
-  os.questionALUtilisateur = (question, contexte, signal) => {
-    const hote = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-    if (!hote) return Promise.resolve('')
-    return askModelQuestion(hote.webContents, 'loop', question, contexte, signal)
-  }
+  // Aucun run ne se met en pause pour poser une question dans une fenêtre (2026-11-08, choix de
+  // l'utilisateur) : un run bloqué tranche lui-même (`gates/etendue-repetee.ts`, `juge/relecture-froide.ts`).
 
   /**
    * La passerelle Outlook LOCALE, pour les widgets Interlocuteurs et Agenda de la vue Accueil.

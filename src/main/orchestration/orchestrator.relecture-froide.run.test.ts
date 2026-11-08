@@ -4,10 +4,9 @@
  * Les tests de `relecture-froide.ts` prouvent que l'écart est LU. Ceux-ci prouvent que le pipeline
  * l'HONORE : ils lisent l'ordre des appels réellement payés, et ce que chaque étape a reçu.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { CostAggregator } from '../dashboards/cost'
 import { compileExecutionQuote, type ExecutionQuote } from './execution-quote'
-import { ModelQuestionHub } from '../modeles/model-questions'
 import { Orchestrator, type WorkflowRunOverride } from './orchestrator'
 import { CONSIGNE_RELECTURE_FROIDE } from '../consignes/phase-briefs'
 import { ProviderRegistry } from '../providers/registry'
@@ -18,7 +17,7 @@ import type {
   SendResult,
   StreamChunk
 } from '../providers/types'
-import { DELAI_QUESTION_CADRAGE_MS, promptDeRelecture } from '../juge/relecture-froide'
+import { promptDeRelecture } from '../juge/relecture-froide'
 import { RoleModelConfig } from '../profil/roles'
 import type { PipelinePhase } from '../skills/skill-pipeline'
 import { TrustLedger } from '../trust/ledger'
@@ -131,13 +130,11 @@ interface Options {
   phases?: PipelinePhase[]
   graphe?: WorkflowRunOverride['graph']
   groupe?: boolean
-  demander?: (texte: string, signal?: AbortSignal) => Promise<string | undefined>
-  questions?: string[]
   devis?: ExecutionQuote
 }
 
 function orchestrateur(f: Fournisseur, o: Options = {}): Orchestrator {
-  const { demander, graphe, phases = ['frame', 'build'] } = o
+  const { graphe, phases = ['frame', 'build'] } = o
   return new Orchestrator({
     registry: new ProviderRegistry().register(f),
     roles: new RoleModelConfig({
@@ -162,18 +159,6 @@ function orchestrateur(f: Fournisseur, o: Options = {}): Orchestrator {
                   { provider: f.id, model: 'm2' }
                 ]
               : []
-        }
-      : {}),
-    ...(demander
-      ? {
-          demanderALUtilisateur: (
-            question: { text: string },
-            _contexte?: string,
-            signal?: AbortSignal
-          ) => {
-            o.questions?.push(question.text)
-            return demander(question.text, signal)
-          }
         }
       : {}),
     ...(o.devis ? { currentExecutionQuote: () => o.devis } : {})
@@ -385,7 +370,12 @@ describe('quand aucune relecture ne doit partir', () => {
   })
 })
 
-describe('la question du cadrage repris', () => {
+/*
+ * PLUS DE FENÊTRE DE QUESTION (2026-11-08, demande de l'utilisateur) : le run se mettait en pause
+ * jusqu'à 30 minutes sur la question du cadrage repris. Il n'interroge plus personne : la réponse
+ * recommandée (la première) devient la décision, et la suite la reçoit.
+ */
+describe('la question du cadrage repris : tranchée sans pause', () => {
   const avecQuestion = `${REDUIT}
 ### Bilan de l’étape
 - Verdict : fait — cadrage refait.
@@ -395,115 +385,22 @@ describe('la question du cadrage repris', () => {
 - Question : Tout livrer d’un coup ? → Oui, tout | Non, par lots
 `
 
-  it('monte une fois à l’utilisateur, et sa réponse arrive au build', async () => {
-    const questions: string[] = []
+  it('la réponse recommandée devient la décision, et arrive au build', async () => {
     const f = new Fournisseur([REDUIT, avecQuestion], [ECART])
-    await orchestrateur(f, {
-      questions,
-      demander: async () => 'Non, par lots'
-    }).run(TACHE)
-    expect(questions).toEqual(['Tout livrer d’un coup ?'])
+    const r = await orchestrateur(f).run(TACHE)
     expect(f.appels.slice(0, 4)).toEqual(['frame', 'relecture', 'frame', 'build'])
-    expect(f.recu('build')).toContain('DIRECTIVE UTILISATEUR')
-    expect(f.recu('build')).toContain('Non, par lots')
-  })
-
-  it.each([
-    ['sans réponse', undefined],
-    ['fenêtre fermée', 'attend pour l’instant']
-  ])('%s : le run continue, et la trace le dit', async (_, reponse) => {
-    const f = new Fournisseur([REDUIT, avecQuestion], [ECART])
-    const r = await orchestrateur(f, { demander: async () => reponse }).run(TACHE)
     expect(f.compte('build')).toBe(1)
+    expect(f.recu('build')).toContain('DÉCISION DU CADRAGE')
+    expect(f.recu('build')).toContain('« Oui, tout »')
     expect(f.recu('build')).not.toContain('DIRECTIVE UTILISATEUR')
-    expect(lignes(r.trace).some((l) => l.includes('sans réponse'))).toBe(true)
+    expect(lignes(r.trace).some((l) => l.includes('tranchée sans pause'))).toBe(true)
   })
 
-  describe('une question laissée ouverte', () => {
-    afterEach(() => {
-      vi.useRealTimers()
-    })
-
-    /** La vraie file de questions : c'est elle qui libère le run, et `index.ts` ferme la fenêtre. */
-    const poser = (
-      hub: ModelQuestionHub,
-      avance: (id: string) => void
-    ): ((texte: string, signal?: AbortSignal) => Promise<string>) => {
-      return (text, signal) => {
-        let id = ''
-        const reponse = hub.ask(
-          'loop',
-          { text, options: [], reason: 'material-ambiguity' },
-          (enAttente) => {
-            id = enAttente.id
-          },
-          undefined,
-          signal
-        )
-        avance(id)
-        return reponse
-      }
-    }
-
-    it('passé le délai, la question se ferme et le run continue', async () => {
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
-      const f = new Fournisseur([REDUIT, avecQuestion], [ECART])
-      const r = await orchestrateur(f, {
-        demander: poser(new ModelQuestionHub(), () => {
-          vi.advanceTimersByTime(DELAI_QUESTION_CADRAGE_MS)
-        })
-      }).run(TACHE)
-      expect(f.compte('build')).toBe(1)
-      expect(f.recu('build')).not.toContain('DIRECTIVE UTILISATEUR')
-      expect(lignes(r.trace).some((l) => l.includes('sans réponse'))).toBe(true)
-    })
-
-    it('jumeau : après 29 minutes, la réponse compte encore', async () => {
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
-      const hub = new ModelQuestionHub()
-      const f = new Fournisseur([REDUIT, avecQuestion], [ECART])
-      await orchestrateur(f, {
-        demander: poser(hub, (id) => {
-          vi.advanceTimersByTime(29 * 60_000)
-          hub.resolve(id, 'Non, par lots')
-        })
-      }).run(TACHE)
-      expect(f.recu('build')).toContain('Non, par lots')
-    })
-
-    it('une annulation du run coupe la question, sans build', async () => {
-      const annulation = new AbortController()
-      const f = new Fournisseur([REDUIT, avecQuestion], [ECART])
-      const details: string[] = []
-      await orchestrateur(f, {
-        demander: poser(new ModelQuestionHub(), () => {
-          annulation.abort()
-        })
-      })
-        .run(
-          TACHE,
-          (etape) => details.push(etape.detail ?? ''),
-          undefined,
-          undefined,
-          annulation.signal
-        )
-        .catch(() => undefined)
-      expect(f.compte('build')).toBe(0)
-      expect(details.some((detail) => detail.includes('sans réponse'))).toBe(false)
-    })
-  })
-
-  it('sans fenêtre de question, le run continue', async () => {
-    const f = new Fournisseur([REDUIT, avecQuestion], [ECART])
-    await orchestrateur(f).run(TACHE)
-    expect(f.compte('build')).toBe(1)
-  })
-
-  it('jumeau : un cadrage repris sans question ne dérange pas l’utilisateur', async () => {
-    const questions: string[] = []
+  it('jumeau : un cadrage repris sans question ne décide rien de plus', async () => {
     const f = new Fournisseur([REDUIT, COMPLET], [ECART])
-    await orchestrateur(f, { questions, demander: async () => 'réponse' }).run(TACHE)
-    expect(questions).toEqual([])
+    const r = await orchestrateur(f).run(TACHE)
+    expect(f.recu('build')).not.toContain('DÉCISION DU CADRAGE')
+    expect(lignes(r.trace).some((l) => l.includes('tranchée sans pause'))).toBe(false)
   })
 })
 
@@ -558,7 +455,7 @@ describe('rappel du cadrage en reprise de session', () => {
     expect(f.recu('frame', 1)).toContain(ECART)
   })
 
-  it('ni la réponse de l’utilisateur : la phase suivante la reçoit', async () => {
+  it('ni la décision du cadrage : la phase suivante la reçoit', async () => {
     const avecQuestion = `${COMPLET}
 ### Bilan de l’étape
 - Verdict : fait — cadrage refait.
@@ -568,10 +465,7 @@ describe('rappel du cadrage en reprise de session', () => {
 - Question : Tout livrer d’un coup ? → Oui, tout | Non, par lots
 `
     const f = new AvecSession([REDUIT, avecQuestion], [ECART])
-    await orchestrateur(f, {
-      phases: ['frame', 'terrain', 'build'],
-      demander: async () => 'Non, par lots'
-    }).run(TACHE)
-    expect(f.recu('terrain')).toContain('DIRECTIVE UTILISATEUR')
+    await orchestrateur(f, { phases: ['frame', 'terrain', 'build'] }).run(TACHE)
+    expect(f.recu('terrain')).toContain('DÉCISION DU CADRAGE')
   })
 })

@@ -32,7 +32,7 @@ import { shaHeadSurDisque } from '../git/depot-git'
 import { ajusterNotesSurChoix, lecteurAncrageDepuisDisque, marquerDejaFait, plafonnerNotesScout, type SujetDejaFait } from '../scout/scout-plafond'
 import { blocPistesDejaConnues, type FacteursChoix } from '../scout/scout-memoire'
 import { sortieFrameAvecCasLimites } from './frame-cas-limites'
-import { consigneDeLaReponse, consigneDeReprise, DELAI_QUESTION_CADRAGE_MS, issueDeRelecturePourLeCout, ligneDePanneDeRelecture, ligneDeRelecture, lireRelecture, promptDeRelecture, questionDuCadrageRepris, relectureAPasser, type IssueDeRelecture } from '../juge/relecture-froide'
+import { consigneDeDecisionDuCadrage, consigneDeReprise, decisionDuCadrageRepris, issueDeRelecturePourLeCout, ligneDeDecisionDuCadrage, ligneDePanneDeRelecture, ligneDeRelecture, lireRelecture, promptDeRelecture, relectureAPasser, type IssueDeRelecture } from '../juge/relecture-froide'
 import { briefArbitrage, createMidPhaseSupervision, readRouteVerdict, type RouteVerdict } from '../modeles/route-drift'
 import { noterAppelCourt, ROLE_PETITES_TACHES, signalerPanneAppelCourt } from './petites-taches-trace'
 import { estJugeTerminal, motifChaineApresJugeNonJouee, noeudsApresJuge, initialBudget, nextNode, readModelChoice, resolveChoice, type ModelChoice, type NodeVerdict } from '../workflow/workflow-walk'
@@ -60,7 +60,7 @@ import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { consigneBureauCache } from '../consignes/consigne-bureau-cache'
 import { evidenceDeLErreur } from '../providers/evidence-portee-par-erreur'
 import { classifyProviderFailure, describeFanoutFailure, explainRoleFailure, modeleDeRepliApresRefus } from '../providers/provider-failure-diagnosis'
-import { CONTRAT_ETENDUE, doitDemanderLEtendue, issueDeLaReponse, objectionDEtendue, questionDEtendue } from '../gates/etendue-repetee'
+import { CONTRAT_ETENDUE, consigneDeDecisionDEtendue, doitTrancherLEtendue, ligneDeDecisionDEtendue, objectionDEtendue } from '../gates/etendue-repetee'
 import { TOURS_OUTILS_MAX, compteRenduDesOutils, demandeUnOutil, executerOutilsDuNoeud, lanceurQuiCompteLesNotes, type LanceurCommandeSkill } from '../skills/skill-node-tools'
 import { demarrerServeurOutilsNoeudSkill, lecturesDirectesDuBrain, libelleAppelObserve, porteLesOutilsNatifs, type ServeurOutilsNoeudSkill } from '../skills/skill-node-mcp'
 import { sharedBrainRoot } from '../brain/brain-paths'
@@ -2074,39 +2074,12 @@ export async function runInner(
     // Le build ne lit plus ni l'ordre de refaire le cadrage, ni la version remplacée.
     retirerDuContexte(consigne)
     remplaces.forEach(retirerDuContexte)
-    const question = questionDuCadrageRepris(dernierCadrage())
-    if (!question) return
-    // Le délai passe par le signal : c'est lui qui libère la file de questions et ferme la fenêtre
-    // (`askModelQuestion`, `index.ts`). Une fenêtre ignorée gardait sinon le run avant le code.
-    const delai = new AbortController()
-    const minuteur = setTimeout(
-      () => delai.abort('Question restée sans réponse'),
-      DELAI_QUESTION_CADRAGE_MS
-    )
-    const reponse = await this.deps
-      .demanderALUtilisateur?.(
-        question,
-        task,
-        signal ? AbortSignal.any([signal, delai.signal]) : delai.signal
-      )
-      ?.catch(() => undefined)
-    clearTimeout(minuteur)
-    if (signal?.aborted) return
-    const consigneUtilisateur = consigneDeLaReponse(reponse)
-    if (consigneUtilisateur) {
-      pousserContexte(
-        'directiveUtilisateur',
-        `DIRECTIVE UTILISATEUR ARRIVEE PENDANT LE RUN — PRIORITAIRE, elle CORRIGE le cadre : ${consigneUtilisateur}`
-      )
-      prevSessionId = undefined
-    }
-    push({
-      step: 'gate',
-      role: 'gate',
-      detail: consigneUtilisateur
-        ? `Question du cadrage repris : réponse transmise à la suite (« ${consigneUtilisateur.slice(0, 200)} »).`
-        : `Question du cadrage repris restée sans réponse, le run continue : « ${question.text} »`
-    })
+    // Aucune pause : une question laissée dans le bilan est tranchée par sa réponse recommandée.
+    const decision = decisionDuCadrageRepris(dernierCadrage())
+    if (!decision) return
+    pousserContexte('decisionCadrage', consigneDeDecisionDuCadrage(decision))
+    prevSessionId = undefined
+    push({ step: 'gate', role: 'gate', detail: ligneDeDecisionDuCadrage(decision) })
   }
   const relireLeCadrage = async (cadrageJoue: boolean): Promise<void> => {
     const cadrage = dernierCadrage()
@@ -3081,7 +3054,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
   // Les tests d'orchestrateur gardent l'ancien plafond (tests/reinit-couts-session.ts).
   const jusquAuVert =
     politique.reparations > 0 && process.env.AUTOWIN_REPARATION_BORNEE !== '1'
-  // L'objection d'étendue du DERNIER verdict du juge, et si l'utilisateur a déjà tranché.
+  // L'objection d'étendue du DERNIER verdict du juge, et si le modèle a déjà reçu l'ordre de trancher.
   let etenduePrecedente: string | undefined
   let etendueTranchee = false
   for (
@@ -3275,55 +3248,26 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
      * tours.
      */
     /*
-     * OBJECTION D'ÉTENDUE RÉPÉTÉE → PAUSE ET QUESTION (règles dans
+     * OBJECTION D'ÉTENDUE RÉPÉTÉE → LE MODÈLE TRANCHE, SANS PAUSE (règles dans
      * `gates/etendue-repetee.ts`). Quatre refus « ta demande n'est pas remplie »
-     * ont relancé quatre réparations, en mode jusqu'au vert où rien d'autre n'arrête la boucle.
+     * ont relancé quatre réparations, en mode jusqu'au vert, sans que personne ne décide.
      * Seul un verdict RENDU par le juge dans ce passage compte : un refus du contrôle avant le juge
-     * laisse `lastJudgeText` sur le verdict précédent.
+     * laisse `lastJudgeText` sur le verdict précédent. Le frein du refus répété n'est PAS remis à
+     * zéro : si la même objection revient après la décision, c'est lui qui arrête la boucle.
      */
     if (!r.refusAvantJuge) {
       const etendueCourante = objectionDEtendue(lastJudgeText)
-      const demander = doitDemanderLEtendue({
+      const trancher = doitTrancherLEtendue({
         jusquAuVert,
         dejaTranchee: etendueTranchee,
         courante: etendueCourante,
         precedente: etenduePrecedente
       })
       etenduePrecedente = etendueCourante
-      if (demander && etendueCourante) {
+      if (trancher && etendueCourante) {
         etendueTranchee = true
-        push({
-          step: 'gate',
-          role: 'gate',
-          detail: `Pause : le juge refuse deux fois de suite pour l'étendue de la demande — question posée à l'utilisateur, aucune réparation avant sa réponse.`
-        })
-        const reponse = await this.deps
-          .demanderALUtilisateur?.(questionDEtendue(etendueCourante), task, signal)
-          ?.catch(() => undefined)
-        const issue = issueDeLaReponse(reponse)
-        if (issue.kind === 'arreter') {
-          gate.reasons.push(issue.motif)
-          push({ step: 'gate', role: 'gate', detail: issue.motif })
-          break
-        }
-        if (issue.kind === 'consigne')
-          pousserContexte(
-            'directiveUtilisateur',
-            `DIRECTIVE UTILISATEUR ARRIVEE PENDANT LE RUN — PRIORITAIRE, elle CORRIGE le cadre : ${issue.texte}`
-          )
-        // 05/11/2026 : l'utilisateur vient de trancher CE refus. Le frein du refus
-        // répété, qui mord désormais jusqu'au vert, repart de zéro : sinon il couperait
-        // au passage suivant la suite qu'il vient de choisir.
-        motifsPrecedents = []
-        refusIdentiquesConsecutifs = 0
-        push({
-          step: 'gate',
-          role: 'gate',
-          detail:
-            issue.kind === 'consigne'
-              ? `Reprise sur ta consigne d'étendue : « ${issue.texte.slice(0, 200)} ».`
-              : 'Reprise : tu as choisi de continuer jusqu’à couvrir toute la demande.'
-        })
+        pousserContexte('decisionEtendue', consigneDeDecisionDEtendue(etendueCourante))
+        push({ step: 'gate', role: 'gate', detail: ligneDeDecisionDEtendue(etendueCourante) })
       }
     }
     const passage = deciderDuPassage({

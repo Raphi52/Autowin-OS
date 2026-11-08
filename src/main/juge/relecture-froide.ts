@@ -1,6 +1,4 @@
 import { cadrageRefuse } from '../orchestration/frame-cas-limites'
-import { FENETRE_FERMEE } from '../gates/etendue-repetee'
-import type { ModelQuestion } from '../modeles/model-questions'
 import { messageDuRun } from '../../shared/message-du-run'
 
 /**
@@ -18,9 +16,12 @@ import { messageDuRun } from '../../shared/message-du-run'
  * QUATRE BORNES, et chacune répond à un risque :
  *  - une seule relecture par run : ce contrôle n'est pas une boucle de plus ;
  *  - une alerte ne bloque rien, elle relance le cadrage une fois. Une fausse alerte se règle alors
- *    sans l'utilisateur (`Écart assumé`), et un vrai choix lui remonte avant le code ;
+ *    sans l'utilisateur (`Écart assumé`), et un vrai choix est tranché par le cadrage lui-même ;
  *  - une panne de relecture ne coûte jamais le run : l'appelant continue et le dit dans la trace ;
- *  - une question laissée ouverte ne retient le run que `DELAI_QUESTION_CADRAGE_MS`.
+ *  - aucune question ne retient le run : une question du cadrage repris est tranchée par sa réponse
+ *    recommandée. La fenêtre de question qui le mettait en pause 30 minutes a été retirée à la
+ *    demande de l'utilisateur (2026-11-08 : « je veux pas de popup comme ça ; si le modèle est
+ *    bloqué, on fait une phrase de prise de décision »).
  *
  * LES TÂCHES CRITIQUES SEULEMENT, comme le voulait la demande (« commencer par les tâches critiques,
  * puis mesurer »). Repassés dans `classifyRegime`, 19 des 131 runs cadrage + build du corpus sont
@@ -39,13 +40,6 @@ import { messageDuRun } from '../../shared/message-du-run'
 /** Bornes de ce que lit le relecteur. Le plus long cadrage rejoué fait 32 Ko, et coûte 0,13 $. */
 export const BORNE_DEMANDE = 8_000
 export const BORNE_CADRAGE = 40_000
-
-/**
- * Combien de temps une question du cadrage repris retient le run. Sans borne, une fenêtre
- * ignorée le gardait en attente avant le code. Passé ce délai, le run suit le cadrage tel qu'il est
- * écrit, et la trace dit que la question est restée sans réponse.
- */
-export const DELAI_QUESTION_CADRAGE_MS = 30 * 60_000
 
 const MAX_ECARTS = 8
 const MAX_CARACTERES_PAR_ECART = 600
@@ -135,28 +129,38 @@ export function consigneDeReprise(ecarts: readonly string[]): string {
     'Refais le cadrage, une seule fois. Pour CHAQUE écart, choisis une sortie :\n' +
     '- couvre ce que la demande exige ;\n' +
     '- ou, si la demande permet vraiment ce choix, écris sous `## Besoin` : `Écart assumé : <raison>` ;\n' +
-    "- ou, si le choix revient à l'utilisateur, écris dans ton bilan " +
-    '`- Question : <question> → <réponse recommandée> | <autre réponse>` : elle lui sera posée avant le code.\n' +
+    "- ou, si le choix semble revenir à l'utilisateur, tranche toi-même : personne ne répondra avant le code. " +
+    'Écris sous `## Besoin` : `Décision : <ton choix> — <raison>`.\n' +
     "Ce relecteur n'a vu ni le fil ni le code : s'il se trompe, dis-le dans `Écart assumé`, n'élargis pas " +
     'le travail pour lui donner raison. Il ne relira pas ta nouvelle version.'
   )
 }
 
-/** La question du cadrage repris, dans la forme de la fenêtre de question. */
-export function questionDuCadrageRepris(cadrage: string): ModelQuestion | undefined {
+/**
+ * Une question restée dans le bilan du cadrage repris malgré la consigne : elle n'est posée à
+ * personne, sa réponse recommandée (la première, `messageDuRun`) devient la décision du run.
+ */
+export function decisionDuCadrageRepris(
+  cadrage: string
+): { question: string; reponse: string } | undefined {
   const message = messageDuRun([{ text: cadrage }])
-  if (!message) return undefined
-  return {
-    text: message.question,
-    options: message.reponses.map((reponse) => reponse.libelle),
-    reason: 'material-ambiguity'
-  }
+  const recommandee =
+    message?.reponses.find((reponse) => reponse.recommande) ?? message?.reponses[0]
+  if (!message || !recommandee) return undefined
+  return { question: message.question, reponse: recommandee.libelle }
 }
 
-/** La réponse à porter au build, ou rien si la question est restée sans réponse. */
-export function consigneDeLaReponse(reponse: string | undefined): string | undefined {
-  const texte = (reponse ?? '').trim()
-  return texte && texte !== FENETRE_FERMEE ? texte : undefined
+/** Ce que lit la suite du run : la décision prise à la place d'une question. */
+export function consigneDeDecisionDuCadrage(decision: {
+  question: string
+  reponse: string
+}): string {
+  return `DÉCISION DU CADRAGE — personne n'a été interrogé : à « ${decision.question} », le run retient la réponse recommandée « ${decision.reponse} ». Suis-la, et redis-la en une phrase dans ton bilan.`
+}
+
+/** La ligne de trace de cette décision. */
+export function ligneDeDecisionDuCadrage(decision: { question: string; reponse: string }): string {
+  return `Question du cadrage repris tranchée sans pause : « ${decision.question} » → « ${decision.reponse} » (réponse recommandée).`
 }
 
 /** La ligne de trace : c'est elle qui permettra de mesurer la relecture après coup. */

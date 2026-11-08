@@ -1,21 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
   CONTRAT_ETENDUE,
-  OPTION_ARRETER,
-  OPTION_CONTINUER,
-  doitDemanderLEtendue,
-  issueDeLaReponse,
-  objectionDEtendue,
-  questionDEtendue
+  consigneDeDecisionDEtendue,
+  doitTrancherLEtendue,
+  ligneDeDecisionDEtendue,
+  objectionDEtendue
 } from './etendue-repetee'
 
 /*
- * OBJECTION D'ÉTENDUE RÉPÉTÉE EN MODE JUSQU'AU VERT → PAUSE ET QUESTION (2026-10-25).
+ * OBJECTION D'ÉTENDUE RÉPÉTÉE EN MODE JUSQU'AU VERT (2026-10-25).
  *
  * Cas (run-ec2036c0932d-1) : le juge a refusé QUATRE fois de suite « Ta demande n'est pas
  * remplie. Tu as écrit « full anglais » » ; chaque refus relançait une réparation qui traduisait de
- * nouveaux écrans (33 $, 22 $, 16 $ pour les réparations 4, 8 et 11). Livrer tout ou par étapes est
- * un choix de l'utilisateur, pas du juge ni du build.
+ * nouveaux écrans (33 $, 22 $, 16 $ pour les réparations 4, 8 et 11), sans que personne ne décide
+ * s'il fallait tout livrer ou livrer par étapes.
  */
 const verdict = (puce: string): string =>
   ['DEFAUT: demande pas remplie', 'SCORE: 40', 'OBJECTIONS:', `- ${puce}`].join('\n')
@@ -42,57 +40,38 @@ describe('objectionDEtendue', () => {
   })
 })
 
-describe('doitDemanderLEtendue', () => {
+describe('doitTrancherLEtendue', () => {
   const base = { jusquAuVert: true, dejaTranchee: false, courante: 'a', precedente: 'b' }
-  it('demande quand deux verdicts du juge d’affilée portent une objection d’étendue', () => {
-    expect(doitDemanderLEtendue(base)).toBe(true)
+  it('tranche quand deux verdicts du juge d’affilée portent une objection d’étendue', () => {
+    expect(doitTrancherLEtendue(base)).toBe(true)
   })
-  it('ne demande pas hors jusqu’au vert, au premier constat, ni une seconde fois dans le run', () => {
-    expect(doitDemanderLEtendue({ ...base, jusquAuVert: false })).toBe(false)
-    expect(doitDemanderLEtendue({ ...base, precedente: undefined })).toBe(false)
-    expect(doitDemanderLEtendue({ ...base, courante: undefined })).toBe(false)
-    expect(doitDemanderLEtendue({ ...base, dejaTranchee: true })).toBe(false)
+  it('ne tranche pas hors jusqu’au vert, au premier constat, ni une seconde fois dans le run', () => {
+    expect(doitTrancherLEtendue({ ...base, jusquAuVert: false })).toBe(false)
+    expect(doitTrancherLEtendue({ ...base, precedente: undefined })).toBe(false)
+    expect(doitTrancherLEtendue({ ...base, courante: undefined })).toBe(false)
+    expect(doitTrancherLEtendue({ ...base, dejaTranchee: true })).toBe(false)
   })
 })
 
-describe('questionDEtendue et issueDeLaReponse', () => {
-  it('pose la question avec deux boutons, l’objection et la demande en contexte', () => {
-    const q = questionDEtendue('ÉTENDUE — 110 écrans restent en français')
-    expect(q.options).toEqual([OPTION_CONTINUER, OPTION_ARRETER])
-    expect(q.text).toContain('110 écrans restent en français')
-    expect(q.reason).toBe('material-ambiguity')
+/*
+ * PLUS DE FENÊTRE DE QUESTION (2026-11-08, demande de l'utilisateur) : la réparation suivante
+ * reçoit l'ordre de trancher elle-même par une phrase `Décision :`, avec un inventaire en lecture
+ * seule d'abord si elle ne sait pas ce qui reste. Le parcours complet est rejoué dans
+ * `orchestrator.etendue-repetee.test.ts`.
+ */
+describe('consigneDeDecisionDEtendue et ligneDeDecisionDEtendue', () => {
+  const objection = 'ÉTENDUE — 110 écrans restent en français'
+
+  it('porte l’objection, l’ordre de trancher et la phrase de décision attendue', () => {
+    const consigne = consigneDeDecisionDEtendue(objection)
+    expect(consigne).toContain('110 écrans restent en français')
+    expect(consigne).toContain('ne la pose pas, tranche')
+    expect(consigne).toContain('`Décision : <ce que ce passage couvre')
+    expect(consigne).toContain('inventaire en lecture seule')
   })
 
-  it('continuer → réparation suivante ; arrêter → arrêt nommé ; texte libre → consigne', () => {
-    expect(issueDeLaReponse(OPTION_CONTINUER)).toEqual({ kind: 'continuer' })
-    const arret = issueDeLaReponse(OPTION_ARRETER)
-    expect(arret.kind).toBe('arreter')
-    expect(issueDeLaReponse('seulement le chat et Settings')).toEqual({
-      kind: 'consigne',
-      texte: 'seulement le chat et Settings'
-    })
+  it('la trace dit qu’il n’y a pas de pause, et borne l’objection', () => {
+    expect(ligneDeDecisionDEtendue(objection)).toContain('pas de pause')
+    expect(ligneDeDecisionDEtendue(`ÉTENDUE — ${'x'.repeat(900)}`).length).toBeLessThan(400)
   })
-
-  it('aucune réponse possible (fenêtre fermée, aucune fenêtre) → arrêt, jamais une relance', () => {
-    expect(issueDeLaReponse(undefined).kind).toBe('arreter')
-    expect(issueDeLaReponse('attend pour l’instant').kind).toBe('arreter')
-    expect(issueDeLaReponse('   ').kind).toBe('arreter')
-  })
-
-  /*
-   * LA FAUSSE PROMESSE (2026-10-30) : le motif disait « Le run reste
-   * reprenable », et un fil l'a répété à l'utilisateur. Or un arrêt sans réponse efface l'état du
-   * run : seule la copie survit. Le parcours complet est rejoué dans
-   * `orchestrator.etendue-repetee.test.ts`.
-   */
-  it.each([undefined, 'attend pour l’instant', '   '])(
-    'sans réponse (%j), le motif ne promet aucune reprise et dit ce qui reste',
-    (reponse) => {
-      const issue = issueDeLaReponse(reponse)
-      if (issue.kind !== 'arreter') throw new Error('arrêt attendu')
-      expect(issue.motif).not.toMatch(/reprenable/i)
-      expect(issue.motif).toContain('ne peut pas être repris')
-      expect(issue.motif).toContain('restent dans sa copie, non publiés')
-    }
-  )
 })

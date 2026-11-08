@@ -47,7 +47,6 @@ import type {
 import type { WatchdogMutationClaims } from '../task-manager/types'
 import { isShellMutation, isStateOracle } from '../providers/evidence-vocabulary'
 import { estMurDeQuota } from '../../shared/reprise-quota'
-import type { ModelQuestion } from '../modeles/model-questions'
 import type { AutoCloseResult } from '../runs/run-autoclose'
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { WorktreeAgentActivity } from '../../shared/worktree-activity-model'
@@ -808,18 +807,6 @@ export interface OrchestratorLifecycleDeps {
    * phase suivante.
    */
   drainDirectives?: (conversationId: string) => string[]
-  /**
-   * POSER UNE QUESTION À L'UTILISATEUR ET ATTENDRE SA RÉPONSE — le run est en pause pendant ce temps
-   * (2026-10-25). Branché par `index.ts` sur la fenêtre de question de l'app ; absent
-   * (app sans interface, tests) = personne ne peut répondre. Deux usages : l'objection d'étendue
-   * répétée en mode jusqu'au vert (`gates/etendue-repetee.ts`) et la question d'un cadrage repris
-   * (`relecture-froide.ts`).
-   */
-  demanderALUtilisateur?: (
-    question: ModelQuestion,
-    contexte?: string,
-    signal?: AbortSignal
-  ) => Promise<string | undefined> | undefined
   /**
    * FIN DE RUN (lot 1 du RUN outils-agent-1-2-4-6-7) : ferme le bureau caché du run
    * (`identifiantBureauCache(runId)`), que le run soit vert, rouge ou planté. Une app laissée ouverte

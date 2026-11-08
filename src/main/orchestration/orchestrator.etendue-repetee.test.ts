@@ -31,14 +31,13 @@ import { RoleModelConfig } from '../profil/roles'
 import { TrustLedger } from '../trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 import type { WorkflowGraph } from '../workflow/workflow-graph'
-import type { ModelQuestion } from '../modeles/model-questions'
-import { OPTION_ARRETER, OPTION_CONTINUER } from '../gates/etendue-repetee'
 
 /*
  * LE CAS REJOUÉ (2026-10-25) : en mode jusqu'au vert, le juge refuse deux fois
- * d'affilée pour l'ÉTENDUE de la demande. Avant ce correctif, la boucle relançait une réparation
- * après l'autre (le test lève au-delà de 6 builds pour échouer vite) ; désormais elle se met en
- * pause, pose la question, et suit la réponse.
+ * d'affilée pour l'ÉTENDUE de la demande. La boucle relançait une réparation après l'autre (le test
+ * lève au-delà de 6 builds pour échouer vite). Elle se mettait ensuite en pause sur une fenêtre de
+ * question, que l'utilisateur ne veut plus (2026-11-08) : la réparation suivante reçoit désormais
+ * l'ordre de trancher elle-même, et le frein du refus répété borne le coût.
  */
 const ETENDUE = 'ÉTENDUE — 110 écrans sur 113 restent en français'
 const texte = (m: Message[]): string =>
@@ -69,7 +68,7 @@ class JugeEtendueProvider implements ProviderAdapter {
     }
     this.promptsBuild.push(texte(messages))
     if (this.promptsBuild.length > 6)
-      throw new Error('boucle non arrêtée : la question d’étendue est débranchée')
+      throw new Error('boucle non arrêtée : rien ne borne les refus d’étendue')
     return {
       text: 'travail fait',
       provider: this.id,
@@ -104,21 +103,12 @@ const GRAPHE: WorkflowGraph = {
   ]
 }
 
-async function lancer(
-  reponse: string | undefined | null,
-  valideAuJuge?: number
-): Promise<{
+async function lancer(valideAuJuge?: number): Promise<{
   resultat: Awaited<ReturnType<Orchestrator['run']>>
   provider: JugeEtendueProvider
-  questions: ModelQuestion[]
-  onRunSettled: ReturnType<typeof vi.fn>
-  finsDeCopie: Array<Record<string, unknown> | undefined>
+  traces: string[]
 }> {
   const provider = new JugeEtendueProvider(valideAuJuge)
-  const questions: ModelQuestion[] = []
-  const onRunSettled = vi.fn()
-  const finsDeCopie: Array<Record<string, unknown> | undefined> = []
-  const copies = makeTestWorktrees('C:\\base')
   const orch = new Orchestrator({
     registry: new ProviderRegistry().register(provider),
     roles: new RoleModelConfig({
@@ -128,25 +118,9 @@ async function lancer(
     cost: new CostAggregator(),
     trust: new TrustLedger(),
     executionWorkspace: 'C:\\base',
-    worktrees: {
-      ...copies,
-      end: (runId, options) => {
-        finsDeCopie.push(options as Record<string, unknown> | undefined)
-        return copies.end(runId, options)
-      }
-    },
-    onRunSettled,
+    worktrees: makeTestWorktrees('C:\\base'),
     execPhases: ['build'],
-    currentWorkflow: () => ({ graph: GRAPHE }),
-    // `null` = aucune fenêtre branchée (l'app sans interface) : la dépendance est absente.
-    ...(reponse === null
-      ? {}
-      : {
-          demanderALUtilisateur: async (question: ModelQuestion) => {
-            questions.push(question)
-            return reponse
-          }
-        })
+    currentWorkflow: () => ({ graph: GRAPHE })
   })
   const resultat = await orch.run(
     'passe autowin en full anglais',
@@ -157,64 +131,43 @@ async function lancer(
     undefined,
     []
   )
-  return { resultat, provider, questions, onRunSettled, finsDeCopie }
+  const traces = resultat.trace.map((etape) => etape.detail ?? '')
+  return { resultat, provider, traces }
 }
 
-describe('objection d’étendue répétée en mode jusqu’au vert : pause et question', () => {
+describe('objection d’étendue répétée en mode jusqu’au vert : le modèle tranche, sans pause', () => {
   it('le juge du pipeline reçoit la consigne du préfixe « ÉTENDUE — »', async () => {
-    const { provider } = await lancer(OPTION_ARRETER)
+    const { provider } = await lancer(3)
     expect(provider.promptsJuge[0]).toContain('commence par « ÉTENDUE — »')
   })
 
-  it('« Arrêter » → une seule question après DEUX refus d’étendue, aucune réparation de plus', async () => {
-    const { resultat, provider, questions } = await lancer(OPTION_ARRETER)
-    expect(questions).toHaveLength(1)
-    expect(questions[0].options).toEqual([OPTION_CONTINUER, OPTION_ARRETER])
-    expect(questions[0].text).toContain('110 écrans sur 113')
-    expect(provider.promptsJuge).toHaveLength(2)
-    expect(provider.promptsBuild).toHaveLength(2)
-    expect(resultat.gateBlocked).toBe(true)
-    expect(resultat.gateReasons.join(' | ')).toMatch(/Réparation arrêtée sur ta réponse/)
+  it('après DEUX refus d’étendue, la réparation suivante reçoit l’ordre de décider elle-même', async () => {
+    const { provider, traces } = await lancer(3)
+    expect(provider.promptsBuild).toHaveLength(3)
+    // Les deux premiers builds ne l'ont pas : un seul refus ne suffit pas à trancher.
+    expect(provider.promptsBuild[1]).not.toContain('DÉCISION À PRENDRE TOI-MÊME')
+    expect(provider.promptsBuild[2]).toContain('DÉCISION À PRENDRE TOI-MÊME')
+    expect(provider.promptsBuild[2]).toContain('110 écrans sur 113')
+    expect(provider.promptsBuild[2]).toContain('`Décision :')
+    expect(provider.promptsBuild[2]).toContain('inventaire en lecture seule')
+    expect(traces.join('\n')).toMatch(/pas de pause, la réparation suivante tranche elle-même/)
+    expect(traces.join('\n')).not.toMatch(/question posée à l'utilisateur/)
   })
 
-  it('« Continuer » → la boucle reprend sans redemander, jusqu’au vert', async () => {
-    const { resultat, provider, questions } = await lancer(OPTION_CONTINUER, 4)
-    expect(questions).toHaveLength(1)
-    expect(provider.promptsJuge).toHaveLength(4)
+  it('la décision mène au vert quand le juge l’accepte', async () => {
+    const { resultat, provider } = await lancer(3)
+    expect(provider.promptsJuge).toHaveLength(3)
     expect(resultat.gateBlocked).toBe(false)
   })
 
-  it('texte libre → il devient la consigne de la réparation suivante', async () => {
-    const { provider, questions } = await lancer('seulement le chat et Settings', 3)
-    expect(questions).toHaveLength(1)
-    expect(provider.promptsBuild[2]).toContain('seulement le chat et Settings')
-  })
-
-  it('aucune fenêtre pour répondre → arrêt nommé, jamais une réparation de plus', async () => {
-    const { resultat, provider } = await lancer(null)
-    expect(provider.promptsBuild).toHaveLength(2)
-    expect(resultat.gateReasons.join(' | ')).toMatch(/restée sans réponse/)
-  })
-
-  /*
-   * LE MOTIF DIT CE QUI ARRIVE VRAIMENT (2026-10-30). La fenêtre s'est
-   * fermée sans réponse : `onRunSettled` a effacé l'état du run (`os.ts`) alors que le motif
-   * promettait « Le run reste reprenable ». Garder cet état ne corrigerait rien : le run repartirait
-   * seul au démarrage suivant (`index.ts`), c'est-à-dire une réparation que personne n'a tranchée.
-   */
-  it('sans réponse, le run est clos et le motif le dit : seule sa copie reste', async () => {
-    const { resultat, provider, onRunSettled, finsDeCopie } = await lancer(undefined)
-
-    expect(provider.promptsBuild).toHaveLength(2)
-    // Les faits que le motif doit décrire : état effacé, copie ni fusionnée ni mise en suspens.
-    expect(onRunSettled).toHaveBeenCalledTimes(1)
-    expect(finsDeCopie).toHaveLength(1)
-    expect(finsDeCopie[0]).toMatchObject({ merge: false })
-    expect(finsDeCopie[0]).not.toHaveProperty('suspendu')
-
-    const motifs = resultat.gateReasons.join(' | ')
-    expect(motifs).not.toMatch(/reprenable/i)
-    expect(motifs).toContain('ne peut pas être repris')
-    expect(motifs).toContain('restent dans sa copie, non publiés')
+  it('la même objection revient après la décision → arrêt nommé, sans réparation de plus', async () => {
+    const { resultat, provider, traces } = await lancer()
+    expect(provider.promptsBuild).toHaveLength(3)
+    expect(resultat.gateBlocked).toBe(true)
+    expect(`${resultat.gateReasons.join(' | ')}\n${traces.join('\n')}`).toMatch(
+      /le même refus est revenu 3 fois de suite/
+    )
+    // Une seule décision par run.
+    expect(traces.filter((t) => /tranche elle-même/.test(t))).toHaveLength(1)
   })
 })
