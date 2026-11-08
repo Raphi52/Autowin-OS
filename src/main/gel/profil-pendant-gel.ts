@@ -58,6 +58,11 @@ export interface ReglagesProfilPendantGel {
   pileMs: number
   /** Nombre maximal de relevés de pile par gel. */
   pilesMax: number
+  /**
+   * Motif qui reconnaît NOTRE code dans un relevé (appliqué au chemin du fichier, séparateurs `/`).
+   * Sans lui, une fonction de Node ou d'Electron nommerait le gel à la place de notre code.
+   */
+  motifNotreCode: string
 }
 
 /*
@@ -75,8 +80,86 @@ export const REGLAGES_PAR_DEFAUT: ReglagesProfilPendantGel = {
   intervalleUs: 10_000,
   profilsGardes: 30,
   pileMs: 250,
-  pilesMax: 240
+  pilesMax: 240,
+  motifNotreCode: 'out/main/(chunks/)?[^/]+[.]js$'
 }
+
+/*
+ * LE NOM DU GEL, écrit PENDANT le gel. Le fil principal est bloqué : c'est le worker qui lit les
+ * relevés (V8 les sert par interruption), calcule la fonction qui tient la fenêtre, puis la publie
+ * dans une petite mémoire partagée que le détecteur lit à la fin du gel. Sans ce nom publié tôt, la
+ * ligne du journal part en « inconnu » : le profil complet n'existe qu'une fois le gel fini.
+ * fix-ok: cause mesurée — les 10 gels profilés du 06/11 (gels.jsonl, 10:57:00.222Z et suivants)
+ * sortent « inconnu », parce que nommerOperationDuGel ne lit que l'opération déclarée et
+ * l'accumulation, jamais le profil ; le nom n'existait que dans le classement.
+ *
+ * LA MÊME RÈGLE que scripts/gels-profils.mjs (quiTientLaFenetre) : on descend l'arbre des appels
+ * depuis le haut tant que le chemin le plus fréquent garde la MAJORITÉ stricte des relevés. Une
+ * égalité ne désigne personne. Tout écart entre les deux serait un nom différent pour un même gel.
+ *
+ * Mémoire partagée : un en-tête de trois entiers (séquence, longueur du nom, génération du gel),
+ * puis les octets du nom. La séquence est impaire pendant une écriture, pour qu'un lecteur qui
+ * tombe au milieu la rejette au lieu de lire un mélange.
+ */
+const NOM_OCTETS_MAX = 256
+const TETE_NOM_OCTETS = 16
+
+/** Règle de nommage, en JavaScript pur : elle tourne dans le worker, sans module de l'application. */
+export const CODE_DU_NOMMAGE = String.raw`
+function creerNommageDuGel(motifSource) {
+  const notre = new RegExp(motifSource)
+  let arbre = { enfants: new Map() }
+  let releves = 0
+  return {
+    reinitialiser() {
+      arbre = { enfants: new Map() }
+      releves = 0
+    },
+    ajouter(frames) {
+      releves += 1
+      const chaine = []
+      for (const texte of frames) {
+        const m = /^(.*) (\S+):(\d+):(\d+)$/.exec(texte)
+        if (!m) continue
+        const fichier = m[2].replace(/\\/g, '/')
+        if (!notre.test(fichier)) continue
+        // fix-ok: cause mesurée — 6 gels sur 10 du 06/11 sortent « (anonyme) » seul (relevés
+        // réels), nom qui ne désigne rien. La position dans le bundle reste la seule piste.
+        const i = fichier.lastIndexOf('/out/')
+        const court = i >= 0 ? fichier.slice(i + 5) : fichier
+        chaine.push({
+          fonction: m[1],
+          frame: fichier + ':' + m[3] + ':' + m[4],
+          lieu: court + ':' + m[3] + ':' + m[4]
+        })
+      }
+      let noeud = arbre
+      for (const f of chaine.reverse()) {
+        let enfant = noeud.enfants.get(f.frame)
+        if (!enfant) {
+          enfant = { fonction: f.fonction, lieu: f.lieu, n: 0, enfants: new Map() }
+          noeud.enfants.set(f.frame, enfant)
+        }
+        enfant.n += 1
+        noeud = enfant
+      }
+    },
+    nom() {
+      if (!releves) return undefined
+      let noeud = arbre
+      let coupable
+      for (;;) {
+        const suivant = [...noeud.enfants.values()].sort((a, b) => b.n - a.n)[0]
+        if (!suivant || (coupable && suivant.n * 2 <= releves)) break
+        coupable = suivant
+        noeud = suivant
+      }
+      if (!coupable) return undefined
+      return coupable.fonction === '(anonyme)' ? '(anonyme) ' + coupable.lieu : coupable.fonction
+    }
+  }
+}
+`
 
 /**
  * Code du worker, évalué tel quel (CommonJS) : il ne doit dépendre d'aucun module de l'app, et il
@@ -89,7 +172,21 @@ const fs = require('node:fs')
 const path = require('node:path')
 const r = workerData.reglages
 const dossier = workerData.dossier
+${CODE_DU_NOMMAGE}
 const battement = new BigInt64Array(workerData.tampon)
+const entete = new Int32Array(workerData.tamponNom, 0, 3)
+const octetsDuNom = new Uint8Array(workerData.tamponNom, ${TETE_NOM_OCTETS})
+const nommage = creerNommageDuGel(r.motifNotreCode)
+let numeroGel = 0
+// Publie le nom du gel (texte vide = aucun nom). Séquence impaire pendant l'écriture, cf. en-tête.
+function publierLeNom(texte, gel) {
+  const octets = new TextEncoder().encode(texte).subarray(0, octetsDuNom.length)
+  Atomics.add(entete, 0, 1)
+  octetsDuNom.set(octets, 0)
+  Atomics.store(entete, 1, octets.length)
+  Atomics.store(entete, 2, gel)
+  Atomics.add(entete, 0, 1)
+}
 const session = new inspector.Session()
 session.connectToMainThread()
 const envoyer = (methode, params) =>
@@ -114,10 +211,18 @@ function relever(maintenant) {
   if (releveEnVol || piles.length >= r.pilesMax || maintenant - dernierReleve < r.pileMs) return
   releveEnVol = true
   dernierReleve = maintenant
+  const gelDuReleve = numeroGel
   envoyer('Runtime.evaluate', { expression: RELEVE_DE_PILE, returnByValue: true, silent: true })
     .then((res) => {
       const frames = res && res.result && res.result.value
-      if (Array.isArray(frames) && frames.length) piles.push({ a: iso(Date.now()), frames })
+      if (Array.isArray(frames) && frames.length) {
+        piles.push({ a: iso(Date.now()), frames })
+        // Un relevé qui revient APRES le début d'un gel suivant ne doit pas nommer ce gel-là.
+        if (gelDuReleve === numeroGel) {
+          nommage.ajouter(frames)
+          publierLeNom(nommage.nom() ?? '', numeroGel)
+        }
+      }
     })
     .catch(() => {})
     .finally(() => { releveEnVol = false })
@@ -175,6 +280,9 @@ setInterval(() => {
     debutGel = dernier
     piles = []
     dernierReleve = 0
+    numeroGel += 1
+    nommage.reinitialiser()
+    publierLeNom('', numeroGel)
     relever(maintenant)
     envoyer('Profiler.enable')
       .then(() => envoyer('Profiler.setSamplingInterval', { interval: r.intervalleUs }))
@@ -206,6 +314,43 @@ setInterval(() => {
 }, r.tickMs)
 `
 
+/** Lecteur du profileur en cours — `undefined` tant qu'aucun profileur ne tourne sur ce processus. */
+let lecteurDuNomCourant: (() => string | undefined) | undefined
+
+/**
+ * Lecteur du nom publié par le worker. Un nom ne se rend qu'UNE fois : le détecteur le lit à chaque
+ * réveil, et une lecture déjà faite pour ce gel ne rend plus rien — un gel sans nom ne doit jamais
+ * hériter du nom d'un gel précédent.
+ */
+function creerLecteurDuNom(tampon: SharedArrayBuffer): () => string | undefined {
+  const entete = new Int32Array(tampon, 0, 3)
+  const octets = new Uint8Array(tampon, TETE_NOM_OCTETS)
+  let generationLue = -1
+  return () => {
+    for (let essai = 0; essai < 3; essai++) {
+      const sequence = Atomics.load(entete, 0)
+      if (sequence % 2 !== 0) continue
+      const longueur = Atomics.load(entete, 1)
+      const generation = Atomics.load(entete, 2)
+      const copie = octets.slice(0, longueur)
+      if (Atomics.load(entete, 0) !== sequence) continue
+      if (generation === generationLue) return undefined
+      generationLue = generation
+      return longueur > 0 ? new TextDecoder().decode(copie) : undefined
+    }
+    return undefined
+  }
+}
+
+/**
+ * Le nom de la fonction qui tient le gel en cours, tel que le worker l'a publié pendant le gel —
+ * `undefined` s'il n'y en a pas, ou s'il a déjà été lu pour ce gel. Appelé à chaque réveil du
+ * détecteur, pour que le nom rejoigne la ligne du gel et nulle part ailleurs.
+ */
+export function lireNomDuGelProfile(): string | undefined {
+  return lecteurDuNomCourant?.()
+}
+
 /**
  * Démarre le profileur de gels pour le processus courant. Rend la fonction d'arrêt, ou `undefined`
  * si la plateforme ne le permet pas (pas de mémoire partagée, pas de worker). Un inspecteur absent
@@ -226,9 +371,12 @@ export function demarrerProfilPendantGel(
     battre()
     const minuteur = setInterval(battre, r.battementMs)
     minuteur.unref?.()
+    const tamponNom = new SharedArrayBuffer(TETE_NOM_OCTETS + NOM_OCTETS_MAX)
+    const lecteur = creerLecteurDuNom(tamponNom)
+    lecteurDuNomCourant = lecteur
     const worker = new Worker(CODE_DU_PROFILEUR, {
       eval: true,
-      workerData: { tampon, dossier: join(dir, DOSSIER_DES_PROFILS), reglages: r }
+      workerData: { tampon, tamponNom, dossier: join(dir, DOSSIER_DES_PROFILS), reglages: r }
     })
     // Un instrument d'observabilité ne doit JAMAIS retenir l'application ouverte.
     worker.unref()
@@ -237,6 +385,7 @@ export function demarrerProfilPendantGel(
     })
     return () => {
       clearInterval(minuteur)
+      if (lecteurDuNomCourant === lecteur) lecteurDuNomCourant = undefined
       void worker.terminate()
     }
   } catch {
