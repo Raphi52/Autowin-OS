@@ -657,6 +657,20 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           ? last.content
           : 'tour agent'
       const recoveredProviderUsage = recovery?.providerCall.result.usage
+      // L'appel coupé, récupéré depuis son flux, garde sa propre base de cumul dans le collecteur de
+      // coût : sans cette ligne, sa dépense n'atteignait jamais cost.jsonl. Dédoublonné par appel :
+      // une republication du même appel ne compte pas deux fois.
+      if (recovery && recoveredProviderUsage)
+        chatCostRecorder.record(recoveredProviderUsage, {
+          provider: recovery.call.provider,
+          model:
+            recovery.providerCall.result.model ??
+            turnPromptIdentity?.model ??
+            turnRuntimeBinding.model,
+          conversationId,
+          turnId,
+          appelId: recovery.call.token
+        })
       if (
         conversationId &&
         recovery &&

@@ -46,11 +46,27 @@ export interface TurnCost extends TokenUsage {
    * antérieures au 2026-11-02.
    */
   modVersion?: string
+  /**
+   * Appel CLI d'un tour de chat REPRIS. Écrit dans le registre : c'est lui qui dit, après une relance,
+   * qu'un appel déjà compté ne doit pas l'être une seconde fois (`totalDeAppel`).
+   */
+  appelId?: string
+}
+
+/** Ce qu'un appel a DÉJÀ coûté au registre : la somme de ses lignes, relues du fichier au démarrage. */
+export interface TotalAppel {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+  costUsd: number
 }
 
 /** Ce dont un appelant de cout a besoin : enregistrer un tour. */
 export interface CostSink {
   add(t: TurnCost): void
+  /** Ce que le registre a déjà compté pour un appel, ou `undefined` s'il ne l'a jamais vu. */
+  totalDeAppel?(appelId: string): TotalAppel | undefined
 }
 
 /**
@@ -68,7 +84,11 @@ export function withCostContext(
         conversationId: t.conversationId ?? context.conversationId,
         turnId: t.turnId ?? context.turnId
       })
-    }
+    },
+    // Sans ce relais, un appel repris passé par l'enveloppe serait recompté après une relance.
+    ...(sink.totalDeAppel
+      ? { totalDeAppel: (appelId: string) => sink.totalDeAppel?.(appelId) }
+      : {})
   }
 }
 
@@ -114,6 +134,13 @@ const ALERT_RATIO_THRESHOLD = 0.8
 
 export class CostAggregator {
   private turns: TurnCost[] = []
+  /**
+   * Total déjà compté PAR APPEL REPRIS. Reconstruit depuis le fichier au démarrage : c'est la base qui
+   * survit à une relance, là où la mémoire d'un enregistreur repart de zéro.
+   * fix-ok: appel repris recompté après relance — reproduit par test rouge : un enregistreur neuf, sur le
+   * même registre, ajoutait de nouveau l'appel repris. Base lue du registre, pas de la mémoire du recorder.
+   */
+  private readonly totauxParAppel = new Map<string, TotalAppel>()
 
   /**
    * `budgetUsd` : plafond fixe, ou RESOLVEUR relu à chaque `budgetStatus()`. Le résolveur existe
@@ -135,7 +162,7 @@ export class CostAggregator {
           // Une ligne JSON VALIDE mais de mauvaise forme passait le cast et devenait un tour
           // fantome : `inputTokens` non numerique agrege en NaN, provider absent casse le
           // regroupement. Le `catch` ne voyait rien — il ne garde que les JSON illisibles.
-          if (isTurnCost(parsed)) this.turns.push(parsed)
+          if (isTurnCost(parsed)) this.memoriser(parsed)
         } catch {
           /* ligne corrompue — ignorée */
         }
@@ -163,10 +190,36 @@ export class CostAggregator {
       ts: turn.ts ?? new Date().toISOString(),
       ...(modVersion ? { modVersion } : {})
     }
-    this.turns.push(t)
+    this.memoriser(t)
     if (!this.persistPath) return
     this.enAttente.push(`${JSON.stringify(t)}\n`)
     this.planifierEcriture()
+  }
+
+  /** Ce que le registre a déjà compté pour un appel repris (`undefined` : jamais vu). */
+  totalDeAppel(appelId: string): TotalAppel | undefined {
+    const total = this.totauxParAppel.get(appelId)
+    return total ? { ...total } : undefined
+  }
+
+  /** Range une ligne dans le registre et, si elle porte un appel, dans son total. */
+  private memoriser(t: TurnCost): void {
+    this.turns.push(t)
+    if (!t.appelId) return
+    const total = this.totauxParAppel.get(t.appelId) ?? {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      costUsd: 0
+    }
+    this.totauxParAppel.set(t.appelId, {
+      inputTokens: total.inputTokens + (t.inputTokens || 0),
+      outputTokens: total.outputTokens + (t.outputTokens || 0),
+      cacheReadTokens: total.cacheReadTokens + (t.cacheReadTokens || 0),
+      cacheCreationTokens: total.cacheCreationTokens + (t.cacheCreationTokens || 0),
+      costUsd: total.costUsd + (t.costUsd ?? 0)
+    })
   }
 
   /** Lignes écrites mais pas encore posées sur le disque. */
@@ -241,9 +294,13 @@ export class CostAggregator {
   /** Statut budget : ratio et alerte (>= 80% du budget defini). */
   budgetStatus(): BudgetStatus {
     const pricedSpendUsd = this.totalUsd()
-    const turns = this.turns.length
-    const unpricedTurns = this.turns.reduce((n, t) => n + (t.costUsd === undefined ? 1 : 0), 0)
+    // Tours, pas lignes : un tour qui règle plusieurs fois écrit plusieurs lignes. Le compte est pris
+    // par identifiant de tour, sinon chaque reprise et chaque règlement compterait comme un tour.
+    // fix-ok: tours surcomptés — mesuré : 1 254 lignes superviseur pour 976 tours distincts sur 7 jours.
+    const turns = compterLesTours(this.turns)
     const unpriced = this.turns.filter((t) => t.costUsd === undefined)
+    const unpricedRows = unpriced.length
+    const unpricedTurns = compterLesTours(unpriced)
     // Le tarif n'est reconstituable que si les tours NON TARIFES servent tous le MEME modele :
     // en choisir un parmi plusieurs serait inventer un montant.
     const model = unpriced.every((t) => t.model === unpriced[0]?.model)
@@ -254,8 +311,9 @@ export class CostAggregator {
       : undefined
     const costCoverage = resolveCostCoverage(
       {
-        knownCostUsd: turns > unpricedTurns ? pricedSpendUsd : null,
-        unpricedCalls: unpricedTurns,
+        // Vrai dès qu'UNE ligne est tarifée : compté en lignes, comme avant le compte par tour.
+        knownCostUsd: this.turns.length > unpricedRows ? pricedSpendUsd : null,
+        unpricedCalls: unpricedRows,
         inputTokens: unpriced.reduce((n, t) => n + (t.inputTokens || 0), 0),
         outputTokens: unpriced.reduce((n, t) => n + (t.outputTokens || 0), 0),
         cacheReadTokens: unpriced.reduce((n, t) => n + (t.cacheReadTokens || 0), 0),
@@ -311,6 +369,20 @@ export class CostAggregator {
     }
     return result
   }
+}
+
+/**
+ * Nombre de TOURS, pas de lignes. Une ligne sans identifiant de tour compte pour un tour à elle seule,
+ * comme avant : rien ne se fusionne sans identifiant.
+ */
+function compterLesTours(lignes: readonly TurnCost[]): number {
+  const tours = new Set<string>()
+  let sansIdentifiant = 0
+  for (const t of lignes) {
+    if (t.turnId) tours.add(`${t.conversationId ?? ''}|${t.turnId}`)
+    else sansIdentifiant += 1
+  }
+  return tours.size + sansIdentifiant
 }
 
 /**
