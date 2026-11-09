@@ -98,8 +98,7 @@ function fenetrage(): ReturnType<typeof createWindowing> {
     T0_DEMARRAGE: 0,
     jalonDemarrage: () => undefined,
     automationInstanceMode: { isolated: true, headless: false },
-    isolatedTestInstance: true,
-    headlessTestInstance: false
+    isolatedTestInstance: true
   })
 }
 

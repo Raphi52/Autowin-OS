@@ -16,9 +16,7 @@ import { surveillerFenetreInjoignable } from '../gel/gel-fenetre'
 import { surveillerParBattement } from '../gel/gel-battement-fenetre'
 import { journaliserGel } from '../gel/gel-main'
 import { app, shell, BrowserWindow, Menu, Tray, desktopCapturer, screen } from 'electron'
-import { placerFenetreDetachee } from '../../shared/view-tabs'
 import { HAUTEUR_BOUTONS_FENETRE } from '../../shared/barre-fenetre'
-import type { AppDestination } from '../../shared/navigation'
 import { installerCaptureSonSysteme } from '../media/audio-loopback'
 import { join } from 'path'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -65,7 +63,6 @@ export type WindowingDeps = {
   jalonDemarrage: (etape: string) => void
   automationInstanceMode: { isolated: boolean; headless: boolean }
   isolatedTestInstance: boolean
-  headlessTestInstance: boolean
 }
 
 /** Ce que `index.ts` câble ensuite sur son démarrage et ses canaux IPC. */
@@ -73,8 +70,6 @@ export type Fenetres = {
   createWindow: () => void
   showMainWindow: () => void
   setupTray: () => void
-  /** Ouvre une vue seule dans sa propre fenêtre, centrée sur le point écran du lâcher d'onglet. */
-  openViewWindow: (view: AppDestination, screenX: number, screenY: number) => void
   rendererLocation: () => { devRendererUrl?: string; rendererHtmlPath: string }
   /** Vrai UNIQUEMENT après un quit demandé depuis le menu du tray. */
   estEnFermeture: () => boolean
@@ -87,23 +82,17 @@ export type Fenetres = {
   /**
    * La fenêtre PRINCIPALE vivante, ou `null` (fermée : l'app vit dans la barre d'état). Lue par le
    * navigateur intégré du chat, qui pose ses pages DANS cette fenêtre ; seule cette
-   * fermeture la connaît, `getAllWindows()` mêlant les vues détachées et la mascotte.
+   * fermeture la connaît, `getAllWindows()` mêlant les cartes de fin de tour et la mascotte.
    */
   fenetrePrincipale: () => BrowserWindow | null
 }
 
 export function createWindowing(deps: WindowingDeps): Fenetres {
-  const {
-    T0_DEMARRAGE,
-    jalonDemarrage,
-    automationInstanceMode,
-    isolatedTestInstance,
-    headlessTestInstance
-  } = deps
+  const { T0_DEMARRAGE, jalonDemarrage, automationInstanceMode, isolatedTestInstance } = deps
 
   /**
    * LA fenêtre principale vivante, ou null. Tenue ICI et pas déduite de
-   * `BrowserWindow.getAllWindows()` : cette liste contient AUSSI les vues détachées et la mascotte,
+   * `BrowserWindow.getAllWindows()` : cette liste contient AUSSI les cartes de fin de tour et la mascotte,
    * donc elle ne dit pas si la fenêtre principale existe déjà.
    *
    * CE QU'ELLE EMPÊCHE (constaté à l'écran le 2026-09-12) : une SECONDE fenêtre principale
@@ -162,38 +151,6 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
   }
   function refleterRunsVivants(etat: EtatRunsVivants): void {
     appliquerPresenceSysteme({ fenetre: mainWindowVivante, icone: tray }, etat)
-  }
-  // fix-ok: la fenetre detachee etait centree sur la souris sans tenir compte de l ecran (bord = hors ecran) ; mesure par les tests placerFenetreDetachee de view-tabs.test.ts
-  function openViewWindow(view: AppDestination, screenX: number, screenY: number): void {
-    // Fenêtre INDÉPENDANTE (ni `parent`, ni `alwaysOnTop`) : elle doit pouvoir vivre seule sur un
-    // autre écran. Même preload et même isolation que les autres fenêtres.
-    const zone = screen.getDisplayNearestPoint({
-      x: Math.round(screenX),
-      y: Math.round(screenY)
-    }).workArea
-    const place = placerFenetreDetachee({ screenX, screenY }, { width: 1100, height: 760 }, zone)
-    const win = new BrowserWindow({
-      ...place,
-      minWidth: 480,
-      minHeight: 360,
-      show: false,
-      autoHideMenuBar: true,
-      backgroundColor: '#05070d',
-      title: 'Autowin OS',
-      webPreferences: {
-        preload: join(__dirname, '../preload/index.js'),
-        contextIsolation: true,
-        sandbox: false
-      }
-    })
-    win.once('ready-to-show', () => {
-      presentAutomationWindow(win, headlessTestInstance, { focus: true, flash: false })
-    })
-    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-      win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#view=${view}`)
-    } else {
-      win.loadFile(join(__dirname, '../renderer/index.html'), { hash: `view=${view}` })
-    }
   }
   function rendererLocation(): { devRendererUrl?: string; rendererHtmlPath: string } {
     return {
@@ -580,7 +537,6 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     createWindow,
     showMainWindow,
     setupTray,
-    openViewWindow,
     rendererLocation,
     estEnFermeture: () => isQuitting,
     refleterRunsVivants,

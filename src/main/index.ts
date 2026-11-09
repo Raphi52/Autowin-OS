@@ -1188,17 +1188,9 @@ const fenetres = createWindowing({
   T0_DEMARRAGE,
   jalonDemarrage,
   automationInstanceMode,
-  isolatedTestInstance,
-  headlessTestInstance
+  isolatedTestInstance
 })
-const {
-  createWindow,
-  setupTray,
-  showMainWindow,
-  openViewWindow,
-  rendererLocation,
-  refleterRunsVivants
-} = fenetres
+const { createWindow, setupTray, showMainWindow, rendererLocation, refleterRunsVivants } = fenetres
 /** Raccourci clavier global : posé au démarrage, libéré à la fermeture (sinon il reste capté). */
 let raccourciCapture: RaccourciInstalle | null = null
 const diagnosticCapabilities = new DiagnosticCapabilities()
@@ -1893,7 +1885,6 @@ function contexteIpcChat() {
     modelCatalog,
     notifiedTaskAlerts,
     notifyWatchdogWorkflowIncident,
-    openViewWindow,
     os,
     outcomeLearning,
     outcomeLearningDirectory,

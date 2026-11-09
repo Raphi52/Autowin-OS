@@ -862,7 +862,11 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:setRoutageChatLectureSeule` — l'interrupteur
     //   « les questions du chat passent par ce modèle » du bloc des petites tâches. Il n'accepte qu'un
     //   booléen ; rien d'autre n'entre dans `roles.json`. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(302)
+    // MISE A JOUR 2026-11-08 — 302 -> 301 : aucun ajout, un
+    //   retrait, dans `ipc/chat.ts` — la vue detachee est supprimee (elle s'ouvrait en fenetre
+    //   separee par-dessus l'app sans qu'aucun bouton ne la propose plus) : `window:detach-view`.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(301)
     expect(unguarded).toEqual([])
   })
 

@@ -779,8 +779,6 @@ interface ChatApi {
   /** Ouvre un fichier cite par un agent (`[a.ts:80](src/main/a.ts:80)`). Chemin resolu cote main. */
   revealFile: (path: string, line?: number) => Promise<{ ok: boolean; reason?: string }>
   appState: () => Promise<AppSnapshot>
-  detachView: (view: string, screenX: number, screenY: number) => Promise<{ ok: boolean }>
-  windowBounds: () => { x: number; y: number; width: number; height: number }
   appCommand: (name: string, args?: Record<string, unknown>) => Promise<CommandResult>
   /** Messages entre fils du même dépôt, envoyés et reçus par ce fil. Lecture seule. */
   messagesEntreFils: (conversationId: string) => Promise<MessageEntreFilsAffiche[]>

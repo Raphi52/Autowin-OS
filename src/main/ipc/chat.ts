@@ -1,5 +1,4 @@
 import { commandeNonInjectable } from '../skills/skill-routing'
-import { isAppDestination } from '../../shared/view-tabs'
 import { observerLeMoteur } from '../app/observer-les-sources'
 import { MOTIF_STOP_DU_CHAT } from '../../shared/arret-par-stop'
 import { HAUTEUR_BOUTONS_FENETRE } from '../../shared/barre-fenetre'
@@ -392,7 +391,6 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
     modelCatalog,
     notifiedTaskAlerts,
     notifyWatchdogWorkflowIncident,
-    openViewWindow,
     os,
     outcomeLearning,
     outcomeLearningDirectory,
@@ -1678,18 +1676,6 @@ Le fil reprend ensuite normalement.`
     const selected = await pickDirectory(event.sender)
     return selected ? behaviourAccess.approve(selected) : null
   })
-
-  ipcMain.handle(
-    'window:detach-view',
-    (event, view: unknown, screenX: unknown, screenY: unknown) => {
-      assertTrustedRendererSender(event, 'Detach view')
-      if (!isAppDestination(view)) throw new Error('Vue inconnue')
-      if (!Number.isFinite(screenX) || !Number.isFinite(screenY))
-        throw new Error('Position invalide')
-      openViewWindow(view, screenX as number, screenY as number)
-      return { ok: true }
-    }
-  )
 
   // Usage RÉEL des outils (actions Codex/Claude observées) — distinct du catalogue natif décoratif.
   ipcMain.handle('os:toolUsage', (event) => {
