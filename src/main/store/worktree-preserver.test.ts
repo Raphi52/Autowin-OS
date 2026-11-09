@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
@@ -151,5 +151,41 @@ describe('préserver puis libérer une copie abandonnée', () => {
   it('dit `absente` sur une copie qui n’existe pas, sans jeter', () => {
     const { base, worktreeRoot } = depot()
     expect(manager(base, worktreeRoot).preserverEtLiberer('run-inconnu-9').outcome).toBe('absente')
+  })
+
+  describe('avec le crochet de commit du dépôt (séparation entreprise)', () => {
+    // Le commit de préservation passe par le même contrôle que tout commit : un terme d'entreprise
+    // ne doit pas entrer dans la branche de récupération. Profil FICTIF, lu depuis le dossier principal.
+    function depotAvecCrochet(): ReturnType<typeof depot> {
+      const d = depot()
+      git(d.base, 'config', 'core.hooksPath', resolve(__dirname, '../../../.githooks'))
+      mkdirSync(join(d.base, 'entreprise', 'fictif'), { recursive: true })
+      writeFileSync(
+        join(d.base, 'entreprise', 'fictif', 'identite.json'),
+        JSON.stringify({ nom: 'Fictif Sa' })
+      )
+      return d
+    }
+
+    it("REFUSE de préserver un travail qui porte un nom d'entreprise, et n'enregistre rien de ce nom", () => {
+      const { base, worktreeRoot, agentId, copie } = depotAvecCrochet()
+      writeFileSync(join(copie, 'a.txt'), 'travail pour Fictif Sa\n')
+
+      const r = manager(base, worktreeRoot).preserverEtLiberer(agentId)
+
+      expect(r.outcome).toBe('refuse')
+      expect(existsSync(copie)).toBe(true) // la copie garde le travail : rien n'est perdu
+      expect(git(base, 'show', `autowin/recovery/${agentId}:a.txt`)).toBe('base')
+    })
+
+    it('PRÉSERVE un travail propre même avec le crochet actif (jumeau du refus)', () => {
+      const { base, worktreeRoot, agentId, copie } = depotAvecCrochet()
+      writeFileSync(join(copie, 'a.txt'), 'travail propre\n')
+
+      const r = manager(base, worktreeRoot).preserverEtLiberer(agentId)
+
+      expect(r.outcome).toBe('preserve-et-libere')
+      expect(git(base, 'show', `${r.branche}:a.txt`)).toBe('travail propre')
+    })
   })
 })
