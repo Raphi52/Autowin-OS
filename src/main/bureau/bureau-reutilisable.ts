@@ -41,12 +41,10 @@ export type DecisionBureau = 'reinitialiser' | 'preserver'
  *
  * CE N'EST PAS UNE COQUETTERIE : la cle nomme un DOSSIER (`<racine unique>/<cle>`, ou
  * `agent__<cle>` pour une copie rangée sous l'ancienne racine), donc elle consomme le budget de
- * chemin de Windows. Mesure sur le depot reel — la cle
- * `command-edit-conv-1412-src-renderer-src-components-updatebanner-tsx` portait le bureau a 147
- * caracteres AVANT le fichier edite ; en ajoutant le fichier (~44) puis le cache que la verification
- * ecrit dans `node_modules/.vite/vitest/<hash>/results.json` (~65), on atteignait ~256 pour une
- * limite de 260. Les publications echouaient alors en `merge-failed : Filename too long`, REFUSANT
- * des editions saines, et le travail partait dans une `refs/autowin/rescue/…` que rien n'affiche.
+ * chemin de Windows, limite a 260 caracteres. Le fichier edite, puis le cache que la verification
+ * ecrit dans `node_modules/.vite/vitest/<hash>/results.json`, s'ajoutent a ce chemin : une cle trop
+ * longue le fait depasser, et la publication echoue en `merge-failed : Filename too long` sur une
+ * edition saine.
  */
 export const LONGUEUR_MAX_CLE_BUREAU = 64
 

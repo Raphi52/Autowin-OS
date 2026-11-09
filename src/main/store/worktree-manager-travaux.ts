@@ -234,7 +234,8 @@ function memeDossier(a: string, b: string): boolean {
  * La branche de secours PRIME quand elle existe : c'est l'adresse durable, celle qui survit a la
  * suppression du bureau. Le HEAD detache n'est que le dernier recours -- mais c'est precisement
  * celui qui manquait.
- *
+ */
+/**
  * Le HEAD de CHAQUE bureau, en UNE commande. `git worktree list --porcelain` rend deja tout ce
  * qu'un `rev-parse` par dossier allait rechercher un par un.
  */
