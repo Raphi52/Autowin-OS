@@ -13,6 +13,7 @@ import {
   pickResumeForTask,
   pickOrchestrationsToResume,
   pickOrchestrationToResume,
+  pointsDeRepriseVivantsSur,
   resolveResumableRuntime,
   saveOrchestrationAgentCheckpoint,
   saveOrchestrationState,
@@ -700,6 +701,21 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     expect(pickOrchestrationsToResume([frais, perime], now).map((s) => s.runId)).toEqual([
       'run-frais'
     ])
+  })
+
+  /**
+   * Le balayage des copies lit les points de reprise VIVANTS, à l'heure donnée. Un point périmé n'est
+   * jamais rouvert au réveil : sa copie ne protège donc plus rien, et la garder ferait fuir le disque.
+   */
+  it('ne protège PAS la copie d’un point périmé : la reprise ne le rouvrira pas', () => {
+    const now = 1_000_000_000_000
+    saveOrchestrationState(root, { ...state('run-frais', now - 60 * 60 * 1000, ['frame']) })
+    saveOrchestrationState(root, {
+      ...state('run-perime', now - 40 * 60 * 60 * 1000, ['frame']),
+      task: 'avant-hier'
+    })
+
+    expect([...pointsDeRepriseVivantsSur(root, now)]).toEqual(['run-frais'])
   })
 
   it('laisse passer une nuit — fermer le soir et rouvrir le matin reprend le run', () => {

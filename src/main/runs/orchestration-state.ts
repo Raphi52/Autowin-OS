@@ -7,7 +7,11 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
-import { rename as renameAsync, writeFile as writeFileAsync, mkdir as mkdirAsync } from 'node:fs/promises'
+import {
+  rename as renameAsync,
+  writeFile as writeFileAsync,
+  mkdir as mkdirAsync
+} from 'node:fs/promises'
 import { join } from 'node:path'
 import { type PipelinePhase, type NodePhase } from '../skills/skill-pipeline'
 import { estIdentifiantDeNoeud } from '../../shared/pipeline-phases'
@@ -84,9 +88,12 @@ export interface OrchestrationRunState {
     electedRunId: string
     decidedAt: number
   }
-  /** Fin durable d'un appel dont l'issue provider est indémontrable. Jamais repris implicitement. */
+  /**
+   * Fin durable d'un run qui ne doit plus être repris : appel dont l'issue provider est indémontrable
+   * (`interrupted`), ou copie jetée sur demande de l'utilisateur (`discarded`). Jamais repris implicitement.
+   */
   terminal?: {
-    status: 'interrupted'
+    status: 'interrupted' | 'discarded'
     reason: string
     decidedAt: number
   }
@@ -229,9 +236,7 @@ function isRuntimeSnapshot(value: unknown): value is OrchestrationRuntimeSnapsho
   if (
     !Object.entries(value.phaseFanOut).every(
       ([phase, members]) =>
-        estIdentifiantDeNoeud(phase) &&
-        Array.isArray(members) &&
-        members.every(isRoleBinding)
+        estIdentifiantDeNoeud(phase) && Array.isArray(members) && members.every(isRoleBinding)
     )
   ) {
     return false
@@ -258,9 +263,7 @@ function isExecutionQuote(value: unknown): value is ExecutionQuote {
     !value.taskFingerprint.trim() ||
     !['trivial', 'standard', 'critical'].includes(String(value.regime)) ||
     !Array.isArray(value.phases) ||
-    !value.phases.every(
-      (phase) => estIdentifiantDeNoeud(phase)
-    )
+    !value.phases.every((phase) => estIdentifiantDeNoeud(phase))
   ) {
     return false
   }
@@ -298,8 +301,7 @@ function isExecutionQuote(value: unknown): value is ExecutionQuote {
   if (!isRecord(value.allocation) || !isRecord(value.allocation.phaseMembers)) return false
   if (
     !Object.entries(value.allocation.phaseMembers).every(
-      ([phase, count]) =>
-        estIdentifiantDeNoeud(phase) && isPositiveInteger(count)
+      ([phase, count]) => estIdentifiantDeNoeud(phase) && isPositiveInteger(count)
     )
   ) {
     return false
@@ -424,8 +426,7 @@ function isRunAgentRef(
      * le DoD exercait `isPhaseOutput` et JAMAIS une reference d'agent. Elargir un type sans elargir
      * le controle runtime qui le double est exactement le piege que ce depot documente ailleurs.
      */
-    (value.phase === undefined ||
-      estIdentifiantDeNoeud(value.phase)) &&
+    (value.phase === undefined || estIdentifiantDeNoeud(value.phase)) &&
     (value.active === undefined || typeof value.active === 'boolean') &&
     (value.fanOut === undefined || typeof value.fanOut === 'boolean') &&
     (value.reservationId === undefined || isNonEmptyString(value.reservationId)) &&
@@ -496,7 +497,7 @@ function isTerminalDisposition(
 ): value is NonNullable<OrchestrationRunState['terminal']> {
   return (
     isRecord(value) &&
-    value.status === 'interrupted' &&
+    (value.status === 'interrupted' || value.status === 'discarded') &&
     isNonEmptyString(value.reason) &&
     typeof value.decidedAt === 'number' &&
     Number.isFinite(value.decidedAt) &&
@@ -523,12 +524,15 @@ function raisonsCheckpointInvalide(value: unknown): string[] {
   if (!(value.conversationId === undefined || isNonEmptyString(value.conversationId)))
     r.push('conversationId invalide')
   if (!(value.turnId === undefined || isNonEmptyString(value.turnId))) r.push('turnId invalide')
-  if (!(value.forkedFrom === undefined || isForkOrigin(value.forkedFrom))) r.push('forkedFrom invalide')
+  if (!(value.forkedFrom === undefined || isForkOrigin(value.forkedFrom)))
+    r.push('forkedFrom invalide')
   if (!Array.isArray(value.phaseOutputs)) r.push('phaseOutputs n est pas un tableau')
   else
     value.phaseOutputs.forEach((o, i) => {
       if (!isPhaseOutput(o))
-        r.push(`phaseOutputs[${i}] invalide (phase=${JSON.stringify((o as { phase?: unknown })?.phase)})`)
+        r.push(
+          `phaseOutputs[${i}] invalide (phase=${JSON.stringify((o as { phase?: unknown })?.phase)})`
+        )
     })
   if (!(value.bindingOverride === undefined || isRoleBinding(value.bindingOverride)))
     r.push('bindingOverride invalide')
@@ -536,23 +540,38 @@ function raisonsCheckpointInvalide(value: unknown): string[] {
     r.push('runtimeSnapshot invalide')
   if (!(value.executionQuote === undefined || isExecutionQuote(value.executionQuote)))
     r.push('executionQuote invalide')
-  if (!(value.usage === undefined || isExecutionUsageSnapshot(value.usage))) r.push('usage invalide')
-  if (!(value.resumeDisposition === undefined || (isRunId(value.runId) && isResumeDisposition(value.resumeDisposition, value.runId))))
+  if (!(value.usage === undefined || isExecutionUsageSnapshot(value.usage)))
+    r.push('usage invalide')
+  if (!(
+    value.resumeDisposition === undefined ||
+    (isRunId(value.runId) && isResumeDisposition(value.resumeDisposition, value.runId))
+  ))
     r.push('resumeDisposition invalide')
-  if (!(value.terminal === undefined || isTerminalDisposition(value.terminal))) r.push('terminal invalide')
+  if (!(value.terminal === undefined || isTerminalDisposition(value.terminal)))
+    r.push('terminal invalide')
   if (!(value.quotaWall === undefined || isQuotaWall(value.quotaWall))) r.push('quotaWall invalide')
   if (value.agents !== undefined) {
     if (!Array.isArray(value.agents)) r.push('agents n est pas un tableau')
     else
       value.agents.forEach((a, i) => {
         if (!isRunAgentRef(a))
-          r.push(`agents[${i}] invalide (phase=${JSON.stringify((a as { phase?: unknown })?.phase)})`)
+          r.push(
+            `agents[${i}] invalide (phase=${JSON.stringify((a as { phase?: unknown })?.phase)})`
+          )
       })
   }
   if (!hasConsistentActiveReservationLinks(value)) r.push('liens de reservation incoherents')
-  if (!(typeof value.startedAt === 'number' && Number.isFinite(value.startedAt) && value.startedAt >= 0))
+  if (!(
+    typeof value.startedAt === 'number' &&
+    Number.isFinite(value.startedAt) &&
+    value.startedAt >= 0
+  ))
     r.push('startedAt invalide')
-  if (!(typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt) && value.updatedAt >= 0))
+  if (!(
+    typeof value.updatedAt === 'number' &&
+    Number.isFinite(value.updatedAt) &&
+    value.updatedAt >= 0
+  ))
     r.push('updatedAt invalide')
   return r
 }
@@ -857,6 +876,26 @@ export function saveOrchestrationAgentCheckpointAsync(
   return updated
 }
 
+/** Raison écrite dans le point d'un run dont la copie a été jetée sur demande explicite. */
+export const RAISON_JET_VOLONTAIRE = 'copie jetée sur demande explicite de l’utilisateur'
+
+/**
+ * Clôt durablement le point de reprise d'un run dont la copie vient d'être jetée. Sans cela, la reprise
+ * suivante retente le run, ne trouve plus sa copie et refuse « copie durable absente ». Le point n'est
+ * pas effacé : il reste lisible, marqué `discarded`, et n'est plus rendu à la reprise.
+ * Rend `false` quand aucun point ouvert ne porte ce run (rien n'est écrit).
+ */
+// fix-ok: le jet retirait la copie sans fermer son point de reprise : la relance retentait le run et refusait « copie durable absente ».
+export function clorePointDeRepriseJete(root: string, runId: string, nowMs: number): boolean {
+  const etat = loadOrchestrationState(root, runId)
+  if (!etat || etat.terminal) return false
+  saveOrchestrationState(root, {
+    ...etat,
+    terminal: { status: 'discarded', reason: RAISON_JET_VOLONTAIRE, decidedAt: nowMs }
+  })
+  return true
+}
+
 /** États encore présents = runs qui n'ont jamais atteint leur clôture (l'app est morte avant). */
 export function loadOrchestrationStates(root: string): OrchestrationRunState[] {
   const states: OrchestrationRunState[] = []
@@ -1031,6 +1070,17 @@ export function pickOrchestrationsToResume(
     ...mostRecentFirst(neverStarted),
     ...mostRecentFirst(suppressed)
   ]
+}
+
+/**
+ * Les runs dont le point de reprise vit encore, à l'heure donnée : exactement ceux que la reprise au
+ * réveil rouvrira (même tri, même péremption). Une copie de run hors de cet ensemble n'a plus de
+ * reprise à servir : le balayage peut la prendre. Un point périmé ne protège donc pas sa copie.
+ */
+export function pointsDeRepriseVivantsSur(root: string, nowMs: number): ReadonlySet<string> {
+  return new Set(
+    pickOrchestrationsToResume(loadOrchestrationStates(root), nowMs).map((state) => state.runId)
+  )
 }
 
 /** Normalise un libelle de tache pour comparer « la meme tache » ecrite a l'espace pres. */

@@ -13,7 +13,9 @@ import {
   assertSafeId,
   shellPath,
   parseNullSeparatedPaths,
-  detailFinalisationJetee
+  detailFinalisationJetee,
+  copieGardeeParUnPointDeReprise,
+  tracerRetraitDeCopie
 } from './worktree-manager-outils'
 import type { WorktreeManager } from './worktree-manager'
 
@@ -660,7 +662,9 @@ export function finalizeSansSecours(
       }
     }
   }
-  const integrationCleanup = this.cleanupWorktree(integrationPath)
+  const integrationCleanup = this.cleanupWorktree(integrationPath, true, {
+    raison: 'copie d’intégration terminée'
+  })
   if (!integrationCleanup.ok) {
     if (integrationResult.outcome !== 'merged') {
       return {
@@ -928,7 +932,9 @@ export function cleanupPublished(
   if (existsSync(this.worktreeRoot)) {
     for (const entry of readdirSync(this.worktreeRoot, { withFileTypes: true })) {
       if (!entry.isDirectory() || !entry.name.startsWith(`integration__${agentId}__`)) continue
-      const cleanup = this.cleanupWorktree(join(this.worktreeRoot, entry.name))
+      const cleanup = this.cleanupWorktree(join(this.worktreeRoot, entry.name), true, {
+        raison: 'copie d’intégration publiée'
+      })
       if (!cleanup.ok) {
         return {
           outcome: 'cleanup-pending',
@@ -1150,7 +1156,17 @@ export function balayerLesCoquilles(this: WorktreeManager): string[] {
       this.ancrerAvantSuppression(agentId, chemin)
     }
   }
-  return balayerCoquillesVides(this.worktreeRoot)
+  // fix-ok: balayerCoquillesVides retirait une coquille vide sans consulter le point de reprise de son run ; la garde du passage commun ne la couvrait pas.
+  const supprimees = balayerCoquillesVides(this.worktreeRoot, (chemin) =>
+    copieGardeeParUnPointDeReprise(this.copiesProtegees, chemin)
+  )
+  // fix-ok: balayerCoquillesVides retirait sans écrire de ligne de trace (ENOENT sur .retraits.jsonl) ; la trace s'écrit après la suppression, comme au passage commun.
+  for (const nom of supprimees) {
+    const chemin = join(this.worktreeRoot, nom)
+    const trace = tracerRetraitDeCopie(this.worktreeRoot, chemin, 'coquille vide retirée')
+    if (trace) this.noterEchecDeBalayage(chemin, trace)
+  }
+  return supprimees
 }
 
 export function discard(this: WorktreeManager, agentId: string): void {
@@ -1162,7 +1178,11 @@ export function discard(this: WorktreeManager, agentId: string): void {
   const ownershipIssue = this.ownershipIssue(path)
   if (ownershipIssue) throw new Error(ownershipIssue)
   this.ancrerAvantSuppression(agentId, path)
-  const cleanup = this.cleanupWorktree(path, true)
+  // fix-ok: la garde du point de reprise est au retrait ; un jet demandé par l'utilisateur déclare donc son motif (passeOutre), sinon il serait refusé.
+  const cleanup = this.cleanupWorktree(path, true, {
+    raison: 'jeter le travail retenu',
+    passeOutre: 'jeté sur demande explicite de l’utilisateur'
+  })
   if (!cleanup.ok) {
     throw new Error(cleanup.detail ?? `La copie ${agentId} n’a pas pu être supprimée.`)
   }

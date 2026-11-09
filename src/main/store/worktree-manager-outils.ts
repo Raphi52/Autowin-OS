@@ -2,8 +2,9 @@
 // classe et ses modules voisins ; ré-exportés par worktree-manager.ts pour les appelants.
 import { execFile, execFileSync } from 'node:child_process'
 import type { EntreeBalayage } from './balayage-retention'
-import { realpathSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { appendFileSync, realpathSync } from 'node:fs'
+import { appendFile } from 'node:fs/promises'
+import { basename, join, resolve } from 'node:path'
 import type { WorktreeOperationWorkerLike } from './worktree-operation-client'
 import { LIGNES } from './worktree-manager-empreintes'
 import { WorktreeManager } from './worktree-manager'
@@ -436,5 +437,72 @@ export function attacherMethodes(proto: object, methodes: Record<string, unknown
       enumerable: false,
       configurable: true
     })
+  }
+}
+
+/**
+ * Un run dont le point de reprise vit encore garde sa copie : la retirer rend sa reprise impossible.
+ * Tout retrait de copie passe par cette garde (`cleanupWorktree`, `cleanupWorktreeAsync`, et les
+ * retraits par le disque), sauf un retrait voulu qui la déclare par `passeOutre`.
+ */
+export const DETAIL_POINT_DE_REPRISE_VIVANT =
+  'un point de reprise vit encore pour ce run : la copie est gardée'
+
+/**
+ * Options d'un retrait de copie. `raison` nomme la sortie dans le journal ; `passeOutre` est le motif
+ * d'un retrait voulu qui ignore la garde du point de reprise.
+ */
+export type OptionsDeRetrait = { raison?: string; passeOutre?: string }
+
+export const RAISON_NON_NOMMEE = 'retrait sans raison nommée'
+
+/**
+ * Journal des retraits, à la racine des copies. C'est un fichier, pas un dossier `agent__` : le balayage
+ * ne retient que ces dossiers, il ne touche donc jamais ce journal.
+ */
+export const JOURNAL_DES_RETRAITS = '.retraits.jsonl'
+
+export function copieGardeeParUnPointDeReprise(
+  copiesProtegees: ReadonlySet<string>,
+  path: string
+): boolean {
+  const nom = basename(path)
+  return nom.startsWith('agent__') && copiesProtegees.has(nom.slice('agent__'.length))
+}
+
+function ligneDeRetrait(path: string, raison: string): string {
+  const nom = basename(path)
+  const run = nom.startsWith('agent__') ? nom.slice('agent__'.length) : nom
+  return `${JSON.stringify({ quand: new Date().toISOString(), run, raison })}\n`
+}
+
+/**
+ * Trace un retrait DÉJÀ RÉUSSI : la copie est partie, la trace ne peut plus l'empêcher. Un échec
+ * d'écriture est donc rendu au lieu d'être avalé, pour que le blocage soit nommé.
+ */
+export function tracerRetraitDeCopie(
+  racine: string,
+  path: string,
+  raison: string
+): string | undefined {
+  try {
+    appendFileSync(join(racine, JOURNAL_DES_RETRAITS), ligneDeRetrait(path, raison))
+    return undefined
+  } catch (error) {
+    return `trace du retrait non écrite : ${error instanceof Error ? error.message : String(error)}`
+  }
+}
+
+/** Même trace, sans tenir la boucle : seule la forme de l'écriture change. */
+export async function tracerRetraitDeCopieAsync(
+  racine: string,
+  path: string,
+  raison: string
+): Promise<string | undefined> {
+  try {
+    await appendFile(join(racine, JOURNAL_DES_RETRAITS), ligneDeRetrait(path, raison))
+    return undefined
+  } catch (error) {
+    return `trace du retrait non écrite : ${error instanceof Error ? error.message : String(error)}`
   }
 }

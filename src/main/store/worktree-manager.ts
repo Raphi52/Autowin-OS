@@ -166,6 +166,12 @@ export class WorktreeManager {
   readonly processIdentity: (pid: number) => string | null | undefined
   readonly now: () => number
   readonly operationClient?: WorktreeOperationClient
+  /**
+   * Copies dont le point de reprise existe encore. Le balayage les garde même propres, inactives et
+   * sans travail : les retirer rend la reprise impossible. Posé par le coordinateur avant chaque
+   * réconciliation, car seul lui connaît les runs reprenables.
+   */
+  copiesProtegees: ReadonlySet<string> = new Set<string>()
 
   constructor(opts: WorktreeManagerOptions) {
     this.baseRepo = opts.baseRepo
@@ -375,7 +381,8 @@ export class WorktreeManager {
   async recoveryInventoryAsync(): Promise<WorktreeRecoveryInventory> {
     return this.operationClient
       ? this.operationClient.run(
-          { operation: 'recoveryInventory' },
+          // fix-ok: la requête d'inventaire doit emporter la garde, sinon le fil d'opérations balaie sans elle
+          { operation: 'recoveryInventory', copiesProtegees: [...this.copiesProtegees] },
           {},
           { timeoutMs: INVENTAIRE_RECUPERATION_TIMEOUT_MS }
         )

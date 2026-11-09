@@ -3,7 +3,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
@@ -285,5 +285,243 @@ describe('balayage asynchrone : retrait sans git synchrone', () => {
     expect(git(repo, 'worktree', 'list')).not.toContain('run-horaire')
     expect(retraitsAsynchrones.length).toBeGreaterThan(0)
     expect(retraitsSynchrones).toEqual([])
+  })
+})
+
+/**
+ * Une copie dont le point de reprise vit encore n'est retirée par aucun chemin : ni le balayage horaire,
+ * ni la reprise d'une suppression coupée, ni un « jeter ». La garde se lit sur le point de reprise, pas
+ * sur l'âge : un run arrêté par le quota a une copie propre, et l'âge seul la prendrait.
+ */
+function lireLeJournal(racine: string): Array<{ run?: string; raison?: string; quand?: string }> {
+  return readFileSync(join(racine, '.retraits.jsonl'), 'utf8')
+    .trim()
+    .split('\n')
+    .map((ligne) => JSON.parse(ligne) as { run?: string; raison?: string; quand?: string })
+}
+
+/** Une suppression commencée puis coupée : fiche posée, `.git` disparu, dossier encore là. */
+function coupeeSansGit(wm: WorktreeManager, agentId: string): string {
+  const path = wm.acquire(agentId)
+  wm.noterSuppressionCommencee(path)
+  rmSync(join(path, '.git'), { force: true })
+  return path
+}
+
+// fix-ok: le journal s'écrivait après le retrait (oublierEchecDeBalayage) et la reprise des suppressions coupées ignorait la garde (verdictDeReprise)
+describe('balayage et point de reprise encore vivant', () => {
+  it("CONSERVE la copie propre et inactive d'un run dont le point de reprise existe encore", () => {
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 4)
+    const path = wm.acquire('run-reprenable')
+    wm.copiesProtegees = new Set(['run-reprenable'])
+
+    expect(wm.reconcileResidues().swept ?? []).toEqual([])
+    expect(existsSync(path)).toBe(true)
+    // Le filtre évite la tentative : sans lui, la garde disque refuse et le balayage noterait un échec
+    // pour une copie qu'il doit simplement laisser. Ce test le verrouille seul.
+    expect(wm.blocagesDeBalayage()).toEqual([])
+  })
+
+  it("JUMEAU : la même copie propre part dès qu'aucun point de reprise ne la protège", () => {
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 4)
+    const path = wm.acquire('run-reprenable')
+    wm.copiesProtegees = new Set(['un-autre-run'])
+
+    expect(wm.reconcileResidues().swept).toEqual(['run-reprenable'])
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it('journalise chaque retrait de copie : run, raison, heure', () => {
+    const repo = tempRepo()
+    const wm = manager(repo, true)
+    wm.acquire('run-sterile')
+
+    expect(wm.reconcileResidues().swept).toEqual(['run-sterile'])
+    const lignes = lireLeJournal(wm.worktreeRoot)
+    expect(lignes).toHaveLength(1)
+    expect(lignes[0].run).toBe('run-sterile')
+    expect(lignes[0].raison).toBe('balayage horaire')
+    expect(Number.isNaN(Date.parse(lignes[0].quand ?? ''))).toBe(false)
+  })
+
+  // fix-ok: la trace du retrait disque du balayage (finirBalayageParLeDisque, worktree-manager-copies.ts) n'était verrouillée par aucun test ; ce test la fixe.
+  it('balayage par le disque (git refuse, copie plus enregistrée) : le retrait écrit sa trace, raison balayage horaire', () => {
+    const repo = tempRepo()
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-sweeproot-'))
+    roots.push(racine)
+    const path = join(racine, 'agent__run-disque')
+    mkdirSync(path)
+    writeFileSync(join(path, 'travail.txt'), 'x')
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      // git refuse tout retrait et ne connaît plus la copie : seul le disque peut la retirer.
+      tryGitFn: (_repo, args) =>
+        args[0] === 'worktree' && args[1] === 'remove'
+          ? { code: 1, stdout: '', stderr: 'refus simulé' }
+          : { code: 0, stdout: '', stderr: '' }
+    })
+
+    expect(wm.balayerLeChemin(path)).toBe(true)
+    expect(existsSync(path)).toBe(false)
+    expect(lireLeJournal(racine).map((l) => [l.run, l.raison])).toEqual([
+      ['run-disque', 'balayage horaire']
+    ])
+  })
+
+  it('un journal illisible ne retient plus la copie : le retrait se fait et la copie disparaît', () => {
+    const repo = tempRepo()
+    const wm = manager(repo, true)
+    const path = wm.acquire('run-sans-trace')
+    mkdirSync(join(wm.worktreeRoot, '.retraits.jsonl'))
+
+    expect(wm.reconcileResidues().swept).toEqual(['run-sans-trace'])
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it('la reprise d’une suppression coupée garde la copie d’un run dont le point de reprise vit', () => {
+    const repo = tempRepo()
+    const wm = manager(repo, true)
+    const path = coupeeSansGit(wm, 'run-coupe')
+    wm.copiesProtegees = new Set(['run-coupe'])
+
+    expect(wm.reprendreSuppressionsCommencees()).toEqual([])
+    expect(existsSync(path)).toBe(true)
+    // Même raison que pour le balayage : sans le filtre de la reprise, la garde disque refuse et
+    // la reprise noterait un échec pour une copie qu'elle doit laisser.
+    expect(wm.blocagesDeBalayage()).toEqual([])
+  })
+
+  it('JUMEAU : la même suppression coupée est reprise dès qu’aucun point de reprise ne la protège', () => {
+    const repo = tempRepo()
+    const wm = manager(repo, true)
+    const path = coupeeSansGit(wm, 'run-coupe')
+    wm.copiesProtegees = new Set(['un-autre-run'])
+
+    expect(wm.reprendreSuppressionsCommencees()).toEqual(['run-coupe'])
+    expect(existsSync(path)).toBe(false)
+    expect(lireLeJournal(wm.worktreeRoot).map((l) => l.raison)).toEqual([
+      'reprise d’une suppression coupée'
+    ])
+  })
+
+  it('jeter un travail retenu laisse sa trace, avec sa raison', () => {
+    const repo = tempRepo()
+    const wm = manager(repo, true)
+    wm.acquire('run-jete')
+
+    wm.discard('run-jete')
+    expect(lireLeJournal(wm.worktreeRoot).map((l) => [l.run, l.raison])).toEqual([
+      ['run-jete', 'jeter le travail retenu']
+    ])
+  })
+
+  it("un retrait réussi dont la trace ne s'écrit pas reste un blocage nommé : la copie est partie, le journal manque", () => {
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 4)
+    const path = wm.acquire('run-trace-cassee')
+    // Un dossier à la place du journal : l'écriture échoue alors que la copie est déjà partie.
+    mkdirSync(join(wm.worktreeRoot, '.retraits.jsonl'))
+
+    wm.reconcileResidues()
+
+    expect(existsSync(path)).toBe(false)
+    expect(wm.blocagesDeBalayage().map((b) => b.detail)).toEqual([
+      expect.stringContaining('trace du retrait non écrite')
+    ])
+  })
+})
+
+/**
+ * Un retrait RÉUSSI dont la trace ne s'écrit pas : la copie est partie, le blocage reste nommé sur chaque
+ * sortie (passage commun, disque du balayage, reprise), en forme synchrone comme asynchrone.
+ */
+describe('trace muette après un retrait réussi, sur chaque sortie', () => {
+  const BLOCAGE_TRACE = expect.stringContaining('trace du retrait non écrite')
+
+  it("balayage asynchrone : un retrait réussi par git dont la trace ne s'écrit pas reste un blocage nommé", async () => {
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 4)
+    const path = wm.acquire('run-trace-async')
+    mkdirSync(join(wm.worktreeRoot, '.retraits.jsonl'))
+
+    await wm.sweepAbandonedAgentCopiesAsync()
+
+    expect(existsSync(path)).toBe(false)
+    expect(wm.blocagesDeBalayage().map((b) => b.detail)).toEqual([BLOCAGE_TRACE])
+  })
+
+  it('balayage asynchrone par le disque (git refuse, copie plus enregistrée) : la trace muette reste un blocage nommé', async () => {
+    const repo = tempRepo()
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-sweeproot-'))
+    roots.push(racine)
+    const path = join(racine, 'agent__run-disque-trace')
+    mkdirSync(path)
+    writeFileSync(join(path, 'travail.txt'), 'x')
+    const refusGit = (_repo: string, args: string[]) =>
+      args[0] === 'worktree' && args[1] === 'remove'
+        ? { code: 1, stdout: '', stderr: 'refus simulé' }
+        : { code: 0, stdout: '', stderr: '' }
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      tryGitFn: refusGit,
+      tryGitAsyncFn: async (dir, args) => refusGit(dir, args)
+    })
+    mkdirSync(join(racine, '.retraits.jsonl'))
+
+    expect(await wm.balayerLeCheminAsync(path)).toBe(true)
+    expect(existsSync(path)).toBe(false)
+    expect(wm.blocagesDeBalayage().map((b) => b.detail)).toEqual([BLOCAGE_TRACE])
+  })
+
+  it('balayage par le disque, forme synchrone (git refuse, copie plus enregistrée) : la trace muette reste un blocage nommé', () => {
+    const repo = tempRepo()
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-sweeproot-'))
+    roots.push(racine)
+    const path = join(racine, 'agent__run-disque-trace-sync')
+    mkdirSync(path)
+    writeFileSync(join(path, 'travail.txt'), 'x')
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      tryGitFn: (_repo, args) =>
+        args[0] === 'worktree' && args[1] === 'remove'
+          ? { code: 1, stdout: '', stderr: 'refus simulé' }
+          : { code: 0, stdout: '', stderr: '' }
+    })
+    mkdirSync(join(racine, '.retraits.jsonl'))
+
+    expect(wm.balayerLeChemin(path)).toBe(true)
+    expect(existsSync(path)).toBe(false)
+    expect(wm.blocagesDeBalayage().map((b) => b.detail)).toEqual([BLOCAGE_TRACE])
+  })
+
+  it('reprise asynchrone d’une suppression coupée : la trace muette reste un blocage au passage suivant', async () => {
+    const repo = tempRepo()
+    const wm = manager(repo, true)
+    coupeeSansGit(wm, 'run-coupe-trace-async')
+    mkdirSync(join(wm.worktreeRoot, '.retraits.jsonl'))
+
+    await wm.reprendreSuppressionsCommenceesAsync()
+    expect(wm.blocagesDeBalayage().map((b) => b.detail)).toEqual([BLOCAGE_TRACE])
+
+    await wm.reprendreSuppressionsCommenceesAsync()
+    expect(wm.blocagesDeBalayage().map((b) => b.detail)).toEqual([BLOCAGE_TRACE])
+  })
+
+  it('reprise d’une suppression coupée : la trace muette reste un blocage au passage suivant', () => {
+    const repo = tempRepo()
+    const wm = manager(repo, true)
+    coupeeSansGit(wm, 'run-coupe-trace')
+    mkdirSync(join(wm.worktreeRoot, '.retraits.jsonl'))
+
+    wm.reprendreSuppressionsCommencees()
+    expect(wm.blocagesDeBalayage().map((b) => b.detail)).toEqual([BLOCAGE_TRACE])
+
+    wm.reprendreSuppressionsCommencees()
+    expect(wm.blocagesDeBalayage().map((b) => b.detail)).toEqual([BLOCAGE_TRACE])
   })
 })

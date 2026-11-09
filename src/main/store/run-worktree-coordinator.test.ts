@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 import type { FinalizeResult } from './worktree-manager'
 import { WorktreeRunStateStore } from './worktree-run-state'
+import { pointsDeRepriseVivantsSur, saveOrchestrationState } from '../runs/orchestration-state'
 
 const TEST_SHA = '1'.repeat(40)
 const PUBLISHED_SHA = 'a'.repeat(40)
@@ -794,6 +795,35 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     expect(discardAsync).toHaveBeenCalledWith('held-run')
     expect(coordinator.activity()).toEqual([])
     await expect(coordinator.discardHeldAsync('missing')).resolves.toBe(false)
+  })
+
+  it('un jet volontaire clôt le point de reprise du run : la relance ne le retient plus', async () => {
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-jet-point-'))
+    try {
+      saveOrchestrationState(racine, {
+        runId: 'held-run',
+        task: 'Tournoi',
+        phaseOutputs: [{ phase: 'build' as never, text: 'livrable build' }],
+        startedAt: 1_000,
+        updatedAt: 2_000
+      })
+      const discardAsync = vi.fn().mockResolvedValue(undefined)
+      const coordinator = new RunWorktreeCoordinator({
+        manager: { ...fakeManager(), discardAsync },
+        racinePointsDeReprise: racine,
+        nowFn: () => 3_000
+      })
+      coordinator.begin('held-run', 'Tournoi', true)
+      coordinator.end('held-run', { merge: false, retainGreen: true })
+      expect(pointsDeRepriseVivantsSur(racine, 3_000).has('held-run')).toBe(true)
+
+      await expect(coordinator.discardHeldAsync('held-run')).resolves.toBe(true)
+
+      expect(discardAsync).toHaveBeenCalledWith('held-run')
+      expect(pointsDeRepriseVivantsSur(racine, 3_000).has('held-run')).toBe(false)
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
   })
 
   it('end attend le CLI encore vivant avant de fusionner et supprimer sa copie', () => {

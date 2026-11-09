@@ -1,7 +1,9 @@
 import { estVerrouGitTenu, motifDeBlocagePublication } from '../../shared/blocage-git-verrou'
 import { pendantOperation } from '../gel/gel-main'
 import { existsSync } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, join } from 'node:path'
+import { ensureAutowinAppData } from '../app/app-data'
+import { clorePointDeRepriseJete, pointsDeRepriseVivantsSur } from '../runs/orchestration-state'
 import type { VerdictBureau } from './verdict-bureau'
 import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
 import { delaiDeReprise, ESSAIS_MAX } from './delai-de-reprise'
@@ -103,8 +105,18 @@ export interface RunWorktreeCoordinatorDeps {
         | 'recensementNonPubliesAsync'
         | 'baseDirtyFiles'
         | 'baseDirtyFilesAsync'
+        // Copies que le balayage doit garder (point de reprise vivant). Écrit par le coordinateur.
+        | 'copiesProtegees'
       >
     >
+  /**
+   * Runs dont le point de reprise (checkpoint d'orchestration) existe encore : leur copie ne part pas
+   * au balayage, même propre et inactive. Par défaut, lu dans le dossier `run-state` de l'application,
+   * le même que la reprise au réveil ; un test injecte le sien.
+   */
+  pointsDeRepriseVivants?: () => ReadonlySet<string>
+  /** Dossier où lire les points de reprise quand `pointsDeRepriseVivants` est absent ; un test le place ailleurs. */
+  racinePointsDeReprise?: string
   stateStore?: WorktreeRunStateStore
   nowFn?: () => number
   /** Appelé à chaque changement d'activité → l'app pousse vers le renderer (IPC). */
@@ -423,6 +435,9 @@ export class RunWorktreeCoordinator {
   private readonly onRefusIntegration?: RunWorktreeCoordinatorDeps['onRefusIntegration']
   private readonly onRecoveredPublication?: RunWorktreeCoordinatorDeps['onRecoveredPublication']
   private readonly stateStore?: WorktreeRunStateStore
+  private readonly pointsDeRepriseVivants: () => ReadonlySet<string>
+  /** Clôt le point de reprise d'un run dont la copie vient d'être jetée (même racine que la lecture). */
+  private readonly fermerLePointDeRepriseJete: (runId: string) => void
   private readonly runs = new Map<string, Tracked>()
   private readonly waitingForProcess = new Set<string>()
   private readonly waitingForRetry = new Set<string>()
@@ -464,6 +479,21 @@ export class RunWorktreeCoordinator {
     this.preparerCopie = deps.preparerCopie
     this.onRecoveredPublication = deps.onRecoveredPublication
     this.stateStore = deps.stateStore
+    const racinePoints = deps.racinePointsDeReprise
+    this.pointsDeRepriseVivants =
+      deps.pointsDeRepriseVivants ??
+      (() =>
+        pointsDeRepriseVivantsSur(
+          racinePoints ?? join(ensureAutowinAppData(), 'run-state'),
+          Date.now()
+        ))
+    // fix-ok: même cause que discardHeldAsync (point de reprise resté ouvert après un jet) ; on ne ferme jamais un point qu'on n'a pas lu.
+    this.fermerLePointDeRepriseJete = (runId) =>
+      clorePointDeRepriseJete(
+        racinePoints ?? join(ensureAutowinAppData(), 'run-state'),
+        runId,
+        this.now()
+      )
     this.arreterSurveillance = deps.surveillerReferences?.(() => this.referencesGitChangees())
     // Le balayage ET le recensement partent d'ici : couper un seul laisserait l'autre agir.
     if (deps.sansRecuperation) return
@@ -477,6 +507,8 @@ export class RunWorktreeCoordinator {
      */
     this.demarrerLeBalayageAutomatique()
     if (this.manager.operationsAreIsolated?.() && this.manager.recoveryInventoryAsync) {
+      // La garde part AVEC la requête : cet inventaire tourne dans le worker, qui ne voit pas le fil principal.
+      this.alignerLesCopiesProtegees()
       void this.manager
         .recoveryInventoryAsync()
         .then(async (inventory) =>
@@ -2096,6 +2128,8 @@ export class RunWorktreeCoordinator {
       return false
     }
     await this.manager.discardAsync(runId)
+    // fix-ok: le jet retirait la copie sans fermer son point de reprise ; fermé ici, après un retrait réussi seulement (un échec laisse le point ouvert).
+    this.fermerLePointDeRepriseJete(runId)
     this.runs.delete(runId)
     this.stateStore?.remove(runId)
     this.emit()
@@ -2566,7 +2600,18 @@ export class RunWorktreeCoordinator {
     return issue
   }
 
+  /**
+   * Pousse au gestionnaire les runs dont le point de reprise vit encore, avant tout balayage : c'est
+   * la garde qui empêche de retirer la copie d'un run reprenable. Relu à chaque balayage, car un
+   * checkpoint naît ou meurt entre deux démarrages.
+   */
+  private alignerLesCopiesProtegees(): void {
+    // fix-ok: le balayage doit lire le point de reprise vivant avant de retirer une copie propre et inactive
+    this.manager.copiesProtegees = this.pointsDeRepriseVivants()
+  }
+
   async balayerLesCopiesAbandonnees(): Promise<string[]> {
+    this.alignerLesCopiesProtegees()
     try {
       return (await this.manager.sweepAbandonedAgentCopiesAsync?.()) ?? []
     } catch {
@@ -2575,6 +2620,7 @@ export class RunWorktreeCoordinator {
   }
 
   private async reconcileExistingAsync(): Promise<void> {
+    this.alignerLesCopiesProtegees()
     // Les coquilles vides d'abord : elles MENTENT a tout ce qui les mesure ensuite. Un `git status`
     // lance dans l'une d'elles ne repond pas « vide » -- git remonte l'arborescence et rapporte
     // l'etat du depot PARENT. Reconcilier avant de les retirer, c'est reconcilier sur douze faux
@@ -2776,6 +2822,8 @@ export class RunWorktreeCoordinator {
     residuesPrecalcules?: ReturnType<WorktreeManager['reconcileResidues']>,
     referencesPrecalculees?: ReadonlyMap<string, boolean | undefined>
   ): void {
+    // Les copies des runs reprenables sont gardées AVANT tout balayage (voir alignerLesCopiesProtegees).
+    this.alignerLesCopiesProtegees()
     // `??` et non `||` : des résidus déjà calculés mais VIDES ne doivent pas relancer le balayage.
     const residues =
       inventory?.residues ?? residuesPrecalcules ?? this.manager.reconcileResidues?.()

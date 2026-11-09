@@ -16,7 +16,13 @@ import {
   canonicalPath,
   parseNullSeparatedPaths,
   ARGS_STATUT_DE_LA_BASE,
-  argsDeRetraitDeCopie
+  argsDeRetraitDeCopie,
+  DETAIL_POINT_DE_REPRISE_VIVANT,
+  OptionsDeRetrait,
+  RAISON_NON_NOMMEE,
+  copieGardeeParUnPointDeReprise,
+  tracerRetraitDeCopie,
+  tracerRetraitDeCopieAsync
 } from './worktree-manager-outils'
 import { WorktreeManager } from './worktree-manager'
 
@@ -77,17 +83,39 @@ const DETAIL_NOTE_REFUSEE = 'la note de retrait n’a pas pu être écrite : la 
 /** git a rendu 0, mais le dossier reste sur le disque : la copie n'est pas partie. */
 const DETAIL_DOSSIER_SURVIVANT = 'git a retiré la copie, mais son dossier reste sur le disque'
 
+/**
+ * LE PASSAGE COMMUN de tout retrait de copie : la garde du point de reprise s'applique ici, avant la
+ * note et avant git, et la trace s'écrit ici, une fois le retrait réussi. Un retrait voulu qui ignore
+ * la garde le déclare par `options.passeOutre` (son motif).
+ */
 export function cleanupWorktree(
   this: WorktreeManager,
   path: string,
-  force = true
-): { ok: boolean; detail?: string } {
+  force = true,
+  options: OptionsDeRetrait = {}
+): { ok: boolean; detail?: string; traceManquante?: string } {
+  // fix-ok: le retrait ne regardait pas le point de reprise : copie propre et inactive de 3 h retirée, reprise ensuite refusée « copie durable absente ».
+  if (!options.passeOutre && copieGardeeParUnPointDeReprise(this.copiesProtegees, path)) {
+    return { ok: false, detail: DETAIL_POINT_DE_REPRISE_VIVANT }
+  }
   const voisines = this.preparerRetraitDeCopie(path)
   if (voisines === undefined) return { ok: false, detail: DETAIL_NOTE_REFUSEE }
   const remove = this.tryGitFn(this.baseRepo, argsDeRetraitDeCopie(path, force))
-  const resultat = this.conclureRetraitDeCopie(path, force, remove, voisines)
+  const resultat = this.conclureRetraitDeCopie(
+    path,
+    force,
+    remove,
+    voisines,
+    undefined,
+    options.passeOutre
+  )
   this.oublierSuppressionCommencee(path)
-  return resultat
+  if (!resultat.ok) return resultat
+  const trace = tracerRetraitDeCopie(this.worktreeRoot, path, options.raison ?? RAISON_NON_NOMMEE)
+  if (!trace) return resultat
+  // fix-ok: seul le balayage notait la trace manquante ; un appelant direct (quarantaine, jet) la perdait.
+  this.noterEchecDeBalayage(path, trace)
+  return { ok: true, detail: `retrait fait ; ${trace}`, traceManquante: trace }
 }
 
 /**
@@ -105,16 +133,38 @@ export function cleanupWorktree(
 export async function cleanupWorktreeAsync(
   this: WorktreeManager,
   path: string,
-  force = true
-): Promise<{ ok: boolean; detail?: string }> {
+  force = true,
+  options: OptionsDeRetrait = {}
+): Promise<{ ok: boolean; detail?: string; traceManquante?: string }> {
+  if (!options.passeOutre && copieGardeeParUnPointDeReprise(this.copiesProtegees, path)) {
+    return { ok: false, detail: DETAIL_POINT_DE_REPRISE_VIVANT }
+  }
   const voisines = this.preparerRetraitDeCopie(path)
   if (voisines === undefined) return { ok: false, detail: DETAIL_NOTE_REFUSEE }
   const remove = await this.tryGitAsyncFn(this.baseRepo, argsDeRetraitDeCopie(path, force))
   const detailDisque =
-    remove.code !== 0 && force ? await this.tenterRetraitDisqueAsync(path) : undefined
-  const resultat = this.conclureRetraitDeCopie(path, force, remove, voisines, detailDisque)
+    remove.code !== 0 && force
+      ? await this.tenterRetraitDisqueAsync(path, options.passeOutre)
+      : undefined
+  const resultat = this.conclureRetraitDeCopie(
+    path,
+    force,
+    remove,
+    voisines,
+    detailDisque,
+    options.passeOutre
+  )
   this.oublierSuppressionCommencee(path)
-  return resultat
+  if (!resultat.ok) return resultat
+  const trace = await tracerRetraitDeCopieAsync(
+    this.worktreeRoot,
+    path,
+    options.raison ?? RAISON_NON_NOMMEE
+  )
+  if (!trace) return resultat
+  // fix-ok: même cause que la forme synchrone : le blocage n'était noté que par le balayage.
+  this.noterEchecDeBalayage(path, trace)
+  return { ok: true, detail: `retrait fait ; ${trace}`, traceManquante: trace }
 }
 
 /**
@@ -152,7 +202,9 @@ export function conclureRetraitDeCopie(
   remove: { code: number; stdout: string; stderr: string },
   voisines: string[],
   /** Escalade disque DÉJÀ tentée par la forme asynchrone ; absente, elle est faite ici. */
-  detailDisque?: string
+  detailDisque?: string,
+  /** Motif d'un retrait voulu : son repli disque suit la même garde que le passage commun. */
+  passeOutre?: string
 ): { ok: boolean; detail?: string } {
   if (remove.code === 0) {
     /*
@@ -196,7 +248,8 @@ export function conclureRetraitDeCopie(
     return { ok: false, detail: causeGit(remove) || undefined }
   }
 
-  const filesystemDetail = detailDisque ?? this.tenterRetraitDisque(path)
+  // fix-ok: le repli disque ne recevait pas passeOutre ; la garde du point de reprise refusait le repli d'un retrait voulu.
+  const filesystemDetail = detailDisque ?? this.tenterRetraitDisque(path, passeOutre)
   const prune = this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
   if (!existsSync(path) && prune.code === 0) {
     supprimerHistoriqueCli(path, voisines)
@@ -255,7 +308,10 @@ export function acquire(
     startRevision
   ])
   if (context && this.git(path, ['rev-parse', 'HEAD']) !== startRevision) {
-    this.cleanupWorktree(path)
+    this.cleanupWorktree(path, true, {
+      raison: 'copie créée non conforme',
+      passeOutre: 'copie créée à l’instant : sa révision ne correspond pas'
+    })
     throw new Error('La copie créée ne correspond pas à la révision capturée.')
   }
   /*
@@ -321,7 +377,11 @@ export function rafraichirSiBasePerimee(
         `Publiez ou rangez ce travail.`
     )
   }
-  const nettoye = this.cleanupWorktree(path)
+  // La copie est propre (aucun fichier non publié, déjà vérifié plus haut) : recréée sur la base à jour.
+  const nettoye = this.cleanupWorktree(path, true, {
+    raison: 'base périmée : copie propre recréée',
+    passeOutre: 'copie sans travail, recréée sur la base à jour par l’acquisition'
+  })
   if (!nettoye.ok || existsSync(path)) {
     throw new Error(
       `Bureau ${agentId} sur une base périmée : impossible de le rafraîchir sur ` +

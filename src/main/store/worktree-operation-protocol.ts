@@ -38,7 +38,11 @@ export type WorktreeOperationRequest =
       baseBranch?: string
     }
   | { operation: 'acknowledgePublication'; agentId: string; publishedSha: string }
-  | { operation: 'recoveryInventory' }
+  /**
+   * `copiesProtegees` : les copies dont le point de reprise vit encore. Le worker a SON gestionnaire,
+   * qui ne voit pas la garde du fil principal : sans ce champ, son balayage retire une copie reprenable.
+   */
+  | { operation: 'recoveryInventory'; copiesProtegees?: string[] }
   /**
    * Le recensement des travaux non publies, ENTIEREMENT dans le worker.
    *

@@ -29,7 +29,11 @@ import {
   parseNullSeparatedPaths,
   SPAWN_INTENT_MAX_AGE_MS,
   ABANDONED_AGENT_MIN_AGE_MS,
-  RESIDU_SANS_ENJEU_MIN_AGE_MS
+  RESIDU_SANS_ENJEU_MIN_AGE_MS,
+  DETAIL_POINT_DE_REPRISE_VIVANT,
+  copieGardeeParUnPointDeReprise,
+  tracerRetraitDeCopie,
+  tracerRetraitDeCopieAsync
 } from './worktree-manager-outils'
 import { WorktreeManager } from './worktree-manager'
 import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
@@ -227,7 +231,7 @@ export function reconcileResidues(
       })
       continue
     }
-    const cleanup = this.cleanupWorktree(path)
+    const cleanup = this.cleanupWorktree(path, true, { raison: 'copie d’intégration orpheline' })
     if (cleanup.ok) result.cleaned += 1
     else {
       result.blocked.push({
@@ -306,7 +310,7 @@ export function reconcileResidues(
         })
         continue
       }
-      const menage = this.cleanupWorktree(quarantinedPath)
+      const menage = this.cleanupWorktree(quarantinedPath, true, { raison: 'quarantaine' })
       if (menage.ok) result.cleaned += 1
       else {
         result.blocked.push({
@@ -465,6 +469,10 @@ function copieAgeeEtInactive(this: WorktreeManager, entry: Dirent): CopieCandida
   if (!entry.isDirectory() || !entry.name.startsWith('agent__')) return undefined
   const agentId = entry.name.slice('agent__'.length)
   if (!SAFE_ID.test(agentId)) return undefined
+  // Le point de reprise d'un run encore reprenable vaut copie : la retirer rend sa reprise impossible,
+  // quelle que soit son âge et son état. Garde sur le point de reprise, pas sur l'âge.
+  // fix-ok: le balayage doit lire le point de reprise vivant avant de retirer une copie propre et inactive
+  if (this.copiesProtegees.has(agentId)) return undefined
   const path = join(this.worktreeRoot, entry.name)
 
   let ageMs: number
@@ -570,8 +578,10 @@ function deciderApresAppartenance(
  */
 export function balayerLeChemin(this: WorktreeManager, path: string): boolean {
   // Sans note écrite, rien ne part : l'escalade disque ci-dessous ne doit jamais couper un retrait non noté.
+  // fix-ok: le balayage horaire retirait la copie propre et inactive de 3 h d'un run dont le point de reprise vivait ; la reprise était ensuite refusée « copie durable absente ».
   if (!this.noterSuppressionCommencee(path)) return false
-  if (this.cleanupWorktree(path, false).ok) return this.oublierEchecDeBalayage(path)
+  const retraitDoux = this.cleanupWorktree(path, false, { raison: RAISON_BALAYAGE })
+  if (retraitDoux.ok) return conclureBalayageReussi(this, path, retraitDoux.traceManquante)
 
   /*
    * ESCALADE plutot qu'abandon silencieux.
@@ -584,10 +594,11 @@ export function balayerLeChemin(this: WorktreeManager, path: string): boolean {
    * Les protections du travail sont deja passees (age, processus actif, propriete, fichiers non
    * publies, commit reference) : ce qui reste n'est qu'une question de MOYEN de suppression.
    */
-  if (this.estWorktreeEnregistree(path) && this.cleanupWorktree(path, true).ok) {
-    return this.oublierEchecDeBalayage(path)
+  if (this.estWorktreeEnregistree(path)) {
+    const retraitForce = this.cleanupWorktree(path, true, { raison: RAISON_BALAYAGE })
+    if (retraitForce.ok) return conclureBalayageReussi(this, path, retraitForce.traceManquante)
   }
-  return this.finirBalayageParLeDisque(path)
+  return this.finirBalayageParLeDisque(path, undefined, RAISON_BALAYAGE)
 }
 
 /**
@@ -598,15 +609,33 @@ export function balayerLeChemin(this: WorktreeManager, path: string): boolean {
 export async function balayerLeCheminAsync(this: WorktreeManager, path: string): Promise<boolean> {
   // Même porte que `balayerLeChemin` : pas de retrait, même par le disque, sans note écrite.
   if (!this.noterSuppressionCommencee(path)) return false
-  if ((await this.cleanupWorktreeAsync(path, false)).ok) return this.oublierEchecDeBalayage(path)
-  if (this.estWorktreeEnregistree(path) && (await this.cleanupWorktreeAsync(path, true)).ok) {
-    return this.oublierEchecDeBalayage(path)
+  const retraitDoux = await this.cleanupWorktreeAsync(path, false, { raison: RAISON_BALAYAGE })
+  if (retraitDoux.ok) return conclureBalayageReussi(this, path, retraitDoux.traceManquante)
+  if (this.estWorktreeEnregistree(path)) {
+    const retraitForce = await this.cleanupWorktreeAsync(path, true, { raison: RAISON_BALAYAGE })
+    if (retraitForce.ok) return conclureBalayageReussi(this, path, retraitForce.traceManquante)
   }
-  return this.finirBalayageParLeDisque(path, await this.tenterRetraitDisqueAsync(path))
+  return this.finirBalayageParLeDisque(
+    path,
+    await this.tenterRetraitDisqueAsync(path),
+    RAISON_BALAYAGE
+  )
 }
 
-/** Retrait disque d'une copie : '' s'il a réussi, sinon la cause (qui nomme le fichier bloquant). */
-export function tenterRetraitDisque(this: WorktreeManager, path: string): string {
+// fix-ok: tenterRetraitDisque appliquait la garde du point de reprise sans regarder passeOutre ; le repli disque d'un retrait voulu rendait ok:false et la copie restait.
+/**
+ * Retrait disque d'une copie : '' s'il a réussi, sinon la cause (qui nomme le fichier bloquant).
+ * `passeOutre` : le même motif qu'au passage commun ; sans lui, la garde du point de reprise tient.
+ */
+export function tenterRetraitDisque(
+  this: WorktreeManager,
+  path: string,
+  passeOutre?: string
+): string {
+  // Le retrait par le disque est une sortie de plus : il suit la garde du passage commun, et ne la
+  // contourne que par le même motif.
+  if (!passeOutre && copieGardeeParUnPointDeReprise(this.copiesProtegees, path))
+    return DETAIL_POINT_DE_REPRISE_VIVANT
   try {
     this.removeDirFn(path)
     return ''
@@ -618,8 +647,11 @@ export function tenterRetraitDisque(this: WorktreeManager, path: string): string
 /** Le même retrait, hors du fil principal : seule la FORME change, jamais le verdict. */
 export async function tenterRetraitDisqueAsync(
   this: WorktreeManager,
-  path: string
+  path: string,
+  passeOutre?: string
 ): Promise<string> {
+  if (!passeOutre && copieGardeeParUnPointDeReprise(this.copiesProtegees, path))
+    return DETAIL_POINT_DE_REPRISE_VIVANT
   try {
     await this.removeDirAsyncFn(path)
     return ''
@@ -636,7 +668,8 @@ export async function tenterRetraitDisqueAsync(
 export function finirBalayageParLeDisque(
   this: WorktreeManager,
   path: string,
-  detailDisque?: string
+  detailDisque: string | undefined,
+  raison: string
 ): boolean {
   // Relevées AVANT le retrait : les copies voisines protègent leur propre historique CLI.
   const voisines = copiesVivantes(path)
@@ -650,6 +683,12 @@ export function finirBalayageParLeDisque(
      */
     supprimerHistoriqueCli(path, voisines)
     this.oublierSuppressionCommencee(path)
+    // Retrait par le disque réussi : sa trace s'écrit ici, puisque le passage commun n'a pas tourné.
+    const trace = tracerRetraitDeCopie(this.worktreeRoot, path, raison)
+    if (trace) {
+      this.noterEchecDeBalayage(path, trace)
+      return true
+    }
     return this.oublierEchecDeBalayage(path)
   }
 
@@ -663,10 +702,32 @@ export function noterEchecDeBalayage(this: WorktreeManager, path: string, detail
   this.echecsDeBalayage.set(cle, { echecs: (precedent?.echecs ?? 0) + 1, detail })
 }
 
+/**
+ * Chaque sortie en succès du balayage passe ici : la copie est partie. Sa trace s'écrit au passage
+ * commun (`cleanupWorktree`) ou, pour un retrait par le disque, dans `finirBalayageParLeDisque`.
+ */
 export function oublierEchecDeBalayage(this: WorktreeManager, path: string): true {
   this.echecsDeBalayage.delete(resolve(path))
   return true
 }
+
+/**
+ * Retrait réussi : la copie est partie. Une trace manquante est DÉJÀ notée au passage commun
+ * (`cleanupWorktree`) : la noter ici la compterait deux fois. Sans trace manquante, un ancien blocage
+ * de ce chemin s'efface.
+ */
+// fix-ok: le passage commun note déjà la trace manquante ; le balayage ne doit pas la noter une seconde fois (echecs = 2).
+function conclureBalayageReussi(
+  wm: WorktreeManager,
+  path: string,
+  traceManquante: string | undefined
+): true {
+  if (traceManquante) return true
+  return wm.oublierEchecDeBalayage(path)
+}
+
+const RAISON_BALAYAGE = 'balayage horaire'
+const RAISON_REPRISE = 'reprise d’une suppression coupée'
 
 /** Les chemins que le balayage n'a PAS pu retirer, avec leur nombre d'echecs et la cause lue. */
 export function blocagesDeBalayage(
@@ -902,6 +963,10 @@ function verdictDeReprise(
   fiche: FicheDeSuppression,
   chemin: string
 ): VerdictDeReprise {
+  // Un run dont le point de reprise vit encore garde sa copie, même coupée : la finir la rendrait
+  // introuvable à la reprise. Le verdict se relit quand le point de reprise disparaît.
+  // fix-ok: la reprise d'une suppression coupée ne doit pas finir la copie d'un run reprenable
+  if (this.copiesProtegees.has(fiche.agentId)) return 'attendre'
   if (this.hasActiveProcesses(fiche.agentId)) return 'attendre'
   const naissance = naissanceDuDossier(chemin)
   if (naissance === undefined) return 'finir'
@@ -925,6 +990,7 @@ export function reprendreSuppressionsCommencees(this: WorktreeManager): string[]
       continue
     }
     const voisines = copiesVivantes(chemin)
+    let traceManquante: string | undefined
     if (verdict === 'retirer') {
       const lien = delierLesDependances(chemin)
       if (lien.fait === 'echec') {
@@ -936,11 +1002,15 @@ export function reprendreSuppressionsCommencees(this: WorktreeManager): string[]
         this.noterEchecDeBalayage(chemin, detail || 'le dossier survit à la reprise')
         continue
       }
+      // Retrait réussi : sa trace s'écrit ici. Un échec ne retient ni le ménage ni la fiche : la copie est partie.
+      traceManquante = tracerRetraitDeCopie(this.worktreeRoot, chemin, RAISON_REPRISE)
     }
     this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
     supprimerHistoriqueCli(chemin, voisines)
     retirerLaFiche(this.worktreeRoot, fiche.agentId)
-    this.oublierEchecDeBalayage(chemin)
+    // fix-ok: la trace en échec gardait la fiche et sortait de la boucle ; le passage suivant (dossier absent, verdict finir) effaçait le blocage sans réécrire la trace.
+    if (traceManquante) this.noterEchecDeBalayage(chemin, traceManquante)
+    else this.oublierEchecDeBalayage(chemin)
     reprises.push(fiche.agentId)
   }
   return reprises
@@ -960,6 +1030,7 @@ export async function reprendreSuppressionsCommenceesAsync(
       continue
     }
     const voisines = copiesVivantes(chemin)
+    let traceManquante: string | undefined
     if (verdict === 'retirer') {
       const lien = delierLesDependances(chemin)
       if (lien.fait === 'echec') {
@@ -971,11 +1042,15 @@ export async function reprendreSuppressionsCommenceesAsync(
         this.noterEchecDeBalayage(chemin, detail || 'le dossier survit à la reprise')
         continue
       }
+      // Même règle que la forme synchrone : un retrait réussi reste réussi même si sa trace échoue.
+      traceManquante = await tracerRetraitDeCopieAsync(this.worktreeRoot, chemin, RAISON_REPRISE)
     }
     await this.tryGitAsyncFn(this.baseRepo, ['worktree', 'prune'])
     supprimerHistoriqueCli(chemin, voisines)
     retirerLaFiche(this.worktreeRoot, fiche.agentId)
-    this.oublierEchecDeBalayage(chemin)
+    // fix-ok: même cause que la forme synchrone : le passage suivant effaçait le blocage sans réécrire la trace.
+    if (traceManquante) this.noterEchecDeBalayage(chemin, traceManquante)
+    else this.oublierEchecDeBalayage(chemin)
     reprises.push(fiche.agentId)
   }
   return reprises
@@ -1238,7 +1313,7 @@ export function cleanupAgentWorktree(
     }
   }
 
-  const cleanup = this.cleanupWorktree(quarantinePath, false)
+  const cleanup = this.cleanupWorktree(quarantinePath, false, { raison: 'quarantaine' })
   if (cleanup.ok) {
     /*
      * L'historique CLI se purge sur le chemin D'ORIGINE, jamais sur celui de la quarantaine.

@@ -4,7 +4,10 @@ const calls = vi.hoisted(
   () => [] as Array<{ bin: string; args: string[]; options: Record<string, unknown> }>
 )
 
-vi.mock('node:child_process', () => ({
+// Mock partiel : la chaîne d'imports de WorktreeManager charge aussi les contrôles Git, qui relèvent
+// `execFile` au chargement. Un mock qui ne le fournit pas casse l'import avant que le test ne tourne.
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:child_process')>()),
   execFileSync: (bin: string, args: string[], options: Record<string, unknown>) => {
     calls.push({ bin, args, options })
     if (args.includes('--git-common-dir')) return '.git\n'

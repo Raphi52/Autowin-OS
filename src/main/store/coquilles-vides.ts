@@ -57,8 +57,14 @@ function porteAucunFichier(chemin: string): boolean {
  *
  * Ne descend QUE d'un niveau : chaque entree de `racine` est un bureau, et un sous-dossier vide
  * DANS un bureau porteur n'est pas une coquille — c'est une partie de son travail.
+ *
+ * `estGardee` : un bureau gardé par un point de reprise n'est jamais retiré, même vide. Une coquille
+ * est une copie comme une autre pour la reprise : la retirer rend la reprise « copie absente ».
  */
-export function balayerCoquillesVides(racine: string): string[] {
+export function balayerCoquillesVides(
+  racine: string,
+  estGardee: (chemin: string) => boolean = () => false
+): string[] {
   let bureaux: string[]
   try {
     bureaux = readdirSync(racine)
@@ -70,6 +76,7 @@ export function balayerCoquillesVides(racine: string): string[] {
     const chemin = join(racine, nom)
     try {
       if (!statSync(chemin).isDirectory()) continue
+      if (estGardee(chemin)) continue
       if (!estCoquilleVide(chemin)) continue
       supprimerArbre(chemin)
       supprimes.push(nom)

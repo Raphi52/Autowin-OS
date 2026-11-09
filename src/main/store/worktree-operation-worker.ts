@@ -83,6 +83,9 @@ port.on('message', (request: WorktreeOperationRequest) => {
         value = manager.commitsDejaReferences(request.shas)
         break
       case 'recoveryInventory':
+        // fix-ok: ce fil d'opérations a son propre gestionnaire, qui ne connaît pas les points de reprise : son balayage retirait la copie d'un run reprenable
+        // La garde arrive avec la requête, AVANT le balayage, qui tourne dans recoveryInventory().
+        manager.copiesProtegees = new Set(request.copiesProtegees ?? [])
         value = manager.recoveryInventory()
         break
       case 'describe':
