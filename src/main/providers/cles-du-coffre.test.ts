@@ -4,8 +4,9 @@
  *
  * Le coffre utilisé est le VRAI (`creerCoffre`), sur un fichier temporaire et un chiffrement factice :
  * seule la place du coffre du processus est prise, pour que les lancements le lisent sans Electron.
- * Entrée qui rend ces tests rouges : retirer `envDuCoffre(...)` d'un des quatre moteurs, ou retirer
+ * Entrée qui rend ces tests rouges : retirer `envDuCoffre(...)` d'un des cinq moteurs, ou retirer
  * un nom de `EXCLUSIONS_COFFRE`.
+ * fix-ok: le moteur direct manquait (commande shell sans la clé, mesuré rouge) ; cas ajouté avec sa garde.
  */
 import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -34,6 +35,7 @@ import { environnementAgent } from './claude'
 import { environnementCodex } from './codex'
 import { AgyAdapter } from './agy'
 import { GrokAdapter } from './grok'
+import { creerOutilsAgentDirect } from './outils-agent-direct'
 import { QuestionsACote } from '../chat/question-a-cote'
 
 const MISTRAL = 'valeur-mistral-0123456789'
@@ -241,5 +243,33 @@ describe('Grok — env du processus lancé', () => {
     expect(envs[0]!.MISTRAL_API_KEY).toBe(MISTRAL)
     expect(envs[0]!.XAI_API_KEY).toBeUndefined()
     expect(nomsInjectes(envs[0]!)).not.toContain('XAI_API_KEY')
+  })
+})
+
+describe('moteur direct — la commande shell et la garde de ses agents', () => {
+  /** Lit une variable dans le shell lancé (cmd.exe sous Windows, sh ailleurs). */
+  const lire = (nom: string): string => (process.platform === 'win32' ? `%${nom}%` : `$${nom}`)
+  const outil = (o: Parameters<typeof creerOutilsAgentDirect>[0], nom: string) =>
+    creerOutilsAgentDirect(o).find((x) => x.nom === nom)!
+
+  it('la clé arrive dans la commande, nommée ; le run l’emporte sur le coffre', async () => {
+    const commande = outil(
+      { cwd: dossier, scriptGarde: () => '', agentEnv: { OPENAI_API_KEY: 'valeur-du-run' } },
+      'commande'
+    )
+    const cmd = `echo ${lire('MISTRAL_API_KEY')}/${lire(COFFRE_NOMS_ENV)}/${lire('OPENAI_API_KEY')}`
+    const sortie = await commande.executer({ commande: cmd }, {} as never)
+    expect(sortie).toContain(`${MISTRAL}/`)
+    expect(sortie).toMatch(/\/[A-Z_,]*MISTRAL_API_KEY[A-Z_,]*\//)
+    expect(sortie).toContain('/valeur-du-run')
+  })
+
+  it('la garde reçoit AUTOWIN_COFFRE_NOMS dans son propre environnement', async () => {
+    // Garde qui refuse en rendant, comme motif, les noms qu'elle voit.
+    const garde = `process.stdout.write(JSON.stringify({ hookSpecificOutput: { permissionDecision: 'deny', permissionDecisionReason: String(process.env.${COFFRE_NOMS_ENV}) } }))`
+    const commande = outil({ cwd: dossier, scriptGarde: () => garde }, 'commande')
+    await expect(commande.executer({ commande: 'echo x' }, {} as never)).rejects.toThrow(
+      /MISTRAL_API_KEY/
+    )
   })
 })

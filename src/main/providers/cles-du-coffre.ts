@@ -1,5 +1,5 @@
 /**
- * LES CLÉS DU COFFRE DANS L'ENVIRONNEMENT D'UN AGENT — un seul calcul, partagé par les quatre moteurs.
+ * LES CLÉS DU COFFRE DANS L'ENVIRONNEMENT D'UN AGENT — un seul calcul, partagé par les cinq moteurs.
  *
  * Pourquoi : un agent se sert d'une clé API par son NOM (`$MISTRAL_API_KEY` dans sa commande) au lieu
  * de la réclamer dans le fil ou de refuser faute de droit. Le coffre est relu à CHAQUE lancement : une
@@ -18,7 +18,7 @@ import { valeursPourAgent } from '../app/coffre-cles'
 
 export const COFFRE_NOMS_ENV = 'AUTOWIN_COFFRE_NOMS'
 
-export type MoteurAgent = 'claude' | 'codex' | 'agy' | 'grok'
+export type MoteurAgent = 'claude' | 'codex' | 'agy' | 'grok' | 'direct'
 
 /** Par moteur, les noms que le coffre ne pose jamais : ceux qui changent la connexion du CLI lancé. */
 export const EXCLUSIONS_COFFRE: Readonly<Record<MoteurAgent, readonly string[]>> = {
@@ -39,7 +39,12 @@ export const EXCLUSIONS_COFFRE: Readonly<Record<MoteurAgent, readonly string[]>>
   agy: ['GEMINI_API_KEY', 'AGY_ADC_AUTH'],
   // Règle de l'utilisateur : Grok passe par son CLI et son abonnement, jamais par l'API directe.
   // `envSansCleXai` (grok.ts) retire en plus la variable héritée, en dernier.
-  grok: ['XAI_API_KEY']
+  grok: ['XAI_API_KEY'],
+  // Moteur direct (openai-compat.ts) : aucun CLI n'est lancé. Il lit sa clé dans l'environnement de
+  // l'app elle-même (`this.cfg.env ?? process.env`), jamais dans celui des commandes de ses agents :
+  // aucune clé posée ici ne peut changer sa connexion.
+  // fix-ok: outils-agent-direct.ts construisait l'env des commandes sans le coffre (test « moteur direct » rouge : %MISTRAL_API_KEY% non défini)
+  direct: []
 }
 
 /**

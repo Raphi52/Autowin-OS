@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { envDuCoffre } from './cles-du-coffre'
 import type { OutilAgent } from './openai-compat'
 
 /**
@@ -35,7 +36,13 @@ const DOSSIERS_IGNORES = new Set(['node_modules', '.git', '.autowin-data', 'out'
 
 export function creerOutilsAgentDirect(o: OptionsOutilsAgentDirect): OutilAgent[] {
   const cwd = resolve(o.cwd)
-  const env: NodeJS.ProcessEnv = { ...process.env, ...(o.agentEnv ?? {}) }
+  // Même ordre que les autres moteurs : poste, clés du coffre, puis variables du run. La garde et la
+  // commande shell voient le même environnement.
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...envDuCoffre('direct'),
+    ...(o.agentEnv ?? {})
+  }
   let cheminGarde: Promise<string> | undefined
   const garde = async (outil: string, entree: Record<string, unknown>): Promise<void> => {
     cheminGarde ??= (async () => {
