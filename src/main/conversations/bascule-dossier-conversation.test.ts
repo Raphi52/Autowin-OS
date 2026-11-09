@@ -178,7 +178,7 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
       actif?: boolean
       depot?: string | null
       ouvrir?: () => Promise<Ouverture>
-      questionSeule?: boolean
+      rienAEcrire?: boolean
     } = {}
   ): {
     issue: ReturnType<typeof preparerLeDossierDuTour>
@@ -191,7 +191,7 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
       fil: store.get(id),
       depotPartage: options.depot === undefined ? DEPOT : options.depot,
       actif: options.actif ?? true,
-      questionSeule: options.questionSeule ?? false,
+      rienAEcrire: options.rienAEcrire ?? false,
       ouvrirCopie: async () => {
         ouvertures += 1
         return options.ouvrir ? options.ouvrir() : OUVERTE
@@ -239,7 +239,7 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
     const store = new ConversationStore(() => 1000)
     const id = store.create({ title: 'T', provider: 'claude' }).id
 
-    const essai = preparer(store, id, { questionSeule: true })
+    const essai = preparer(store, id, { rienAEcrire: true })
 
     expect(await essai.issue).toBe('rien')
     expect(essai.ouvertures()).toBe(0)
@@ -253,7 +253,7 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
     store.passerDansLaCopie(id, { chemin: COPIE, depot: DEPOT })
     store.revenirDeLaCopie(id)
 
-    const essai = preparer(store, id, { questionSeule: true })
+    const essai = preparer(store, id, { rienAEcrire: true })
 
     expect(await essai.issue).toBe('reprise')
     expect(essai.ouvertures()).toBe(0)

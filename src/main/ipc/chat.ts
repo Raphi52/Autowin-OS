@@ -258,7 +258,7 @@ import {
 import { photographierLeCode } from '../git/photo-du-code'
 import { ligneDeMiseAJour, mettreLaCopieDuFilAJour } from '../git/copie-du-fil-a-jour'
 import { DOSSIER_DES_COPIES_DE_FIL } from '../../shared/copie-du-fil'
-import { estUneQuestionSansAction } from '../chat/grow-au-debut'
+import { demandeSansEcritureDansLeDepot } from '../copies/demande-sans-copie'
 import { messageLiaison } from '../store/dependances-copie-agent'
 import { materializeChatArtifact } from '../store/chat-artifact-store'
 import { filterNativePreflight, readNativePreflight } from '../activity/native-preflight'
@@ -2318,7 +2318,7 @@ Le fil reprend ensuite normalement.`
       fil,
       depotPartage: estUnDepotGit(depot) ? depot : null,
       actif: lireReglageCopieParFil(reglageCopieParFil()),
-      questionSeule: estUneQuestionSansAction(
+      rienAEcrire: demandeSansEcritureDansLeDepot(
         [...messages].reverse().find((m) => m.role === 'user')?.content
       ),
       // la garde « copie d'avant déjà là » et les annonces de refus vivent dans bascule-dossier-conversation.ts, testées là.

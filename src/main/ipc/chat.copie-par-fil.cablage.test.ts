@@ -35,10 +35,10 @@ describe('une copie par fil — au début du tour', () => {
     )
   })
 
-  it('une question seule n’ouvre pas de copie : la décision lit la dernière demande du tour', () => {
+  it('une demande qui n’écrit rien n’ouvre pas de copie : la décision lit la dernière demande du tour', () => {
     const passage = source.slice(source.indexOf('const passerLeFilDansSaCopie = async ('))
     const bloc = passage.slice(0, passage.indexOf('const tourCompteDesReception'))
-    expect(bloc).toContain('questionSeule: estUneQuestionSansAction(')
+    expect(bloc).toContain('rienAEcrire: demandeSansEcritureDansLeDepot(')
     expect(bloc).toContain("[...messages].reverse().find((m) => m.role === 'user')?.content")
   })
 

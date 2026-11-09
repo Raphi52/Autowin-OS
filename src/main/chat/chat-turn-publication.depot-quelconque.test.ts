@@ -273,7 +273,7 @@ describe('un fil rangé dans un dépôt tiers — ouverture de sa copie au débu
       fil: { projectPath: autreDepot.depot },
       depotPartage: estUnDepotGit(autreDepot.depot) ? autreDepot.depot : null,
       actif: true,
-      questionSeule: false,
+      rienAEcrire: false,
       ouvrirCopie: () =>
         ouvrirLaCopieDuFilPourLeTour({
           dossierDeDonnees,
@@ -300,7 +300,7 @@ describe('un fil rangé dans un dépôt tiers — ouverture de sa copie au débu
       fil: { projectPath: autreDepot.depot },
       depotPartage: autreDepot.depot,
       actif: true,
-      questionSeule: true,
+      rienAEcrire: true,
       ouvrirCopie: async () => {
         throw new Error('une question seule ne doit ouvrir aucune copie')
       },

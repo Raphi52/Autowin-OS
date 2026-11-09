@@ -233,7 +233,7 @@ export function estUneDemandeDAction(demande: string | undefined, skillInvoquee?
 /**
  * Une QUESTION SEULE : ni demande d'action, ni skill invoquée, et une tournure de question (mot
  * interrogatif en tête ou point d'interrogation final). Lue aussi par la copie de fil
- * (`preparerLeDossierDuTour`) : une question n'a rien à écrire, elle ne mérite pas de copie. Étroite
+ * (`demande-sans-copie.ts`) : une question n'a rien à écrire, elle ne mérite pas de copie. Étroite
  * par construction, à l'inverse de `estUneDemandeDAction` : dans le doute, le fil reçoit sa copie.
  */
 export function estUneQuestionSansAction(demande: string | undefined): boolean {
