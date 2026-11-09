@@ -1493,10 +1493,14 @@ export function argumentsMcpNoeudSkill(
   const noeud = opts.skillNodeTools
   // `--strict-mcp-config` est pose PARTOUT sauf pour un noeud skill dont l'heritage est demande.
   // C'est lui qui prive les huit phases du pipeline de tout serveur externe (verifie hors-modele :
-  // sans `--mcp-config`, le CLI rend « outil absent »).
+  // sans `--mcp-config`, le CLI rend « outil absent »). Une étape de lot ne reçoit que le serveur
+  // d'Autowin, sans ceux de l'utilisateur (`sansServeursUtilisateur`).
   const strict = noeud?.inheritMachineMcp === true ? [] : ['--strict-mcp-config']
   if (!noeud) return { strict, mcp: [], autorises: [] }
-  const fusion = fusionnerServeursMcp(noeud.mcpConfig, serveursUtilisateur)
+  const fusion = fusionnerServeursMcp(
+    noeud.mcpConfig,
+    noeud.sansServeursUtilisateur ? [] : serveursUtilisateur
+  )
   return {
     strict,
     mcp: ['--mcp-config', fusion.config],

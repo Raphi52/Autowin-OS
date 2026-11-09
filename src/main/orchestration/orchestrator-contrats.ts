@@ -906,6 +906,11 @@ export interface OrchestratorDecompositionDeps {
    * au moment de la phase, quand le bus est la. Absente = aucun outil, comportement d'avant.
    */
   skillCommands?: () => LanceurCommandeSkill | undefined
+  /**
+   * L'outil des étapes d'un run lancé par un fil de lot (`ecrire_a_un_fil`, signé de ce fil), en
+   * liaison tardive comme `skillCommands`. Rend rien pour un fil hors plan : aucun outil.
+   */
+  outilsDuLot?: (conversationId: string) => LanceurCommandeSkill | undefined
   /** Source du devis actif, portee par l'ExecutionSupervisor local au run. */
   currentExecutionQuote?: () => ExecutionQuote | undefined
   /** Compteurs locaux du run, persistes avec chaque checkpoint pour une reprise sans reset. */

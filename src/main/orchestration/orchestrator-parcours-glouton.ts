@@ -382,7 +382,9 @@ export async function runGreedyBuildPhase(
   failed: string[]
   skipped: string[]
 }> {
-  const { registry, roles } = this.deps
+  const { roles } = this.deps
+  // Les sous-tâches d'un build de lot reçoivent elles aussi l'outil pour écrire au chef.
+  const registry = this.registreDuRun(runId, push)
   const cost = this.costFor(runId)
   type ProviderAdmission = {
     state: 'probing' | 'ready' | 'blocked'

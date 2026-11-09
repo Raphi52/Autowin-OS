@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { autoriserSondageBloquant, WorktreeManager } from './worktree-manager'
+import { observerGit } from './worktree-manager-outils'
 import {
   optionsDuGestionnaireDuWorker,
   type DonneesDuWorker,
@@ -12,6 +13,10 @@ const port = parentPort
 // Ici, un sondage d'empreinte bloquant ne gele l'interface de personne : l'appelant attend
 // deja la reponse de ce worker. C'est le SEUL endroit ou la voie synchrone reste ouverte.
 autoriserSondageBloquant()
+
+// Chaque commande git est signalée au fil principal PENDANT qu'elle tourne : une commande bloquée
+// ne répond plus, et c'est ce signal qui nomme, au délai, ce que l'opération attendait.
+observerGit((evenement) => port.postMessage({ type: 'etape', ...evenement }))
 
 // Le gestionnaire se construit par `optionsDuGestionnaireDuWorker`, testée : la racine unique y arrive.
 const manager = new WorktreeManager(optionsDuGestionnaireDuWorker(workerData as DonneesDuWorker))
@@ -98,11 +103,12 @@ port.on('message', (request: WorktreeOperationRequest) => {
         value = manager.readConflictDiff(request.agentId, request.snapshot)
         break
     }
-    port.postMessage({ type: 'result', value })
+    port.postMessage({ type: 'result', value, termineA: Date.now() })
   } catch (error) {
     port.postMessage({
       type: 'error',
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      termineA: Date.now()
     })
   }
 })

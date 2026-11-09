@@ -558,6 +558,9 @@ export async function run(
         if (phases.length !== 1 || phases[0] !== 'build') {
           greedyPlan = admittedPlan
         } else {
+          // Ce chemin ne passe pas par `runInner`, qui rattache le run à son fil : sans ce
+          // rattachement, les sous-tâches ignoraient de quel fil de lot elles venaient.
+          if (conversationId || turnId) this.costContextByRun.set(runId, { conversationId, turnId })
           const greedyResult = await this.runGreedyPipeline(
             task,
             admittedPlan,
