@@ -41,13 +41,17 @@ const OUTCOME_ALIASES: Record<string, WatchdogOutcome> = {
   réparation: 'repair'
 }
 
+/** Bornes de l'enveloppe de l'événement : elles servent aussi à reconnaître un réveil après coup. */
+const DEBUT_EVENEMENT = '--- ÉVÉNEMENT QUI T’A RÉVEILLÉ ---'
+const FIN_EVENEMENT = '--- fin de l’événement ---'
+
 export function buildWatchdogPrompt(basePrompt: string, signal: WatchdogSignal): string {
   return [
     basePrompt.trim(),
     '',
-    '--- ÉVÉNEMENT QUI T’A RÉVEILLÉ ---',
+    DEBUT_EVENEMENT,
     signal.context.trim(),
-    '--- fin de l’événement ---',
+    FIN_EVENEMENT,
     '',
     "Tu n'as pas été lancé par une horloge : quelque chose vient de se produire, et le contexte " +
       'ci-dessus est tout ce qui le décrit. Établis les faits avant de conclure.',
@@ -57,6 +61,18 @@ export function buildWatchdogPrompt(basePrompt: string, signal: WatchdogSignal):
     '',
     ...WATCHDOG_OUTCOMES.map((outcome) => `- \`${outcome}\` : ${OUTCOME_LABEL[outcome]}`)
   ].join('\n')
+}
+
+/**
+ * Le message est un réveil composé par `buildWatchdogPrompt`. Il arrive dans le fil avec le rôle
+ * `user` alors que personne ne l'a tapé à ce tour : ce qui lit le dernier message comme une demande
+ * de l'utilisateur doit pouvoir l'écarter. L'enveloppe est au MILIEU du message (après la consigne
+ * de la règle) : on cherche ses deux bornes, chacune seule sur sa ligne et dans l'ordre.
+ */
+export function estUnReveilDeSurveillance(message: string | undefined): boolean {
+  const lignes = (message ?? '').split(/\r?\n/).map((ligne) => ligne.trim())
+  const debut = lignes.indexOf(DEBUT_EVENEMENT)
+  return debut >= 0 && lignes.indexOf(FIN_EVENEMENT, debut + 1) > debut
 }
 
 /**

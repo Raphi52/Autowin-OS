@@ -6,6 +6,7 @@ import { ENTETE_REPRISE_AUTOMATIQUE } from '../chat/relance-taches-de-fond'
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
 import { promptDOrdre } from '../conversations/messages-entre-fils-app'
 import { consommerReprise, poserReprise } from '../app/redemarrage-reprise'
+import { buildWatchdogPrompt } from '../task-manager/watchdog-prompt'
 
 const ACTIF = 'D:\\AutoWinOS'
 
@@ -178,6 +179,32 @@ describe('depotCiteDansLeMessage', () => {
       'Lot 4 sur 5 du plan « Refonte », confié par le fil chef conv-1 (plan-1).\n' +
       'Alerte : une fin de tour pourrait envoyer D:\\Projets\\Contoso vers son serveur.'
     expect(depotCiteDansLeMessage(prompt, ACTIF, existe)).toBeNull()
+  })
+
+  /*
+   * RÉVEIL DU TASK MANAGER (2026-11-09). La consigne d'une surveillance interdisait de toucher un
+   * autre dépôt en le citant, et le réveil a fait basculer le fil dans ce dépôt-là. Le message est composé par
+   * l'app (`buildWatchdogPrompt`), pas tapé par l'utilisateur à ce tour : ses chemins sont des données.
+   * Entrée qui doit faire échouer : le dépôt cité par la consigne rendu comme dépôt de travail.
+   */
+  it('ne bascule pas sur le reveil d une surveillance du Task Manager qui cite un autre depot', () => {
+    const existe = disque('D:\\Projets\\Contoso', 'D:\\Projets\\Contoso\\.git')
+    const reveil = buildWatchdogPrompt(
+      'Vérifie que les plans sont finis, puis lance /git. Interdit : toucher D:\\Projets\\Contoso.',
+      {
+        signature: 'chat-turn-done:conv-1',
+        context: 'Source : événement interne Autowin « chat-turn-done »',
+        depth: 0,
+        rootSignature: 'chat-turn-done:conv-1',
+        source: 'app-event',
+        observedAt: 1_000
+      }
+    )
+    expect(depotCiteDansLeMessage(reveil, ACTIF, existe)).toBeNull()
+    // La même consigne tapée par l'utilisateur, sans l'enveloppe du réveil, bascule toujours.
+    expect(depotCiteDansLeMessage('Interdit : toucher D:\\Projets\\Contoso.', ACTIF, existe)).toBe(
+      'D:\\Projets\\Contoso'
+    )
   })
 
   /*

@@ -6,6 +6,7 @@ import { estUneConsigneDeRedemarrage } from '../app/redemarrage-reprise'
 import { formeDuChemin, memeCheminSurDisque } from '../fichiers/meme-chemin'
 import { estUnMessageDuPlan } from '../../shared/plan-de-lots'
 import { estDansLesDonneesDeLApp } from '../../shared/copie-du-fil'
+import { estUnReveilDeSurveillance } from '../task-manager/watchdog-prompt'
 
 /**
  * LE DEPOT CITE PAR LA DEMANDE — pour aligner le dossier de travail sur ce dont l'utilisateur PARLE.
@@ -33,6 +34,10 @@ import { estDansLesDonneesDeLApp } from '../../shared/copie-du-fil'
  * Un message COMPOSE PAR UN PLAN DE LOTS non plus (2026-11-08) : le reveil du chef recopiait sa
  * preuve de validation, qui citait un autre depot, et le chef est parti y travailler avec la
  * publication de fin de tour allumee. Un lot, lui, s'ouvre dans le dossier du chef par construction.
+ *
+ * Un REVEIL DU TASK MANAGER non plus (2026-11-09) : la consigne d'une surveillance disait de ne
+ * PAS toucher un autre depot en le citant, et le reveil a fait basculer le fil dedans. La consigne
+ * a ete ecrite a la creation de la regle, pas a ce tour : le fil reste dans le dossier de la regle.
  *
  * Aucun redemarrage n'est requis : le dossier est resolu A CHAQUE tour depuis la conversation.
  */
@@ -75,7 +80,8 @@ export function depotCiteDansLeMessage(
     estUnPromptDOrdre(message) ||
     estUneRepriseAutomatique(message) ||
     estUneConsigneDeRedemarrage(message) ||
-    estUnMessageDuPlan(message)
+    estUnMessageDuPlan(message) ||
+    estUnReveilDeSurveillance(message)
   )
     return null
   const depotActif = dossierActif.trim() ? racineDepot(dossierActif, existe) : undefined
