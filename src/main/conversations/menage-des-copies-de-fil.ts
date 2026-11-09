@@ -1,14 +1,37 @@
 import { existsSync, readdirSync, renameSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { ancienNomDeCopieDeFil, nomDeCopieDeFil } from '../../shared/copie-du-fil'
 import { supprimerArbreAsync } from '../fichiers/fs-supprimer'
 import { lireLaBaseDuFil } from '../git/photo-du-code'
 import { arbreDeLaCopie } from '../orchestration/garder-un-essai'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import { delierLesDependances } from '../store/dependances-copie-agent'
+import {
+  racinesHistoriqueCliPour,
+  rangerHistoriqueCliDUneCopie,
+  ramenerLesSessionsDUneCopie
+} from '../store/historique-cli-copie'
 import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
+import {
+  entrerLeTravailDeLaCopie,
+  PREFIXE_EN_CREATION,
+  PREFIXE_ENTREE_EN_ATTENTE,
+  reprendreLesSuppressionsCoupees,
+  retirerLaCopieDeTache,
+  uneEntreeEstEnAttente
+} from '../copies/copie-de-tache'
+import {
+  dossierDeCopieDeTache,
+  NOM_RACINE_COPIES_DE_TACHES,
+  racineDesCopiesDeTaches
+} from '../copies/chemins-de-copies'
 
 /*
+ * DEUX PASSES. Les copies d'avant (`copies-de-fil/<fil>`, `retours-de-tour/essai__…`) sont celles de
+ * `menageDesCopiesDeFil` ci-dessous, jusqu'à leur retrait. Les nouvelles vivent sous la racine unique
+ * (`copies-de-taches/<fil>`) : `menageDesCopiesDeTaches`, qui passe par la primitive (`copie-de-tache.ts`).
+ * Même décision pour les deux : fil fini, calme, aucun tour.
+ *
  * LE MÉNAGE DES COPIES DE FIL. Chaque fil du dépôt d'Autowin reçoit sa copie
  * (`copies-de-fil/<fil>` ; avant elle, `retours-de-tour/essai__<fil>-<instant>-1`, voir
  * `bascule-dossier-conversation.ts`) et rien ne la retirait : 11 copies complètes du dépôt sur le disque le 07/11, une par fil ouvert depuis la veille.
@@ -16,13 +39,13 @@ import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
  *
  * UNE COPIE PART SEULEMENT SI RIEN N'Y SERAIT PERDU : son arbre (fichiers non suivis compris, ignorés
  * exclus) est celui de la base du fil, c'est-à-dire exactement ce que la porte de fin de tour a déjà
- * publié. Une copie qui porte un écart reste, quelle que soit l'ancienneté du fil. Mesuré le 07/11 :
- * 9 copies sur 11 étaient dans ce cas, et celle de conv-1702 portait un travail non publié.
+ * publié. Une copie qui porte un écart reste, quelle que soit l'ancienneté du fil : c'est là que peut
+ * dormir un travail non publié.
  *
  * « FINI » = aucun tour en cours, et le fil est resté calme `CALME_AVANT_MENAGE_MS` (1 h, voir plus
- * bas). Une copie retirée se rouvre au MÊME chemin (`copies-de-fil/<fil>`) :
- * la session du CLI, rangée sous ce chemin, reste reprenable. Le retrait ne touche jamais à l'historique
- * du CLI (`~/.claude`), qui n'est pas dans la copie.
+ * bas). Après le retrait, la session du fil est posée sous son dossier d'avant, là où le CLI la cherchera,
+ * puis l'historique CLI de la copie (`~/.claude`) part dans une corbeille datée (`historique-cli-copie.ts`).
+ * Une session qui ne peut pas être posée garde l'historique en place.
  *
  * LE FIL EST DÉCROCHÉ AVANT LA SUPPRESSION : son dossier rangé redevient celui d'avant la copie.
  * Sans quoi son tour suivant serait refusé (« dossier rangé disparu »). La copie est d'abord RENOMMÉE
@@ -56,7 +79,7 @@ export const PREFIXE_A_SUPPRIMER = 'a-supprimer__'
 export interface FilDuMenage {
   id: string
   projectPath?: string
-  copieDuFil?: { chemin?: unknown }
+  copieDuFil?: { chemin?: unknown; dossierAvant?: unknown }
   inactive?: boolean
   updatedAt: number
 }
@@ -65,10 +88,20 @@ export interface FilDuMenage {
  * Le fil d'une copie de fil et, quand son nom le porte, l'instant de son ouverture : `copies-de-fil/<fil>`,
  * ou l'ancien nom `essai__<fil>-<instant>-<rang>`. `null` pour tout autre dossier.
  */
+// la racine unique doit être reconnue ici, sinon le ménage ne voit aucune de ses copies.
 function identiteDeLaCopie(copie: string): { fil: string; quand?: number } | null {
   const ancienne = ancienNomDeCopieDeFil(copie)
   if (ancienne) return { fil: ancienne.fil, quand: ancienne.quand }
-  return nomDeCopieDeFil(copie)
+  const nouvelle = nomDeCopieDeFil(copie)
+  if (nouvelle) return nouvelle
+  // La racine unique ne porte pas l'instant dans son nom : l'ouverture se lit sur le disque.
+  const parent = dirname(copie)
+  if (
+    basename(parent) === NOM_RACINE_COPIES_DE_TACHES &&
+    dossierDeCopieDeTache(parent, basename(copie)) !== null
+  )
+    return { fil: basename(copie) }
+  return null
 }
 
 export type DecisionPourLaCopie =
@@ -80,6 +113,15 @@ function cle(chemin: string | undefined): string {
         .replace(/[\\/]+$/u, '')
         .toLowerCase()
     : ''
+}
+
+/** Le fil se sert-il de cette copie (dossier courant, ou copie notée) ? */
+function usageDeLaCopie(fil: FilDuMenage, copie: string): boolean {
+  const ici = cle(copie)
+  return (
+    cle(fil.projectPath) === ici ||
+    (typeof fil.copieDuFil?.chemin === 'string' && cle(fil.copieDuFil.chemin) === ici)
+  )
 }
 
 /**
@@ -100,11 +142,7 @@ export function decisionPourLaCopie(entree: {
   const ouverteA = nom.quand ?? entree.ouverteA
   const calmeMs = entree.calmeMs ?? CALME_AVANT_MENAGE_MS
   const ici = cle(entree.copie)
-  const utilisateurs = entree.fils.filter(
-    (fil) =>
-      cle(fil.projectPath) === ici ||
-      (typeof fil.copieDuFil?.chemin === 'string' && cle(fil.copieDuFil.chemin) === ici)
-  )
+  const utilisateurs = entree.fils.filter((fil) => usageDeLaCopie(fil, entree.copie))
   // Sans fil (supprimé, ou archivé pas encore relu) : seule l'heure de la copie dit son âge. Une copie
   // toute neuve peut être celle qu'un tour est en train d'ouvrir, avant de la noter sur son fil : son
   // âge ne suffit qu'au-delà de `AGE_MIN_COPIE_SANS_FIL_MS`, jamais au délai de calme d'un fil.
@@ -145,6 +183,53 @@ async function retirerLaCopie(chemin: string): Promise<void> {
   await supprimerArbreAsync(chemin)
 }
 
+/**
+ * Le dossier où le fil revient quand sa copie est retirée : celui d'avant, noté sur le fil, ou le dépôt quand la
+ * note ne le donne pas (comme la reprise de session du tour, qui lit le même choix). `undefined` si aucun fil ne se
+ * sert de cette copie : rien ne dit alors où reprendre la session.
+ */
+function dossierAvantDeLaCopie(
+  fils: readonly FilDuMenage[],
+  copie: string,
+  depot: string
+): string | undefined {
+  const ici = cle(copie)
+  const notee = fils.find(
+    (fil) => typeof fil.copieDuFil?.chemin === 'string' && cle(fil.copieDuFil.chemin) === ici
+  )?.copieDuFil
+  if (!notee) return undefined
+  return typeof notee.dossierAvant === 'string' && notee.dossierAvant ? notee.dossierAvant : depot
+}
+
+/**
+ * L'historique CLI d'une copie qu'on vient de retirer : sa session est d'abord posée sous le dossier d'avant du fil
+ * (là où le CLI la cherchera), puis le dossier de la copie part en corbeille datée. Sans dossier d'avant, ou si une
+ * session ne peut pas être posée, rien ne part : l'historique reste en place, et la raison remonte au bilan.
+ */
+function rangerHistoriqueDeLaCopieRetiree(entree: {
+  copie: string
+  dossierAvant: string | undefined
+  racines: readonly string[]
+  jour: string
+}): Array<{ chemin: string; raison: string }> {
+  if (entree.dossierAvant === undefined) return []
+  const ramenees = ramenerLesSessionsDUneCopie({
+    copie: entree.copie,
+    dossierAvant: entree.dossierAvant,
+    racines: entree.racines
+  })
+  if (ramenees.echecs.length > 0)
+    return ramenees.echecs.map((chemin) => ({
+      chemin,
+      raison: 'session non posée sous le dossier d’avant : son historique reste en place'
+    }))
+  rangerHistoriqueCliDUneCopie({ copie: entree.copie, racines: entree.racines, jour: entree.jour })
+  return []
+}
+
+/** Le jour (AAAA-MM-JJ) qui nomme la corbeille de l'historique CLI rangé ce jour-là. */
+const jourDe = (instant: number): string => new Date(instant).toISOString().slice(0, 10)
+
 /** L'instant de création du dossier ; `undefined` si le disque ne le dit pas. */
 function ouvertureSurLeDisque(chemin: string): number | undefined {
   try {
@@ -171,6 +256,8 @@ export async function menageDesCopiesDeFil(entree: {
   calmeMs?: number
   runGit?: GitRunner
   retirer?: (chemin: string) => Promise<void>
+  /** Les racines `projects` du CLI où l'historique d'une copie peut vivre (par défaut : les comptes d'Autowin). */
+  racinesHistoriqueCli?: (copie: string) => readonly string[]
 }): Promise<BilanDuMenage> {
   const bilan: BilanDuMenage = { supprimees: [], gardees: [], echecs: [] }
   const maintenant = entree.maintenant ?? Date.now
@@ -264,6 +351,14 @@ export async function menageDesCopiesDeFil(entree: {
       await retirer(decroche)
       bilan.supprimees.push(chemin)
       aPrune = true
+      bilan.echecs.push(
+        ...rangerHistoriqueDeLaCopieRetiree({
+          copie: chemin,
+          dossierAvant: dossierAvantDeLaCopie(entree.lireFils(), chemin, entree.depot),
+          racines: (entree.racinesHistoriqueCli ?? racinesHistoriqueCliPour)(chemin),
+          jour: jourDe(maintenant())
+        })
+      )
     } catch (erreur) {
       bilan.echecs.push({ chemin: decroche, raison: message(erreur) })
     }
@@ -274,6 +369,145 @@ export async function menageDesCopiesDeFil(entree: {
       await git(['worktree', 'prune'], entree.depot)
     } catch (erreur) {
       bilan.echecs.push({ chemin: entree.depot, raison: `git worktree prune : ${message(erreur)}` })
+    }
+  }
+  return bilan
+}
+
+export interface EntreeDuMenageDesCopiesDeTaches {
+  dossierDeDonnees: string
+  depot: string
+  lireFils: () => readonly FilDuMenage[]
+  tourEnCours: (id: string) => boolean
+  decrocher: (id: string) => void
+  maintenant?: () => number
+  calmeMs?: number
+  runGit?: GitRunner
+  /** Les racines `projects` du CLI où l'historique d'une copie peut vivre (par défaut : les comptes d'Autowin). */
+  racinesHistoriqueCli?: (copie: string) => readonly string[]
+  /** Le titre d'une entrée refaite par la passe, tiré des fichiers entrés. Absent : le titre par défaut de la primitive. */
+  titreDuCommit?: (tache: string, fichiers: readonly string[]) => string
+  /** Appelé quand la passe fait entrer un travail que la porte avait refusé : le fil le dit à l'utilisateur. */
+  annoncerLaReprise?: (tache: string) => void
+}
+
+/**
+ * LE MÉNAGE DE LA RACINE UNIQUE (`copies-de-taches\<fil>`), par les verbes de la primitive : la même décision
+ * que pour les copies d'avant (fil fini, calme, aucun tour), et le retrait passe par `retirerLaCopieDeTache`,
+ * qui refuse tout écart et toute copie encore utilisée.
+ *
+ * L'ORDRE COMPTE. La primitive retire d'abord, en refusant un fil qui se sert encore de la copie ou dont le
+ * tour a repris. Les fils décrochés ne sont rendus à leur dossier qu'APRÈS un retrait réussi : une copie gardée
+ * (travail non publié) garde sa note, et son fil y revient au tour suivant sans bascule du dossier.
+ */
+export async function menageDesCopiesDeTaches(
+  entree: EntreeDuMenageDesCopiesDeTaches
+): Promise<BilanDuMenage> {
+  const bilan: BilanDuMenage = { supprimees: [], gardees: [], echecs: [] }
+  const maintenant = entree.maintenant ?? Date.now
+  const calmeMs = entree.calmeMs ?? CALME_AVANT_MENAGE_MS
+  const racine = racineDesCopiesDeTaches(entree.dossierDeDonnees)
+  // Les suppressions coupées d'un passage précédent se finissent d'abord, sans nouvelle lecture.
+  const reprises = await reprendreLesSuppressionsCoupees({
+    dossierDeDonnees: entree.dossierDeDonnees,
+    depot: entree.depot,
+    sansDistant: true,
+    runGit: entree.runGit
+  })
+  bilan.echecs.push(...reprises.echecs)
+  if (!existsSync(racine)) return bilan
+  let noms: string[]
+  try {
+    noms = readdirSync(racine)
+  } catch (erreur) {
+    bilan.echecs.push({ chemin: racine, raison: message(erreur) })
+    return bilan
+  }
+  for (const nom of noms) {
+    if (
+      nom.startsWith(PREFIXE_A_SUPPRIMER) ||
+      nom.startsWith(PREFIXE_EN_CREATION) ||
+      nom.startsWith(PREFIXE_ENTREE_EN_ATTENTE)
+    )
+      continue
+    const chemin = join(racine, nom)
+    if (!identiteDeLaCopie(chemin)) continue
+    // la passe horaire refait l'entrée que la porte a refusée (fichier visé modifié), sans nouveau tour : sans
+    // cette reprise, le travail restait dans la copie jusqu'au prochain tour du fil. Un travail jamais refusé n'est pas
+    // touché, et une entrée refusée n'est refaite que si aucun tour de ce fil ne tourne.
+    if (
+      uneEntreeEstEnAttente(entree.dossierDeDonnees, nom) &&
+      !entree.tourEnCours(nom) &&
+      !entree.lireFils().some((fil) => usageDeLaCopie(fil, chemin) && entree.tourEnCours(fil.id))
+    ) {
+      const titre = entree.titreDuCommit
+      const entre = await entrerLeTravailDeLaCopie({
+        dossierDeDonnees: entree.dossierDeDonnees,
+        depot: entree.depot,
+        tache: nom,
+        sansDistant: true,
+        runGit: entree.runGit,
+        ...(titre ? { messageDuCommit: (fichiers: readonly string[]) => titre(nom, fichiers) } : {})
+      })
+      if (!entre.ok) {
+        const refus = { chemin, raison: entre.raison }
+        if (entre.motif === 'echec') bilan.echecs.push(refus)
+        else bilan.gardees.push(refus)
+        continue
+      }
+      if (entre.etat === 'entree') entree.annoncerLaReprise?.(nom)
+    }
+    const decision = decisionPourLaCopie({
+      copie: chemin,
+      fils: entree.lireFils(),
+      tourEnCours: entree.tourEnCours,
+      maintenant: maintenant(),
+      calmeMs,
+      ouverteA: ouvertureSurLeDisque(chemin)
+    })
+    if (!decision.supprimer) {
+      bilan.gardees.push({ chemin, raison: decision.raison })
+      continue
+    }
+    // Un fil décidé « fini » qui reprend entre-temps, ou un tour en cours, bloque le retrait : la primitive relit ce
+    // constat juste avant de renommer la copie.
+    const bloque = (fil: FilDuMenage): boolean =>
+      usageDeLaCopie(fil, chemin) &&
+      (entree.tourEnCours(fil.id) ||
+        !decision.aDecrocher.includes(fil.id) ||
+        maintenant() - fil.updatedAt < calmeMs)
+    const retrait = await retirerLaCopieDeTache({
+      dossierDeDonnees: entree.dossierDeDonnees,
+      depot: entree.depot,
+      tache: nom,
+      sansDistant: true,
+      runGit: entree.runGit,
+      tachesQuiLUtilisent: () =>
+        entree
+          .lireFils()
+          .filter(bloque)
+          .map((fil) => fil.id)
+    })
+    if (!retrait.ok) {
+      if (retrait.motif === 'echec') bilan.echecs.push({ chemin, raison: retrait.raison })
+      else bilan.gardees.push({ chemin, raison: retrait.raison })
+      continue
+    }
+    if (retrait.etat !== 'retiree') continue
+    bilan.supprimees.push(chemin)
+    bilan.echecs.push(
+      ...rangerHistoriqueDeLaCopieRetiree({
+        copie: chemin,
+        dossierAvant: dossierAvantDeLaCopie(entree.lireFils(), chemin, entree.depot),
+        racines: (entree.racinesHistoriqueCli ?? racinesHistoriqueCliPour)(chemin),
+        jour: jourDe(maintenant())
+      })
+    )
+    // Rendu à son dossier d'avant seulement après le retrait, et seulement s'il se sert toujours de cette copie.
+    for (const id of decision.aDecrocher) {
+      if (entree.tourEnCours(id)) continue
+      if (entree.lireFils().some((fil) => fil.id === id && usageDeLaCopie(fil, chemin)))
+        entree.decrocher(id)
     }
   }
   return bilan

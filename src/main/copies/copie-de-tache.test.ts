@@ -162,6 +162,8 @@ describe('ouvrir — une copie par tâche, sous la racine unique, base posée', 
     expect(await lireLaBaseDuFil({ dossier: resultat.chemin, conversationId: TACHE })).toBe(
       resultat.base
     )
+    expect((await git(resultat.chemin, 'rev-parse', 'HEAD')).trim()).toBe(resultat.base)
+    expect(await git(resultat.chemin, 'status', '--porcelain')).toBe('')
   })
 
   it('reprend telle quelle une copie déjà ouverte, sans la recréer', async () => {
@@ -291,8 +293,10 @@ describe('ouvrir — une copie par tâche, sous la racine unique, base posée', 
     expect(existsSync(join(resultat.chemin, 'node_modules'))).toBe(false)
   })
 
-  // La copie se crée sous un nom provisoire : une coupure ne laisse rien sous le nom de la copie, et la reprise défait le dossier provisoire.
-  it('une copie coupée pendant sa création ne prend pas le nom de la copie : l’ouverture suivante la reprend', async () => {
+  // Une coupure pendant la création laisse la copie sous son nom, mais la fiche `en-creation__<tâche>` dit qu'elle n'est
+  // pas entière : elle n'est ni rendue, ni entrée, ni retirée, et l'ouverture suivante la défait puis la refait.
+  // la fiche de création tient seule la copie en cours ; il n'y a pas de nom provisoire à rétablir.
+  it('une copie coupée pendant sa création porte sa fiche : rien ne la rend, ni n’y touche ; l’ouverture suivante la refait', async () => {
     const t = await temoin()
     const coupure = await ouvrirLaCopieDeTache({
       dossierDeDonnees: t.donnees,
@@ -302,9 +306,10 @@ describe('ouvrir — une copie par tâche, sous la racine unique, base posée', 
       runGit: coupureDeLaCreation(await defaultGitRunner())
     })
     expect(coupure).toMatchObject({ ok: false, motif: 'echec' })
-    expect(existsSync(copieDe(t))).toBe(false)
-    expect(await entrer(t)).toMatchObject({ ok: false, motif: 'copie-absente' })
-    expect(await retirer(t)).toEqual({ ok: true, etat: 'deja-absente' })
+    expect(existsSync(join(racineDe(t), `en-creation__${TACHE}`))).toBe(true)
+    expect(await entrer(t)).toMatchObject({ ok: false, motif: 'creation-coupee' })
+    expect(await retirer(t)).toMatchObject({ ok: false, motif: 'creation-coupee' })
+    expect(existsSync(copieDe(t))).toBe(true)
 
     const reprise = await ouvrirLaCopieDeTache({
       dossierDeDonnees: t.donnees,
@@ -315,27 +320,31 @@ describe('ouvrir — une copie par tâche, sous la racine unique, base posée', 
     if (!reprise.ok) throw new Error(`reprise refusée : ${reprise.raison}`)
     expect(reprise.deja).toBe(false)
     expect(readFileSync(join(copieDe(t), 'a.txt'), 'utf8')).toBe('un\ndeux\ntrois\n')
+    expect(existsSync(join(racineDe(t), `en-creation__${TACHE}`))).toBe(false)
     // La copie reprise tient encore après un ménage des enregistrements git du dépôt.
     await git(t.depot, 'worktree', 'prune')
     expect((await git(copieDe(t), 'rev-parse', 'HEAD')).trim()).toBe(reprise.base)
   })
 
-  // fix-ok: une copie que le dépôt ne reconnaît plus était rendue ouverte (deja: true), et un appel git muet tenait la file sans délai.
-  it('une copie posée sous son nom avant que le dépôt la reconnaisse n’est jamais rendue ouverte : le refus la nomme, et sa réparation la rend ouverte', async () => {
+  // Sans copie, il n'y a rien à entrer ni à retirer : le refus le dit sans toucher au dépôt.
+  it('sans copie pour cette tâche : entrer refuse copie-absente, et retirer constate qu’elle est déjà absente', async () => {
     const t = await temoin()
-    const gitReel = await defaultGitRunner()
-    const panne = await ouvrirLaCopieDeTache({
-      dossierDeDonnees: t.donnees,
-      depot: t.depot,
-      tache: TACHE,
-      sansDistant: true,
-      runGit: async (args, cwd, options) => {
-        if (args.includes('repair')) throw new Error('arrêt simulé avant le recalage')
-        return gitReel(args, cwd, options)
-      }
-    })
-    expect(panne).toMatchObject({ ok: false, motif: 'echec' })
-    expect(existsSync(copieDe(t))).toBe(true)
+    expect(existsSync(copieDe(t))).toBe(false)
+    expect(await entrer(t)).toMatchObject({ ok: false, motif: 'copie-absente' })
+    expect(await retirer(t)).toEqual({ ok: true, etat: 'deja-absente' })
+    expect(existsSync(copieDe(t))).toBe(false)
+  })
+
+  // une copie que le dépôt ne reconnaît pas ne doit jamais être rendue ouverte, et un appel git muet ne doit pas tenir la file.
+  it('une copie que le dépôt ne reconnaît pas n’est jamais rendue ouverte : le refus la nomme, et sa réparation la rend ouverte', async () => {
+    const t = await temoin()
+    await ouvrir(t)
+    // Le dépôt ne tient plus ce dossier pour sa copie : l'enregistrement git de la tâche pointe ailleurs.
+    const enregistrement = readdirSync(join(t.depot, '.git', 'worktrees'))[0] as string
+    writeFileSync(
+      join(t.depot, '.git', 'worktrees', enregistrement, 'gitdir'),
+      `${join(t.racine, 'ailleurs', '.git')}\n`
+    )
 
     const refusee = await ouvrirLaCopieDeTache({
       dossierDeDonnees: t.donnees,
@@ -431,25 +440,64 @@ describe('ouvrir — une copie par tâche, sous la racine unique, base posée', 
     )
   })
 
-  // Le lien des dépendances passe avant le recalage : un recalage raté ne prive pas la copie de son lien.
-  it('une copie dont le recalage a échoué à la création a déjà son lien : le refus ne l’en prive pas', async () => {
+  // Le lien des dépendances se pose à la création : la copie ouverte peut lancer ses tests sans geste de plus.
+  it('une copie créée a déjà son lien des dépendances dès son ouverture', async () => {
     const t = await temoin()
     mkdirSync(join(t.depot, 'node_modules', 'paquet'), { recursive: true })
     writeFileSync(join(t.depot, 'node_modules', 'paquet', 'index.txt'), 'module')
-    const gitReel = await defaultGitRunner()
 
-    const panne = await ouvrirLaCopieDeTache({
+    const ouverte = await ouvrirLaCopieDeTache({
       dossierDeDonnees: t.donnees,
       depot: t.depot,
       tache: TACHE,
-      sansDistant: true,
-      runGit: async (args, cwd, options) => {
-        if (args.includes('repair')) throw new Error('arrêt simulé avant le recalage')
-        return gitReel(args, cwd, options)
-      }
+      sansDistant: true
     })
-    expect(panne).toMatchObject({ ok: false, motif: 'echec' })
+    if (!ouverte.ok) throw new Error(`ouverture refusée : ${ouverte.raison}`)
+    expect(ouverte.deja).toBe(false)
     expect(lstatSync(join(copieDe(t), 'node_modules')).isSymbolicLink()).toBe(true)
+    expect(readFileSync(join(copieDe(t), 'node_modules', 'paquet', 'index.txt'), 'utf8')).toBe(
+      'module'
+    )
+  })
+
+  // Le seuil de la longueur : la copie de 215 caractères s'ouvre et se retire, celle de 216 est refusée sans rien créer.
+  it('une copie de 215 caractères s’ouvre et se retire ; une de 216 est refusée sans rien créer', async () => {
+    const t = await temoin()
+    const dossierDeDonnees = (longueur: number): string => join(t.racine, 'x'.repeat(longueur))
+    const copieDeLongueur = (longueur: number): string =>
+      dossierDeCopieDeTache(racineDesCopiesDeTaches(dossierDeDonnees(longueur)), TACHE) as string
+    // Un nom de dossier plus long d'un caractère rend la copie plus longue d'un caractère.
+    const base = copieDeLongueur(1).length
+    const dd215 = dossierDeDonnees(1 + (215 - base))
+    const dd216 = dossierDeDonnees(1 + (216 - base))
+    expect(copieDeLongueur(1 + (215 - base)).length).toBe(215)
+
+    const ouverte = await ouvrirLaCopieDeTache({
+      dossierDeDonnees: dd215,
+      depot: t.depot,
+      tache: TACHE,
+      sansDistant: true
+    })
+    if (!ouverte.ok) throw new Error(`ouverture refusée : ${ouverte.raison}`)
+    expect(ouverte.chemin.length).toBe(215)
+    expect(
+      await retirerLaCopieDeTache({
+        dossierDeDonnees: dd215,
+        depot: t.depot,
+        tache: TACHE,
+        sansDistant: true,
+        tachesQuiLUtilisent: () => []
+      })
+    ).toEqual({ ok: true, etat: 'retiree' })
+
+    const refusee = await ouvrirLaCopieDeTache({
+      dossierDeDonnees: dd216,
+      depot: t.depot,
+      tache: TACHE,
+      sansDistant: true
+    })
+    expect(refusee).toMatchObject({ ok: false, motif: 'chemin-trop-long' })
+    expect(existsSync(racineDesCopiesDeTaches(dd216))).toBe(false)
   })
 
   it('rouvrir une copie déjà liée garde son lien, sans le refaire ; un dépôt sans node_modules ne crée aucun lien', async () => {
@@ -482,7 +530,7 @@ describe('ouvrir — une copie par tâche, sous la racine unique, base posée', 
     expect(existsSync(join(copieDe(t), 'node_modules'))).toBe(false)
   })
 
-  // Deux gestes sur une même tâche passent l'un après l'autre : la seconde ne trouve jamais la base ou le dossier provisoire de la première à moitié posés.
+  // Deux gestes sur une même tâche passent l'un après l'autre : la seconde ne trouve jamais la base ou la copie de la première à moitié posées.
   it('deux ouvertures simultanées de la même tâche ne se gênent pas : la seconde reprend la copie de la première', async () => {
     const t = await temoin()
     const gitReel = await defaultGitRunner()

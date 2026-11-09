@@ -1,7 +1,10 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { OuvertureDeCopie } from '../copies/copie-de-tache'
+import { refDeBaseDuFil } from '../git/photo-du-code'
+import { defaultGitRunner } from '../runs/run-autoclose'
 import { ConversationStore } from '../store/conversations'
 import {
   avertissementDossierConversation,
@@ -12,6 +15,7 @@ import {
   DossierRangeDisparuError,
   ecrireReglageCopieParFil,
   lireReglageCopieParFil,
+  ouvrirLaCopieDuFilPourLeTour,
   preparerLeDossierDuTour,
   refusDossierDuTour,
   refuserTourSiDossierDisparu,
@@ -156,7 +160,16 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
   const DEPOT = 'D:\\AutoWinOS'
   const COPIE = 'D:\\AutoWinOS\\.autowin-data\\autowin-os\\retours-de-tour\\essai__conv-1-5-1'
   const existe = (): boolean => true
-  type Ouverture = { ok: true; chemin: string } | { ok: false; raison: string }
+  /** Une ouverture réussie, dans la forme exacte que rend la primitive (`ouvrirLaCopieDeTache`). */
+  // fix-ok: le faux résultat porte base, deja et dependances : sans eux, le typage refuse le stub.
+  const OUVERTE: OuvertureDeCopie = {
+    ok: true,
+    chemin: COPIE,
+    base: 'base-du-fil',
+    deja: false,
+    dependances: { fait: 'liees' }
+  }
+  type Ouverture = OuvertureDeCopie
 
   function preparer(
     store: ConversationStore,
@@ -181,7 +194,7 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
       questionSeule: options.questionSeule ?? false,
       ouvrirCopie: async () => {
         ouvertures += 1
-        return options.ouvrir ? options.ouvrir() : { ok: true, chemin: COPIE }
+        return options.ouvrir ? options.ouvrir() : OUVERTE
       },
       passer: (copie) => {
         store.passerDansLaCopie(id, copie)
@@ -324,7 +337,11 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
     const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
 
     const essai = preparer(store, id, {
-      ouvrir: async () => ({ ok: false, raison: 'chemin de 216 caractères (215 au plus)' })
+      ouvrir: async () => ({
+        ok: false,
+        motif: 'chemin-trop-long',
+        raison: 'chemin de 216 caractères (215 au plus)'
+      })
     })
 
     expect(await essai.issue).toBe('refusee')
@@ -427,5 +444,210 @@ describe('dossierDuFilOuvertPar (fil d’un lot)', () => {
   it('aucun dossier quand le chef n’en a pas', () => {
     expect(dossierDuFilOuvertPar({ projectPath: '  ' })).toBeUndefined()
     expect(dossierDuFilOuvertPar(undefined)).toBeUndefined()
+  })
+})
+
+describe('ouvrirLaCopieDuFilPourLeTour — la garde et les annonces d’avant', () => {
+  // fix-ok: à la réécriture, le refus perdait le chemin nommé et l'absence de photo (refs/autowin vide), mesurés dans photo-du-code.test.ts de la base 5ffba09f0 ; le test les reprend.
+  it('une copie d’avant déjà là (copies-de-fil/<fil>) n’est jamais écrasée : refus nommé, rien n’est écrit', async () => {
+    const dossierDeDonnees = mkdtempSync(join(tmpdir(), 'aos-ouverture-garde-'))
+    const copieDAvant = join(dossierDeDonnees, 'copies-de-fil', 'conv-1')
+    mkdirSync(copieDAvant, { recursive: true })
+    writeFileSync(join(copieDAvant, 'travail.txt'), 'travail de l’ancienne copie\n', 'utf8')
+    const depot = await depotTemoin()
+
+    const ouverte = await ouvrirLaCopieDuFilPourLeTour({
+      dossierDeDonnees,
+      depot,
+      conversationId: 'conv-1'
+    })
+
+    expect(ouverte).toMatchObject({ ok: false, motif: 'dossier-occupe' })
+    expect(ouverte.ok ? '' : ouverte.raison).toContain(
+      'existe déjà sans être la copie notée sur ce fil'
+    )
+    // Le refus nomme le dossier à sortir du chemin : l'utilisateur sait ce qui occupe la place.
+    expect(ouverte.ok ? '' : ouverte.raison).toContain(copieDAvant)
+    expect(readFileSync(join(copieDAvant, 'travail.txt'), 'utf8')).toBe(
+      'travail de l’ancienne copie\n'
+    )
+    expect(existsSync(join(dossierDeDonnees, 'copies-de-taches', 'conv-1'))).toBe(false)
+    // Refus avant toute photo : le dépôt n'a ni photo ni base.
+    const git = await defaultGitRunner()
+    expect(await git(['for-each-ref', 'refs/autowin/'], depot)).toBe('')
+  })
+
+  it('un chemin de copie trop long est refusé avec le chemin fautif, comme avant', async () => {
+    const dossierDeDonnees = join(
+      mkdtempSync(join(tmpdir(), 'aos-ouverture-long-')),
+      'x'.repeat(230)
+    )
+    const depot = await depotTemoin()
+    const ouverte = await ouvrirLaCopieDuFilPourLeTour({
+      dossierDeDonnees,
+      depot,
+      conversationId: 'conv-1'
+    })
+    const chemin = join(dossierDeDonnees, 'copies-de-taches', 'conv-1')
+
+    expect(ouverte).toMatchObject({ ok: false, motif: 'chemin-trop-long' })
+    expect(ouverte.ok ? '' : ouverte.raison).toBe(
+      `Le dossier de la copie ferait ${chemin.length} caractères (${chemin}) : git pour Windows en accepte 215 caractères au plus. Aucune copie n’a été ouverte.`
+    )
+    // La longueur se contrôle avant la photo : ni copie, ni base posée dans le dépôt.
+    expect(existsSync(join(dossierDeDonnees, 'copies-de-taches'))).toBe(false)
+    const git = await defaultGitRunner()
+    expect(await git(['for-each-ref', 'refs/autowin/'], depot)).toBe('')
+  })
+})
+
+/** Un dépôt git témoin : un commit, et un fichier suivi `a.txt` qui vaut « version commitée ». */
+async function depotTemoin(): Promise<string> {
+  const depot = join(mkdtempSync(join(tmpdir(), 'aos-ouverture-depot-')), 'depot')
+  mkdirSync(depot)
+  const git = await defaultGitRunner()
+  await git(['init', '-q', '-b', 'main'], depot)
+  await git(['config', 'user.name', 'Test'], depot)
+  await git(['config', 'user.email', 'test@example.invalid'], depot)
+  writeFileSync(join(depot, 'a.txt'), 'version commitée\n', 'utf8')
+  await git(['add', '-A'], depot)
+  await git(['commit', '-q', '-m', 'base'], depot)
+  return depot
+}
+
+// La limite de longueur s'applique à la copie elle-même : la primitive la contrôle (copie-de-tache.ts).
+describe('ouvrirLaCopieDuFilPourLeTour — les cas que l’ouverture garde', () => {
+  it('hors dépôt git : refusé avec la raison, et aucun dossier de copies', async () => {
+    const dossierDeDonnees = mkdtempSync(join(tmpdir(), 'aos-ouverture-hors-'))
+    const hors = mkdtempSync(join(tmpdir(), 'aos-ouverture-hors-depot-'))
+
+    const ouverte = await ouvrirLaCopieDuFilPourLeTour({
+      dossierDeDonnees,
+      depot: hors,
+      conversationId: 'conv-1'
+    })
+
+    expect(ouverte).toMatchObject({ ok: false, motif: 'photo-impossible' })
+    expect(ouverte.ok ? '' : ouverte.raison).toBe(
+      'Impossible de photographier le code de ce fil : son dossier n’est pas un dépôt git, ou la photo n’a pas pu être prise à temps. Aucune copie n’a été ouverte.'
+    )
+    expect(existsSync(join(dossierDeDonnees, 'copies-de-taches'))).toBe(false)
+  })
+
+  it('jumeau accepté : une copie de 215 caractères tout juste ouverte, comme avant', async () => {
+    const depot = await depotTemoin()
+    const base = mkdtempSync(join(tmpdir(), 'aos-ouverture-jumeau-'))
+    const dossierDeDonnees = join(base, 'x'.repeat(190 - base.length))
+    const chemin = join(dossierDeDonnees, 'copies-de-taches', 'conv-1')
+    expect(chemin.length).toBe(215)
+
+    const ouverte = await ouvrirLaCopieDuFilPourLeTour({
+      dossierDeDonnees,
+      depot,
+      conversationId: 'conv-1'
+    })
+
+    // L'échec montre la raison réelle du refus, pas un objet tronqué.
+    expect(ouverte.ok ? ouverte.chemin : ouverte.raison).toBe(chemin)
+    expect(ouverte).toMatchObject({ ok: true, chemin })
+  })
+
+  it('copie de 210 caractères : ouverte comme avant, sans refus sous la limite', async () => {
+    const depot = await depotTemoin()
+    const base = mkdtempSync(join(tmpdir(), 'aos-ouverture-provisoire-'))
+    const dossierDeDonnees = join(base, 'x'.repeat(185 - base.length))
+    const chemin = join(dossierDeDonnees, 'copies-de-taches', 'conv-1')
+    expect(chemin.length).toBe(210)
+
+    const ouverte = await ouvrirLaCopieDuFilPourLeTour({
+      dossierDeDonnees,
+      depot,
+      conversationId: 'conv-1'
+    })
+
+    // L'échec montre la raison réelle du refus, pas un objet tronqué.
+    expect(ouverte.ok ? ouverte.chemin : ouverte.raison).toBe(chemin)
+    expect(ouverte).toMatchObject({ ok: true, chemin })
+  })
+
+  it('une pose de base refusée : aucune copie laissée, et l’annonce dit que rien n’est ouvert', async () => {
+    const depot = await depotTemoin()
+    const dossierDeDonnees = mkdtempSync(join(tmpdir(), 'aos-ouverture-base-'))
+    const gitReel = await defaultGitRunner()
+
+    const ouverte = await ouvrirLaCopieDuFilPourLeTour({
+      dossierDeDonnees,
+      depot,
+      conversationId: 'conv-1',
+      runGit: async (args, cwd, options) => {
+        if (args[0] === 'update-ref' && args[1] === refDeBaseDuFil('conv-1'))
+          throw new Error('panne simulée de la pose de base')
+        return gitReel(args, cwd, options)
+      }
+    })
+
+    expect(ouverte).toMatchObject({ ok: false, motif: 'echec' })
+    expect(ouverte.ok ? '' : ouverte.raison).toContain('La base de la tâche n’a pas été posée :')
+    expect(ouverte.ok ? '' : ouverte.raison).toContain('Aucune copie n’a été ouverte.')
+    expect(existsSync(join(dossierDeDonnees, 'copies-de-taches', 'conv-1'))).toBe(false)
+  })
+
+  it('deux fils modifient le même fichier dans leurs copies : le dépôt partagé ne bouge pas', async () => {
+    const depot = await depotTemoin()
+    const dossierDeDonnees = mkdtempSync(join(tmpdir(), 'aos-ouverture-deux-fils-'))
+    const git = await defaultGitRunner()
+    const statut = await git(['status', '--porcelain'], depot)
+
+    const neuf = await ouvrirLaCopieDuFilPourLeTour({
+      dossierDeDonnees,
+      depot,
+      conversationId: 'conv-neuf'
+    })
+    const ancien = await ouvrirLaCopieDuFilPourLeTour({
+      dossierDeDonnees,
+      depot,
+      conversationId: 'conv-ancien'
+    })
+    expect(neuf).toMatchObject({ ok: true })
+    expect(ancien).toMatchObject({ ok: true })
+    const copies = [neuf, ancien].map((copie) => (copie as { chemin: string }).chemin)
+
+    writeFileSync(join(copies[0], 'a.txt'), 'écrit par le fil neuf\n', 'utf8')
+    writeFileSync(join(copies[1], 'a.txt'), 'écrit par le fil ancien\n', 'utf8')
+
+    expect(new Set(copies).size).toBe(2)
+    expect(await git(['status', '--porcelain'], depot)).toBe(statut)
+    expect(readFileSync(join(depot, 'a.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe(
+      'version commitée\n'
+    )
+  })
+
+  it('machine chargée : l’ouverture attend sa photo au-delà des 5 s du début de tour', async () => {
+    // Git est retenu au-delà de 5 s, puis relâché : la photo doit tout de même aboutir.
+    const depot = await depotTemoin()
+    const dossierDeDonnees = mkdtempSync(join(tmpdir(), 'aos-ouverture-lente-'))
+    const gitReel = await defaultGitRunner()
+    let relacher!: () => void
+    const porte = new Promise<void>((libere) => {
+      relacher = libere
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const enCours = ouvrirLaCopieDuFilPourLeTour({
+        dossierDeDonnees,
+        depot,
+        conversationId: 'conv-1',
+        runGit: async (args, cwd, options) => {
+          await porte
+          return gitReel(args, cwd, options)
+        }
+      })
+      await vi.advanceTimersByTimeAsync(5_001)
+      vi.useRealTimers()
+      relacher()
+      expect(await enCours).toMatchObject({ ok: true })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

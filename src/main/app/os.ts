@@ -146,7 +146,10 @@ import { AUTOWIN_WORKSPACE_ENV, AUTOWIN_WORKSPACE_ORIGIN_ENV } from '../../share
 import type { RapportRetention } from '../../shared/rapport-retention'
 import { PublicationARejouer } from '../../shared/echec-publication'
 import { annonceRefusDuProjet } from '../chat/annonce-commit-local'
-import { ExecutionSupervisor, type ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
+import {
+  ExecutionSupervisor,
+  type ExecutionUsageSnapshot
+} from '../orchestration/execution-supervisor'
 import { compileExecutionQuote } from '../orchestration/execution-quote'
 import { DEFAULT_ORCHESTRATION_BUDGET } from '../orchestration/orchestration-budget'
 import { applyWorkflowProfile } from '../workflow/workflow-profile-apply'
@@ -935,7 +938,10 @@ export class AutowinOS {
           if (!this.autoClose) return
           this.closeBaselines.set(
             runId,
-            captureCloseBaseline(executionWorkspace, brainEstUnDepot() ? sharedBrainRoot() : undefined)
+            captureCloseBaseline(
+              executionWorkspace,
+              brainEstUnDepot() ? sharedBrainRoot() : undefined
+            )
           )
         },
         close: async ({ runId, task, projectPublication }) => {
@@ -987,7 +993,9 @@ export class AutowinOS {
   private set lastAutoClose(report: AutoCloseReport | undefined) {
     this.dernierRapport = report
     if (report && !saveLastAutoCloseReport(report)) {
-      console.warn('[cloture auto] dernier rapport non persisté : il ne survivra pas au redémarrage')
+      console.warn(
+        '[cloture auto] dernier rapport non persisté : il ne survivra pas au redémarrage'
+      )
     }
   }
 
@@ -1047,7 +1055,10 @@ export class AutowinOS {
       fichiers: readonly string[]
     ) => Promise<VerificationAvantPublication>
     /** Typage de ce qui part, joué AVANT les tests (voir `typage-avant-publication.ts`). */
-    typerAvantPublication?: (repo: string, fichiers: readonly string[]) => Promise<TypageAvantPublication>
+    typerAvantPublication?: (
+      repo: string,
+      fichiers: readonly string[]
+    ) => Promise<TypageAvantPublication>
   }): Promise<AutoCloseReport | undefined> {
     const { autresToursEnCours, ...tour } = input
     const next = this.chatTurnPublications.then(async () => {
@@ -1074,7 +1085,9 @@ export class AutowinOS {
                     }),
                   fermer: (runId: string, publier: boolean) =>
                     worktrees.endAsync(runId, { merge: publier })
-                }
+                },
+                // la porte reçoit le dossier de données, sans quoi la racine unique n'entre jamais par la primitive.
+                dossierDeDonnees: ensureAutowinAppData()
               }
             }
           : {})

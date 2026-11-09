@@ -1,6 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, dirname, isAbsolute, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { memeCheminSurDisque } from '../fichiers/meme-chemin'
+import { ouvrirLaCopieDeTache, type OuvertureDeCopie } from '../copies/copie-de-tache'
+import { dossierDeCopieDeTache, racineDesCopiesDeTaches } from '../copies/chemins-de-copies'
+import { LONGUEUR_MAX_CHEMIN_DE_COPIE } from '../git/photo-du-code'
+import type { GitRunner } from '../runs/run-autoclose'
+import { DOSSIER_DES_COPIES_DE_FIL } from '../../shared/copie-du-fil'
 
 /**
  * POURQUOI un rangement ne pilote PAS le dossier de travail (regle du 2026-09-08).
@@ -228,6 +233,67 @@ export function revenirSiSaCopieADisparu(
   return true
 }
 
+// copie d'avant déjà là : la primitive ne la voit pas (racine unique), la garde la refuse avant elle.
+/**
+ * LA COPIE NEUVE D'UN FIL, ouverte par la primitive sous la racine unique. Une copie d'avant
+ * (`copies-de-fil/<fil>`) déjà là n'est jamais écrite par-dessus : la racine unique ne la voit pas, et elle peut
+ * porter du travail. Les refus gardent les phrases que l'utilisateur voit.
+ */
+export async function ouvrirLaCopieDuFilPourLeTour(entree: {
+  dossierDeDonnees: string
+  depot: string
+  conversationId: string
+  /** Le lanceur git de la primitive ; les tests y mettent une panne ou une lenteur. */
+  // sans lanceur injectable, un test ne peut pas simuler une panne de base ni une photo lente.
+  runGit?: GitRunner
+}): Promise<OuvertureDeCopie> {
+  const copieDAvant = join(
+    entree.dossierDeDonnees,
+    DOSSIER_DES_COPIES_DE_FIL,
+    entree.conversationId
+  )
+  if (existsSync(copieDAvant))
+    return {
+      ok: false,
+      motif: 'dossier-occupe',
+      raison: `Le dossier ${copieDAvant} existe déjà sans être la copie notée sur ce fil : rien n’a été écrit par-dessus.`
+    }
+  const ouverte = await ouvrirLaCopieDeTache({
+    dossierDeDonnees: entree.dossierDeDonnees,
+    depot: entree.depot,
+    tache: entree.conversationId,
+    sansDistant: true,
+    runGit: entree.runGit
+  }).catch((erreur: unknown): OuvertureDeCopie => ({
+    ok: false,
+    motif: 'echec',
+    raison: erreur instanceof Error ? erreur.message : String(erreur)
+  }))
+  if (ouverte.ok) return ouverte
+  return { ...ouverte, raison: annonceDuRefusDOuverture(ouverte, entree) }
+}
+
+/** Le refus de la primitive, dit dans les phrases d'avant pour les motifs que l'utilisateur voyait. */
+function annonceDuRefusDOuverture(
+  refus: { motif: string; raison: string },
+  entree: { dossierDeDonnees: string; conversationId: string }
+): string {
+  const copie = dossierDeCopieDeTache(
+    racineDesCopiesDeTaches(entree.dossierDeDonnees),
+    entree.conversationId
+  )
+  // La phrase d'avant nomme le chemin de la copie : la primitive ne le fait pas pour la limite de longueur.
+  if (refus.motif === 'chemin-trop-long' && copie && copie.length > LONGUEUR_MAX_CHEMIN_DE_COPIE)
+    return `Le dossier de la copie ferait ${copie.length} caractères (${copie}) : git pour Windows en accepte ${LONGUEUR_MAX_CHEMIN_DE_COPIE} caractères au plus. Aucune copie n’a été ouverte.`
+  if (refus.motif === 'dossier-occupe' && copie)
+    return `Le dossier ${copie} existe déjà sans être la copie notée sur ce fil : rien n’a été écrit par-dessus.`
+  if (refus.motif === 'identifiant-invalide')
+    return `« ${entree.conversationId} » ne peut pas nommer un dossier de copie : aucune copie n’a été ouverte.`
+  if (refus.motif === 'photo-impossible')
+    return 'Impossible de photographier le code de ce fil : son dossier n’est pas un dépôt git, ou la photo n’a pas pu être prise à temps. Aucune copie n’a été ouverte.'
+  return refus.raison
+}
+
 export type IssueDuPassage = 'rien' | 'ouverte' | 'reprise' | 'revenu' | 'refusee'
 
 /**
@@ -248,7 +314,8 @@ export async function preparerLeDossierDuTour(entree: {
   actif: boolean
   /** Le message du tour est une question sans action (`estUneQuestionSansAction`). */
   questionSeule?: boolean
-  ouvrirCopie: () => Promise<{ ok: true; chemin: string } | { ok: false; raison: string }>
+  /** L'ouverture de la primitive (`ouvrirLaCopieDeTache`), câblée par `chat.ts` : son résultat exact, motif compris. */
+  ouvrirCopie: () => Promise<OuvertureDeCopie>
   passer: (copie: { chemin: string; depot: string }) => void
   revenir: () => void
   annoncer: (ligne: string) => void

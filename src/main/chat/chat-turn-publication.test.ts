@@ -28,6 +28,7 @@ import type { ExecutionEvidence } from '../providers/types'
 import type { GitRunner } from '../runs/run-autoclose'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { avancerLaBaseDuFil } from '../git/photo-du-code'
+import { ouvrirLaCopieDeTache } from '../copies/copie-de-tache'
 import { WorktreeManager } from '../store/worktree-manager'
 
 /** Vrais dépôts git en tmp : sous charge parallèle, le budget vitest par défaut (5 s) est trop court. */
@@ -815,7 +816,8 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
   it('typage ROUGE de ce qui part : rien n’est commité, les tests ne sont pas joués, chaque fichier nomme l’erreur', async () => {
     const { repo, remote, debut, traces } = await tourQuiModifieMine()
     const headAvant = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout
-    const erreur = "src/main/index.ts: TS2345: Argument of type '{ shell: ShellRaccourci; }' is not assignable"
+    const erreur =
+      "src/main/index.ts: TS2345: Argument of type '{ shell: ShellRaccourci; }' is not assignable"
     const typer = vi.fn(async () => ({
       statut: 'echec' as const,
       projets: ['node' as const],
@@ -840,7 +842,11 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
     expect(fichiersTypes).toEqual(['mine.ts'])
     expect(verifier).not.toHaveBeenCalled()
     expect(report).toMatchObject({
-      project: { status: 'skipped', reason: 'typage-rouge', detail: expect.stringContaining('1 erreur de typage nouvelle') },
+      project: {
+        status: 'skipped',
+        reason: 'typage-rouge',
+        detail: expect.stringContaining('1 erreur de typage nouvelle')
+      },
       exclus: [{ path: 'mine.ts', motif: 'typage-rouge', erreursDeTypage: [erreur] }],
       typage: { statut: 'echec' }
     })
@@ -1660,5 +1666,180 @@ describe('fil passé en copie — la porte vers la branche locale, jamais une br
 
     expect(report?.project).toMatchObject({ status: 'pushed', mode: 'direct', branch: 'travail' })
     expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
+  })
+})
+
+/**
+ * UN FIL DANS UNE COPIE DE LA RACINE UNIQUE (`copies-de-taches\<fil>`) : la porte passe par la primitive
+ * (`entrerLeTravailDeLaCopie`), jamais par la file de publication. Cette file-ci lève si on l'appelle.
+ */
+// fix-ok: la copie de la racine unique est reconnue par chemins réels (nom court tmpdir contre nom long git), sinon elle tombe dans la file d'avant.
+describe('fil passé en copie de la racine unique — la porte par la primitive', () => {
+  async function filEnRacineUnique(): Promise<{
+    repo: string
+    copie: string
+    porte: NonNullable<Parameters<typeof publierTourDeChat>[0]['porte']>
+  }> {
+    const { repo } = await depot()
+    await run('git', ['config', 'commit.gpgsign', 'false'], { cwd: repo })
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-chat-racine-'))
+    dirs.push(racine)
+    const ouverte = await ouvrirLaCopieDeTache({
+      dossierDeDonnees: racine,
+      depot: repo,
+      tache: 'conv-A',
+      sansDistant: true
+    })
+    if (!ouverte.ok) throw new Error(ouverte.raison)
+    return {
+      repo,
+      copie: ouverte.chemin,
+      porte: {
+        depot: repo,
+        dossierDeDonnees: racine,
+        publication: {
+          ouvrir: async () => {
+            throw new Error(
+              'la file de publication ne doit pas servir à une copie de la racine unique'
+            )
+          },
+          fermer: async () => undefined
+        }
+      }
+    }
+  }
+
+  it('fin de tour : le travail entre dans la branche, et le commit porte la ligne de porte', async () => {
+    const { repo, copie, porte } = await filEnRacineUnique()
+    const debut = await photographierDebutDeTour(copie, realGit, DEBUT)
+    writeFileSync(join(copie, 'mine.ts'), 'export const a = 1\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute la constante a',
+      debut,
+      traces: [
+        trace(copie, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ],
+      porte
+    })
+
+    expect(report?.project).toMatchObject({ status: 'committed', files: 1 })
+    expect((await run('git', ['show', 'travail:mine.ts'], { cwd: repo })).stdout).toBe(
+      'export const a = 1\n'
+    )
+    const corps = (await run('git', ['log', '-1', '--format=%B', 'travail'], { cwd: repo })).stdout
+    expect(corps.trimEnd().split('\n').at(-1)).toBe('Porte: conv-A')
+  })
+
+  /**
+   * Un fil de la racine unique, avec la VRAIE file de publication : la voie d'attente (un fichier modifié dans le dossier
+   * partagé) y passe, comme pour les copies d'avant.
+   */
+  async function filEnRacineUniqueAvecFile(): Promise<{
+    repo: string
+    copie: string
+    porte: NonNullable<Parameters<typeof publierTourDeChat>[0]['porte']>
+  }> {
+    const { repo } = await depot()
+    await run('git', ['config', 'commit.gpgsign', 'false'], { cwd: repo })
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-chat-racine-'))
+    dirs.push(racine)
+    const ouverte = await ouvrirLaCopieDeTache({
+      dossierDeDonnees: racine,
+      depot: repo,
+      tache: 'conv-A',
+      sansDistant: true
+    })
+    if (!ouverte.ok) throw new Error(ouverte.raison)
+    const fileDeCopies = mkdtempSync(join(tmpdir(), 'autowin-chat-file-'))
+    dirs.push(fileDeCopies)
+    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: fileDeCopies })
+    return {
+      repo,
+      copie: ouverte.chemin,
+      porte: {
+        depot: repo,
+        dossierDeDonnees: racine,
+        publication: {
+          ouvrir: async (runId) => wm.acquire(runId),
+          fermer: async (runId, publier) => {
+            if (publier) return wm.finalize(runId)
+            wm.discard(runId)
+            return undefined
+          }
+        }
+      }
+    }
+  }
+
+  // le texte de conflit est celui de la passe, pas celui de la primitive.
+  it('un conflit avec main nomme le fichier, et dit que rien n’est entré', async () => {
+    const { repo, copie, porte } = await filEnRacineUniqueAvecFile()
+    const debut = await photographierDebutDeTour(copie, realGit, DEBUT)
+    writeFileSync(join(copie, 'mine.ts'), 'export const a = 1\n')
+    writeFileSync(join(repo, 'mine.ts'), 'export const a = 2\n')
+    await run('git', ['add', 'mine.ts'], { cwd: repo })
+    await run('git', ['commit', '-m', 'main bouge'], { cwd: repo })
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute la constante a',
+      debut,
+      traces: [
+        trace(copie, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ],
+      porte
+    })
+
+    expect(report?.project).toMatchObject({
+      status: 'skipped',
+      reason: 'porte-refusee',
+      detail:
+        'Ce fil change les mêmes lignes que main depuis son dernier passage : mine.ts. Rien n’est entré dans main ; le travail reste dans la copie du fil.'
+    })
+  })
+
+  // un fichier visé modifié dans le dossier partagé relève du refus « modifie-non-commite » de la primitive : rien n’y est écrit.
+  it('un fichier visé modifié dans le dossier partagé refuse le passage : rien n’y est écrit, la copie reste', async () => {
+    const { repo, copie, porte } = await filEnRacineUniqueAvecFile()
+    const debut = await photographierDebutDeTour(copie, realGit, DEBUT)
+    writeFileSync(join(copie, 'mine.ts'), 'export const a = 1\n')
+    writeFileSync(join(repo, 'mine.ts'), 'travail non commité d’un autre fil\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute la constante a',
+      debut,
+      traces: [
+        trace(copie, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ],
+      porte
+    })
+
+    expect(report?.project).toMatchObject({
+      status: 'skipped',
+      reason: 'porte-refusee',
+      detail: expect.stringContaining('Modifié et non commité dans le dossier partagé : mine.ts')
+    })
+    expect(report?.project).toMatchObject({ detail: expect.stringContaining('la copie reste') })
+    // Vrai parce que la passe horaire refait cette entrée seule une fois le fichier commité.
+    expect(report?.project).toMatchObject({
+      detail: expect.stringContaining('Autowin retentera tout seul')
+    })
+    expect(readFileSync(join(repo, 'mine.ts'), 'utf8')).toBe('travail non commité d’un autre fil\n')
+    expect(readFileSync(join(copie, 'mine.ts'), 'utf8')).toBe('export const a = 1\n')
   })
 })

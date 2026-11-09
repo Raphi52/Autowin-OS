@@ -48,8 +48,11 @@ describe('une copie par fil — au début du tour', () => {
     const bloc = passage.slice(0, passage.indexOf('const tourCompteDesReception'))
     expect(bloc).toContain('actif: lireReglageCopieParFil(reglageCopieParFil())')
     expect(bloc).toContain('depotPartage: estDepotAutowin(depot) ? depot : null')
-    // La copie s'ouvre sous `copies-de-fil/<fil>`, plus parmi les essais (`retours-de-tour`).
-    expect(bloc).toContain('dossierDesCopies: dossierDesCopiesDeFil()')
+    // l'ouverture vit dans bascule-dossier-conversation.ts ; cet épinglage suit son appel, dossier racine et dépôt compris.
+    // La copie s'ouvre sous la racine unique (`copies-de-taches\<fil>`), par la primitive, et plus sous `copies-de-fil`.
+    expect(bloc).toContain('ouvrirLaCopieDuFilPourLeTour({')
+    expect(bloc).toContain('dossierDeDonnees: ensureAutowinAppData(appDataRoot)')
+    expect(bloc).toContain('depot: dossierDuTour(conversationId)')
     expect(source).toContain('join(ensureAutowinAppData(appDataRoot), DOSSIER_DES_COPIES_DE_FIL)')
   })
 

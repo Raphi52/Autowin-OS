@@ -14,7 +14,9 @@ import {
   planHistoriqueCliASupprimer,
   planifierRangementHistoriquesCli,
   racinesHistoriqueCliPour,
+  rangerHistoriqueCliDUneCopie,
   rangerHistoriquesCliOrphelins,
+  ramenerLesSessionsDUneCopie,
   suivreSessionEntreDossiers,
   supprimerHistoriqueCli
 } from './historique-cli-copie'
@@ -76,7 +78,7 @@ describe('racinesHistoriqueCliPour', () => {
   })
 })
 
-// fix-ok: cause mesurée — rouge avant correctif (11 échecs sur 24) : 1 échec sur la profondeur, `racinesHistoriqueCliPour` (src/main/store/historique-cli-copie.ts) remonte d'un niveau fixe et ne trouve pas `claude-accounts` d'une copie d'agent sous `worktrees/<dépôt>/<agent>` ; 10 échecs « is not a function » : le rangement des restes n'existe pas encore.
+// fix-ok: `racinesHistoriqueCliPour` (historique-cli-copie.ts) remontait d'un niveau fixe et ne trouvait pas `claude-accounts` d'une copie d'agent sous `worktrees/<dépôt>/<agent>`.
 describe('planifierRangementHistoriquesCli', () => {
   const PARENT = join('D:', 'AutoWinOS', '.autowin-data', 'autowin-os', 'worktrees', '5a94')
   const MORT = encoderCheminCli(join(PARENT, 'agent__mort'))
@@ -375,5 +377,86 @@ describe('suivreSessionEntreDossiers', () => {
       })
     ).toBe('absente')
     expect(existsSync(projets(config, VERS))).toBe(false)
+  })
+
+  it('source rangée, session déjà posée sous l’arrivée → suivie, et rien n’est recopié', () => {
+    const config = mkdtempSync(join(tmpdir(), 'cfg-suivi-'))
+    poser(config, VERS, 'tour 1 et 2')
+    expect(
+      suivreSessionEntreDossiers({ configDir: config, depuis: SOURCE, vers: VERS, sessionId: SID })
+    ).toBe('suivie')
+    expect(readFileSync(join(projets(config, VERS), `${SID}.jsonl`), 'utf8')).toBe('tour 1 et 2')
+  })
+})
+
+// source rangée : suivreSessionEntreDossiers doit regarder l'arrivée avant de rendre « absente ».
+describe('ramener puis ranger l’historique d’une copie retirée', () => {
+  const SESSION = '3cd742bb-8548-4ae9-8b2f-7038dd27af57'
+  const AUTRE = '5b0e2f7a-1c3d-4e8f-9a6b-2d4c6e8f0a1b'
+  /** Une copie de la racine unique, son dossier d'avant, une copie voisine encore là, et la racine `projects`. */
+  const contexte = () => {
+    const base = mkdtempSync(join(tmpdir(), 'hist-ram-'))
+    const copie = join(base, 'copies-de-taches', 'conv-1')
+    const depot = join(base, 'depot')
+    mkdirSync(join(base, 'copies-de-taches', 'conv-2'), { recursive: true })
+    mkdirSync(depot, { recursive: true })
+    const racine = join(base, 'cfg', 'projects')
+    const poser = (dossier: string, nom: string, contenu: string): void => {
+      mkdirSync(join(racine, encoderCheminCli(dossier)), { recursive: true })
+      writeFileSync(join(racine, encoderCheminCli(dossier), nom), contenu, 'utf8')
+    }
+    return { base, copie, depot, racine, poser }
+  }
+
+  it('ramène chaque session de la copie sous le dossier d’avant, et refuse celle qu’il ne peut pas poser', () => {
+    const c = contexte()
+    c.poser(c.copie, `${SESSION}.jsonl`, 'tour 1')
+    c.poser(c.copie, 'pas un uuid.jsonl', 'x')
+
+    const bilan = ramenerLesSessionsDUneCopie({
+      copie: c.copie,
+      dossierAvant: c.depot,
+      racines: [c.racine]
+    })
+
+    expect(bilan.ramenees).toBe(1)
+    expect(bilan.echecs).toEqual([join(c.racine, encoderCheminCli(c.copie), 'pas un uuid.jsonl')])
+    expect(
+      readFileSync(join(c.racine, encoderCheminCli(c.depot), `${SESSION}.jsonl`), 'utf8')
+    ).toBe('tour 1')
+  })
+
+  it('range le dossier de la copie une fois sa session ramenée ; un sous-dossier de run sans autre exemplaire reste, et la copie voisine aussi', () => {
+    const c = contexte()
+    c.poser(c.copie, `${SESSION}.jsonl`, 'tour 1')
+    const sousRun = `${c.copie}${A}agent__run-1${A}1`
+    c.poser(sousRun, `${AUTRE}.jsonl`, 'run')
+    c.poser(join(c.base, 'copies-de-taches', 'conv-2'), `${SESSION}.jsonl`, 'voisine')
+    ramenerLesSessionsDUneCopie({ copie: c.copie, dossierAvant: c.depot, racines: [c.racine] })
+
+    const bilan = rangerHistoriqueCliDUneCopie({
+      copie: c.copie,
+      racines: [c.racine],
+      jour: '2026-11-08'
+    })
+
+    expect(bilan.ranges).toEqual([join(c.racine, encoderCheminCli(c.copie))])
+    expect(existsSync(join(c.racine, encoderCheminCli(c.copie)))).toBe(false)
+    expect(
+      existsSync(
+        join(
+          c.base,
+          'cfg',
+          'corbeille-historique-cli',
+          '2026-11-08',
+          encoderCheminCli(c.copie),
+          `${SESSION}.jsonl`
+        )
+      )
+    ).toBe(true)
+    expect(existsSync(join(c.racine, encoderCheminCli(c.depot), `${SESSION}.jsonl`))).toBe(true)
+    expect(existsSync(join(c.racine, encoderCheminCli(sousRun), `${AUTRE}.jsonl`))).toBe(true)
+    const voisine = join(c.base, 'copies-de-taches', 'conv-2')
+    expect(existsSync(join(c.racine, encoderCheminCli(voisine), `${SESSION}.jsonl`))).toBe(true)
   })
 })

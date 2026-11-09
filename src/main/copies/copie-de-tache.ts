@@ -19,7 +19,16 @@
  * Les fonctions reprises (photo, base, porte, ménage, retrait) restent en service à leur place : ce module
  * ne les remplace pas encore, et ne les modifie pas.
  */
-import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
 import { supprimerArbreAsync } from '../fichiers/fs-supprimer'
@@ -44,8 +53,20 @@ import { dossierDeCopieDeTache, racineDesCopiesDeTaches } from './chemins-de-cop
 /** Le préfixe d'une copie décrochée : un retrait interrompu la reprend au passage suivant. */
 export const PREFIXE_A_SUPPRIMER = 'a-supprimer__'
 
-/** Le dossier où une copie se crée avant de prendre son nom : il n'a jamais été remis à une tâche. */
+/**
+ * La fiche d'une création en cours : un fichier posé juste avant `git worktree add`, retiré dès que la copie est
+ * entière. Une copie qui porte encore sa fiche est une création coupée : elle n'a jamais été rendue à une tâche,
+ * donc elle se défait avant qu'une autre la refasse. Un ancien dossier de ce nom, d'avant la fiche, se défait de
+ * la même façon.
+ */
 export const PREFIXE_EN_CREATION = 'en-creation__'
+
+/**
+ * La fiche d'une entrée refusée parce qu'un fichier visé était modifié dans le dossier partagé. La passe horaire du
+ * ménage ne refait QUE cette entrée-là, dès que le fil ne tourne plus : un travail jamais refusé n'entre pas tout seul.
+ * La fiche s'efface quand l'entrée passe, quand la copie part, et quand une copie neuve s'ouvre.
+ */
+export const PREFIXE_ENTREE_EN_ATTENTE = 'entree-en-attente__'
 
 /**
  * La photo d'une ouverture attend son résultat : rien ne part sans la copie. Un budget de tour (5 s)
@@ -69,7 +90,7 @@ const AUTEUR = {
 
 /**
  * Les gestes d'une même racine passent un à un : deux appels sur une même tâche ne se marchent pas dessus. Sinon
- * la seconde trouverait la base ou le dossier provisoire de la première à moitié posés.
+ * la seconde trouverait la base ou la copie de la première à moitié posées.
  */
 const filesParRacine = new Map<string, Promise<void>>()
 
@@ -111,6 +132,8 @@ export type MotifDeRefusCopie =
   | 'pas-la-copie'
   | 'base-absente'
   | 'enregistrement-absent'
+  | 'creation-coupee'
+  | 'photo-impossible'
   | 'modifie-non-commite'
   | 'conflit'
   | 'separation'
@@ -156,7 +179,8 @@ export interface BilanDeReprise {
  * avance à sa photo. L'ordre inverse laisserait une copie sans base, que rien ne répare.
  *
  * Une copie déjà ouverte se rend telle quelle, à une condition : le dépôt la reconnaît comme sa copie. Une copie
- * renommée sans être recalée répond encore aux commandes git, mais le refus la nomme au lieu de la rendre ouverte.
+ * qu'il ne reconnaît pas répond encore aux commandes git, mais le refus la nomme au lieu de la rendre ouverte.
+ * Une création coupée (fiche `en-creation__<tâche>` encore là) se défait avant : elle n'a jamais été rendue.
  * Un dossier qui occupe la place sans être la copie de cette tâche n'est jamais écrit par-dessus : il peut porter
  * du travail. La photo prend le dépôt tel quel, travail non commité des autres compris ; la base n'avance donc que
  * sur ce que la copie a changé depuis.
@@ -184,6 +208,22 @@ async function ouvrirSansFile(
       `Le dossier de la copie ferait ${copie.length} caractères : git pour Windows en accepte ${LONGUEUR_MAX_CHEMIN_DE_COPIE} au plus. Aucune copie n’a été ouverte.`
     )
   const git = await gitDeLaPrimitive(entree)
+
+  // Une création coupée n'a jamais été rendue : sa copie et sa fiche se défont avant d'en refaire une.
+  const fiche = ficheDeCreation(entree.dossierDeDonnees, entree.tache)
+  if (existsSync(fiche)) {
+    const defait = await defaireUneCreationCoupee(
+      racineDesCopiesDeTaches(entree.dossierDeDonnees),
+      `${PREFIXE_EN_CREATION}${entree.tache}`,
+      entree.depot,
+      git
+    )
+    if (!defait.ok)
+      return refus(
+        'echec',
+        `Une création précédente de cette copie est restée coupée : ${defait.raison}`
+      )
+  }
 
   if (existsSync(copie) || estUnLien(copie)) {
     const pasLaCopie = await raisonSiPasLaCopie(copie, git)
@@ -215,25 +255,6 @@ async function ouvrirSansFile(
     return { ok: true, chemin: copie, base, deja: true, dependances }
   }
 
-  // Le dossier provisoire porte le même nom, avec un préfixe : c'est lui qui doit tenir sous la limite.
-  const provisoire = join(dirname(copie), `${PREFIXE_EN_CREATION}${entree.tache}`)
-  if (provisoire.length > LONGUEUR_MAX_CHEMIN_DE_COPIE)
-    return refus(
-      'chemin-trop-long',
-      `Le dossier provisoire de la copie ferait ${provisoire.length} caractères : git pour Windows en accepte ${LONGUEUR_MAX_CHEMIN_DE_COPIE} au plus. Aucune copie n’a été ouverte.`
-    )
-  if (estUnLien(provisoire))
-    return refus('dossier-occupe', `« ${provisoire} » est un lien : rien n’a été écrit par-dessus.`)
-  if (existsSync(provisoire)) {
-    // Une création interrompue : son dossier n'a jamais été remis à une tâche, il se défait avant d'en refaire un.
-    const defait = await finirLeRetrait(provisoire, entree.depot, git)
-    if (!defait.ok)
-      return refus(
-        'echec',
-        `Une création précédente de cette copie est restée coupée : ${defait.raison}`
-      )
-  }
-
   const photo = await photographierLeCode({
     dossier: entree.depot,
     conversationId: entree.tache,
@@ -243,7 +264,7 @@ async function ouvrirSansFile(
   })
   if (!photo)
     return refus(
-      'echec',
+      'photo-impossible',
       'Impossible de photographier le dépôt : il n’est pas un dépôt git, ou la photo n’a pas pu être prise à temps. Aucune copie n’a été ouverte.'
     )
   // La base d'abord, à la photo ; la copie en sort ensuite, à cette même photo. Une base déjà là (copie
@@ -267,34 +288,37 @@ async function ouvrirSansFile(
       `La base de la tâche n’a pas été posée : ${posee.raison}. Aucune copie n’a été ouverte.`
     )
 
-  // La copie se crée sous le nom provisoire et ne prend son nom qu'une fois entière : un dossier à moitié rempli
-  // n'est jamais rendu comme la copie d'une tâche.
+  // fix-ok: limite de chemin git — la copie se pose sous son nom final, pour ne pas allonger son chemin. La fiche
+  // `en-creation__<tâche>` dit seule qu'elle est en cours : une copie à moitié remplie n'est jamais rendue ni entrée.
   try {
     mkdirSync(racineDesCopiesDeTaches(entree.dossierDeDonnees), { recursive: true })
+    writeFileSync(fiche, '')
+    // Une copie neuve ne doit pas hériter d'une entrée refusée d'une copie disparue.
+    effacerLaFicheEntreeEnAttente(entree.dossierDeDonnees, entree.tache)
     await ouvrirCopieDeLaPhoto({
       dossier: entree.depot,
       sha: photo.sha,
-      destination: provisoire,
+      destination: copie,
       runGit: git
     })
-    renameSync(provisoire, copie)
   } catch (erreur) {
     return refus(
       'echec',
-      `La copie n’a pas pu être ouverte : ${message(erreur)}. Sa base est posée à la photo : l’ouverture suivante reprend d’ici.`
+      `La copie n’a pas pu être ouverte : ${message(erreur)}. Sa base est posée à la photo : l’ouverture suivante la refait.`
+    )
+  }
+  try {
+    unlinkSync(fiche)
+  } catch (erreur) {
+    return refus(
+      'echec',
+      `La copie est entière, mais sa fiche de création n’a pas pu être retirée : ${message(erreur)}. Elle n’est pas rendue ouverte ; l’ouverture suivante la refait.`
     )
   }
 
-  // Sans ce lien, la copie ne peut lancer aucun test : il passe avant le recalage. Un lien raté n'annule pas la
-  // copie, il est rendu pour que l'appelant le dise.
+  // Sans ce lien, la copie ne peut lancer aucun test. Un lien raté n'annule pas la copie : il est rendu pour que
+  // l'appelant le dise.
   const dependances = lierLesDependances(entree.depot, copie)
-  // Le renommage a déplacé la copie : son enregistrement git doit suivre avant qu'elle soit rendue ouverte.
-  const raisonDuRecalage = await recalerLEnregistrement(copie, entree.depot, git)
-  if (raisonDuRecalage)
-    return refus(
-      'echec',
-      `La copie est posée, mais le dépôt ne la reconnaît pas encore : ${raisonDuRecalage}. Elle n’est pas rendue ouverte. ${commandeDeReparation(entree.depot, copie)}`
-    )
   return { ok: true, chemin: copie, base: posee.sha, deja: false, dependances }
 }
 
@@ -308,16 +332,21 @@ async function ouvrirSansFile(
  * qu'ils étaient. Après cette avance, le seul refus possible est une base qui ne suit pas : le travail est
  * alors dans la branche, le refus le dit, et une nouvelle entrée ne l'ajoute pas une seconde fois.
  */
+/** Le titre d'un passage : un texte fixe, ou une fonction qui le tire des fichiers entrés. */
+type MessageDePassage = string | ((fichiers: readonly string[]) => string)
+
 export function entrerLeTravailDeLaCopie(
-  entree: EntreeDeCopie & { messageDuCommit?: string }
+  entree: EntreeDeCopie & { messageDuCommit?: MessageDePassage }
 ): Promise<ResultatEntree> {
   return enFile(entree.dossierDeDonnees, () =>
-    entrerSansFile(entree).catch((erreur: unknown) => echecDeGit(erreur))
+    entrerSansFile(entree)
+      .catch((erreur: unknown) => echecDeGit(erreur))
+      .then((resultat) => tenirLaFicheEntreeEnAttente(entree, resultat))
   )
 }
 
 async function entrerSansFile(
-  entree: EntreeDeCopie & { messageDuCommit?: string }
+  entree: EntreeDeCopie & { messageDuCommit?: MessageDePassage }
 ): Promise<ResultatEntree> {
   const copie = emplacementDeLaCopie(entree.dossierDeDonnees, entree.tache)
   if (!copie)
@@ -327,6 +356,12 @@ async function entrerSansFile(
     )
   if (!existsSync(copie) && !estUnLien(copie))
     return refus('copie-absente', 'Aucune copie pour cette tâche : rien à entrer.')
+  // Une copie à moitié créée n'a pas tout son contenu : la lire ferait passer ses fichiers absents pour des suppressions.
+  if (existsSync(ficheDeCreation(entree.dossierDeDonnees, entree.tache)))
+    return refus(
+      'creation-coupee',
+      'La création de cette copie est restée coupée : rien n’est entré. La copie reste ; l’ouverture suivante la refait.'
+    )
   const git = await gitDeLaPrimitive(entree)
   const pasLaCopie = await raisonSiPasLaCopie(copie, git)
   if (pasLaCopie) return refus('pas-la-copie', pasLaCopie)
@@ -441,7 +476,11 @@ async function entrerSansFile(
 
   // Le commit qui porte ce travail est posé sans crochet : le contrôle des noms d'entreprise passe avant
   // lui, sur ce qu'il emporte (de la tête du dépôt à l'arbre fusionné). Un refus n'écrit rien.
-  const messageDuCommit = entree.messageDuCommit ?? `Entrée du travail de ${entree.tache}`
+  // le titre se tire des fichiers entrés quand l'appelant le demande (la reprise de la passe horaire).
+  const messageDuCommit =
+    typeof entree.messageDuCommit === 'function'
+      ? entree.messageDuCommit(ecart.fichiers)
+      : (entree.messageDuCommit ?? `Entrée du travail de ${entree.tache}`)
   let separation: ResultatDeSeparation
   try {
     separation = await controleDeSeparation({
@@ -546,6 +585,11 @@ async function retirerSansFile(
       'Une suppression précédente de cette copie est restée coupée : la reprendre d’abord.'
     )
   if (!existsSync(copie) && !estUnLien(copie)) return { ok: true, etat: 'deja-absente' }
+  if (existsSync(ficheDeCreation(entree.dossierDeDonnees, entree.tache)))
+    return refus(
+      'creation-coupee',
+      'La création de cette copie est restée coupée : rien n’est retiré. La copie reste ; l’ouverture suivante la refait.'
+    )
 
   const git = await gitDeLaPrimitive(entree)
   const pasLaCopie = await raisonSiPasLaCopie(copie, git)
@@ -588,7 +632,10 @@ async function retirerSansFile(
       `La copie est encore utilisée (${message(erreur)}) : elle reste en place.`
     )
   }
-  return finirLeRetrait(decroche, entree.depot, git)
+  const fin = await finirLeRetrait(decroche, entree.depot, git)
+  // Une copie partie n'a plus d'entrée à refaire.
+  if (fin.ok) effacerLaFicheEntreeEnAttente(entree.dossierDeDonnees, entree.tache)
+  return fin
 }
 
 /**
@@ -641,7 +688,9 @@ async function reprendreSansFile(
       bilan.echecs.push({ chemin, raison: 'c’est un lien, pas une copie : rien n’est supprimé' })
       continue
     }
-    const resultat = await finirLeRetrait(chemin, entree.depot, git)
+    const resultat = nom.startsWith(PREFIXE_EN_CREATION)
+      ? await defaireUneCreationCoupee(racine, nom, entree.depot, git)
+      : await finirLeRetrait(chemin, entree.depot, git)
     if (resultat.ok) bilan.reprises.push(chemin)
     else bilan.echecs.push({ chemin, raison: resultat.raison })
   }
@@ -758,8 +807,8 @@ function fichiersEnConflit(sortie: string): string[] {
 }
 
 /**
- * Le dépôt tient le dossier pour sa copie : son enregistrement git y pointe. Une copie renommée sans recalage
- * répond encore aux commandes git, mais le dépôt ne la reconnaît plus, et son ménage l'emporterait.
+ * Le dépôt tient le dossier pour sa copie : son enregistrement git y pointe. Une copie que le dépôt ne reconnaît
+ * plus répond encore aux commandes git, mais son ménage l'emporterait : ce contrôle la garde.
  */
 async function copieReconnueParLeDepot(
   copie: string,
@@ -775,20 +824,74 @@ async function copieReconnueParLeDepot(
     )
 }
 
+/** La fiche qui marque la création en cours d'une tâche (voir `PREFIXE_EN_CREATION`). */
+function ficheDeCreation(dossierDeDonnees: string, tache: string): string {
+  return join(racineDesCopiesDeTaches(dossierDeDonnees), `${PREFIXE_EN_CREATION}${tache}`)
+}
+
+function ficheEntreeEnAttente(dossierDeDonnees: string, tache: string): string {
+  return join(racineDesCopiesDeTaches(dossierDeDonnees), `${PREFIXE_ENTREE_EN_ATTENTE}${tache}`)
+}
+
+/** Une entrée de cette tâche attend-elle d'être refaite (refusée parce qu'un fichier visé était modifié) ? */
+export function uneEntreeEstEnAttente(dossierDeDonnees: string, tache: string): boolean {
+  return existsSync(ficheEntreeEnAttente(dossierDeDonnees, tache))
+}
+
+function effacerLaFicheEntreeEnAttente(dossierDeDonnees: string, tache: string): void {
+  const fiche = ficheEntreeEnAttente(dossierDeDonnees, tache)
+  if (existsSync(fiche)) unlinkSync(fiche)
+}
+
 /**
- * Recale l'enregistrement git d'une copie sur son chemin actuel : sans effet sur une copie juste. Rend la raison
- * de l'échec, ou `null`.
+ * Pose la fiche quand l'entrée est refusée pour un fichier visé modifié, et l'efface quand elle passe. Une autre
+ * refusée (conflit, contrôle des noms…) n'a pas de fiche : elle attend le prochain passage de la porte, comme avant.
  */
-async function recalerLEnregistrement(
-  copie: string,
+function tenirLaFicheEntreeEnAttente(
+  entree: EntreeDeCopie,
+  resultat: ResultatEntree
+): ResultatEntree {
+  if (resultat.ok) effacerLaFicheEntreeEnAttente(entree.dossierDeDonnees, entree.tache)
+  else if (resultat.motif === 'modifie-non-commite')
+    writeFileSync(ficheEntreeEnAttente(entree.dossierDeDonnees, entree.tache), '')
+  return resultat
+}
+
+/**
+ * Défait une création coupée, nommée par sa fiche `en-creation__<tâche>` dans la racine : la copie part d'abord,
+ * puis la fiche. Une copie jamais rendue n'a pas de travail à perdre. Un ancien dossier provisoire, d'avant la
+ * fiche, s'enlève comme une suppression coupée. Un lien n'est jamais suivi.
+ */
+async function defaireUneCreationCoupee(
+  racine: string,
+  nom: string,
   depot: string,
   git: GitRunner
-): Promise<string | null> {
+): Promise<ResultatRetrait> {
+  const fiche = join(racine, nom)
+  if (estUnDossier(fiche)) return finirLeRetrait(fiche, depot, git)
+  const copie = dossierDeCopieDeTache(racine, nom.slice(PREFIXE_EN_CREATION.length))
+  if (copie === null)
+    return refus('identifiant-invalide', `« ${nom} » ne nomme aucune copie : rien n’est retiré.`)
+  if (estUnLien(copie))
+    return refus('echec', `« ${copie} » est un lien, pas une copie : rien n’est retiré.`)
+  if (existsSync(copie)) {
+    const retrait = await finirLeRetrait(copie, depot, git)
+    if (!retrait.ok) return retrait
+  }
   try {
-    await git(['worktree', 'repair', copie], depot)
-    return null
+    unlinkSync(fiche)
   } catch (erreur) {
-    return message(erreur)
+    return refus('echec', `La fiche de création n’a pas pu être retirée : ${message(erreur)}.`)
+  }
+  return { ok: true, etat: 'retiree' }
+}
+
+function estUnDossier(chemin: string): boolean {
+  try {
+    return lstatSync(chemin).isDirectory()
+  } catch {
+    return false
   }
 }
 

@@ -12,13 +12,11 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
-import { nomDeCopieDeFil } from '../../shared/copie-du-fil'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import {
   avancerLaBaseDuFil,
   lireLaBaseDuFil,
   ouvrirCopieDeLaPhoto,
-  ouvrirLaCopieDuFil,
   photoDuTour,
   photographierLeCode as photographierAvecBudgetDuTour,
   refDeBaseDuFil,
@@ -130,9 +128,9 @@ describe('photographierLeCode — au début du tour, sans toucher au dossier par
 
     expect(seconde?.sha).toBe(premiere?.sha)
     expect(seconde?.ref).toBe(premiere?.ref)
-    expect(await git(repo, 'for-each-ref', '--format=%(refname)', 'refs/autowin/tour/conv-1/')).toBe(
-      'refs/autowin/tour/conv-1/1000\n'
-    )
+    expect(
+      await git(repo, 'for-each-ref', '--format=%(refname)', 'refs/autowin/tour/conv-1/')
+    ).toBe('refs/autowin/tour/conv-1/1000\n')
   })
 
   it('un fichier nouveau trop gros reste hors de la photo', async () => {
@@ -169,10 +167,7 @@ describe('photographierLeCode — au début du tour, sans toucher au dossier par
       .trim()
       .split('\n')
       .sort()
-    expect(refs).toEqual([
-      'refs/autowin/tour/conv-1/1000',
-      'refs/autowin/tour/conv-2/900'
-    ])
+    expect(refs).toEqual(['refs/autowin/tour/conv-1/1000', 'refs/autowin/tour/conv-2/900'])
   })
 
   it('une photo plus vieille que la durée de garde sort, même seule', async () => {
@@ -331,16 +326,19 @@ describe('ouvrirCopieDeLaPhoto — des fichiers à plus de 260 caractères dans 
       return vrai(args, cwd, options)
     }
 
-    const copie = await ouvrirLaCopieDuFil({
+    const photo = await photographierAvecBudgetDuTour({
       dossier: repo,
       conversationId: 'conv-1',
-      dossierDesCopies,
       quand: 5_000,
       runGit
     })
-
-    expect(copie).toMatchObject({ ok: true })
-    const { chemin } = copie as { chemin: string }
+    if (!photo) throw new Error('photo du code absente')
+    const { chemin } = await ouvrirCopieDeLaPhoto({
+      dossier: repo,
+      sha: photo.sha,
+      destination: join(dossierDesCopies, 'conv-1'),
+      runGit
+    })
     expect(join(chemin, ...FICHIER_PROFOND).length).toBeGreaterThan(260)
     expect(lu(join(chemin, ...FICHIER_PROFOND))).toBe('au fond\n')
     // Hors Windows, aucun chemin n'est « trop long » : ce contrôle garde le correctif partout.
@@ -543,7 +541,7 @@ describe('revenirAuCodeDuTour — le bouton « Revenir à ce tour » d’un mess
   })
 
   it('une photo prise ENTRE deux tours (ouverture d’une copie de fil) ne remplace pas celle du tour', async () => {
-    // L'ouverture d'une copie de fil photographie sous le même préfixe que les tours (`ouvrirLaCopieDuFil`).
+    // L'ouverture d'une copie de fil photographie sous le même préfixe que les tours (`ouvrirCopieDeLaPhoto`).
     const repo = await depot()
     writeFileSync(join(repo, 'a.txt'), 'tour 1\n')
     await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 600 })
@@ -611,52 +609,6 @@ describe('revenirAuCodeDuTour — jamais la photo d’un AUTRE tour', () => {
       dossierDesRetours: join(repo, '..', 'retours')
     })
     expect(retour).toMatchObject({ ok: false })
-  })
-})
-
-describe('ouvrirLaCopieDuFil — la photo d’ouverture', () => {
-  it('machine chargée : l’ouverture attend sa photo au-delà des 5 s du début de tour', async () => {
-    // 2026-10-21 : tombé rouge en suite chargée (photo abandonnée à 5 s, « son dossier n’est pas
-    // un dépôt git… »), vert 3 fois sur 3 seul. Git est ici retenu le temps que l'horloge dépasse
-    // 5 s, puis relâché : la photo doit aboutir.
-    const repo = await depot()
-    const vraiGit = await defaultGitRunner()
-    let relacher!: () => void
-    const porte = new Promise<void>((resolve) => {
-      relacher = resolve
-    })
-    const lent: GitRunner = async (args, cwd, options) => {
-      await porte
-      return vraiGit(args, cwd, options)
-    }
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    try {
-      const enCours = ouvrirLaCopieDuFil({
-        dossier: repo,
-        conversationId: 'conv-1',
-        dossierDesCopies: join(repo, '..', 'copies-lentes'),
-        quand: 6_000,
-        runGit: lent
-      })
-      await vi.advanceTimersByTimeAsync(5_001)
-      vi.useRealTimers()
-      relacher()
-      expect(await enCours).toMatchObject({ ok: true })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('hors dépôt git : refusé avec la raison, aucune copie', async () => {
-    const hors = mkdtempSync(join(tmpdir(), 'autowin-copie-hors-'))
-    dossiers.push(hors)
-    const copie = await ouvrirLaCopieDuFil({
-      dossier: hors,
-      conversationId: 'conv-1',
-      dossierDesCopies: join(hors, 'copies-de-fil')
-    })
-    expect(copie).toMatchObject({ ok: false })
-    expect(existsSync(join(hors, 'copies-de-fil'))).toBe(false)
   })
 })
 
@@ -885,153 +837,5 @@ describe('base du fil en copie — elle survit au ménage des photos et avance �
       ok: true,
       sha: commit
     })
-  })
-})
-
-/*
- * LA COPIE D'UN FIL. Un fil d'AutoWinOS travaille dans SA copie, ouverte par une photo puis
- * une copie détachée à cette photo, puis sa porte vers main la publie depuis
- * sa BASE. Les entrées qui font échouer une version fausse :
- *  - un nom de copie que le ménage ne lit pas : il ne la reconnaîtrait pas ;
- *  - une copie ouverte sans base : la porte refuserait au premier tour (« base absente ») ;
- *  - une copie sans `node_modules` : le fil ne pourrait lancer aucun test (décision 2-A, lien partagé) ;
- *  - un chemin de 216 caractères : git pour Windows le refuse après coup, la photo déjà prise.
- */
-describe('ouvrirLaCopieDuFil — un fil d’AutoWinOS dans sa propre copie', () => {
-  it('ouvre la copie sous copies-de-fil/<fil>, pose sa première base et relie les dépendances', async () => {
-    const repo = await depot()
-    mkdirSync(join(repo, 'node_modules', 'paquet'), { recursive: true })
-    writeFileSync(join(repo, 'node_modules', 'paquet', 'index.js'), 'module.exports = 1\n')
-    writeFileSync(join(repo, '.gitignore'), 'ignore/\nnode_modules/\n')
-    writeFileSync(join(repo, 'a.txt'), 'travail non commité d’un autre fil\n')
-    const copies = join(repo, '..', 'copies-de-fil')
-
-    const copie = await ouvrirLaCopieDuFil({
-      dossier: repo,
-      conversationId: 'conv-7',
-      dossierDesCopies: copies,
-      quand: 9_000
-    })
-
-    expect(copie).toMatchObject({ ok: true })
-    const { chemin, base } = copie as { chemin: string; base: string }
-    expect(chemin).toBe(join(copies, 'conv-7'))
-    expect(nomDeCopieDeFil(chemin)).toEqual({ fil: 'conv-7' })
-    expect(await lireLaBaseDuFil({ dossier: repo, conversationId: 'conv-7' })).toBe(base)
-    expect((await git(chemin, 'rev-parse', 'HEAD')).trim()).toBe(base)
-    expect(readFileSync(join(chemin, 'node_modules', 'paquet', 'index.js'), 'utf8')).toContain(
-      'module.exports'
-    )
-    // Le travail non commité du dossier partagé est dans la copie : la copie part de ce que tu vois.
-    expect(readFileSync(join(chemin, 'a.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe(
-      'travail non commité d’un autre fil\n'
-    )
-    // Le lien ne se voit pas dans la copie : rien à publier au premier passage de la porte.
-    expect(await git(chemin, 'status', '--porcelain')).toBe('')
-  })
-
-  it('une base déjà posée (copie précédente disparue) avance jusqu’à la nouvelle copie', async () => {
-    const repo = await depot()
-    const commit = (await git(repo, 'rev-parse', 'HEAD')).trim()
-    const fil = { dossier: repo, conversationId: 'conv-8' }
-    expect(await avancerLaBaseDuFil({ ...fil, depuis: null, vers: commit })).toMatchObject({
-      ok: true
-    })
-    writeFileSync(join(repo, 'a.txt'), 'plus récent\n')
-
-    const copie = await ouvrirLaCopieDuFil({
-      ...fil,
-      dossierDesCopies: join(repo, '..', 'copies-de-fil'),
-      quand: 9_500
-    })
-
-    expect(copie).toMatchObject({ ok: true })
-    expect(await lireLaBaseDuFil(fil)).toBe((copie as { base: string }).base)
-    expect((copie as { base: string }).base).not.toBe(commit)
-  })
-
-  it('deux fils modifient le même fichier dans leurs copies : le dépôt partagé ne bouge pas', async () => {
-    const repo = await depot()
-    const copiesDeFil = join(repo, '..', 'copies-de-fil')
-    const statut = await git(repo, 'status', '--porcelain')
-    const neuf = await ouvrirLaCopieDuFil({
-      dossier: repo,
-      conversationId: 'conv-neuf',
-      dossierDesCopies: copiesDeFil,
-      quand: 10_000
-    })
-    const ancien = await ouvrirLaCopieDuFil({
-      dossier: repo,
-      conversationId: 'conv-ancien',
-      dossierDesCopies: copiesDeFil,
-      quand: 10_001
-    })
-    const copies = [neuf, ancien].map((copie) => (copie as { chemin: string }).chemin)
-
-    writeFileSync(join(copies[0], 'a.txt'), 'écrit par le fil neuf\n')
-    writeFileSync(join(copies[1], 'a.txt'), 'écrit par le fil ancien\n')
-
-    expect(new Set(copies).size).toBe(2)
-    expect(await git(repo, 'status', '--porcelain')).toBe(statut)
-    expect(readFileSync(join(repo, 'a.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe(
-      'version commitée\n'
-    )
-  })
-
-  it('chemin de copie au-delà de 215 caractères : refus clair, ni photo ni copie', async () => {
-    const repo = await depot()
-    const longueurDuNom = 'conv-9'.length + 1
-    const retours = join(repo, '..', 'r'.repeat(216 - longueurDuNom - join(repo, '..').length - 1))
-    const attendu = join(retours, 'conv-9')
-    expect(attendu.length).toBe(216)
-
-    const copie = await ouvrirLaCopieDuFil({
-      dossier: repo,
-      conversationId: 'conv-9',
-      dossierDesCopies: retours,
-      quand: 9_999
-    })
-
-    expect(copie).toMatchObject({ ok: false })
-    expect((copie as { raison: string }).raison).toContain('215 caractères')
-    expect((copie as { raison: string }).raison).toContain(attendu)
-    expect(existsSync(retours)).toBe(false)
-    expect(await git(repo, 'for-each-ref', 'refs/autowin/')).toBe('')
-  })
-
-  it('jumeau accepté : un chemin de 215 caractères tout juste s’ouvre', async () => {
-    const repo = await depot()
-    const longueurDuNom = 'conv-9'.length + 1
-    const retours = join(repo, '..', 'r'.repeat(215 - longueurDuNom - join(repo, '..').length - 1))
-    expect(join(retours, 'conv-9').length).toBe(215)
-
-    const copie = await ouvrirLaCopieDuFil({
-      dossier: repo,
-      conversationId: 'conv-9',
-      dossierDesCopies: retours,
-      quand: 9_999
-    })
-
-    expect(copie).toMatchObject({ ok: true })
-  })
-})
-
-describe('ouvrirLaCopieDuFil — un dossier déjà là n’est jamais écrasé', () => {
-  it('refuse sans photo ni base quand copies-de-fil/<fil> existe déjà', async () => {
-    const repo = await depot()
-    const copies = join(repo, '..', 'copies-de-fil')
-    mkdirSync(join(copies, 'conv-3'), { recursive: true })
-    writeFileSync(join(copies, 'conv-3', 'note.txt'), 'à quelqu’un\n')
-
-    const copie = await ouvrirLaCopieDuFil({
-      dossier: repo,
-      conversationId: 'conv-3',
-      dossierDesCopies: copies
-    })
-
-    expect(copie).toMatchObject({ ok: false })
-    expect((copie as { raison: string }).raison).toContain(join(copies, 'conv-3'))
-    expect(readFileSync(join(copies, 'conv-3', 'note.txt'), 'utf8')).toBe('à quelqu’un\n')
-    expect(await git(repo, 'for-each-ref', 'refs/autowin/')).toBe('')
   })
 })

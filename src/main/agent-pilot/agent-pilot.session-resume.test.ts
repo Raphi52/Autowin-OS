@@ -446,7 +446,13 @@ describe('chat() — un fil qui passe dans sa copie garde la session de l’outi
       fil: store.get(id),
       depotPartage: DEPOT,
       actif: true,
-      ouvrirCopie: async () => ({ ok: true, chemin: COPIE }),
+      ouvrirCopie: async () => ({
+        ok: true,
+        chemin: COPIE,
+        base: 'base-du-fil',
+        deja: false,
+        dependances: { fait: 'liees' }
+      }),
       passer: (copie) => {
         store.passerDansLaCopie(id, copie)
       },

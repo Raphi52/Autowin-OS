@@ -19,10 +19,16 @@ import {
   type VerificationAvantPublication
 } from '../runs/run-autoclose'
 import {
+  arbreDeLaCopie,
   garderLeTravailDuFil,
+  ligneDePorte,
   type PublicationDUneCopie,
   type ResultatGarder
 } from '../orchestration/garder-un-essai'
+import { entrerLeTravailDeLaCopie } from '../copies/copie-de-tache'
+import { dossierDeCopieDeTache, racineDesCopiesDeTaches } from '../copies/chemins-de-copies'
+import { lireLaBaseDuFil } from '../git/photo-du-code'
+import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 
 /**
  * ENCHAÎNEMENT AUTO DU CHAT.
@@ -304,6 +310,14 @@ function messageDeCommit(
 }
 
 /**
+ * Le titre d'une entrée que la passe horaire refait seule : ni demande ni compte rendu, le titre se tire des fichiers
+ * entrés, et la ligne de porte est celle de la porte de fin de tour.
+ */
+export function titreDeLaReprise(tache: string, fichiers: readonly string[]): string {
+  return `${messageDeCommit(tache, '', undefined, fichiers, lireLangueReglee()).trim()}\n\n${ligneDePorte(tache)}`
+}
+
+/**
  * Publie les fichiers PROUVÉS d'un tour de chat terminé : commit de ces seuls fichiers, puis push
  * sur la branche courante ; si le dépôt refuse, branche dédiée + PR (même règle que les tâches
  * d'agent). Rend `undefined` quand le tour n'a laissé aucun fichier en attente : le dernier rapport
@@ -347,7 +361,10 @@ export async function publierTourDeChat(input: {
    * compilation de main ; les tests, rejoués dans l'arbre partagé où l'appelant était encore là,
    * étaient verts. Absent = aucun typage (voir `typage-avant-publication.ts`).
    */
-  typerAvantPublication?: (repo: string, fichiers: readonly string[]) => Promise<TypageAvantPublication>
+  typerAvantPublication?: (
+    repo: string,
+    fichiers: readonly string[]
+  ) => Promise<TypageAvantPublication>
   runGit?: GitRunner
   openPr?: PrOpener
   /**
@@ -355,13 +372,13 @@ export async function publierTourDeChat(input: {
    * dépôt que `publication` fait avancer. Un tour dont le dossier est une copie détachée de ce dépôt
    * passe par elle, et par elle seule. Absent = publication d'avant pour tous les dossiers.
    */
-  porte?: { depot: string; publication: PublicationDUneCopie }
+  porte?: { depot: string; publication: PublicationDUneCopie; dossierDeDonnees?: string }
 }): Promise<AutoCloseReport | undefined> {
   const { conversationId, turnId, debut } = input
   if (!debut.repo) return undefined
   const runGit = input.runGit ?? (await defaultGitRunner())
   if (input.porte && (await estUneCopieDetacheeDuDepot(debut.repo, input.porte.depot, runGit)))
-    return passerLaPorte(input, debut.repo, input.porte.publication, runGit)
+    return passerLaPorte(input, debut.repo, input.porte, runGit)
   const autresToursEnCours = (input.autresToursEnCours ?? []).filter((dossier) => dossier.trim())
   const racines = await cheminsReels([
     debut.repo,
@@ -761,6 +778,124 @@ async function estUneCopieDetacheeDuDepot(
   }
 }
 
+/** La copie d'un fil est-elle celle de la racine unique (`copies-de-taches\<fil>`) ? */
+// fix-ok: comparaison de chemins réels (nom court tmpdir contre nom long git).
+async function estLaCopieDeLaRacineUnique(
+  copie: string,
+  tache: string,
+  dossierDeDonnees: string
+): Promise<boolean> {
+  const attendue = dossierDeCopieDeTache(racineDesCopiesDeTaches(dossierDeDonnees), tache)
+  if (attendue === null) return false
+  // Chemins réels : un nom court de Windows (tmpdir) et le nom long que git rend désignent le même dossier.
+  const reels = await cheminsReels([copie, attendue])
+  return memeCheminSurDisque(reels.get(copie) ?? copie, reels.get(attendue) ?? attendue)
+}
+
+// textes de conflit et de base absente : phrases que l'utilisateur lit, mot pour mot.
+/**
+ * Le texte d'un refus de la passe, dit à l'utilisateur tel quel. Les autres refus gardent le texte de la
+ * primitive, qui nomme la cause.
+ */
+function texteDuRefusDeLaPorte(refus: {
+  motif: string
+  raison: string
+  fichiers?: readonly string[]
+}): string {
+  if (refus.motif === 'conflit') {
+    const liste = refus.fichiers?.length ? refus.fichiers.join(', ') : 'fichiers non nommés'
+    return `Ce fil change les mêmes lignes que main depuis son dernier passage : ${liste}. Rien n’est entré dans main ; le travail reste dans la copie du fil.`
+  }
+  if (refus.motif === 'base-absente')
+    return 'La base de ce fil n’existe plus : la porte ne peut pas dire ce que le fil a changé depuis son dernier passage. Rien n’est entré dans main, et jamais toute la copie à la place.'
+  // la passe horaire refait cette entrée seule (menage-des-copies-de-fil.ts) : « Autowin retentera » dit vrai.
+  if (refus.motif === 'modifie-non-commite') return `${refus.raison} Autowin retentera tout seul.`
+  return refus.raison
+}
+
+/**
+ * LA PORTE D'UNE COPIE DE LA RACINE UNIQUE, par la primitive (`entrerLeTravailDeLaCopie`) : le travail de la
+ * copie entre dans la branche du dépôt, sans file de publication. Le titre du commit se tire des fichiers du
+ * passage, lus d'avance ; un passage sans écart rend `undefined`, comme pour une copie d'avant. Une base absente est
+ * laissée à la primitive, qui la refuse et le dit.
+ *
+ * Un fichier visé modifié et non commité dans le dossier partagé est refusé par la primitive : rien n'y est écrit,
+ * la copie reste, et la passe horaire du ménage le refait seule dès que ce fichier est commité (sans nouveau tour).
+ */
+async function passerLaPorteParLaPrimitive(
+  input: {
+    conversationId: string
+    turnId: string
+    request: string
+    compteRendu?: string
+    langueDuCompteRendu?: Langue
+  },
+  copie: string,
+  depot: string,
+  dossierDeDonnees: string,
+  runGit: GitRunner
+): Promise<AutoCloseReport | undefined> {
+  let issue: Awaited<ReturnType<typeof entrerLeTravailDeLaCopie>>
+  try {
+    const base = await lireLaBaseDuFil({
+      dossier: copie,
+      conversationId: input.conversationId,
+      runGit
+    })
+    const fichiers = base
+      ? (
+          await runGit(
+            [
+              'diff',
+              '--name-only',
+              '--no-renames',
+              '-z',
+              base,
+              await arbreDeLaCopie(copie, runGit)
+            ],
+            copie
+          )
+        )
+          .split('\0')
+          .filter(Boolean)
+      : []
+    if (base && fichiers.length === 0) return undefined
+    const titre = messageDeCommit(
+      input.conversationId,
+      input.request,
+      input.compteRendu,
+      fichiers,
+      input.langueDuCompteRendu ?? lireLangueReglee()
+    )
+    const messageDuCommit = `${titre.trim()}\n\n${ligneDePorte(input.conversationId)}`
+    issue = await entrerLeTravailDeLaCopie({
+      dossierDeDonnees,
+      depot,
+      tache: input.conversationId,
+      sansDistant: true,
+      runGit,
+      messageDuCommit
+    })
+  } catch (error) {
+    return rapport(input, {
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
+  if (!issue.ok)
+    return rapport(input, {
+      status: 'skipped',
+      reason: 'porte-refusee',
+      detail: texteDuRefusDeLaPorte(issue)
+    })
+  if (issue.etat === 'rien-a-entrer') return undefined
+  return rapport(input, {
+    status: 'committed',
+    files: issue.fichiers.length,
+    ...(issue.avertissement ? { detail: issue.avertissement } : {})
+  })
+}
+
 /**
  * FIN DE TOUR D'UN FIL EN COPIE. Tout ce que sa copie porte est à lui : aucune preuve fichier par
  * fichier, aucun fichier mis de côté pour un autre fil. Son travail entre dans main LOCAL par la
@@ -780,9 +915,18 @@ async function passerLaPorte(
     langueDuCompteRendu?: Langue
   },
   copie: string,
-  publication: PublicationDUneCopie,
+  porte: NonNullable<Parameters<typeof publierTourDeChat>[0]['porte']>,
   runGit: GitRunner
 ): Promise<AutoCloseReport | undefined> {
+  const { publication } = porte
+  // La racine unique passe par la primitive ; une copie d'avant, encore là, garde son chemin jusqu'à son retrait.
+  // un fichier visé modifié dans le dossier partagé est un refus de la primitive (« la copie reste »), pas une file d'attente.
+  if (
+    porte.dossierDeDonnees &&
+    (await estLaCopieDeLaRacineUnique(copie, input.conversationId, porte.dossierDeDonnees))
+  ) {
+    return passerLaPorteParLaPrimitive(input, copie, porte.depot, porte.dossierDeDonnees, runGit)
+  }
   let issue: ResultatGarder
   try {
     issue = await garderLeTravailDuFil({

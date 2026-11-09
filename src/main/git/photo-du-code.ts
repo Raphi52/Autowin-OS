@@ -23,7 +23,6 @@ import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
-import { lierLesDependances, type LiaisonDependances } from '../store/dependances-copie-agent'
 
 export const PREFIXE_PHOTOS = 'refs/autowin/tour/'
 
@@ -42,14 +41,6 @@ export const LIMITE_OCTETS_PAR_DEFAUT = 5 * 1024 * 1024
 
 /** Même budget que la photo des fichiers modifiés (`photographierDebutDeTour`) : jamais bloquant. */
 const DELAI_MAX_MS = 5_000
-
-/**
- * L'ouverture d'une copie de fil ATTEND sa photo : rien ne part sans la copie. Le budget du début de
- * tour (5 s, fait pour ne jamais retenir un tour) la faisait échouer dès que la machine était chargée,
- * avec un message qui accusait le dépôt (mesuré le 2026-10-21 : rouge en suite de 30 fichiers, vert
- * 3 fois sur 3 seul).
- */
-const DELAI_PHOTO_DES_COPIES_MS = 30_000
 
 /** L'auteur des photos : jamais l'identité de l'utilisateur, qui n'a rien commité. */
 const AUTEUR = {
@@ -123,7 +114,12 @@ async function photographier(
     const parent = (await git(['rev-parse', '--verify', '-q', 'HEAD'], repo).catch(() => '')).trim()
     const refsExistantes = (
       await git(
-        ['for-each-ref', '--sort=-refname', '--format=%(refname) %(objectname)', `${PREFIXE_PHOTOS}${entree.conversationId}/`],
+        [
+          'for-each-ref',
+          '--sort=-refname',
+          '--format=%(refname) %(objectname)',
+          `${PREFIXE_PHOTOS}${entree.conversationId}/`
+        ],
         repo
       )
     )
@@ -133,8 +129,12 @@ async function photographier(
     const dernierePhoto = refsExistantes[0]
     const dejaPhoto = dernierePhoto?.[1]
     let sha = ''
-    for (const candidat of [dejaPhoto, parent].filter((valeur): valeur is string => Boolean(valeur))) {
-      const arbreCandidat = (await git(['rev-parse', `${candidat}^{tree}`], repo).catch(() => '')).trim()
+    for (const candidat of [dejaPhoto, parent].filter((valeur): valeur is string =>
+      Boolean(valeur)
+    )) {
+      const arbreCandidat = (
+        await git(['rev-parse', `${candidat}^{tree}`], repo).catch(() => '')
+      ).trim()
       if (arbreCandidat === arbre) {
         sha = candidat
         break
@@ -161,7 +161,8 @@ async function photographier(
     const refEncoreFraiche =
       Number.isSafeInteger(quandDernierePhoto) &&
       entree.quand - quandDernierePhoto <= entree.conserver.ageMaxMs
-    const refUtilisee = dejaPhoto === sha && dernierePhoto && refEncoreFraiche ? dernierePhoto[0] : ref
+    const refUtilisee =
+      dejaPhoto === sha && dernierePhoto && refEncoreFraiche ? dernierePhoto[0] : ref
     if (refUtilisee === ref) await git(['update-ref', ref, sha], repo)
     await elaguer(repo, entree.conversationId, entree.quand, entree.conserver, git)
     return { ref: refUtilisee, sha }
@@ -268,9 +269,7 @@ export async function photoDuTour(entree: {
     .map(lirePhoto)
     .filter(
       (photo): photo is NonNullable<typeof photo> =>
-        photo !== null &&
-        photo.fil === entree.conversationId &&
-        photo.quand <= entree.jusqua
+        photo !== null && photo.fil === entree.conversationId && photo.quand <= entree.jusqua
     )
     .sort((a, b) => b.quand - a.quand)
   const derniere = candidates[0]
@@ -420,124 +419,12 @@ export async function revenirAuCodeDuTour(entree: {
   return { ok: true, chemin: copie.chemin, deja: copie.deja, quand: photo.quand }
 }
 
-type CopiesOuvertes =
-  { ok: true; quand: number; sha: string; chemins: string[] } | { ok: false; raison: string }
-
 /**
  * Git pour Windows refuse une copie dont le dossier fait 216 caractères ou plus (voir
  * `CAUSES_D_ECHEC_DE_COPIE`). Le refus se décide AVANT la photo : sinon il tombe après coup, une
  * photo déjà rangée et un dossier de copie à moitié créé.
  */
 export const LONGUEUR_MAX_CHEMIN_DE_COPIE = 215
-
-/**
- * UNE photo du code maintenant, puis une copie détachée à cette photo pour chaque destination. Le
- * refus d'un chemin trop long se décide AVANT la photo (voir `LONGUEUR_MAX_CHEMIN_DE_COPIE`).
- */
-async function photographierPuisOuvrir(entree: {
-  dossier: string
-  conversationId: string
-  quand: number
-  destinations: string[]
-  runGit?: GitRunner
-}): Promise<CopiesOuvertes> {
-  const { quand, destinations } = entree
-  const tropLong = destinations.find((chemin) => chemin.length > LONGUEUR_MAX_CHEMIN_DE_COPIE)
-  if (tropLong)
-    return {
-      ok: false,
-      raison: `Le dossier de la copie ferait ${tropLong.length} caractères (${tropLong}) : git pour Windows en accepte ${LONGUEUR_MAX_CHEMIN_DE_COPIE} caractères au plus. Aucune copie n’a été ouverte.`
-    }
-  const photo = await photographierLeCode({
-    dossier: entree.dossier,
-    conversationId: entree.conversationId,
-    quand,
-    runGit: entree.runGit,
-    delaiMaxMs: DELAI_PHOTO_DES_COPIES_MS
-  })
-  if (!photo)
-    return {
-      ok: false,
-      raison:
-        'Impossible de photographier le code de ce fil : son dossier n’est pas un dépôt git, ou la photo n’a pas pu être prise à temps. Aucune copie n’a été ouverte.'
-    }
-  const chemins: string[] = []
-  for (const destination of destinations) {
-    const copie = await ouvrirCopieDeLaPhoto({
-      dossier: entree.dossier,
-      sha: photo.sha,
-      destination,
-      runGit: entree.runGit
-    })
-    chemins.push(copie.chemin)
-  }
-  return { ok: true, quand, sha: photo.sha, chemins }
-}
-
-export type CopieDuFilOuverte =
-  | { ok: true; chemin: string; base: string; dependances: LiaisonDependances }
-  | { ok: false; raison: string }
-
-/**
- * LA COPIE D'UN FIL D'AUTOWINOS : une copie détachée à la photo du dossier partagé, rangée sous
- * `<dossierDesCopies>/<id du fil>` — le nom que l'utilisateur lit, et que le ménage reconnaît
- * (`nomDeCopieDeFil`, `src/shared/copie-du-fil.ts`). La porte de fin de tour ne lit pas ce nom : elle
- * part de la copie notée sur le fil et de sa base. Puis deux gestes que la porte exige :
- *  - la BASE du fil posée à la photo d'ouverture : la porte publie l'écart depuis elle, et refuse
- *    sans elle. Une base déjà là (copie précédente effacée) avance jusqu'à la nouvelle photo, sinon
- *    le premier passage republierait ce que l'ancienne copie a déjà fait entrer dans main ;
- *  - `node_modules` RELIÉ au dépôt (décision 2-A) : sans lui, le fil ne lance aucun test. Les copies
- *    de « Revenir à ce tour » n'en ont pas (en-tête de ce fichier) ; celle d'un fil, si. Un lien raté n'empêche pas
- *    la copie : il est rendu, pour être dit dans le fil.
- * La photo prend le dossier partagé tel quel, travail non commité des autres fils compris : la porte
- * ne publie donc que ce que CE fil a changé depuis.
- * fix-ok: cause mesurée — aucune copie de fil n'existait (4 rouges de photo-du-code.test.ts sur le code
- * d'avant : fonction absente), et le refus des 216 caractères ne tombait qu'après la photo.
- */
-export async function ouvrirLaCopieDuFil(entree: {
-  dossier: string
-  conversationId: string
-  /** Le dossier qui range les copies de fil (`copies-de-fil` des données de l'app). */
-  dossierDesCopies: string
-  quand?: number
-  runGit?: GitRunner
-}): Promise<CopieDuFilOuverte> {
-  if (!refDeBaseDuFil(entree.conversationId))
-    return {
-      ok: false,
-      raison: `« ${entree.conversationId} » ne peut pas nommer un dossier de copie : aucune copie n’a été ouverte.`
-    }
-  const destination = join(entree.dossierDesCopies, entree.conversationId)
-  // Une copie de fil déjà notée se reprend sans passer ici : un dossier présent n'est pas le sien.
-  if (existsSync(destination))
-    return {
-      ok: false,
-      raison: `Le dossier ${destination} existe déjà sans être la copie notée sur ce fil : rien n’a été écrit par-dessus.`
-    }
-  const git = entree.runGit ?? (await defaultGitRunner())
-  const copies = await photographierPuisOuvrir({
-    dossier: entree.dossier,
-    conversationId: entree.conversationId,
-    quand: entree.quand ?? Date.now(),
-    destinations: [destination],
-    runGit: git
-  })
-  if (!copies.ok) return copies
-  const chemin = copies.chemins[0]
-  const depot = await racineDuDepot(entree.dossier, git)
-  const fil = { dossier: chemin, conversationId: entree.conversationId, runGit: git }
-  const lue = await lireLaBaseDuFil(fil)
-  const base = await avancerLaBaseDuFil({ ...fil, depuis: lue, vers: copies.sha })
-  if (!base.ok)
-    return {
-      ok: false,
-      raison: `La copie ${chemin} est ouverte, mais la base du fil n’a pas pu être posée (${base.raison}) : la porte refuserait tout passage.`
-    }
-  const dependances: LiaisonDependances = depot
-    ? lierLesDependances(depot, chemin)
-    : { fait: 'rien-a-lier', raison: 'le dépôt du fil est introuvable' }
-  return { ok: true, chemin, base: base.sha, dependances }
-}
 
 /*
  * LA BASE D'UN FIL QUI TRAVAILLE DANS SA COPIE. Son travail entre dans main par une porte

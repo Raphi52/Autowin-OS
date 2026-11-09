@@ -65,7 +65,11 @@ import {
 import { execFileSync } from 'node:child_process'
 import { estDansUnDepotGit } from '../git/depot-git'
 import { readBrainHealth } from '../brain/brain-index-refresh'
-import { appliquerBrainReglage, effacerBrainReglage, lireBrainReglage } from '../brain/brain-reglage'
+import {
+  appliquerBrainReglage,
+  effacerBrainReglage,
+  lireBrainReglage
+} from '../brain/brain-reglage'
 import {
   defaultBrainPersoRoot,
   demarrerBrainPerso,
@@ -184,6 +188,7 @@ import {
   dossierDuFilOuvertPar,
   ecrireReglageCopieParFil,
   lireReglageCopieParFil,
+  ouvrirLaCopieDuFilPourLeTour,
   preparerLeDossierDuTour,
   refuserTourSiDossierDisparu,
   revenirSiSaCopieADisparu,
@@ -191,7 +196,8 @@ import {
 } from '../conversations/bascule-dossier-conversation'
 import {
   CALME_AVANT_MENAGE_MS,
-  menageDesCopiesDeFil
+  menageDesCopiesDeFil,
+  menageDesCopiesDeTaches
 } from '../conversations/menage-des-copies-de-fil'
 import { depotCiteDansLeMessage } from '../git/depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from '../conversations/rangement-premier-message'
@@ -200,6 +206,7 @@ import { condenseurDuBrain } from '../brain/brain-condenseur'
 import {
   partageLeDepot,
   photographierDebutDeTour,
+  titreDeLaReprise,
   verifierCeQuiPart
 } from '../chat/chat-turn-publication'
 import { publierSansTour, redacteurDeCommit } from '../git/git-apres-fil-sans-tour'
@@ -245,7 +252,7 @@ import {
   lireStyleMascotte,
   styleAffiche
 } from '../mascotte/mascotte-reglage'
-import { ouvrirLaCopieDuFil, photographierLeCode } from '../git/photo-du-code'
+import { photographierLeCode } from '../git/photo-du-code'
 import { ligneDeMiseAJour, mettreLaCopieDuFilAJour } from '../git/copie-du-fil-a-jour'
 import { DOSSIER_DES_COPIES_DE_FIL } from '../../shared/copie-du-fil'
 import { estUneQuestionSansAction } from '../chat/grow-au-debut'
@@ -261,7 +268,11 @@ import {
   type WorkflowProfilesFile
 } from '../workflow/workflow-profiles'
 import { overrideFor } from '../workflow/workflow-run-override'
-import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from '../workflow/workflow-graph'
+import {
+  graphDefects,
+  worstCaseNodeExecutions,
+  type WorkflowGraph
+} from '../workflow/workflow-graph'
 import { journaliserSaisie, lireOrientationsRattachees } from '../store/journal-saisie'
 import { inventorierDisque, menageDemarrage } from '../store/inventaire-disque'
 import { jouerPasseDeRetention } from '../store/balayage-retention'
@@ -1711,8 +1722,9 @@ Le fil reprend ensuite normalement.`
   /** Les copies des essais et des retours à un tour : « Garder » ne reconnaît une façon que dedans. */
   const dossierDesRetours = (): string => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour')
   /**
-   * Où s'ouvre la copie de chaque fil : `copies-de-fil/<fil>`, un nom qui dit ce qu'elle est. La porte
-   * de fin de tour part de la copie notée sur le fil, jamais de son nom.
+   * Les copies d'avant (`copies-de-fil/<fil>`), encore là jusqu'à leur retrait : une nouvelle copie ne s'y
+   * ouvre plus (elle va sous la racine unique). La porte de fin de tour part de la copie notée sur le fil,
+   * jamais de son nom.
    */
   const dossierDesCopiesDeFil = (): string =>
     join(ensureAutowinAppData(appDataRoot), DOSSIER_DES_COPIES_DE_FIL)
@@ -2319,15 +2331,13 @@ Le fil reprend ensuite normalement.`
       questionSeule: estUneQuestionSansAction(
         [...messages].reverse().find((m) => m.role === 'user')?.content
       ),
+      // la garde « copie d'avant déjà là » et les annonces de refus vivent dans bascule-dossier-conversation.ts, testées là.
       ouvrirCopie: async () => {
-        const copie = await ouvrirLaCopieDuFil({
-          dossier: dossierDuTour(conversationId),
-          conversationId,
-          dossierDesCopies: dossierDesCopiesDeFil()
-        }).catch((erreur: unknown) => ({
-          ok: false as const,
-          raison: erreur instanceof Error ? erreur.message : String(erreur)
-        }))
+        const copie = await ouvrirLaCopieDuFilPourLeTour({
+          dossierDeDonnees: ensureAutowinAppData(appDataRoot),
+          depot: dossierDuTour(conversationId),
+          conversationId
+        })
         if (copie.ok && copie.dependances.fait === 'echec')
           annoncer(`⚠️ ${messageLiaison(copie.dependances)}`)
         return copie
@@ -2970,16 +2980,42 @@ Le fil reprend ensuite normalement.`
     const depot = os.executionWorkspace
     if (!estDepotAutowin(depot)) return
     void pendantOperation('timer:balayage:copiesDeFil', async () => {
-      const bilan = await menageDesCopiesDeFil({
-        dossierDesRetours: dossierDesRetours(),
-        dossierDesCopiesDeFil: dossierDesCopiesDeFil(),
-        depot,
+      const menage: Pick<
+        Parameters<typeof menageDesCopiesDeTaches>[0],
+        'lireFils' | 'tourEnCours' | 'decrocher'
+      > = {
         lireFils: () => os.conversations.list(),
         tourEnCours: (id) => activeChatTurns.isInFlight(id),
         decrocher: (id) => {
           os.conversations.revenirDeLaCopie(id)
         }
+      }
+      // Les copies de la racine unique passent par la primitive ; les copies d'avant, encore là, par leur passe.
+      const copiesAvant = await menageDesCopiesDeFil({
+        dossierDesRetours: dossierDesRetours(),
+        dossierDesCopiesDeFil: dossierDesCopiesDeFil(),
+        depot,
+        ...menage
       })
+      const copiesRacine = await menageDesCopiesDeTaches({
+        dossierDeDonnees: ensureAutowinAppData(appDataRoot),
+        depot,
+        titreDuCommit: titreDeLaReprise,
+        // Le fil avait dit « Autowin retentera » : il lui dit maintenant que c'est entré.
+        annoncerLaReprise: (tache) => {
+          os.conversations.append(tache, {
+            role: 'assistant',
+            content: 'Le travail refusé à la fin du tour est entré dans main.'
+          })
+          broadcast({ type: 'refresh', scope: 'chat', convId: tache })
+        },
+        ...menage
+      })
+      const bilan = {
+        supprimees: [...copiesAvant.supprimees, ...copiesRacine.supprimees],
+        gardees: [...copiesAvant.gardees, ...copiesRacine.gardees],
+        echecs: [...copiesAvant.echecs, ...copiesRacine.echecs]
+      }
       if (bilan.supprimees.length) broadcast({ type: 'refresh', scope: 'conversations' })
       if (bilan.supprimees.length || bilan.echecs.length)
         console.log(

@@ -1,9 +1,10 @@
 /**
  * LA COPIE DE TRAVAIL D'UN FIL — reconnue de la même façon par le processus principal et l'interface.
  *
- * Chaque fil du dépôt d'Autowin travaille dans sa copie, rangée sous `copies-de-fil/<id du fil>` dans
- * les données de l'app (`ouvrirLaCopieDuFil`, `src/main/git/photo-du-code.ts`). Le nom est l'identifiant
- * du fil, rien d'autre : c'est ce que l'utilisateur lit dans l'en-tête et sur le disque.
+ * Chaque fil du dépôt d'Autowin travaille dans sa copie, rangée sous `copies-de-taches/<id du fil>` dans
+ * les données de l'app (`ouvrirLaCopieDeTache`, `src/main/copies/copie-de-tache.ts`). Le nom est l'identifiant
+ * du fil, rien d'autre : c'est ce que l'utilisateur lit dans l'en-tête et sur le disque. Les copies déjà là
+ * sous `copies-de-fil/<id du fil>` y restent jusqu'à leur retrait.
  *
  * Les copies ouvertes avant ce rangement vivent sous `retours-de-tour/essai__<fil>-<instant>-<rang>` :
  * `ancienNomDeCopieDeFil` les reconnaît toujours, et elles restent utilisées jusqu'à ce que le ménage

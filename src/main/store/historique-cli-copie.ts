@@ -97,13 +97,13 @@ export function racinesHistoriqueCliPour(cheminCopie: string): string[] {
   return racines
 }
 
-// fix-ok: cause mesurée — test rouge « trouve les comptes aussi quand la copie d’agent est sous un dossier de dépôt » (historique-cli-copie.test.ts) : 1 échec avant correctif ; l'ancienne remontée fixe à deux niveaux tombait dans `worktrees` et ne trouvait pas `claude-accounts`.
+// fix-ok: une remontée fixe à deux niveaux tombait dans `worktrees` et ne trouvait pas `claude-accounts` d'une copie d'agent.
 /**
  * Le dossier de données d'Autowin, déduit de la POSITION de la copie (un nom de dossier n'est pas un
  * contrat, sa place dans l'arborescence l'est). Une copie de fil vit sous `<données>/copies-de-fil/<fil>`,
  * une copie d'agent sous `<données>/worktrees/<dépôt>/<agent>` : deux niveaux, car chaque dépôt a son
  * dossier. On prend le premier de ces deux niveaux qui porte `claude-accounts`. Une remontée fixe à deux
- * niveaux ratait les comptes des copies d'agent (test rouge mesuré : 1 échec sur ce point).
+ * niveaux ratait les comptes des copies d'agent.
  */
 function racineDeDonnees(cheminCopie: string): string {
   const niveauCourt = dirname(dirname(cheminCopie))
@@ -175,7 +175,9 @@ export function suivreSessionEntreDossiers(entree: {
   const cible = join(projets, encoderCheminCli(entree.vers))
   const fichier = `${entree.sessionId}.jsonl`
   if (source === cible) return existsSync(join(cible, fichier)) ? 'suivie' : 'absente'
-  if (!existsSync(join(source, fichier))) return 'absente'
+  // source rangée : l'arrivée est regardée avant de rendre « absente ».
+  if (!existsSync(join(source, fichier)))
+    return existsSync(join(cible, fichier)) ? 'suivie' : 'absente'
   try {
     mkdirSync(cible, { recursive: true })
     if (existsSync(join(source, entree.sessionId))) {
@@ -361,13 +363,15 @@ export function rangerHistoriquesCliOrphelins(entree: {
   dossiersDeCopies: readonly string[]
   jour: string
   mesurer?: boolean
+  /** Ne retient que les dossiers d'historique voulus ; les autres restes ne sont ni rangés ni comptés. */
+  seulement?: (nom: string) => boolean
 }): BilanDuRangement {
   const avant = lireDossiersHistorique(entree.racines)
   const decisions = planifierRangementHistoriquesCli({
     dossiers: avant,
     copiesExistantes: copiesDesDossiers(entree.dossiersDeCopies),
     dossiersDeCopies: entree.dossiersDeCopies
-  })
+  }).filter((d) => !entree.seulement || entree.seulement(d.nom))
   const aRanger = decisions.filter((d) => d.decision === 'ranger')
   const gardes = decisions
     .filter((d) => d.decision === 'garder')
@@ -402,4 +406,59 @@ export function rangerHistoriquesCliOrphelins(entree: {
     gardes,
     apres: lireDossiersHistorique(entree.racines).length
   }
+}
+
+// historique rangé sans session posée ailleurs : ramener d'abord empêche la perte de session.
+/**
+ * Pose sous le dossier d'avant chaque session d'une copie qu'on retire, là où le CLI la cherchera une fois la
+ * copie partie. À faire AVANT de ranger l'historique de la copie. Une session qui ne peut pas être posée (identifiant
+ * invalide, écriture refusée) est nommée dans `echecs` : son historique ne doit alors pas partir.
+ */
+export function ramenerLesSessionsDUneCopie(entree: {
+  copie: string
+  dossierAvant: string
+  racines: readonly string[]
+}): { ramenees: number; echecs: string[] } {
+  const dossier = encoderCheminCli(entree.copie)
+  let ramenees = 0
+  const echecs: string[] = []
+  for (const racine of entree.racines) {
+    let noms: string[]
+    try {
+      noms = readdirSync(join(racine, dossier))
+    } catch {
+      continue // pas d'historique sous cette racine : rien à ramener
+    }
+    for (const nom of noms) {
+      if (!nom.endsWith(SUFFIXE_SESSION)) continue
+      const suivi = suivreSessionEntreDossiers({
+        configDir: dirname(racine),
+        depuis: entree.copie,
+        vers: entree.dossierAvant,
+        sessionId: nom.slice(0, -SUFFIXE_SESSION.length)
+      })
+      if (suivi === 'suivie') ramenees += 1
+      else echecs.push(join(racine, dossier, nom))
+    }
+  }
+  return { ramenees, echecs }
+}
+
+/**
+ * Range l'historique d'UNE copie retirée (son dossier et les sous-dossiers de ses runs) dans la corbeille datée, si
+ * la règle des restes le permet : chaque session a sa version ailleurs. À appeler après `ramenerLesSessionsDUneCopie`.
+ * Les autres dossiers, y compris les copies voisines, ne sont ni rangés ni comptés.
+ */
+export function rangerHistoriqueCliDUneCopie(entree: {
+  copie: string
+  racines: readonly string[]
+  jour: string
+}): BilanDuRangement {
+  const dossier = encoderCheminCli(entree.copie)
+  return rangerHistoriquesCliOrphelins({
+    racines: entree.racines,
+    dossiersDeCopies: [dirname(entree.copie)],
+    jour: entree.jour,
+    seulement: (nom) => nom === dossier || nom.startsWith(`${dossier}-`)
+  })
 }

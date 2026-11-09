@@ -8,7 +8,8 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { arbreDeLaCopie } from '../orchestration/garder-un-essai'
 import { defaultGitRunner } from '../runs/run-autoclose'
 import { ligneDeMiseAJour, mettreLaCopieDuFilAJour } from './copie-du-fil-a-jour'
-import { avancerLaBaseDuFil, lireLaBaseDuFil, ouvrirLaCopieDuFil } from './photo-du-code'
+import { ouvrirLaCopieDeTache } from '../copies/copie-de-tache'
+import { avancerLaBaseDuFil, lireLaBaseDuFil } from './photo-du-code'
 
 /**
  * La copie d'un fil suit main au début de chaque tour, et ne perd jamais rien.
@@ -46,10 +47,11 @@ async function depotEtCopie(): Promise<{ repo: string; copie: string }> {
   writeFileSync(join(repo, '.gitignore'), 'ignore/\n')
   await git(repo, 'add', '-A')
   await git(repo, 'commit', '-m', 'base')
-  const ouverte = await ouvrirLaCopieDuFil({
-    dossier: repo,
-    conversationId: 'conv-1',
-    dossierDesCopies: join(racine, 'copies-de-fil')
+  const ouverte = await ouvrirLaCopieDeTache({
+    dossierDeDonnees: racine,
+    depot: repo,
+    tache: 'conv-1',
+    sansDistant: true
   })
   if (!ouverte.ok) throw new Error(ouverte.raison)
   return { repo, copie: ouverte.chemin }
