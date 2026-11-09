@@ -416,6 +416,32 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
     expect(depuisLePrincipal.dossierPrincipal).toBeUndefined()
   })
 
+  it('depuis une copie, un fichier déjà tracé par ce fil puis encore modifié reste le travail de la copie', async () => {
+    // Vu sur le vrai dépôt le 09/11/2026 : la copie de ce fil gardait la trace d'un tour précédent, et
+    // l'écriture du tour en cours n'avait pas encore la sienne (posée en fin d'appel). L'outil disait
+    // « retouché depuis hors de tout fil tracé (l'utilisateur à la main) » sur le propre travail du fil.
+    donnees()
+    const ws = depot()
+    const copie = copieDeFil(ws, 'copies-de-fil', 'conv-b')
+    const b = bus(copie)
+    await b.exec(
+      'create_file',
+      { path: 'src/partage.ts', content: 'export const a = 1\n' },
+      'conv-b',
+      undefined,
+      'tour-1'
+    )
+    writeFileSync(join(copie, 'src/partage.ts'), 'export const a = 2 // tour en cours\n')
+
+    const [fichier] = await demander(b, ['src/partage.ts'], 'conv-b')
+
+    expect(fichier.fils).toEqual([
+      expect.objectContaining({ conversation: 'conv-b', toi: true, diffInchange: false })
+    ])
+    expect(fichier.resume).toContain('le travail en cours de cette copie (conv-b)')
+    expect(fichier.resume).not.toMatch(/utilisateur à la main|retouché/)
+  })
+
   it('compte le commit PROPRE d’une copie de run, jamais l’amont qu’elle a reçu à sa création', async () => {
     donnees()
     const ws = depot()

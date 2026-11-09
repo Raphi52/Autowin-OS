@@ -364,8 +364,12 @@ interface LieuDuNonCommite {
   /** Accolé à « non commité » : vide pour le dossier interrogé. */
   ou: string
   conseilAutreFil: string
-  /** Lu quand aucun fil n'est tracé sur le chemin. */
-  sansFil: string
+  /**
+   * Le run ou le fil dont ce dossier est la copie. Seul son agent y écrit, et ses écritures n'ont de
+   * trace qu'en fin d'appel : un changement non commité sans trace, ou qui a dépassé la dernière
+   * trace, y est son travail en cours, pas une retouche à la main.
+   */
+  copie?: string
 }
 
 function constatsDuNonCommite(fils: readonly FilProprietaire[], lieu: LieuDuNonCommite): string[] {
@@ -384,23 +388,25 @@ function constatsDuNonCommite(fils: readonly FilProprietaire[], lieu: LieuDuNonC
       `modifié et non commité${lieu.ou} par ce fil (${miens.map(decrireFil).join(' ; ')})`
     )
   }
+  const enCours = lieu.copie ? `le travail en cours de cette copie (${lieu.copie})` : undefined
   if (tenus.length === 0 && fils.length > 0) {
     constats.push(
-      `touché${lieu.ou} par ${fils.map(decrireFil).join(' ; ')}, puis retouché depuis hors de tout ` +
-        "fil tracé : le diff actuel n'est plus le sien (l'utilisateur à la main, ou un outil hors journal)"
+      enCours
+        ? `modifié et non commité${lieu.ou}, ${enCours}, depuis la dernière trace : ` +
+            fils.map(decrireFil).join(' ; ')
+        : `touché${lieu.ou} par ${fils.map(decrireFil).join(' ; ')}, puis retouché depuis hors de ` +
+            "tout fil tracé : le diff actuel n'est plus le sien (l'utilisateur à la main, ou un outil hors journal)"
     )
   }
-  if (fils.length === 0) constats.push(`modifié et non commité${lieu.ou}, ${lieu.sansFil}`)
+  if (fils.length === 0) {
+    constats.push(`modifié et non commité${lieu.ou}, ${enCours ?? SANS_FIL_TRACE}`)
+  }
   return constats
 }
 
 const SANS_FIL_TRACE = "sans aucun fil tracé : l'utilisateur à la main, ou un outil hors journal"
 
-/**
- * `copieQuiDemande` : le run ou le fil dont le dossier interrogé est la copie. Seul son agent y écrit,
- * et ses écritures n'ont de trace qu'en fin d'appel : un changement non commité sans fil tracé y est
- * son travail en cours, pas une retouche à la main.
- */
+/** `copieQuiDemande` : le run ou le fil dont le dossier interrogé est la copie (`LieuDuNonCommite`). */
 function resumer(
   f: Omit<ProprietaireDeFichier, 'resume'>,
   copieQuiDemande?: string,
@@ -414,9 +420,7 @@ function resumer(
         ou: '',
         conseilAutreFil:
           "relis-le juste avant d'écrire, remplacements ciblés, jamais de réécriture entière",
-        sansFil: copieQuiDemande
-          ? `le travail en cours de cette copie (${copieQuiDemande})`
-          : SANS_FIL_TRACE
+        ...(copieQuiDemande ? { copie: copieQuiDemande } : {})
       })
     )
   }
@@ -425,8 +429,7 @@ function resumer(
     constats.push(
       ...constatsDuNonCommite(f.dossierPrincipal.fils, {
         ou: ` dans le dossier principal (${dossierPrincipal ?? 'du dépôt'})`,
-        conseilAutreFil: "ta copie y reviendra : attends qu'il soit commité, ou pars de sa version",
-        sansFil: SANS_FIL_TRACE
+        conseilAutreFil: "ta copie y reviendra : attends qu'il soit commité, ou pars de sa version"
       })
     )
   }
