@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { WorktreeManager } from './worktree-manager'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { racineDe } from './worktree-manager.test-helpers'
 
 const roots: string[] = []
 afterEach(() => {
@@ -46,6 +47,7 @@ describe('worktree add porte core.longpaths', () => {
     roots.push(wtRoot)
     const appels: string[][] = []
     const manager = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
       baseRepo: repo,
       worktreeRoot: wtRoot,
       git: (dir, args) => {

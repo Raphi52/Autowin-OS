@@ -274,6 +274,16 @@ describe('contratDepuisRuns — bornes mesurées sur le corpus réel', () => {
     ).toEqual(['src/main/commands/commands.ts'])
   })
 
+  it('écarte les copies de tâche rangées à la racine unique, même sans dossier `.autowin-data`', () => {
+    const besoin = [
+      'traite src/main/commands/commands.ts:12',
+      'et autowin-os/copies-de-taches/run-d56aee422bde-1/src/main/commands/commands.ts:12'
+    ].join(' ')
+    expect(
+      contratDepuisRuns([{ path: 'a/RUN.md', content: runMd('red', besoin) }])?.cibles
+    ).toEqual(['src/main/commands/commands.ts'])
+  })
+
   it('borne le contrat : une note de seize cibles n’est pas un signal', () => {
     const besoin = Array.from({ length: 16 }, (_, i) => `src/main/f${i}.ts:${i + 1}`).join(' et ')
     const cibles = contratDepuisRuns([{ path: 'a/RUN.md', content: runMd('red', besoin) }])?.cibles

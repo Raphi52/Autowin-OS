@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { WorktreeManager } from './worktree-manager'
-import { nettoyerRacines, roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, nettoyerRacines, roots, tempRepo } from './worktree-manager.test-helpers'
 
 afterEach(nettoyerRacines)
 
@@ -31,6 +31,7 @@ function managerDontLeRemoveMent(): { wm: WorktreeManager; racine: string } {
   const racine = mkdtempSync(join(tmpdir(), 'autowin-coquille-'))
   roots.push(racine)
   const wm = new WorktreeManager({
+    racineCopiesDeTaches: racineDe(racine),
     baseRepo: repo,
     worktreeRoot: racine,
     tryGitFn: (dir: string, args: string[]) => {

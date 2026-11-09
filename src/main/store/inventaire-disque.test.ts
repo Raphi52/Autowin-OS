@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  FAMILLES_AUTOWIN_SUR_DISQUE,
   inventorierDisque,
   menageDemarrage,
   oublierMenageDemarrage,
@@ -14,6 +15,19 @@ function famille(racine: string, nom: string, fichiers: Record<string, string>):
   for (const [chemin, contenu] of Object.entries(fichiers))
     writeFileSync(join(racine, nom, chemin), contenu, 'utf8')
 }
+
+describe('familles comptées par l’inventaire', () => {
+  // fix-ok: la liste nommée de l'inventaire doit compter la racine unique `copies-de-taches`, sinon le poids des copies sort du total affiché.
+  it('compte la racine unique des copies de travail, fils et agents compris', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'inventaire-'))
+    famille(racine, 'copies-de-taches', { 'a.txt': 'x'.repeat(200) })
+
+    const familles = inventorierDisque(racine, FAMILLES_AUTOWIN_SUR_DISQUE, []).familles
+    const copies = familles.find((f) => f.nom === 'copies-de-taches')
+
+    expect(copies?.octets).toBe(200)
+  })
+})
 
 describe('inventaire disque d’Autowin', () => {
   beforeEach(() => oublierMenageDemarrage())

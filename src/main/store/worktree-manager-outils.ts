@@ -2,12 +2,13 @@
 // classe et ses modules voisins ; ré-exportés par worktree-manager.ts pour les appelants.
 import { execFile, execFileSync } from 'node:child_process'
 import type { EntreeBalayage } from './balayage-retention'
-import { appendFileSync, realpathSync } from 'node:fs'
+import { appendFileSync, readFileSync, realpathSync } from 'node:fs'
 import { appendFile } from 'node:fs/promises'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import type { WorktreeOperationWorkerLike } from './worktree-operation-client'
 import { LIGNES } from './worktree-manager-empreintes'
 import { WorktreeManager } from './worktree-manager'
+import { agentIdDeCopieHeritee, agentIdDeCopieNeuve } from '../copies/chemins-de-copies'
 
 export const SAFE_ID = /^[A-Za-z0-9_-]+$/
 
@@ -68,6 +69,40 @@ export function messageCommitAgent(agentId: string, task?: string): string {
 export function assertSafeId(value: string, label: string): void {
   if (!SAFE_ID.test(value))
     throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
+}
+
+/**
+ * La racine de travail `chemin` appartient-elle au dépôt dont `commonDir` est le répertoire commun ?
+ *
+ * Le lien `.git` d'une racine de travail pointe dans `<commonDir>\worktrees\`. On le lit sans git : une
+ * coquille dont le registre a disparu reste reconnue, et une copie d'un autre dépôt ne l'est jamais.
+ * Les deux côtés passent par realpath, car Git écrit le nom long Windows et Node peut rendre le nom court.
+ */
+export function estCopieDuDepot(chemin: string, commonDir: string | undefined): boolean {
+  if (commonDir === undefined) return false
+  let lien: string
+  try {
+    lien = readFileSync(join(chemin, '.git'), 'utf8')
+  } catch {
+    return false
+  }
+  const pointe = /^gitdir:\s*(.+?)\s*$/m.exec(lien)?.[1]
+  if (pointe === undefined) return false
+  // fix-ok: la racine unique est partagée entre dépôts ; ce contrôle écarte la copie d'un autre dépôt, sans appel à git, donc sans dépendre de son état.
+  return (
+    normaliserChemin(dirname(resolve(chemin, pointe))) ===
+    normaliserChemin(join(commonDir, 'worktrees'))
+  )
+}
+
+function normaliserChemin(chemin: string): string {
+  let reel = resolve(chemin)
+  try {
+    reel = realpathSync.native(reel)
+  } catch {
+    // Dossier absent : on compare le chemin résolu tel quel.
+  }
+  return reel.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
 
 /**
@@ -283,6 +318,11 @@ export function detailFinalisationJetee(erreur: unknown): string {
 export interface WorktreeManagerOptions {
   baseRepo: string
   worktreeRoot: string
+  /**
+   * La racine unique des copies de tâche : toute copie d'agent naît sous elle. Une copie déjà née sous
+   * `worktreeRoot` reste là où elle est et se reprend par son ancien nom.
+   */
+  racineCopiesDeTaches: string
   /** Branche de base sur laquelle fusionner (défaut : la branche courante du repo). */
   baseBranch?: string
   /** En production, refuse un job de mutation si origin/main|master ne peut pas être vérifié. */
@@ -466,8 +506,10 @@ export function copieGardeeParUnPointDeReprise(
   copiesProtegees: ReadonlySet<string>,
   path: string
 ): boolean {
+  // fix-ok: une copie sous la racine unique porte l'identifiant du run pour nom : la garde le lit comme l'ancien nom `agent__<run>`.
   const nom = basename(path)
-  return nom.startsWith('agent__') && copiesProtegees.has(nom.slice('agent__'.length))
+  const agentId = agentIdDeCopieHeritee(nom) ?? agentIdDeCopieNeuve(nom)
+  return agentId !== undefined && copiesProtegees.has(agentId)
 }
 
 function ligneDeRetrait(path: string, raison: string): string {

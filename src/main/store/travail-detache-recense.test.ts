@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
-import { git, roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, git, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
  * LE DÉFAUT, vécu le 2026-08-26 sur le run `ef845009a251-1`.
@@ -38,7 +38,15 @@ const monter = (): { repo: string; racine: string; wm: WorktreeManager } => {
   const repo = tempRepo()
   const racine = mkdtempSync(join(tmpdir(), 'autowin-detache-'))
   roots.push(racine)
-  return { repo, racine, wm: new WorktreeManager({ baseRepo: repo, worktreeRoot: racine }) }
+  return {
+    repo,
+    racine,
+    wm: new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
+  }
 }
 
 /**

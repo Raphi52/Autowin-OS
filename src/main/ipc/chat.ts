@@ -109,6 +109,7 @@ import { enregistrerDirectiveDansLeFil } from '../chat/directive-dans-le-fil'
 import { buildContinuationProviderHistory } from '../chat/chat-continuation'
 import { parseFileRef, resolveFileRef } from '../../shared/file-ref'
 import { commandeEditeur, ligneDemandee, racinesRevelation } from '../fichiers/reveal-file'
+import { racineDesCopiesDeTaches } from '../copies/chemins-de-copies'
 import { type ChatTurnEvent } from '../../shared/chat-turn'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
 import { evenementRefusIntegration } from '../activity/ledger'
@@ -277,7 +278,11 @@ import {
   type WorkflowGraph
 } from '../workflow/workflow-graph'
 import { journaliserSaisie, lireOrientationsRattachees } from '../store/journal-saisie'
-import { inventorierDisque, menageDemarrage } from '../store/inventaire-disque'
+import {
+  FAMILLES_AUTOWIN_SUR_DISQUE,
+  inventorierDisque,
+  menageDemarrage
+} from '../store/inventaire-disque'
 import { jouerPasseDeRetention } from '../store/balayage-retention'
 import { chargerShaConsignes } from '../store/registres-consignes'
 import {
@@ -1534,23 +1539,14 @@ Le fil reprend ensuite normalement.`
    * disait. Familles NOMMEES uniquement -- la racine porte aussi les caches de Chromium, qui ne
    * sont pas de l'accumulation d'Autowin.
    */
-  const FAMILLES_DISQUE = [
-    'worktrees',
-    'prompt-observability',
-    'causal-trace',
-    'turn-journals',
-    'run-stdout',
-    'runs',
-    'chat-artifacts',
-    'transcripts',
-    'activity',
-    'trace',
-    'semantic-timeline'
-  ]
-
+  // fix-ok: la liste vit dans inventaire-disque.ts, où la racine unique `copies-de-taches` est comptée ; une seule liste sert à l'écran et au test.
   ipcMain.handle('os:disk-usage', (event) => {
     assertTrustedRendererSender(event, 'Espace disque')
-    return inventorierDisque(app.getPath('userData'), FAMILLES_DISQUE, menageDemarrage())
+    return inventorierDisque(
+      app.getPath('userData'),
+      FAMILLES_AUTOWIN_SUR_DISQUE,
+      menageDemarrage()
+    )
   })
 
   ipcMain.handle('chat:orientations', (event, conversationId: unknown) => {
@@ -1976,6 +1972,7 @@ Le fil reprend ensuite normalement.`
     const racines = racinesRevelation({
       workspace: process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd(),
       worktreesRoot: existsSync(worktreesRoot) ? worktreesRoot : undefined,
+      racineCopiesDeTaches: racineDesCopiesDeTaches(ensureAutowinAppData(appDataRoot)),
       lister: (dir) => {
         try {
           return readdirSync(dir, { withFileTypes: true })

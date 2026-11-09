@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
-import { git, roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, git, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
  * LE TROU, mesuré le 2026-08-26 sur le dépôt réel.
@@ -37,7 +37,14 @@ const monter = (): { repo: string; wm: WorktreeManager } => {
   const repo = tempRepo()
   const racine = mkdtempSync(join(tmpdir(), 'autowin-sauvetage-'))
   roots.push(racine)
-  return { repo, wm: new WorktreeManager({ baseRepo: repo, worktreeRoot: racine }) }
+  return {
+    repo,
+    wm: new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
+  }
 }
 
 /**

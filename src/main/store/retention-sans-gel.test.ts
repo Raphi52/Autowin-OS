@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
+import { racineDe } from './worktree-manager.test-helpers'
 
 /**
  * LE GEL DE 11,7 s AU DEMARRAGE (mesure du 2026-09-08, `gels.jsonl` a 10:23:55).
@@ -14,6 +15,7 @@ function managerDeTest(
   reponses: (repo: string, args: string[]) => { code: number; stdout: string }
 ) {
   return new WorktreeManager({
+    racineCopiesDeTaches: racineDe('D:/depot/.worktrees'),
     baseRepo: 'D:/depot',
     worktreeRoot: 'D:/depot/.worktrees',
     tryGitFn: (repo, args) => ({ ...reponses(repo, args), stderr: '' })

@@ -7,6 +7,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
+// fix-ok: le constructeur exige racineCopiesDeTaches (TS2345 mesuré au typecheck) ; racineDe la fournit à chaque gestionnaire de ce fichier, et son dossier est nettoyé avec les autres.
+import { racineDe } from './worktree-manager.test-helpers'
 
 /**
  * Le passage commun de tout retrait de copie (`cleanupWorktree` et `cleanupWorktreeAsync`) : c'est
@@ -43,9 +45,12 @@ function tempRepo(): string {
 function managerDecaleDeHeures(repo: string, heures: number): WorktreeManager {
   const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-retrait-racine-'))
   roots.push(worktreeRoot)
+  const racineCopiesDeTaches = racineDe(worktreeRoot)
+  roots.push(racineCopiesDeTaches)
   return new WorktreeManager({
     baseRepo: repo,
     worktreeRoot,
+    racineCopiesDeTaches,
     nowFn: () => Date.now() + heures * HEURE_MS
   })
 }
@@ -313,9 +318,12 @@ describe('retrait d’une copie : garde du point de reprise au passage commun', 
     const repo = tempRepo()
     const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-retrait-racine-'))
     roots.push(worktreeRoot)
+    const racineCopiesDeTaches = racineDe(worktreeRoot)
+    roots.push(racineCopiesDeTaches)
     const wm = new WorktreeManager({
       baseRepo: repo,
       worktreeRoot,
+      racineCopiesDeTaches,
       nowFn: () => Date.now(),
       removeDirFn: () => {
         throw new Error('dossier verrouillé par un autre processus')

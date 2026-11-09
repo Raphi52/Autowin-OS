@@ -39,8 +39,9 @@ export type DecisionBureau = 'reinitialiser' | 'preserver'
 /**
  * Longueur maximale d'une cle de bureau.
  *
- * CE N'EST PAS UNE COQUETTERIE : la cle nomme un DOSSIER (`<racine>/agent__<cle>`), donc elle
- * consomme le budget de chemin de Windows. Mesure le 2026-08-26 sur le depot reel — la cle
+ * CE N'EST PAS UNE COQUETTERIE : la cle nomme un DOSSIER (`<racine unique>/<cle>`, ou
+ * `agent__<cle>` pour une copie rangée sous l'ancienne racine), donc elle consomme le budget de
+ * chemin de Windows. Mesure sur le depot reel — la cle
  * `command-edit-conv-1412-src-renderer-src-components-updatebanner-tsx` portait le bureau a 147
  * caracteres AVANT le fichier edite ; en ajoutant le fichier (~44) puis le cache que la verification
  * ecrit dans `node_modules/.vite/vitest/<hash>/results.json` (~65), on atteignait ~256 pour une

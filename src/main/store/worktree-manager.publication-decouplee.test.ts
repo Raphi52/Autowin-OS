@@ -8,7 +8,14 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { WorktreeManager } from './worktree-manager'
 import { join } from 'node:path'
-import { git, manager, nettoyerRacines, roots, tempRepo } from './worktree-manager.test-helpers'
+import {
+  racineDe,
+  git,
+  manager,
+  nettoyerRacines,
+  roots,
+  tempRepo
+} from './worktree-manager.test-helpers'
 
 afterEach(nettoyerRacines)
 
@@ -209,7 +216,12 @@ describe('jamais publié sans l’être', () => {
       const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
       return { code: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
     }
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      tryGitFn
+    })
     const path = wm.acquire('builder')
     writeFileSync(join(path, 'livrable.txt'), 'travail de l’agent\n')
     const headAvant = git(repo, 'rev-parse', 'HEAD')

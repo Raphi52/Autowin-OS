@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
-import { git, roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, git, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
  * LA COUTURE ENTRE DEUX CHANTIERS MENÉS EN PARALLÈLE, le 2026-08-26.
@@ -48,7 +48,11 @@ describe('un bureau à la fois ancré et vivant est compté UNE fois', () => {
     const repo = tempRepo()
     const racine = mkdtempSync(join(tmpdir(), 'autowin-couture-'))
     roots.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
 
     // Un bureau vivant qui a produit du travail…
     const chemin = join(racine, 'agent__run-double')

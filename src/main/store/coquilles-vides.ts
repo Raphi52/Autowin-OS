@@ -63,7 +63,8 @@ function porteAucunFichier(chemin: string): boolean {
  */
 export function balayerCoquillesVides(
   racine: string,
-  estGardee: (chemin: string) => boolean = () => false
+  estGardee: (chemin: string) => boolean = () => false,
+  retenir?: (nom: string) => boolean
 ): string[] {
   let bureaux: string[]
   try {
@@ -73,6 +74,8 @@ export function balayerCoquillesVides(
   }
   const supprimes: string[] = []
   for (const nom of bureaux) {
+    // fix-ok: la racine unique porte aussi les copies de fil, que le balayage des coquilles d'agent ne touche pas : `retenir` les écarte.
+    if (retenir && !retenir(nom)) continue
     const chemin = join(racine, nom)
     try {
       if (!statSync(chemin).isDirectory()) continue

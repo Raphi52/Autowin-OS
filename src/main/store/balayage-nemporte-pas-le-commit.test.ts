@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
-import { git, roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, git, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
  * LE SECOND CHEMIN DESTRUCTEUR, trouvé au cycle 2 de l'audit — à la couture de deux chantiers.
@@ -38,7 +38,11 @@ describe('le balayage des coquilles n’emporte jamais un commit orphelin', () =
     const repo = tempRepo()
     const racine = mkdtempSync(join(tmpdir(), 'autowin-balayage-'))
     roots.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
 
     const chemin = join(racine, 'agent__run-coquille')
     git(repo, 'worktree', 'add', '-q', '--detach', chemin, 'HEAD')
@@ -66,7 +70,11 @@ describe('le balayage des coquilles n’emporte jamais un commit orphelin', () =
     const repo = tempRepo()
     const racine = mkdtempSync(join(tmpdir(), 'autowin-balayage-'))
     roots.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
 
     const chemin = join(racine, 'agent__run-vraiment-vide')
     git(repo, 'worktree', 'add', '-q', '--detach', chemin, 'HEAD')

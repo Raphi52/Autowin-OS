@@ -15,6 +15,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { WorktreeManager } from '../store/worktree-manager'
 import { RunWorktreeCoordinator } from '../store/run-worktree-coordinator'
+import { racineDe } from '../store/worktree-manager.test-helpers'
 
 /**
  * DEFAUT VECU le 22/08 : `edit_file` conditionnait sa publication a un verdict GLOBAL —
@@ -239,7 +240,11 @@ function busSur(repo: string): AppCommandBus {
   const wtRoot = mkdtempSync(join(RACINE, 'wt-'))
   temporaires.push(wtRoot)
   const coordinator = new RunWorktreeCoordinator({
-    manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+    manager: new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot
+    })
   })
   return new AppCommandBus(
     { executionWorkspace: repo, worktrees: coordinator } as never,
@@ -354,7 +359,11 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     const wtRoot = mkdtempSync(join(RACINE, 'wt-'))
     temporaires.push(wtRoot)
     const coordinator = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(wtRoot),
+        baseRepo: repo,
+        worktreeRoot: wtRoot
+      })
     })
     /*
      * Publication FORCEE en echec, avec le motif que la finalisation etablit deja. C'est le seul

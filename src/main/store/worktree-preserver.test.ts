@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { racineDe } from './worktree-manager.test-helpers'
 
 /**
  * PRÉSERVER PUIS LIBÉRER — récupérer le disque sans jamais perdre de travail.
@@ -48,7 +49,11 @@ function depot(): { base: string; worktreeRoot: string; agentId: string; copie: 
 }
 
 const manager = (base: string, worktreeRoot: string): WorktreeManager =>
-  new WorktreeManager({ baseRepo: base, worktreeRoot } as never)
+  new WorktreeManager({
+    racineCopiesDeTaches: racineDe(worktreeRoot),
+    baseRepo: base,
+    worktreeRoot
+  } as never)
 
 describe('préserver puis libérer une copie abandonnée', () => {
   it("REFUSE d'agir quand la copie n'a plus de .git : git remonterait sur l'arbre partagé", () => {

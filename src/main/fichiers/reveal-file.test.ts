@@ -33,6 +33,18 @@ describe('racines de résolution d’une référence citée par un agent', () =>
     expect(racines.some((r) => r.includes('.quarantine'))).toBe(false)
   })
 
+  it('cherche aussi dans les copies d’agent de la racine unique, sans y prendre une copie de fil', () => {
+    const racines = racinesRevelation({
+      workspace: 'C:/repo',
+      worktreesRoot: undefined,
+      racineCopiesDeTaches: 'C:/data/copies-de-taches',
+      lister: (dir) => (dir === 'C:/data/copies-de-taches' ? ['run-1', 'conv-2'] : [])
+    })
+
+    expect(racines).toContain('C:/data/copies-de-taches/run-1')
+    expect(racines).not.toContain('C:/data/copies-de-taches/conv-2')
+  })
+
   it('rend le seul workspace quand aucune copie d’agent n’existe', () => {
     expect(
       racinesRevelation({ workspace: 'C:/repo', worktreesRoot: undefined, lister: () => [] })

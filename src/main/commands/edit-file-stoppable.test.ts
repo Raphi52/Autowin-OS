@@ -15,6 +15,7 @@ import { AppCommandBus } from './commands'
 import { WorktreeManager } from '../store/worktree-manager'
 import { RunWorktreeCoordinator } from '../store/run-worktree-coordinator'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { racineDe } from '../store/worktree-manager.test-helpers'
 
 /**
  * LE BOUTON STOP DOIT ATTEINDRE LA VERIFICATION AUTOMATIQUE D'`edit_file`.
@@ -96,7 +97,11 @@ function busSur(repo: string): AppCommandBus {
   const wtRoot = mkdtempSync(join(RACINE, 'wt-'))
   temporaires.push(wtRoot)
   const coordinator = new RunWorktreeCoordinator({
-    manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+    manager: new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot
+    })
   })
   return new AppCommandBus(
     { executionWorkspace: repo, worktrees: coordinator } as never,

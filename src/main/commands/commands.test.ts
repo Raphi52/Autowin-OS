@@ -22,6 +22,7 @@ import {
   formatOrchestrationOutcome,
   formatOrchestrationOutcomePourLeModele
 } from '../../shared/orchestration-outcome'
+import { racineDe } from '../store/worktree-manager.test-helpers'
 
 /*
  * RACINE APP-DATA PROPRE A CE FICHIER.
@@ -1688,7 +1689,11 @@ describe('AppCommandBus command execution policy', () => {
       git('add', '-A')
       git('commit', '-q', '-m', 'init')
       const baseHead = git('rev-parse', 'HEAD')
-      const manager = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+      const manager = new WorktreeManager({
+        racineCopiesDeTaches: racineDe(wtRoot),
+        baseRepo: repo,
+        worktreeRoot: wtRoot
+      })
       const coordinator = new RunWorktreeCoordinator({ manager })
       const os = fakeOs()
       os.executionWorkspace = repo
@@ -1744,7 +1749,11 @@ describe('AppCommandBus command execution policy', () => {
       )
       git('add', '-A')
       git('commit', '-q', '-m', 'init')
-      const manager = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+      const manager = new WorktreeManager({
+        racineCopiesDeTaches: racineDe(wtRoot),
+        baseRepo: repo,
+        worktreeRoot: wtRoot
+      })
       const coordinator = new RunWorktreeCoordinator({ manager })
       const os = fakeOs()
       os.executionWorkspace = repo

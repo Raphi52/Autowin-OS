@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 import { WorktreeManager } from './worktree-manager'
+// fix-ok: le constructeur exige racineCopiesDeTaches (TS2345 mesuré au typecheck) ; racineDe la fournit à chaque gestionnaire de ce fichier.
+import { racineDe } from './worktree-manager.test-helpers'
 import { WorktreeRunStateStore } from './worktree-run-state'
 import type { WorktreeOperationWorkerLike } from './worktree-operation-client'
 import type { WorktreeOperationRequest } from './worktree-operation-protocol'
@@ -47,6 +49,7 @@ function gestionnaireDeDemarrage(repo: string): { wm: WorktreeManager; racine: s
   const wm = new WorktreeManager({
     baseRepo: repo,
     worktreeRoot: racine,
+    racineCopiesDeTaches: racineDe(racine),
     nowFn: () => Date.now() + HEURES_4
   })
   return { wm, racine }
@@ -61,7 +64,9 @@ describe("démarrage : le balayage ne retire pas la copie d'un run dont le point
     const repo = depotVide()
     const { wm, racine } = gestionnaireDeDemarrage(repo)
     const copie = wm.acquire('run-arrete-quota')
-    const store = new WorktreeRunStateStore(racine, 'depot-test')
+    const store = new WorktreeRunStateStore(racine, 'depot-test', {
+      racineCopiesDeTaches: racineDe(racine)
+    })
 
     new RunWorktreeCoordinator({
       manager: wm,
@@ -78,7 +83,9 @@ describe("démarrage : le balayage ne retire pas la copie d'un run dont le point
     const repo = depotVide()
     const { wm, racine } = gestionnaireDeDemarrage(repo)
     const copie = wm.acquire('run-arrete-quota')
-    const store = new WorktreeRunStateStore(racine, 'depot-test')
+    const store = new WorktreeRunStateStore(racine, 'depot-test', {
+      racineCopiesDeTaches: racineDe(racine)
+    })
 
     new RunWorktreeCoordinator({
       manager: wm,
@@ -98,12 +105,15 @@ describe("démarrage : le balayage ne retire pas la copie d'un run dont le point
     const wm = new WorktreeManager({
       baseRepo: repo,
       worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine),
       operationWorkerFactory: () => workerQuiEnregistre(envoyees)
     })
 
     new RunWorktreeCoordinator({
       manager: wm,
-      stateStore: new WorktreeRunStateStore(racine, 'depot-test'),
+      stateStore: new WorktreeRunStateStore(racine, 'depot-test', {
+        racineCopiesDeTaches: racineDe(racine)
+      }),
       pointsDeRepriseVivants: () => new Set(['run-arrete-quota'])
     })
 

@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
-import { roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
  * L'ECHEC SILENCIEUX DE `balayerLeChemin`.
@@ -51,6 +51,7 @@ function manager(opts: {
   appels: Appel[]
 }): WorktreeManager {
   return new WorktreeManager({
+    racineCopiesDeTaches: racineDe(opts.racine),
     baseRepo: opts.repo,
     worktreeRoot: opts.racine,
     tryGitFn: (_repo, args) => {
@@ -187,6 +188,7 @@ describe('le balayage d’une copie ne traverse pas une jonction imbriquée', ()
     )
 
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
       baseRepo: repo,
       worktreeRoot: racine,
       // Registre git vide : la copie n'est PAS enregistrée. `worktree remove` échoue (git ne la

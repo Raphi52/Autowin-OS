@@ -9,6 +9,7 @@ import {
 } from '../activity/trace-workspace-mutation'
 import { configureAutowinAppDataBase } from '../app/app-data'
 import { AppCommandBus } from '../commands/commands'
+import { racineDesCopiesDeTaches } from '../copies/chemins-de-copies'
 import { ConversationStore } from '../store/conversations'
 
 /**
@@ -232,6 +233,19 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
 
     expect(fichier.copiesDeRun).toEqual([{ run: 'run-abc123-1', etat: 'non commité' }])
     expect(fichier.resume).toContain('run-abc123-1')
+  })
+
+  it('signale le fichier en cours dans la copie d’un run rangée sous la racine unique', async () => {
+    donnees()
+    const ws = depot()
+    const copies = mkdtempSync(join(tmpdir(), 'autowin-proprio-copies-'))
+    const copieRun = join(racineDesCopiesDeTaches(copies), 'run-def456-1')
+    execFileSync('git', ['worktree', 'add', '-q', '--detach', copieRun], { cwd: ws })
+    writeFileSync(join(copieRun, 'src/propre.ts'), 'export const propre = 2 // run\n')
+
+    const [fichier] = await demander(bus(ws), ['src/propre.ts'], 'conv-b')
+
+    expect(fichier.copiesDeRun).toEqual([{ run: 'run-def456-1', etat: 'non commité' }])
   })
 
   it('compte le commit PROPRE d’une copie de run, jamais l’amont qu’elle a reçu à sa création', async () => {

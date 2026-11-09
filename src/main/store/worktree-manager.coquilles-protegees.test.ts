@@ -1,10 +1,20 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { WorktreeManager } from './worktree-manager'
+// fix-ok: le constructeur exige racineCopiesDeTaches (TS2345 mesuré au typecheck) ; racineDe la fournit au gestionnaire de ce fichier, et son dossier est nettoyé avec les autres.
+import { nettoyerRacines, racineDe, tempRepo } from './worktree-manager.test-helpers'
 
 /**
  * Le balayage des coquilles (`balayerLesCoquilles`, appelé au démarrage) retire les dossiers vides de
@@ -16,6 +26,7 @@ const roots: string[] = []
 
 afterEach(() => {
   for (const root of roots.splice(0)) supprimerArbre(root)
+  nettoyerRacines()
 })
 
 function depotVide(): string {
@@ -30,7 +41,28 @@ function gestionnaireVide(): WorktreeManager {
   const repo = depotVide()
   const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-coquille-racine-'))
   roots.push(worktreeRoot)
-  return new WorktreeManager({ baseRepo: repo, worktreeRoot })
+  const racineCopiesDeTaches = racineDe(worktreeRoot)
+  roots.push(racineCopiesDeTaches)
+  return new WorktreeManager({ baseRepo: repo, worktreeRoot, racineCopiesDeTaches })
+}
+
+/**
+ * Une copie d'agent sous la racine unique, dont il ne reste que le lien `.git` : une coquille de CE dépôt.
+ * Le balayage ne retire une coquille que s'il reconnaît son dépôt, donc une coquille vide sans `.git` ne suffit pas.
+ */
+function copieVideSousLaRacineUnique(agentId: string): { wm: WorktreeManager; copie: string } {
+  const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-coquille-unique-'))
+  roots.push(worktreeRoot)
+  const wm = new WorktreeManager({
+    baseRepo: tempRepo(),
+    worktreeRoot,
+    racineCopiesDeTaches: racineDe(worktreeRoot)
+  })
+  const copie = wm.acquire(agentId)
+  for (const entree of readdirSync(copie)) {
+    if (entree !== '.git') rmSync(join(copie, entree), { recursive: true, force: true })
+  }
+  return { wm, copie }
 }
 
 describe('balayage des coquilles : la garde du point de reprise tient aussi ici', () => {
@@ -53,6 +85,23 @@ describe('balayage des coquilles : la garde du point de reprise tient aussi ici'
 
     expect(wm.balayerLesCoquilles()).toEqual(['agent__run-sans-reprise'])
     expect(existsSync(coquille)).toBe(false)
+  })
+
+  it('une coquille vide sous la racine unique, dont le point de reprise vit encore, n’est pas retirée', () => {
+    const { wm, copie } = copieVideSousLaRacineUnique('run-reprenable-unique')
+    wm.copiesProtegees = new Set(['run-reprenable-unique'])
+
+    wm.balayerLesCoquilles()
+
+    expect(existsSync(copie)).toBe(true)
+  })
+
+  it('JUMEAU : une coquille vide sous la racine unique, sans point de reprise, est retirée', () => {
+    const { wm, copie } = copieVideSousLaRacineUnique('run-sans-reprise-unique')
+    wm.copiesProtegees = new Set(['un-autre-run'])
+
+    expect(wm.balayerLesCoquilles()).toEqual(['run-sans-reprise-unique'])
+    expect(existsSync(copie)).toBe(false)
   })
 
   it('une coquille vide retirée par le balayage laisse sa trace : run et raison dans le journal des retraits', () => {

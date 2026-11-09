@@ -7,6 +7,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
+// fix-ok: le constructeur exige racineCopiesDeTaches (TS2345 mesuré au typecheck) ; chaque gestionnaire de ce fichier reçoit racineDe de son dossier de copies.
+import { racineDe } from './worktree-manager.test-helpers'
 
 /**
  * Cause racine mesurée le 2026-08-05 : la finalisation ne supprime la copie agent que sur le chemin
@@ -41,6 +43,7 @@ function manager(repo: string, aged: boolean): WorktreeManager {
   const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-sweeproot-'))
   roots.push(worktreeRoot)
   return new WorktreeManager({
+    racineCopiesDeTaches: racineDe(worktreeRoot),
     baseRepo: repo,
     worktreeRoot,
     nowFn: () => Date.now() + (aged ? 2 * DAY_MS : 0)
@@ -52,6 +55,7 @@ function managerDecaleDeHeures(repo: string, heures: number): WorktreeManager {
   const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-sweeproot-'))
   roots.push(worktreeRoot)
   return new WorktreeManager({
+    racineCopiesDeTaches: racineDe(worktreeRoot),
     baseRepo: repo,
     worktreeRoot,
     nowFn: () => Date.now() + heures * 60 * 60 * 1_000
@@ -266,6 +270,7 @@ describe('balayage asynchrone : retrait sans git synchrone', () => {
       }
     }
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(worktreeRoot),
       baseRepo: repo,
       worktreeRoot,
       nowFn: () => Date.now() + 2 * DAY_MS,
@@ -357,6 +362,7 @@ describe('balayage et point de reprise encore vivant', () => {
     const wm = new WorktreeManager({
       baseRepo: repo,
       worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine),
       // git refuse tout retrait et ne connaît plus la copie : seul le disque peut la retirer.
       tryGitFn: (_repo, args) =>
         args[0] === 'worktree' && args[1] === 'remove'
@@ -467,6 +473,7 @@ describe('trace muette après un retrait réussi, sur chaque sortie', () => {
     const wm = new WorktreeManager({
       baseRepo: repo,
       worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine),
       tryGitFn: refusGit,
       tryGitAsyncFn: async (dir, args) => refusGit(dir, args)
     })
@@ -487,6 +494,7 @@ describe('trace muette après un retrait réussi, sur chaque sortie', () => {
     const wm = new WorktreeManager({
       baseRepo: repo,
       worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine),
       tryGitFn: (_repo, args) =>
         args[0] === 'worktree' && args[1] === 'remove'
           ? { code: 1, stdout: '', stderr: 'refus simulé' }

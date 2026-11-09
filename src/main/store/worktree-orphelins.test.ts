@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { racineDe } from './worktree-manager.test-helpers'
 
 /**
  * COPIES ORPHELINES — des dossiers que git ne connaît plus, et que rien ne pouvait supprimer.
@@ -57,6 +58,7 @@ function depotAvecCopie(): { base: string; worktreeRoot: string; copie: string; 
  */
 function manager(base: string, worktreeRoot: string): WorktreeManager {
   return new WorktreeManager({
+    racineCopiesDeTaches: racineDe(worktreeRoot),
     baseRepo: base,
     worktreeRoot,
     nowFn: () => Date.now() + 3 * 24 * 60 * 60 * 1_000
@@ -133,6 +135,7 @@ describe('balayage des copies abandonnées', () => {
     const orpheline = join(worktreeRoot, 'agent__aaa-orphelin-3')
     cpSync(copie, orpheline, { recursive: true })
     const jeune = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(worktreeRoot),
       baseRepo: base,
       worktreeRoot,
       nowFn: () => Date.now()

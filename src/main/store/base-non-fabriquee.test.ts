@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
-import { roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
  * LA CAUSE RACINE des « workspaces orphelins », établie le 2026-08-24 en pilotant l'app réelle.
@@ -36,23 +36,31 @@ const monter = (): { repo: string; wm: WorktreeManager; racine: string } => {
   const repo = tempRepo()
   const racine = mkdtempSync(join(tmpdir(), 'autowin-base-'))
   roots.push(racine)
-  return { repo, wm: new WorktreeManager({ baseRepo: repo, worktreeRoot: racine }), racine }
+  return {
+    repo,
+    wm: new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    }),
+    racine
+  }
 }
 
 /*
- * Le chemin de copie ATTENDU par le manager. Une garde ANTERIEURE compare `worktreePath` au chemin
- * canonique et refuse avant meme de regarder la base : avec un chemin bidon, ces tests passaient au
- * vert sans jamais atteindre le code teste. Vu deux fois dans cette session -- un decor qui n'atteint
- * pas sa cible ne prouve rien.
+ * Le chemin de copie ATTENDU est celui que `pathFor` rend : la racine unique pour une copie neuve.
+ * La garde qui compare `worktreePath` à ce chemin refuse avant de regarder la base. Un chemin qui ne
+ * correspond pas n'atteint donc pas le code testé : un décor qui n'atteint pas sa cible ne prouve rien.
  */
-const cheminAttendu = (racine: string, runId: string): string => join(racine, `agent__${runId}`)
+// fix-ok: le chemin attendu vient de `pathFor` ; l'ancien nom `agent__` ne désigne plus une copie neuve, et la garde de chemin refuserait avant la base.
+const cheminAttendu = (wm: WorktreeManager, runId: string): string => wm.pathFor(runId)
 
 describe('une base de départ absente', () => {
   it('est refusée comme DÉFINITIVE — aucun réessai ne la rendra valide', () => {
-    const { wm, racine } = monter()
+    const { wm } = monter()
 
     const verdict = wm.validateRecoveryContext('run-sans-base', {
-      worktreePath: cheminAttendu(racine, 'run-sans-base'),
+      worktreePath: cheminAttendu(wm, 'run-sans-base'),
       baseBranch: 'main',
       baseSha: '',
       publication: 'pending'
@@ -62,10 +70,10 @@ describe('une base de départ absente', () => {
   })
 
   it('est aussi définitive quand la base est illisible plutôt que vide', () => {
-    const { wm, racine } = monter()
+    const { wm } = monter()
 
     const verdict = wm.validateRecoveryContext('run-base-illisible', {
-      worktreePath: cheminAttendu(racine, 'run-base-illisible'),
+      worktreePath: cheminAttendu(wm, 'run-base-illisible'),
       baseBranch: 'main',
       baseSha: 'pas-un-sha',
       publication: 'pending'
@@ -78,11 +86,11 @@ describe('une base de départ absente', () => {
     // L'entrée qui doit faire échouer une garde devenue trop large : une base parfaitement lisible.
     // Le contexte est incohérent par ailleurs, donc le refus tombe pour une AUTRE raison, et celle-là
     // ne doit pas être définitive.
-    const { repo, wm, racine } = monter()
+    const { repo, wm } = monter()
     const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim()
 
     const verdict = wm.validateRecoveryContext('run-base-valide', {
-      worktreePath: cheminAttendu(racine, 'run-base-valide'),
+      worktreePath: cheminAttendu(wm, 'run-base-valide'),
       baseBranch: 'main',
       baseSha: sha,
       publication: 'pending'

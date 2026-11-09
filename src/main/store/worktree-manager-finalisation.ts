@@ -4,6 +4,11 @@
 import { causeGit, sortieGit } from './cause-git'
 import { randomUUID } from 'node:crypto'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
+import {
+  agentIdDeCopieHeritee,
+  agentIdDeCopieNeuve,
+  estUneCopieDAgent
+} from '../copies/chemins-de-copies'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FinalizeResult } from './worktree-manager-types'
@@ -15,6 +20,7 @@ import {
   parseNullSeparatedPaths,
   detailFinalisationJetee,
   copieGardeeParUnPointDeReprise,
+  estCopieDuDepot,
   tracerRetraitDeCopie
 } from './worktree-manager-outils'
 import type { WorktreeManager } from './worktree-manager'
@@ -1146,27 +1152,48 @@ export function balayerLesCoquilles(this: WorktreeManager): string[] {
    * `ancrerAvantSuppression` ne pose une branche que si le commit APPORTE quelque chose : une
    * coquille sans travail propre est balayee comme avant, sans laisser de ref derriere elle.
    */
-  if (existsSync(this.worktreeRoot)) {
-    for (const entry of readdirSync(this.worktreeRoot, { withFileTypes: true })) {
-      if (!entry.isDirectory() || !entry.name.startsWith('agent__')) continue
-      const agentId = entry.name.slice('agent__'.length)
-      if (!SAFE_ID.test(agentId)) continue
-      const chemin = join(this.worktreeRoot, entry.name)
+  // fix-ok: la racine unique est partagée entre dépôts : une coquille n'y est ancrée ni retirée que si elle appartient à ce dépôt (lien `.git` vers son répertoire commun).
+  const commonDir = this.gitCommonDir(this.baseRepo)
+  const appartientIci = (chemin: string): boolean => estCopieDuDepot(chemin, commonDir)
+  const racines = [this.worktreeRoot, this.racineCopiesDeTaches].filter((racine) =>
+    existsSync(racine)
+  )
+  for (const racine of racines) {
+    for (const entry of readdirSync(racine, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const agentId =
+        racine === this.worktreeRoot
+          ? agentIdDeCopieHeritee(entry.name)
+          : agentIdDeCopieNeuve(entry.name)
+      if (agentId === undefined || !SAFE_ID.test(agentId)) continue
+      const chemin = join(racine, entry.name)
+      if (racine !== this.worktreeRoot && !appartientIci(chemin)) continue
       if (!estCoquilleVide(chemin)) continue
       this.ancrerAvantSuppression(agentId, chemin)
     }
   }
-  // fix-ok: balayerCoquillesVides retirait une coquille vide sans consulter le point de reprise de son run ; la garde du passage commun ne la couvrait pas.
-  const supprimees = balayerCoquillesVides(this.worktreeRoot, (chemin) =>
-    copieGardeeParUnPointDeReprise(this.copiesProtegees, chemin)
-  )
-  // fix-ok: balayerCoquillesVides retirait sans écrire de ligne de trace (ENOENT sur .retraits.jsonl) ; la trace s'écrit après la suppression, comme au passage commun.
-  for (const nom of supprimees) {
-    const chemin = join(this.worktreeRoot, nom)
-    const trace = tracerRetraitDeCopie(this.worktreeRoot, chemin, 'coquille vide retirée')
-    if (trace) this.noterEchecDeBalayage(chemin, trace)
+  // Chaque racine balayée applique la garde du point de reprise et écrit sa propre trace de retrait, après la suppression.
+  // fix-ok: chaque racine balayée porte son journal des retraits, sous la racine où la copie a été retirée.
+  const balayer = (racine: string, retenir?: (nom: string) => boolean): string[] => {
+    const supprimees = balayerCoquillesVides(
+      racine,
+      (chemin) => copieGardeeParUnPointDeReprise(this.copiesProtegees, chemin),
+      retenir
+    )
+    for (const nom of supprimees) {
+      const chemin = join(racine, nom)
+      const trace = tracerRetraitDeCopie(racine, chemin, 'coquille vide retirée')
+      if (trace) this.noterEchecDeBalayage(chemin, trace)
+    }
+    return supprimees
   }
-  return supprimees
+  return [
+    ...balayer(this.worktreeRoot),
+    ...balayer(
+      this.racineCopiesDeTaches,
+      (nom) => estUneCopieDAgent(nom) && appartientIci(join(this.racineCopiesDeTaches, nom))
+    )
+  ]
 }
 
 export function discard(this: WorktreeManager, agentId: string): void {

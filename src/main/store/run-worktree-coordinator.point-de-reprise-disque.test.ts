@@ -7,6 +7,8 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { saveOrchestrationState } from '../runs/orchestration-state'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 import { WorktreeManager } from './worktree-manager'
+// fix-ok: le constructeur exige racineCopiesDeTaches (TS2345 mesuré au typecheck) ; racineDe la fournit au gestionnaire de ce fichier.
+import { racineDe } from './worktree-manager.test-helpers'
 
 /**
  * LE POINT DE REPRISE LU SUR DISQUE, PAR LE CHEMIN PAR DÉFAUT (sans injecter la garde).
@@ -51,6 +53,7 @@ function montage(repo: string, racinePoints: string) {
   const manager = new WorktreeManager({
     baseRepo: repo,
     worktreeRoot: racineCopies,
+    racineCopiesDeTaches: racineDe(racineCopies),
     nowFn: () => Date.now() + 4 * HEURE_MS
   })
   const co = new RunWorktreeCoordinator({

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
+import { racineDe } from './worktree-manager.test-helpers'
 
 /*
  * LA PASSE DE RETENTION NE CREE PLUS AUCUN PROCESSUS SUR LE FIL PRINCIPAL.
@@ -54,6 +55,7 @@ const gitSimule = (
 function fauxWorker() {
   const ecouteurs: Record<string, (valeur: never) => void> = {}
   const cote = new WorktreeManager({
+    racineCopiesDeTaches: racineDe('D:/depot/.worktrees'),
     baseRepo: 'D:/depot',
     worktreeRoot: 'D:/depot/.worktrees',
     tryGitFn: gitSimule,
@@ -81,6 +83,7 @@ function fauxWorker() {
 describe('passe de retention — hors du fil principal', () => {
   it('avec le worker : AUCUN processus cree sur le fil appelant', async () => {
     const fil = new WorktreeManager({
+      racineCopiesDeTaches: racineDe('D:/depot-inexistant/.worktrees'),
       baseRepo: 'D:/depot-inexistant',
       worktreeRoot: 'D:/depot-inexistant/.worktrees',
       operationWorkerFactory: fauxWorker as never
@@ -101,11 +104,13 @@ describe('passe de retention — hors du fil principal', () => {
   it('rend le MEME verdict que la voie synchrone, consigne comprise', async () => {
     const consigne = (sha: string): boolean => sha === '1111111' || sha === '3333333'
     const synchrone = new WorktreeManager({
+      racineCopiesDeTaches: racineDe('D:/depot/.worktrees'),
       baseRepo: 'D:/depot',
       worktreeRoot: 'D:/depot/.worktrees',
       tryGitFn: gitSimule
     }).recenserRetention(consigne)
     const parWorker = await new WorktreeManager({
+      racineCopiesDeTaches: racineDe('D:/depot-inexistant/.worktrees'),
       baseRepo: 'D:/depot-inexistant',
       worktreeRoot: 'D:/depot-inexistant/.worktrees',
       operationWorkerFactory: fauxWorker as never

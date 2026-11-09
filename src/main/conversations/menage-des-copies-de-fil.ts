@@ -23,6 +23,7 @@ import {
 } from '../copies/copie-de-tache'
 import {
   dossierDeCopieDeTache,
+  estUneCopieDeFil,
   NOM_RACINE_COPIES_DE_TACHES,
   racineDesCopiesDeTaches
 } from '../copies/chemins-de-copies'
@@ -96,9 +97,11 @@ function identiteDeLaCopie(copie: string): { fil: string; quand?: number } | nul
   const nouvelle = nomDeCopieDeFil(copie)
   if (nouvelle) return nouvelle
   // La racine unique ne porte pas l'instant dans son nom : l'ouverture se lit sur le disque.
+  // fix-ok: le ménage ne prend pour copie de fil que les dossiers portant un identifiant de fil : une copie d'agent rangée dans la même racine n'est jamais retirée ici.
   const parent = dirname(copie)
   if (
     basename(parent) === NOM_RACINE_COPIES_DE_TACHES &&
+    estUneCopieDeFil(basename(copie)) &&
     dossierDeCopieDeTache(parent, basename(copie)) !== null
   )
     return { fil: basename(copie) }

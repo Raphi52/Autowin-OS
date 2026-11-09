@@ -1,6 +1,10 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { autoriserSondageBloquant, WorktreeManager } from './worktree-manager'
-import type { WorktreeOperationRequest } from './worktree-operation-protocol'
+import {
+  optionsDuGestionnaireDuWorker,
+  type DonneesDuWorker,
+  type WorktreeOperationRequest
+} from './worktree-operation-protocol'
 
 if (!parentPort) throw new Error('worktree-operation-worker doit être exécuté dans un Worker')
 const port = parentPort
@@ -9,19 +13,8 @@ const port = parentPort
 // deja la reponse de ce worker. C'est le SEUL endroit ou la voie synchrone reste ouverte.
 autoriserSondageBloquant()
 
-const data = workerData as {
-  baseRepo: string
-  worktreeRoot: string
-  baseBranch?: string
-  requireCanonicalRemote?: boolean
-}
-const manager = new WorktreeManager({
-  baseRepo: data.baseRepo,
-  worktreeRoot: data.worktreeRoot,
-  ...(data.baseBranch ? { baseBranch: data.baseBranch } : {}),
-  requireCanonicalRemote: data.requireCanonicalRemote,
-  disableAsyncOperations: true
-})
+// Le gestionnaire se construit par `optionsDuGestionnaireDuWorker`, testée : la racine unique y arrive.
+const manager = new WorktreeManager(optionsDuGestionnaireDuWorker(workerData as DonneesDuWorker))
 
 port.on('message', (request: WorktreeOperationRequest) => {
   try {

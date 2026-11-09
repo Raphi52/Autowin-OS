@@ -23,7 +23,11 @@ beforeEach(() => calls.splice(0))
 describe('frontière Git worktree — aucune console Windows', () => {
   it('masque la sonde dépôt et les deux runners Git du manager', () => {
     repositoryWorktreeIdentity('C:\\worktrees', 'C:\\repo')
-    const manager = new WorktreeManager({ baseRepo: 'C:\\repo', worktreeRoot: 'C:\\worktrees' })
+    const manager = new WorktreeManager({
+      racineCopiesDeTaches: 'C:\\copies-de-taches',
+      baseRepo: 'C:\\repo',
+      worktreeRoot: 'C:\\worktrees'
+    })
     const git = Reflect.get(manager, 'git') as (repo: string, args: string[]) => string
     const tryGit = Reflect.get(manager, 'tryGitFn') as (
       repo: string,

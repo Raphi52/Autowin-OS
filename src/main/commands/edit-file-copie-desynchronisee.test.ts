@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { WorktreeManager } from '../store/worktree-manager'
 import { RunWorktreeCoordinator } from '../store/run-worktree-coordinator'
+import { racineDe } from '../store/worktree-manager.test-helpers'
 
 /**
  * DEFAUT MESURE le 2026-08-30 : `edit_file` edite une COPIE DESYNCHRONISEE.
@@ -85,7 +86,11 @@ function busSur(repo: string): AppCommandBus {
   const wtRoot = mkdtempSync(join(RACINE, 'wt-'))
   temporaires.push(wtRoot)
   const coordinator = new RunWorktreeCoordinator({
-    manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+    manager: new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot
+    })
   })
   const differe = {
     ...coordinator,

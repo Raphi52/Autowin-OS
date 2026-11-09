@@ -4,8 +4,9 @@
 import { createHash } from 'node:crypto'
 import type { EntreeBalayage } from './balayage-retention'
 import { verdictDeBureau, type VerdictBureau } from './verdict-bureau'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, realpathSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { estUneCopieDAgent } from '../copies/chemins-de-copies'
 import {
   SAFE_ID,
   HEX_SHA,
@@ -148,7 +149,7 @@ export function oublierTravailTrie(this: WorktreeManager, agentId: string): bool
  */
 export function empreinteBureauSali(this: WorktreeManager, agentId: string): string | undefined {
   if (!SAFE_ID.test(agentId)) return undefined
-  const bureau = join(this.worktreeRoot, `agent__${agentId}`)
+  const bureau = this.pathFor(agentId)
   if (!existsSync(bureau) || !existsSync(join(bureau, '.git'))) return undefined
   try {
     const tete = this.git(bureau, ['rev-parse', 'HEAD']).trim()
@@ -206,6 +207,22 @@ export function apporteQuelqueChose(
 }
 
 /**
+ * Deux chemins désignent le même dossier. fix-ok: Git et Node ne rendent pas toujours la même forme Windows (nom long ou nom court) du même dossier ; la comparaison passe par realpath.
+ */
+function memeDossier(a: string, b: string): boolean {
+  const normaliser = (chemin: string): string => {
+    let reel = resolve(chemin)
+    try {
+      reel = realpathSync.native(reel)
+    } catch {
+      // Dossier absent : on compare le chemin résolu tel quel.
+    }
+    return reel.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  }
+  return normaliser(a) === normaliser(b)
+}
+
+/**
  * OU VIT le travail d'un agent -- sa branche de secours, ou son bureau reste en HEAD DETACHE.
  *
  * DEFAUT VECU le 2026-08-26 (run `ef845009a251-1`). Le recensement ne connaissait qu'une seule
@@ -217,8 +234,7 @@ export function apporteQuelqueChose(
  * La branche de secours PRIME quand elle existe : c'est l'adresse durable, celle qui survit a la
  * suppression du bureau. Le HEAD detache n'est que le dernier recours -- mais c'est precisement
  * celui qui manquait.
- */
-/**
+ *
  * Le HEAD de CHAQUE bureau, en UNE commande. `git worktree list --porcelain` rend deja tout ce
  * qu'un `rev-parse` par dossier allait rechercher un par un.
  */
@@ -235,7 +251,14 @@ export function headsDesBureaux(this: WorktreeManager): Map<string, string> {
           .trim()
           .replace(/[\\/]+$/, '')
         const base = nom.split(/[\\/]/).pop() ?? ''
-        dossier = base.startsWith('agent__') ? base.slice('agent__'.length) : undefined
+        const parent = nom.slice(0, nom.length - base.length)
+        // fix-ok: une copie posée directement sous la racine unique se recense par son nom nu, donc son HEAD est pris en compte ; les copies d'avant gardent le préfixe agent__.
+        const sousLaRacineUnique = memeDossier(parent, this.racineCopiesDeTaches)
+        dossier = base.startsWith('agent__')
+          ? base.slice('agent__'.length)
+          : sousLaRacineUnique && estUneCopieDAgent(base)
+            ? base
+            : undefined
         if (dossier !== undefined && !SAFE_ID.test(dossier)) dossier = undefined
       } else if (ligne.startsWith('HEAD ') && dossier !== undefined) {
         const sha = ligne.slice('HEAD '.length).trim()
@@ -292,7 +315,7 @@ export function estOrphelin(this: WorktreeManager, sha: string): boolean {
  */
 export function bureauPorteDuTravailNonCommitte(this: WorktreeManager, agentId: string): boolean {
   if (!SAFE_ID.test(agentId)) return false
-  const bureau = join(this.worktreeRoot, `agent__${agentId}`)
+  const bureau = this.pathFor(agentId)
   if (!existsSync(bureau)) return false
   /*
    * SANS SON `.git`, UN DOSSIER DE BUREAU N'EST PLUS UN BUREAU — et git ne dit pas non pour
@@ -341,7 +364,7 @@ export function commitDuTravail(this: WorktreeManager, agentId: string): string 
    * qu'un filet.
    */
   const sauvetage = `refs/autowin/rescue/${agentId}`
-  const bureau = join(this.worktreeRoot, `agent__${agentId}`)
+  const bureau = this.pathFor(agentId)
   if (!existsSync(bureau)) return this.revisionExists(sauvetage) ? sauvetage : undefined
   try {
     const sha = this.git(bureau, ['rev-parse', 'HEAD']).trim()
@@ -462,7 +485,7 @@ export async function recenserRetentionAsync(
  */
 export function bureauPeutPorterDuTravail(this: WorktreeManager, agentId: string): boolean {
   if (!SAFE_ID.test(agentId)) return false
-  if (existsSync(join(this.worktreeRoot, `agent__${agentId}`))) return true
+  if (existsSync(this.pathFor(agentId))) return true
   for (const ref of [`refs/heads/autowin/recovery/${agentId}`, `refs/autowin/rescue/${agentId}`]) {
     if (this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', '--quiet', ref]).code === 0) {
       return true
@@ -680,7 +703,7 @@ export function apercuTravauxNonPublies(
        * Constate le 2026-08-26 : trois bureaux recenses, trois fois `fichiers: []`.
        */
       if (!fichiers.length) {
-        const bureau = join(this.worktreeRoot, `agent__${agentId}`)
+        const bureau = this.pathFor(agentId)
         if (existsSync(bureau)) {
           try {
             const sales = this.git(bureau, ['status', '--porcelain'])
@@ -749,7 +772,7 @@ export function patchTravailNonPublie(
  */
 export function restaurerCopieDepuisSecours(this: WorktreeManager, agentId: string): boolean {
   if (!SAFE_ID.test(agentId)) return false
-  const chemin = join(this.worktreeRoot, `agent__${agentId}`)
+  const chemin = this.pathFor(agentId)
   if (existsSync(chemin)) return true
   try {
     // `git worktree add` echoue si la branche est deja extraite ailleurs : c'est une protection,
@@ -782,7 +805,7 @@ export async function restaurerCopieDepuisSecoursAsync(
   ) => Promise<{ code: number; stdout: string }> = tryGitAsync
 ): Promise<boolean> {
   if (!SAFE_ID.test(agentId)) return false
-  const chemin = join(this.worktreeRoot, `agent__${agentId}`)
+  const chemin = this.pathFor(agentId)
   if (existsSync(chemin)) return true
   const r = await executer(this.baseRepo, [
     '-c',

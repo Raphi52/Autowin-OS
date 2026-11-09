@@ -16,7 +16,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
-import { basename, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { delierLesDependances } from './dependances-copie-agent'
 import { isSameProcessIdentity } from '../app/process-identity'
 import { parsePorcelainPaths } from '../runs/run-autoclose'
@@ -32,19 +32,38 @@ import {
   RESIDU_SANS_ENJEU_MIN_AGE_MS,
   DETAIL_POINT_DE_REPRISE_VIVANT,
   copieGardeeParUnPointDeReprise,
+  estCopieDuDepot,
   tracerRetraitDeCopie,
   tracerRetraitDeCopieAsync
 } from './worktree-manager-outils'
 import { WorktreeManager } from './worktree-manager'
 import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
+import {
+  agentIdDeCopieHeritee,
+  agentIdDeCopieNeuve,
+  estUneCopieDAgent
+} from '../copies/chemins-de-copies'
 
 export function listAgentIds(this: WorktreeManager): string[] {
-  const directories = existsSync(this.worktreeRoot)
+  const anciennes = existsSync(this.worktreeRoot)
     ? readdirSync(this.worktreeRoot, { withFileTypes: true })
         .filter((entry) => entry.isDirectory() && entry.name.startsWith('agent__'))
         .map((entry) => entry.name.slice('agent__'.length))
-        .filter((agentId) => SAFE_ID.test(agentId))
     : []
+  // fix-ok: la racine unique porte les copies de fil et celles des autres dépôts : seules les copies d'agent de ce dépôt y sont listées.
+  const commonDir = this.gitCommonDir(this.baseRepo)
+  const racine = this.racineCopiesDeTaches
+  const neuves = existsSync(racine)
+    ? readdirSync(racine, { withFileTypes: true })
+        .filter(
+          (entry) =>
+            entry.isDirectory() &&
+            estUneCopieDAgent(entry.name) &&
+            estCopieDuDepot(join(racine, entry.name), commonDir)
+        )
+        .map((entry) => entry.name)
+    : []
+  const directories = [...anciennes, ...neuves].filter((agentId) => SAFE_ID.test(agentId))
   const recoveryRefs = this.git(this.baseRepo, [
     'for-each-ref',
     '--format=%(refname:strip=4)',
@@ -356,7 +375,7 @@ export function reconcileResidues(
 }
 
 /**
- * Supprime les copies `agent__*` dont le run s'est terminé SANS publication (échec, abandon,
+ * Supprime les copies d'agent des deux racines dont le run s'est terminé SANS publication (échec, abandon,
  * crash) : la finalisation ne range que le chemin `merged`, donc sans ce balayage chaque run
  * stérile laisse un worktree définitif (811 mesurés le 2026-08-05 sur ce dépôt).
  *
@@ -381,8 +400,8 @@ export function reconcileResidues(
  * Toutes ces gardes sont des prédicats en lecture seule : les réordonner ne change aucun verdict,
  * seulement le nombre d'appels évités.
  */
-export function balayerUneCopie(this: WorktreeManager, entry: Dirent): string | undefined {
-  const decision = this.deciderBalayageDUneCopie(entry)
+export function balayerUneCopie(this: WorktreeManager, copie: CopieAgentLue): string | undefined {
+  const decision = this.deciderBalayageDUneCopie(copie)
   if (decision?.etape !== 'retirer') return decision?.agentId
   return this.balayerLeChemin(decision.path) ? decision.agentId : undefined
 }
@@ -390,9 +409,9 @@ export function balayerUneCopie(this: WorktreeManager, entry: Dirent): string | 
 /** `balayerUneCopie` du balayage horaire : memes verdicts, retrait git sans tenir la boucle. */
 export async function balayerUneCopieAsync(
   this: WorktreeManager,
-  entry: Dirent
+  copie: CopieAgentLue
 ): Promise<string | undefined> {
-  const decision = await this.deciderBalayageDUneCopieAsync(entry)
+  const decision = await this.deciderBalayageDUneCopieAsync(copie)
   if (decision?.etape !== 'retirer') return decision?.agentId
   return (await this.balayerLeCheminAsync(decision.path)) ? decision.agentId : undefined
 }
@@ -407,8 +426,11 @@ type DecisionDeBalayage =
  * `fait` : la copie est deja traitee (preservee puis liberee) ; `retirer` : il ne reste qu'a la
  * supprimer ; `undefined` : on n'y touche pas.
  */
-export function deciderBalayageDUneCopie(this: WorktreeManager, entry: Dirent): DecisionDeBalayage {
-  const candidate = copieAgeeEtInactive.call(this, entry)
+export function deciderBalayageDUneCopie(
+  this: WorktreeManager,
+  copie: CopieAgentLue
+): DecisionDeBalayage {
+  const candidate = copieAgeeEtInactive.call(this, copie)
   if (!candidate || this.ownershipIssue(candidate.path)) return undefined
   const decision = deciderApresAppartenance.call(this, candidate)
   if (decision?.etape !== 'preserver') return decision
@@ -427,9 +449,9 @@ export function deciderBalayageDUneCopie(this: WorktreeManager, entry: Dirent): 
  */
 export async function deciderBalayageDUneCopieAsync(
   this: WorktreeManager,
-  entry: Dirent
+  copie: CopieAgentLue
 ): Promise<DecisionDeBalayage> {
-  const candidate = copieAgeeEtInactive.call(this, entry)
+  const candidate = copieAgeeEtInactive.call(this, copie)
   if (!candidate || (await this.ownershipIssueAsync(candidate.path))) return undefined
   // L'attente laisse la boucle libre, donc un run peut reprendre la copie pendant ce temps : les baux
   // sont relus avant toute preservation ou suppression, comme la forme synchrone les lisait d'un trait.
@@ -464,16 +486,25 @@ function conclurePreservation(
 
 type CopieCandidate = { agentId: string; path: string; ageMs: number }
 
+/** Une copie d'agent posée sur disque : son identifiant, son dossier, et l'entrée qui la décrit. */
+export interface CopieAgentLue {
+  agentId: string
+  path: string
+  entry: Dirent
+}
+
 /** Les gardes sans git, les moins cheres : forme du dossier, age, processus actifs. */
-function copieAgeeEtInactive(this: WorktreeManager, entry: Dirent): CopieCandidate | undefined {
-  if (!entry.isDirectory() || !entry.name.startsWith('agent__')) return undefined
-  const agentId = entry.name.slice('agent__'.length)
+function copieAgeeEtInactive(
+  this: WorktreeManager,
+  copie: CopieAgentLue
+): CopieCandidate | undefined {
+  const { agentId, path } = copie
+  if (!copie.entry.isDirectory()) return undefined
   if (!SAFE_ID.test(agentId)) return undefined
   // Le point de reprise d'un run encore reprenable vaut copie : la retirer rend sa reprise impossible,
   // quelle que soit son âge et son état. Garde sur le point de reprise, pas sur l'âge.
   // fix-ok: le balayage doit lire le point de reprise vivant avant de retirer une copie propre et inactive
   if (this.copiesProtegees.has(agentId)) return undefined
-  const path = join(this.worktreeRoot, entry.name)
 
   let ageMs: number
   try {
@@ -747,10 +778,28 @@ export function estWorktreeEnregistree(this: WorktreeManager, path: string): boo
     .some((ligne) => resolve(ligne.slice('worktree '.length).trim()).toLowerCase() === cible)
 }
 
-export function copiesCandidates(this: WorktreeManager): Dirent[] {
-  return existsSync(this.worktreeRoot)
-    ? readdirSync(this.worktreeRoot, { withFileTypes: true })
-    : []
+// fix-ok: le balayage des copies abandonnées lit les deux racines ; une copie d'agent posée sous la racine unique est candidate au retrait comme une copie d'avant.
+/**
+ * Les copies d'agent des DEUX racines : l'ancienne (`worktrees\<dépôt>\agent__<id>`) et la racine unique
+ * (`copies-de-taches\<id>`). Une copie de fil n'y figure jamais.
+ */
+export function copiesCandidates(this: WorktreeManager): CopieAgentLue[] {
+  const copies: CopieAgentLue[] = []
+  for (const entry of lireDossiers(this.worktreeRoot)) {
+    const agentId = agentIdDeCopieHeritee(entry.name)
+    if (agentId !== undefined)
+      copies.push({ agentId, path: join(this.worktreeRoot, entry.name), entry })
+  }
+  for (const entry of lireDossiers(this.racineCopiesDeTaches)) {
+    const agentId = agentIdDeCopieNeuve(entry.name)
+    if (agentId !== undefined)
+      copies.push({ agentId, path: join(this.racineCopiesDeTaches, entry.name), entry })
+  }
+  return copies
+}
+
+function lireDossiers(racine: string): Dirent[] {
+  return existsSync(racine) ? readdirSync(racine, { withFileTypes: true }) : []
 }
 
 /**
@@ -862,11 +911,24 @@ interface FicheDeSuppression {
 
 type VerdictDeReprise = 'attendre' | 'laisser' | 'oublier' | 'finir' | 'retirer'
 
-function identifiantDeCopieAgent(chemin: string): string | undefined {
+/**
+ * L'identifiant de la copie d'agent posée à `chemin`, sous l'ancienne racine ou sous la racine unique.
+ * Tout autre dossier n'a pas d'identifiant de copie : `undefined`.
+ */
+function identifiantDeCopieAgent(this: WorktreeManager, chemin: string): string | undefined {
   const nom = basename(chemin)
-  if (!nom.startsWith('agent__')) return undefined
-  const agentId = nom.slice('agent__'.length)
-  return SAFE_ID.test(agentId) ? agentId : undefined
+  const dossier = dirname(chemin)
+  let agentId: string | undefined
+  if (dossierEst(dossier, this.worktreeRoot)) {
+    agentId = agentIdDeCopieHeritee(nom)
+  } else if (dossierEst(dossier, this.racineCopiesDeTaches)) {
+    agentId = agentIdDeCopieNeuve(nom)
+  }
+  return agentId !== undefined && SAFE_ID.test(agentId) ? agentId : undefined
+}
+
+function dossierEst(dossier: string, attendu: string): boolean {
+  return resolve(dossier).toLowerCase() === resolve(attendu).toLowerCase()
 }
 
 function dossierDesFiches(racine: string): string {
@@ -901,7 +963,7 @@ function retirerLaFiche(racine: string, agentId: string): void {
  * cas le retrait ne doit pas commencer, sinon il ne serait pas reconnaissable s'il s'arrêtait.
  */
 export function noterSuppressionCommencee(this: WorktreeManager, chemin: string): boolean {
-  const agentId = identifiantDeCopieAgent(chemin)
+  const agentId = identifiantDeCopieAgent.call(this, chemin)
   if (!agentId) return true
   const naissance = naissanceDuDossier(chemin)
   if (naissance === undefined) return true
@@ -920,7 +982,7 @@ export function noterSuppressionCommencee(this: WorktreeManager, chemin: string)
 
 /** Efface la fiche une fois la copie partie. Tant que le dossier est là, la fiche reste. */
 export function oublierSuppressionCommencee(this: WorktreeManager, chemin: string): void {
-  const agentId = identifiantDeCopieAgent(chemin)
+  const agentId = identifiantDeCopieAgent.call(this, chemin)
   if (!agentId || existsSync(chemin)) return
   retirerLaFiche(this.worktreeRoot, agentId)
 }
@@ -982,7 +1044,7 @@ function verdictDeReprise(
 export function reprendreSuppressionsCommencees(this: WorktreeManager): string[] {
   const reprises: string[] = []
   for (const fiche of fichesDeSuppression(this.worktreeRoot)) {
-    const chemin = join(this.worktreeRoot, `agent__${fiche.agentId}`)
+    const chemin = this.pathFor(fiche.agentId)
     const verdict = verdictDeReprise.call(this, fiche, chemin)
     if (verdict === 'attendre' || verdict === 'laisser') continue
     if (verdict === 'oublier') {
@@ -1022,7 +1084,7 @@ export async function reprendreSuppressionsCommenceesAsync(
 ): Promise<string[]> {
   const reprises: string[] = []
   for (const fiche of fichesDeSuppression(this.worktreeRoot)) {
-    const chemin = join(this.worktreeRoot, `agent__${fiche.agentId}`)
+    const chemin = this.pathFor(fiche.agentId)
     const verdict = verdictDeReprise.call(this, fiche, chemin)
     if (verdict === 'attendre' || verdict === 'laisser') continue
     if (verdict === 'oublier') {
@@ -1058,8 +1120,8 @@ export async function reprendreSuppressionsCommenceesAsync(
 
 export function sweepAbandonedAgentCopies(this: WorktreeManager): string[] {
   const swept: string[] = this.reprendreSuppressionsCommencees()
-  for (const entry of this.copiesCandidates()) {
-    const balayee = this.balayerUneCopie(entry)
+  for (const copie of this.copiesCandidates()) {
+    const balayee = this.balayerUneCopie(copie)
     if (balayee) swept.push(balayee)
   }
   return swept
@@ -1073,8 +1135,8 @@ export function sweepAbandonedAgentCopies(this: WorktreeManager): string[] {
  */
 export async function sweepAbandonedAgentCopiesAsync(this: WorktreeManager): Promise<string[]> {
   const swept: string[] = await this.reprendreSuppressionsCommenceesAsync()
-  for (const entry of this.copiesCandidates()) {
-    const balayee = await this.balayerUneCopieAsync(entry)
+  for (const copie of this.copiesCandidates()) {
+    const balayee = await this.balayerUneCopieAsync(copie)
     if (balayee) swept.push(balayee)
     // `setImmediate` et non `setTimeout(0)` : on repasse par la boucle d'événements — donc les IPC
     // en attente sont servis — sans ajouter de délai par copie.

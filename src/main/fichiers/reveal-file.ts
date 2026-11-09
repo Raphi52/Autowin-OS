@@ -1,3 +1,5 @@
+import { agentIdDeCopieHeritee, agentIdDeCopieNeuve } from '../copies/chemins-de-copies'
+
 /**
  * Où chercher un fichier cité par un agent, et comment l'ouvrir À SA LIGNE.
  *
@@ -5,8 +7,9 @@
  * 2026-08-27 et laissés ouverts :
  *
  * - La racine était `AUTOWIN_OS_WORKSPACE ?? process.cwd()`. Or un agent cite ce qu'il voit depuis
- *   SA copie (`worktrees/<hash>/agent__run-*`). Un fichier créé pendant le run n'existe pas encore
- *   dans le workspace : le clic répondait `introuvable`, soit exactement la plainte d'origine.
+ *   SA copie (`worktrees/<hash>/agent__run-*` pour les anciennes copies, `copies-de-taches/run-*` pour
+ *   les neuves). Un fichier créé pendant le run n'existe pas encore dans le workspace : le clic répondait
+ *   `introuvable`, soit exactement la plainte d'origine.
  * - Le numéro de ligne était parsé, transporté, puis jeté. Le lien ouvrait le fichier et jamais la
  *   ligne, sans jamais le dire.
  *
@@ -14,22 +17,34 @@
  * sont testables sans monter de dépôt git.
  */
 
-/** Copies où un agent a pu écrire ce qu'il cite. Le workspace d'abord : c'est le cas normal. */
+/**
+ * Copies où un agent a pu écrire ce qu'il cite. Le workspace d'abord : c'est le cas normal.
+ * Les copies d'agent vivent sous l'ancienne racine (`worktreesRoot`) ou sous la racine unique.
+ */
 export function racinesRevelation(opts: {
   workspace: string
   worktreesRoot: string | undefined
+  racineCopiesDeTaches?: string
   lister: (dir: string) => string[]
 }): string[] {
   const racines = [opts.workspace]
-  if (!opts.worktreesRoot) return racines
-  for (const repo of opts.lister(opts.worktreesRoot)) {
-    if (repo.startsWith('.')) continue
-    const dossierRepo = `${opts.worktreesRoot}/${repo}`
-    for (const copie of opts.lister(dossierRepo)) {
-      // Seules les copies d'AGENT portent du travail à révéler. Une copie `integration__` est
-      // éphémère et appartient à la publication ; `.quarantine` n'est pas un lieu de lecture.
-      if (!copie.startsWith('agent__')) continue
-      racines.push(`${dossierRepo}/${copie}`)
+  if (opts.worktreesRoot) {
+    for (const repo of opts.lister(opts.worktreesRoot)) {
+      if (repo.startsWith('.')) continue
+      const dossierRepo = `${opts.worktreesRoot}/${repo}`
+      for (const copie of opts.lister(dossierRepo)) {
+        // Seules les copies d'AGENT portent du travail à révéler. Une copie `integration__` est
+        // éphémère et appartient à la publication ; `.quarantine` n'est pas un lieu de lecture.
+        if (!agentIdDeCopieHeritee(copie)) continue
+        racines.push(`${dossierRepo}/${copie}`)
+      }
+    }
+  }
+  if (opts.racineCopiesDeTaches) {
+    for (const copie of opts.lister(opts.racineCopiesDeTaches)) {
+      // fix-ok: la révélation lit la racine unique avec le même critère que le balayage : une copie d'agent, jamais un fil.
+      if (agentIdDeCopieNeuve(copie) === undefined) continue
+      racines.push(`${opts.racineCopiesDeTaches}/${copie}`)
     }
   }
   return racines

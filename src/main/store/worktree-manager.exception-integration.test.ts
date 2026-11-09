@@ -19,7 +19,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
-import { nettoyerRacines, roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, nettoyerRacines, roots, tempRepo } from './worktree-manager.test-helpers'
 
 afterEach(nettoyerRacines)
 
@@ -37,7 +37,12 @@ describe('finalisation : une exception inattendue reste diagnosticable', () => {
       const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
       return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
     }
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      tryGitFn
+    })
 
     const path = wm.acquire('builder')
     writeFileSync(join(path, 'a.txt'), 'travail de l’agent\n')

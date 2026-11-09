@@ -76,14 +76,15 @@ const STATUTS_HONORES = new Set(['green', 'degraded-closed'])
 const PLAFOND_CIBLES = 5
 
 /**
- * Chemins qui ne sont PAS des cibles du dépôt : copies isolées de run, espaces applicatifs, et les
- * fragments qu'un chemin URL-encodé laisse derrière lui (`…/Autowin%20OS/…` → `20os/…`).
+ * Chemins qui ne sont PAS des cibles du dépôt : copies isolées de run (sous l'ancienne racine
+ * `worktrees` ou sous la racine unique `copies-de-taches`), espaces applicatifs, et les fragments
+ * qu'un chemin URL-encodé laisse derrière lui (`…/Autowin%20OS/…` → `20os/…`).
  *
  * Mesuré sur le corpus réel : des fils en portaient, et un fil y voyait
  * le MÊME fichier deux fois — une fois dans le dépôt, une fois dans la copie du run.
  */
 const CHEMIN_HORS_DEPOT =
-  /(?:^|\/)(?:\.autowin-data|worktrees|appdata|node_modules|dist|out)(?:\/|$)|agent__run-|^20os\//iu
+  /(?:^|\/)(?:\.autowin-data|worktrees|copies-de-taches|appdata|node_modules|dist|out)(?:\/|$)|agent__run-|^20os\//iu
 
 const MARQUEUR_ABANDON = /abandonn[eé]\s*:\s*l.app s.est arr[eê]t[eé]e/iu
 

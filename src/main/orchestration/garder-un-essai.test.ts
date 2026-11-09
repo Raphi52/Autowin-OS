@@ -20,6 +20,7 @@ import {
   type PublicationDUneCopie
 } from './garder-un-essai'
 import { WorktreeManager } from '../store/worktree-manager'
+import { racineDe } from '../store/worktree-manager.test-helpers'
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 
@@ -89,7 +90,11 @@ describe('garderLeTravailDuFil — la porte d’un fil en copie vers main', () =
   function publicationReelle(repo: string): PublicationDUneCopie & { ouvertes: string[] } {
     const racine = mkdtempSync(join(tmpdir(), 'autowin-porte-wt-'))
     dossiers.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
     const ouvertes: string[] = []
     return {
       ouvertes,

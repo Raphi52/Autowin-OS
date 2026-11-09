@@ -23,6 +23,7 @@ import { messageCommitAgent, WorktreeManager } from './worktree-manager'
 import { annonceCommitLocal } from '../chat/annonce-commit-local'
 import { WorktreeRunStateStore } from './worktree-run-state'
 import { classifierRefusDeReprise } from '../runs/resume-refusal'
+import { racineDe } from './worktree-manager.test-helpers'
 
 const roots: string[] = []
 
@@ -47,13 +48,20 @@ function manager(repo: string): { manager: WorktreeManager; worktreeRoot: string
   const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-recovery-root-'))
   roots.push(worktreeRoot)
   return {
-    manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+    manager: new WorktreeManager({
+      racineCopiesDeTaches: racineDe(worktreeRoot),
+      baseRepo: repo,
+      worktreeRoot
+    }),
     worktreeRoot
   }
 }
 
+// fix-ok: le store de production reçoit la racine unique du gestionnaire (os.ts) ; sans elle, il refuse le manifeste d'une copie neuve « Manifeste de bureau invalide ».
 function stateStore(worktreeRoot: string): WorktreeRunStateStore {
-  return new WorktreeRunStateStore(worktreeRoot, 'repo-test')
+  return new WorktreeRunStateStore(worktreeRoot, 'repo-test', {
+    racineCopiesDeTaches: racineDe(worktreeRoot)
+  })
 }
 
 function authorizeGreenRecovery(
@@ -154,6 +162,7 @@ describe('récupération des worktrees après redémarrage', () => {
     const baseSha = git(repo, 'rev-parse', 'HEAD')
 
     const restartedManager = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(previous.worktreeRoot),
       baseRepo: repo,
       worktreeRoot: previous.worktreeRoot
     })
@@ -162,7 +171,11 @@ describe('récupération des worktrees après redémarrage', () => {
       stateStore: store
     })
     const secondRestart = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: previous.worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(previous.worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot: previous.worktreeRoot
+      }),
       stateStore: store
     })
 
@@ -185,6 +198,7 @@ describe('récupération des worktrees après redémarrage', () => {
     authorizeGreenRecovery(previous.manager, previous.worktreeRoot, 'run-green')
 
     const restartedManager = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(previous.worktreeRoot),
       baseRepo: repo,
       worktreeRoot: previous.worktreeRoot
     })
@@ -237,6 +251,7 @@ describe('récupération des worktrees après redémarrage', () => {
       })
 
       const restartedManager = new WorktreeManager({
+        racineCopiesDeTaches: racineDe(previous.worktreeRoot),
         baseRepo: repo,
         worktreeRoot: previous.worktreeRoot
       })
@@ -307,7 +322,11 @@ describe('récupération des worktrees après redémarrage', () => {
     })
     const publications: Array<{ baseSha: string; agentSha: string }> = []
     new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: previous.worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(previous.worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot: previous.worktreeRoot
+      }),
       stateStore: store,
       onRecoveredPublication: (publication) => {
         publications.push(publication)
@@ -328,7 +347,11 @@ describe('récupération des worktrees après redémarrage', () => {
     expect(() => git(repo, 'rev-parse', `refs/autowin/publications/${runId}`)).toThrow()
 
     new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: previous.worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(previous.worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot: previous.worktreeRoot
+      }),
       stateStore: store,
       onRecoveredPublication: (publication) => {
         publications.push(publication)
@@ -342,7 +365,11 @@ describe('récupération des worktrees après redémarrage', () => {
   it('classe « publication acquise » une reprise de relance dont la SHA préparée est déjà sur main', () => {
     const { repo, store, worktreeRoot, runId } = preparerReprisePubliee(true)
     const coordinateur = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot
+      }),
       stateStore: store,
       sansRecuperation: true
     })
@@ -358,7 +385,11 @@ describe('récupération des worktrees après redémarrage', () => {
   it('classe « publication acquise » aussi sur la reprise asynchrone de relance', async () => {
     const { repo, store, worktreeRoot, runId } = preparerReprisePubliee(true)
     const coordinateur = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot
+      }),
       stateStore: store,
       sansRecuperation: true
     })
@@ -377,7 +408,11 @@ describe('récupération des worktrees après redémarrage', () => {
   it('reprend une copie dont la SHA n’est pas encore sur main (jumeau accepté)', () => {
     const { repo, store, worktreeRoot, runId } = preparerReprisePubliee(false)
     const coordinateur = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot
+      }),
       stateStore: store,
       sansRecuperation: true
     })
@@ -392,7 +427,11 @@ describe('récupération des worktrees après redémarrage', () => {
     git(repo, 'merge', '--ff-only', agentSha)
     git(repo, 'update-ref', `refs/autowin/publications/${runId}`, agentSha)
     const coordinateur = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot
+      }),
       stateStore: store,
       sansRecuperation: true
     })
@@ -409,7 +448,11 @@ describe('récupération des worktrees après redémarrage', () => {
     const { repo, store, worktreeRoot, runId, agentPath } = preparerReprisePubliee(false)
     git(agentPath, 'commit', '-q', '--allow-empty', '-m', 'travail ajouté après la préparation')
     const coordinateur = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot
+      }),
       stateStore: store,
       sansRecuperation: true
     })
@@ -426,7 +469,11 @@ describe('récupération des worktrees après redémarrage', () => {
     const { repo, store, worktreeRoot, runId, agentPath } = preparerReprisePubliee(false)
     writeFileSync(join(agentPath, 'agent.txt'), 'modifié à la main\n')
     const coordinateur = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot
+      }),
       stateStore: store,
       sansRecuperation: true
     })
@@ -470,7 +517,11 @@ describe('récupération des worktrees après redémarrage', () => {
     })
 
     const coordinator = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: previous.worktreeRoot }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(previous.worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot: previous.worktreeRoot
+      }),
       stateStore: stateStore(previous.worktreeRoot)
     })
 
@@ -494,6 +545,7 @@ describe('récupération des worktrees après redémarrage', () => {
     writeFileSync(join(orphanPath, 'result.tmp'), 'livrable ignoré\n')
 
     const restartedManager = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(previous.worktreeRoot),
       baseRepo: repo,
       worktreeRoot: previous.worktreeRoot
     })
@@ -547,6 +599,7 @@ describe('récupération des worktrees après redémarrage', () => {
     }
 
     const restartedManager = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(previous.worktreeRoot),
       baseRepo: repo,
       worktreeRoot: previous.worktreeRoot,
       tryGitFn
@@ -573,6 +626,7 @@ describe('récupération des worktrees après redémarrage', () => {
     const publishedHead = git(repo, 'rev-parse', 'HEAD')
     const secondRestart = new RunWorktreeCoordinator({
       manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(previous.worktreeRoot),
         baseRepo: repo,
         worktreeRoot: previous.worktreeRoot
       }),
@@ -598,6 +652,7 @@ describe('récupération des worktrees après redémarrage', () => {
     previous.manager.markProcess('run-active', process.pid, true)
 
     const restartedManager = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(previous.worktreeRoot),
       baseRepo: repo,
       worktreeRoot: previous.worktreeRoot
     })
@@ -649,6 +704,7 @@ describe('récupération des worktrees après redémarrage', () => {
     }
 
     const restartedManager = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(previous.worktreeRoot),
       baseRepo: repo,
       worktreeRoot: previous.worktreeRoot,
       tryGitFn
@@ -747,7 +803,12 @@ describe('récupération des worktrees après redémarrage', () => {
     }
     const store = stateStore(worktreeRoot)
     const coordinator = new RunWorktreeCoordinator({
-      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot, tryGitFn }),
+      manager: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(worktreeRoot),
+        baseRepo: repo,
+        worktreeRoot,
+        tryGitFn
+      }),
       stateStore: store
     })
     const runId = 'index-change-then-retry'

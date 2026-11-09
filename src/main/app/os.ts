@@ -112,6 +112,7 @@ import { RunWorktreeCoordinator } from '../store/run-worktree-coordinator'
 import { surveillerReferencesGit } from '../store/surveillance-references-git'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
 import { WorktreeRunStateStore } from '../store/worktree-run-state'
+import { racineDesCopiesDeTaches } from '../copies/chemins-de-copies'
 import type { WatchdogMutationClaimsSink } from '../task-manager/types'
 import type { WatchdogMutationClaims } from '../task-manager/types'
 import { preparedCommitMutationEvidence } from '../providers/workspace-mutation-evidence'
@@ -607,9 +608,13 @@ export class AutowinOS {
           join(ensureAutowinAppData(), 'worktrees'),
           executionWorkspace
         )
+        // La racine unique des copies d'agent : les NOUVELLES copies y naissent ; celles d'avant restent
+        // sous `worktrees` jusqu'à leur retrait, et se reprennent là où elles sont.
+        const racineCopiesDeTaches = racineDesCopiesDeTaches(ensureAutowinAppData())
         const manager = new WorktreeManager({
           baseRepo: executionWorkspace,
           worktreeRoot: identity.root,
+          racineCopiesDeTaches, // fix-ok: le gestionnaire crée les copies sous la racine unique, la même que celle du store de l'état des runs.
           requireCanonicalRemote: true
         })
         // Le manager est EXPOSE a part : la retention LIT, le coordinateur ORCHESTRE.
@@ -640,7 +645,10 @@ export class AutowinOS {
           // La liste des travaux non publiés suit le dépôt, même touché en ligne de commande
           // Sans lire git, seulement les fichiers de références sous `.git`.
           surveillerReferences: (siChange) => surveillerReferencesGit(executionWorkspace, siChange),
-          stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
+          // fix-ok: le store et le gestionnaire reçoivent la même racine, pour qu'une copie neuve naisse et soit relue au même endroit.
+          stateStore: new WorktreeRunStateStore(identity.root, identity.repoId, {
+            racineCopiesDeTaches
+          }),
           /**
            * PREVENIR quand un travail est abandonne. Verifie le 2026-08-23 : l'application ne
            * comportait AUCUNE notification -- un travail fini pouvait mourir en silence, et trois

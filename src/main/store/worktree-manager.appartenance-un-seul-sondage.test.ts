@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
+import { nettoyerRacines, racineDe, roots } from './worktree-manager.test-helpers'
 
 /**
  * Mesure (gels.jsonl, 2026-09-23/24) : `execFileSync git rev-parse` ×3 par appel, depuis
@@ -7,21 +11,56 @@ import { WorktreeManager } from './worktree-manager'
  * Cause : `--git-common-dir` de la copie était demandé DEUX fois (foreignCopyDetail puis le
  * contrôle final). Contrat : une seule sonde `--git-common-dir` par copie et par vérification.
  */
+
+afterEach(nettoyerRacines)
+
+const echappe = (texte: string): string => texte.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Un dépôt témoin sous le dossier temporaire. Seuls les appels git sont simulés : le disque n'est
+ * jamais lu ni écrit à ces chemins.
+ */
+function depotTemoin(): {
+  base: string
+  wt: string
+  copie: string
+  commun: string
+  autre: string
+} {
+  const dossier = mkdtempSync(join(tmpdir(), 'appartenance-'))
+  roots.push(dossier)
+  const base = join(dossier, 'depot')
+  const wt = join(base, '.autowin-data', 'wt')
+  return {
+    base,
+    wt,
+    copie: join(wt, 'agent__x'),
+    commun: join(base, '.git'),
+    autre: join(dossier, 'ailleurs', '.git')
+  }
+}
+
 describe('ownershipIssue — un seul sondage git-common-dir par copie', () => {
   it('ne relance pas git pour une valeur déjà obtenue', () => {
-    const base = 'C:/depot'
-    const copie = 'C:/depot/.autowin-data/wt/agent__x'
+    const { base, wt, copie, commun } = depotTemoin()
     const appels: string[] = []
     const tryGitFn = (dir: string, args: string[]) => {
       appels.push(`${dir} ${args.join(' ')}`)
       if (args.includes('--git-common-dir') && args.includes('--show-toplevel'))
-        return { code: 0, stdout: `C:/depot/.git\n${dir}\n`, stderr: '' }
-      if (args.includes('--git-common-dir')) return { code: 0, stdout: 'C:/depot/.git\n', stderr: '' }
+        return { code: 0, stdout: `${commun}\n${dir}\n`, stderr: '' }
+      if (args.includes('--git-common-dir')) return { code: 0, stdout: `${commun}\n`, stderr: '' }
       if (args.includes('--show-toplevel')) return { code: 0, stdout: `${dir}\n`, stderr: '' }
       return { code: 1, stdout: '', stderr: '' }
     }
-    const wm = new WorktreeManager({ baseRepo: base, worktreeRoot: 'C:/depot/.autowin-data/wt', tryGitFn } as never)
-    const issue = (wm as unknown as { ownershipIssue(p: string): string | undefined }).ownershipIssue(copie)
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wt),
+      baseRepo: base,
+      worktreeRoot: wt,
+      tryGitFn
+    } as never)
+    const issue = (
+      wm as unknown as { ownershipIssue(p: string): string | undefined }
+    ).ownershipIssue(copie)
     expect(issue).toBeUndefined()
     expect(appels.filter((a) => a.startsWith(copie) && a.includes('--git-common-dir'))).toHaveLength(1)
     // Un seul lancement git sur la copie par verification (etait 3 : gels.jsonl 2026-09-24).
@@ -36,27 +75,27 @@ describe('ownershipIssue — un seul sondage git-common-dir par copie', () => {
  * la copie légitime, seule à rendre `undefined`.
  */
 describe('ownershipIssueAsync — même verdict que la forme synchrone, sans git synchrone', () => {
-  const base = 'C:/depot'
-  const copie = 'C:/depot/.autowin-data/wt/agent__x'
   type Sortie = { code: number; stdout: string; stderr: string }
   type Forme = {
     ownershipIssue(p: string): string | undefined
     ownershipIssueAsync(p: string): Promise<string | undefined>
   }
+
+  const { base, wt, copie, commun, autre } = depotTemoin()
   const cas: Array<{ nom: string; sonde: Sortie; attendu: RegExp | undefined }> = [
     {
       nom: 'copie légitime (accepté)',
-      sonde: { code: 0, stdout: `C:/depot/.git\n${copie}\n`, stderr: '' },
+      sonde: { code: 0, stdout: `${commun}\n${copie}\n`, stderr: '' },
       attendu: undefined
     },
     {
       nom: 'copie d’un autre dépôt',
-      sonde: { code: 0, stdout: `C:/ailleurs/.git\n${copie}\n`, stderr: '' },
-      attendu: /^La copie appartient à un autre dépôt \(C:\/ailleurs\/\.git\)/
+      sonde: { code: 0, stdout: `${autre}\n${copie}\n`, stderr: '' },
+      attendu: new RegExp(`^La copie appartient à un autre dépôt \\(${echappe(autre)}\\)`)
     },
     {
       nom: 'dossier amputé : git remonte sur la base',
-      sonde: { code: 0, stdout: `C:/depot/.git\n${base}\n`, stderr: '' },
+      sonde: { code: 0, stdout: `${commun}\n${base}\n`, stderr: '' },
       attendu: /n’est pas une racine de travail : git remonte sur/
     },
     {
@@ -70,19 +109,21 @@ describe('ownershipIssueAsync — même verdict que la forme synchrone, sans git
     it(nom, async () => {
       const repondre = (dir: string, args: string[]): Sortie => {
         if (dir === base && args.join(' ') === 'rev-parse --git-common-dir')
-          return { code: 0, stdout: 'C:/depot/.git\n', stderr: '' }
+          return { code: 0, stdout: `${commun}\n`, stderr: '' }
         if (dir === copie) return sonde
         return { code: 1, stdout: '', stderr: '' }
       }
       const synchrone = new WorktreeManager({
+        racineCopiesDeTaches: racineDe(wt),
         baseRepo: base,
-        worktreeRoot: 'C:/depot/.autowin-data/wt',
+        worktreeRoot: wt,
         tryGitFn: repondre
       } as never) as unknown as Forme
       const appelsSynchrones: string[] = []
       const asynchrone = new WorktreeManager({
+        racineCopiesDeTaches: racineDe(wt),
         baseRepo: base,
-        worktreeRoot: 'C:/depot/.autowin-data/wt',
+        worktreeRoot: wt,
         tryGitFn: (dir: string, args: string[]) => {
           appelsSynchrones.push(`${dir} ${args.join(' ')}`)
           return repondre(dir, args)

@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
-import { git, roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, git, roots, tempRepo } from './worktree-manager.test-helpers'
 
 afterEach(() => {
   for (const d of roots.splice(0)) {
@@ -26,7 +26,11 @@ describe('lancer une conversation quand origin ne repond pas', () => {
     git(repo, 'update-ref', 'refs/remotes/origin/main', git(repo, 'rev-parse', 'HEAD'))
     const racine = mkdtempSync(join(tmpdir(), 'autowin-offline-'))
     roots.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
 
     expect(() => wm.describeForLaunch('conv-1')).not.toThrow()
   })
@@ -38,7 +42,11 @@ describe('lancer une conversation quand origin ne repond pas', () => {
     git(repo, 'update-ref', 'refs/remotes/origin/main', attendu)
     const racine = mkdtempSync(join(tmpdir(), 'autowin-offline2-'))
     roots.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
 
     expect(wm.describeForLaunch('conv-1')).toMatchObject({
       canonicalBaseRef: 'origin/main',
@@ -52,7 +60,12 @@ describe('lancer une conversation quand origin ne repond pas', () => {
     git(repo, 'remote', 'add', 'origin', join(tmpdir(), 'depot-qui-nexiste-pas.git'))
     const racine = mkdtempSync(join(tmpdir(), 'autowin-offline3-'))
     roots.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine, requireCanonicalRemote: true })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine,
+      requireCanonicalRemote: true
+    })
 
     expect(() => wm.describeForLaunch('conv-1')).toThrow(/Lancement bloqué/)
   })

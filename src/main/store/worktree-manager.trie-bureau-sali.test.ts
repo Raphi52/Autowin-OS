@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { git, nettoyerRacines, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, git, nettoyerRacines, tempRepo } from './worktree-manager.test-helpers'
 import { WorktreeManager } from './worktree-manager'
 
 /**
@@ -26,7 +26,14 @@ describe('WorktreeManager — un bureau SALI trie se tait, et ressort des qu’i
     const bureau = join(racine, 'agent__run-sali-1')
     git(repo, 'worktree', 'add', '-q', '--detach', bureau, 'HEAD')
     writeFileSync(join(bureau, 'livrable.txt'), 'travail jamais committé\n')
-    return { wm: new WorktreeManager({ baseRepo: repo, worktreeRoot: racine }), bureau }
+    return {
+      wm: new WorktreeManager({
+        racineCopiesDeTaches: racineDe(racine),
+        baseRepo: repo,
+        worktreeRoot: racine
+      }),
+      bureau
+    }
   }
 
   it('le marquage referme le bureau sali — et rien n’est supprime', () => {

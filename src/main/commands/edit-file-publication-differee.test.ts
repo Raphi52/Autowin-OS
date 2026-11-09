@@ -14,6 +14,7 @@ import { AppCommandBus } from './commands'
 import { WorktreeManager } from '../store/worktree-manager'
 import { RunWorktreeCoordinator } from '../store/run-worktree-coordinator'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { racineDe } from '../store/worktree-manager.test-helpers'
 
 /**
  * DEFAUT VECU le 2026-08-25 : TROIS `edit_file` sur QUATRE ont rendu
@@ -123,7 +124,11 @@ function busSur(repo: string, issue: unknown): AppCommandBus {
   const wtRoot = mkdtempSync(join(RACINE, 'wt-'))
   temporaires.push(wtRoot)
   const coordinator = new RunWorktreeCoordinator({
-    manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+    manager: new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot
+    })
   })
   const differe = {
     ...coordinator,

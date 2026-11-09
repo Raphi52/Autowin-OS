@@ -7,6 +7,8 @@ import type * as WorkerThreads from 'node:worker_threads'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { WorktreeManager } from './worktree-manager'
 import type { WorktreeOperationRequest } from './worktree-operation-protocol'
+// fix-ok: le constructeur exige racineCopiesDeTaches (TS2345 mesuré au typecheck) ; le worker la reçoit par ses données, racineDe la fournit, et nettoyerRacines retire son dossier.
+import { nettoyerRacines, racineDe } from './worktree-manager.test-helpers'
 
 /*
  * LE WORKER DE RECENSEMENT DOIT RESPECTER LA GARDE DU POINT DE REPRISE.
@@ -20,7 +22,7 @@ import type { WorktreeOperationRequest } from './worktree-operation-protocol'
 const portail = vi.hoisted(() => ({
   ecouteurs: [] as Array<(requete: WorktreeOperationRequest) => void>,
   reponses: [] as unknown[],
-  donnees: { baseRepo: '', worktreeRoot: '' }
+  donnees: { baseRepo: '', worktreeRoot: '', racineCopiesDeTaches: '' }
 }))
 
 vi.mock('node:worker_threads', async (importOriginal) => ({
@@ -72,6 +74,7 @@ async function workerDeDemarrage(
   portail.reponses.length = 0
   portail.donnees.baseRepo = repo
   portail.donnees.worktreeRoot = racine
+  portail.donnees.racineCopiesDeTaches = racineDe(racine)
   await import('./worktree-operation-worker')
   const ecouteur = portail.ecouteurs[0]
   if (!ecouteur) throw new Error('le worker n’a pas branché son écouteur de requêtes')
@@ -80,6 +83,7 @@ async function workerDeDemarrage(
 
 afterEach(() => {
   for (const root of roots.splice(0)) supprimerArbre(root)
+  nettoyerRacines()
 })
 
 describe('worker d’opérations : l’inventaire de démarrage respecte le point de reprise', () => {
@@ -87,9 +91,11 @@ describe('worker d’opérations : l’inventaire de démarrage respecte le poin
     const repo = depotVide()
     const racine = mkdtempSync(join(tmpdir(), 'autowin-worker-racine-'))
     roots.push(racine)
-    const copie = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine }).acquire(
-      'run-reprenable'
-    )
+    const copie = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine)
+    }).acquire('run-reprenable')
     vieillir(copie)
 
     const demande = await workerDeDemarrage(repo, racine)
@@ -103,9 +109,11 @@ describe('worker d’opérations : l’inventaire de démarrage respecte le poin
     const repo = depotVide()
     const racine = mkdtempSync(join(tmpdir(), 'autowin-worker-racine-'))
     roots.push(racine)
-    const copie = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine }).acquire(
-      'run-reprenable'
-    )
+    const copie = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine)
+    }).acquire('run-reprenable')
     vieillir(copie)
 
     const demande = await workerDeDemarrage(repo, racine)

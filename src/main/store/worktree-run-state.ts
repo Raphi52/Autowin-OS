@@ -2,7 +2,11 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import type { WorktreeFileChange } from '../../shared/worktree-activity-model'
-import { dossierDeCopieDeTache, nomCopieAgentHeritee } from '../copies/chemins-de-copies'
+import {
+  cheminAncienDeCopieAgent,
+  cheminNeufDeCopieAgent,
+  nomCopieAgentHeritee
+} from '../copies/chemins-de-copies'
 import { cheminsEnCoursDans, deposerFichier, depotEnCours } from '../gel/ecriture-hors-fil'
 
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
@@ -144,11 +148,11 @@ function isOptionalText(value: unknown): boolean {
 
 function isRecord(
   value: unknown,
-  cheminAttendu: (runId: string) => string | null
+  cheminsAcceptes: (runId: string) => string[]
 ): value is WorktreeRunRecord {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<WorktreeRunRecord>
-  const attendu = typeof candidate.runId === 'string' ? cheminAttendu(candidate.runId) : null
+  const acceptes = typeof candidate.runId === 'string' ? cheminsAcceptes(candidate.runId) : []
   const validVerdict =
     typeof candidate.verdict === 'string' && VERDICTS.has(candidate.verdict as WorktreeRunVerdict)
   const validPublication =
@@ -174,8 +178,9 @@ function isRecord(
     typeof candidate.agentName === 'string' &&
     candidate.agentName.trim().length > 0 &&
     typeof candidate.worktreePath === 'string' &&
-    attendu !== null &&
-    canonicalPath(candidate.worktreePath) === canonicalPath(attendu) &&
+    acceptes.some(
+      (chemin) => canonicalPath(chemin) === canonicalPath(candidate.worktreePath ?? '')
+    ) &&
     (candidate.worktreeAvailable === undefined ||
       typeof candidate.worktreeAvailable === 'boolean') &&
     isSafeBranch(candidate.baseBranch) &&
@@ -254,9 +259,9 @@ export class WorktreeRunStateStore {
     root: string,
     private readonly repoId: string,
     /**
-     * Sans option, les copies restent sous `root`, là où elles sont. Avec `racineCopiesDeTaches`,
-     * elles sont attendues sous la racine unique : à n'activer qu'une fois la copie déplacée, sinon
-     * le bureau paraîtrait absent alors qu'il est là.
+     * Avec `racineCopiesDeTaches`, le store accepte la copie NEUVE sous la racine unique, et la copie déjà
+     * enregistrée sous l'ancien nom reste lisible et s'écrit là où elle est, jusqu'à son retrait (voir
+     * `save`). Sans option, seule l'ancienne racine est acceptée : le store ne fabrique aucune copie.
      */
     private readonly options: { racineCopiesDeTaches?: string } = {}
   ) {
@@ -319,7 +324,7 @@ export class WorktreeRunStateStore {
     try {
       const parsed = this.rebaserCheminHerite(JSON.parse(texte) as unknown, runId)
       if (
-        !isRecord(parsed, (id) => this.cheminAttendu(id)) ||
+        !isRecord(parsed, (id) => this.cheminsAcceptes(id)) ||
         parsed.repoId !== this.repoId ||
         parsed.runId !== runId
       )
@@ -351,8 +356,21 @@ export class WorktreeRunStateStore {
   save(record: WorktreeRunRecord): void {
     this.assertRunId(record.runId)
     const localRecord = { ...record, repoId: this.repoId }
-    if (!isRecord(localRecord, (id) => this.cheminAttendu(id))) {
+    if (!isRecord(localRecord, (id) => this.cheminsAcceptes(id))) {
       throw new Error(`Manifeste de bureau invalide: ${record.runId}`)
+    }
+    // Avec la racine unique active, un run NEUF ne s'enregistre plus sous l'ancienne racine. Un run déjà
+    // enregistré (copie en cours ou à publication bloquée) s'écrit là où sa copie se trouve.
+    // fix-ok: une copie déjà posée à l'ancien emplacement peut recevoir son premier manifeste : seul un run sans manifeste ni copie là-bas est neuf.
+    if (
+      this.options.racineCopiesDeTaches !== undefined &&
+      this.estSousAncienneRacine(localRecord) &&
+      !this.dejaEnregistre(record.runId) &&
+      !existsSync(localRecord.worktreePath)
+    ) {
+      throw new Error(
+        `Manifeste de bureau invalide: copie neuve sous l'ancienne racine (${record.runId}).`
+      )
     }
     // `ecarter` : l'ancienne version passe en `.bak` avant d'être remplacée, comme l'écriture d'avant.
     // Remplacer un manifeste créé l'instant d'avant tient 20 à 28 s sur ce poste.
@@ -387,23 +405,42 @@ export class WorktreeRunStateStore {
     if (!parsed || typeof parsed !== 'object') return parsed
     const candidat = parsed as { worktreePath?: unknown }
     if (typeof candidat.worktreePath !== 'string') return parsed
-    const attendu = this.cheminAttendu(runId)
-    if (attendu === null) return parsed
-    if (canonicalPath(candidat.worktreePath) === canonicalPath(attendu)) return parsed
+    // fix-ok: le rebasage ramène un chemin ancien vers l'ancien dossier, jamais vers la racine unique : une copie posée là se lit où elle est.
+    const ancien = cheminAncienDeCopieAgent(this.worktreeRoot, runId)
+    if (canonicalPath(candidat.worktreePath) === canonicalPath(ancien)) return parsed
     const dernierSegment = candidat.worktreePath
       .replace(/[\\/]+$/, '')
       .split(/[\\/]/)
       .pop()
     if (dernierSegment !== nomCopieAgentHeritee(runId)) return parsed
-    return { ...(parsed as object), worktreePath: attendu }
+    return { ...(parsed as object), worktreePath: ancien }
   }
 
-  // fix-ok: isRecord et rebaserCheminHerite codaient en dur `worktreeRoot/agent__<runId>` ; les tests de la racine unique restaient rouges tant que ce chemin était seul accepté.
-  /** Où la copie de ce run doit se trouver, selon la racine active (voir le constructeur). */
-  private cheminAttendu(runId: string): string | null {
-    const racine = this.options.racineCopiesDeTaches
-    if (racine !== undefined) return dossierDeCopieDeTache(racine, runId)
-    return join(this.worktreeRoot, nomCopieAgentHeritee(runId))
+  /**
+   * Les emplacements où la copie de ce run peut légitimement être : l'ancien (une copie née avant la
+   * racine unique y finit) et, si la racine unique est active, le neuf.
+   */
+  private cheminsAcceptes(runId: string): string[] {
+    const ancien = cheminAncienDeCopieAgent(this.worktreeRoot, runId)
+    const neuf = cheminNeufDeCopieAgent(this.options.racineCopiesDeTaches, runId)
+    return neuf === null || neuf === ancien ? [ancien] : [ancien, neuf]
+  }
+
+  /** Une copie de ce run est-elle rangée sous l'ancienne racine ? */
+  private estSousAncienneRacine(record: WorktreeRunRecord): boolean {
+    const ancien = cheminAncienDeCopieAgent(this.worktreeRoot, record.runId)
+    return canonicalPath(record.worktreePath) === canonicalPath(ancien)
+  }
+
+  /**
+   * Ce run a déjà un enregistrement : déposé et pas encore écrit (la file est partagée entre les
+   * instances du store), ou sur le disque. Même règle que `get`, qui lit la même file d'abord.
+   */
+  private dejaEnregistre(runId: string): boolean {
+    const chemin = this.pathFor(runId)
+    const depot = depotEnCours(chemin)
+    if (depot !== undefined) return depot !== null
+    return existsSync(chemin) || existsSync(`${chemin}.bak`)
   }
 
   private blocked(runId: string): WorktreeRunRecord {

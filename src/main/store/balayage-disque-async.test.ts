@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { WorktreeManager } from './worktree-manager'
-import { roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
  * LE BALAYAGE « NON BLOQUANT » SUPPRIMAIT LA COPIE EN SYNCHRONE — heal, 2026-10-23.
@@ -82,6 +82,7 @@ function preparer(enregistree: boolean): { wm: WorktreeManager; chemin: string }
   const chemin = copieLourde(racine)
   const git = gitSimule(chemin, enregistree)
   const wm = new WorktreeManager({
+    racineCopiesDeTaches: racineDe(racine),
     baseRepo: repo,
     worktreeRoot: racine,
     tryGitFn: git,
@@ -119,6 +120,7 @@ describe('balayage asynchrone : le retrait disque rend la main à la boucle', ()
     const git = gitSimule(chemin, false)
     const retires: string[] = []
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
       baseRepo: repo,
       worktreeRoot: racine,
       tryGitFn: git,
@@ -208,6 +210,7 @@ describe('balayage asynchrone : le contrôle d’appartenance ne fige pas la bou
       }
     }
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
       baseRepo: base,
       worktreeRoot: racine,
       // Chaque copie vient d'être créée : l'horloge avancée de deux jours la rend « vieille ».
@@ -296,6 +299,7 @@ describe('balayage asynchrone : le contrôle d’appartenance ne fige pas la bou
     }
     const maintenant = (): number => Date.now() + 2 * JOUR_MS
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
       baseRepo: base,
       worktreeRoot: racine,
       nowFn: maintenant,

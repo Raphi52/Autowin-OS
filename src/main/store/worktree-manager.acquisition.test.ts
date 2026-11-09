@@ -46,6 +46,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
 import {
+  racineDe,
   detachedCommit,
   git,
   installCompensationIndexOwner,
@@ -67,6 +68,7 @@ describe('WorktreeManager — acquisition (21/81 de la suite d’origine)', () =
     const names = ['café -> littéral.txt', 'ligne\nsuivante.txt', 'guillemet"brut.txt']
     const status = names.map((name) => `?? ${name}`).join('\0') + '\0'
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
       baseRepo: repo,
       worktreeRoot: wtRoot,
       git: (_dir, args) => (args[0] === 'status' ? status : '')
@@ -96,7 +98,11 @@ describe('WorktreeManager — acquisition (21/81 de la suite d’origine)', () =
     const repo = tempRepo()
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot
+    })
     const residue = join(wtRoot, 'integration__run-z__crash')
     git(repo, 'worktree', 'add', '--detach', residue, 'HEAD')
 
@@ -109,6 +115,7 @@ describe('WorktreeManager — acquisition (21/81 de la suite d’origine)', () =
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
       baseRepo: repo,
       worktreeRoot: wtRoot,
       processIdentityFn: () => undefined
@@ -236,7 +243,12 @@ describe('WorktreeManager — acquisition (21/81 de la suite d’origine)', () =
     }
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      tryGitFn
+    })
     const path = wm.acquire('builder')
     writeFileSync(join(path, 'b.txt'), 'travail de la copie\n')
 
@@ -310,7 +322,12 @@ exit 0
     }
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      tryGitFn
+    })
     const path = wm.acquire('builder')
     writeFileSync(join(path, 'b.txt'), 'travail de la copie\n')
 
@@ -379,7 +396,12 @@ exit 0
     }
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      tryGitFn
+    })
     const path = wm.acquire('builder')
     writeFileSync(join(path, 'b.txt'), 'travail de la copie\n')
     const hook = join(repo, '.git', 'hooks', 'reference-transaction')
@@ -424,6 +446,7 @@ exit 0
       return { code: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
     }
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
       baseRepo: repo,
       worktreeRoot: wtRoot,
       tryGitFn
@@ -439,6 +462,7 @@ exit 0
     )
 
     const resumed = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(resumedRoot),
       baseRepo: repo,
       worktreeRoot: resumedRoot
     }) as unknown as CompensationIndexLockProbe
@@ -474,6 +498,7 @@ exit 0
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
     const resumed = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
       baseRepo: repo,
       worktreeRoot: wtRoot,
       nowFn: () => 1_000
@@ -505,7 +530,12 @@ exit 0
     }
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      tryGitFn
+    })
     const path = wm.acquire('builder')
     writeFileSync(join(path, 'b.txt'), 'travail de la copie\n')
     const hook = join(repo, '.git', 'hooks', 'reference-transaction')
@@ -541,6 +571,7 @@ exit 0
     )
 
     const resumed = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
       baseRepo: repo,
       worktreeRoot: wtRoot,
       processIdentityFn: (pid) => (pid === stalePid ? undefined : `live|${pid}`)
@@ -573,7 +604,12 @@ exit 0
     }
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      tryGitFn
+    })
     const path = wm.acquire('builder')
     writeFileSync(join(path, 'b.txt'), 'travail de la copie\n')
     const hook = join(repo, '.git', 'hooks', 'reference-transaction')
@@ -595,7 +631,11 @@ exit 0
       readdirSync(wtRoot).filter((name) => name.startsWith('integration__builder__'))
     ).toHaveLength(1)
 
-    const restarted = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+    const restarted = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot
+    })
     expect(restarted.reconcileResidues()).toMatchObject({ cleaned: 1, blocked: [] })
     expect(restarted.finalize('builder')).toMatchObject({
       outcome: 'blocked',
@@ -631,6 +671,7 @@ exit 0
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
       baseRepo: repo,
       worktreeRoot: wtRoot,
       git: gitRunner,
@@ -651,7 +692,11 @@ exit 0
     const repo = tempRepo()
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
-    const setup = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+    const setup = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot
+    })
     const agentPath = setup.acquire('post-cas-race')
     writeFileSync(join(agentPath, 'published.txt'), 'publié\n')
     git(agentPath, 'add', 'published.txt')
@@ -692,7 +737,12 @@ exit 0
         stderr: result.stderr ?? ''
       }
     }
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      tryGitFn
+    })
 
     expect(wm.cleanupPublished('post-cas-race', publishedSha, 'main')).toMatchObject({
       outcome: 'merged'
@@ -719,7 +769,12 @@ exit 0
     }
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
     roots.push(wtRoot)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(wtRoot),
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      tryGitFn
+    })
     const agentPath = wm.acquire('ownership-retry')
     writeFileSync(join(agentPath, 'ownership.txt'), 'travail publié\n')
     git(agentPath, 'add', 'ownership.txt')

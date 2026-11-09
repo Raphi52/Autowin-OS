@@ -192,7 +192,8 @@ function ecrireEtatBrut(racine: string, etat: WorktreeRunRecord): string {
 }
 
 describe('racine unique des copies : relecture d’un état version 1', () => {
-  it('rend un état hérité sous la nouvelle racine, sans toucher aux autres champs', () => {
+  // fix-ok: le rebasage ramène un état hérité vers l'ancien dossier, où sa copie existe ; la racine unique n'est pas une cible de rebasage, la copie n'y est jamais déplacée.
+  it('un état hérité reste sous l’ancienne racine, là où est sa copie : rien n’est déplacé', () => {
     const donnees = tempRoot()
     const ancienne = join(donnees, 'worktrees', REPO_REEL)
     const nouvelle = join(donnees, 'copies-de-taches')
@@ -202,7 +203,7 @@ describe('racine unique des copies : relecture d’un état version 1', () => {
     const lu = new WorktreeRunStateStore(ancienne, REPO_REEL, {
       racineCopiesDeTaches: nouvelle
     }).get(RUN_REEL)
-    expect(lu).toEqual({ ...etat, worktreePath: join(nouvelle, RUN_REEL) })
+    expect(lu).toEqual(etat)
   })
 
   it('lit sans réécrire le fichier : relire ne déplace rien sur le disque', () => {

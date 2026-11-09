@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process'
 import { statSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { ensureAutowinAppData } from '../app/app-data'
+import { runDUneCopieDeRun } from '../copies/chemins-de-copies'
 import { readGitState } from '../git/git-read-main'
 import {
   normalizeWorkspaceTracePath,
@@ -25,7 +26,8 @@ import {
  * le lisait, et seulement pour le fil affiché. Trois questions, trois sources :
  * - un AUTRE FIL a modifié ce fichier sans le commiter → journal des fichiers, recoupé avec le diff
  *   actuel exactement comme l'onglet Fichiers (`conversation-git-state.ts`, `stillOwned`) ;
- * - un RUN le change dans sa copie → `git worktree list`, copies `agent__run-*` seulement : une copie
+ * - un RUN le change dans sa copie → `git worktree list`, copies de run seulement (`agent__run-*` ou
+ *   `copies-de-taches/run-*`) : une copie
  *   `agent__command-verify-*` est un INSTANTANÉ du dossier de l'utilisateur, la signaler dénoncerait
  *   chaque fichier en cours une seconde fois ;
  * - il a changé EN AMONT → `HEAD..@{u}`, SANS `git fetch` : la commande ne sort pas du poste et
@@ -36,7 +38,6 @@ const CHEMINS_MAX = 50
 const COPIES_EN_PARALLELE = 6
 const ETAT_COPIE_NON_COMMITE = 'non commité'
 const ETAT_COPIE_COMMITE = 'commité dans la copie, pas encore intégré'
-const PREFIXE_COPIE_DE_RUN = 'agent__run-'
 
 export interface FilProprietaire {
   conversation: string
@@ -169,13 +170,18 @@ interface CopieDeRun {
 async function copiesDeRun(workspace: string): Promise<CopieDeRun[]> {
   const sortie = await git(workspace, ['worktree', 'list', '--porcelain']).catch(() => '')
   const ici = dossierCle(workspace)
-  return sortie
-    .split(/\r?\n/)
-    .filter((ligne) => ligne.startsWith('worktree '))
-    .map((ligne) => ligne.slice('worktree '.length).trim())
-    .filter((dossier) => basename(dossier).startsWith(PREFIXE_COPIE_DE_RUN))
-    .filter((dossier) => dossierCle(dossier) !== ici)
-    .map((dossier) => ({ run: basename(dossier).slice('agent__'.length), dossier }))
+  return (
+    sortie
+      .split(/\r?\n/)
+      .filter((ligne) => ligne.startsWith('worktree '))
+      .map((ligne) => ligne.slice('worktree '.length).trim())
+      .filter((dossier) => dossierCle(dossier) !== ici)
+      // fix-ok: une copie de run se reconnaît à son dossier, sous l'une ou l'autre racine ; une copie de commande ou de fil n'est jamais signalée.
+      .flatMap((dossier) => {
+        const run = runDUneCopieDeRun(dossier)
+        return run === undefined ? [] : [{ run, dossier }]
+      })
+  )
 }
 
 /**

@@ -7,7 +7,7 @@ import { supprimerArbre, supprimerArbreAsync } from '../fichiers/fs-supprimer'
 import { encoderCheminCli, racinesHistoriqueCliPour } from './historique-cli-copie'
 import { DOSSIER_DES_FICHES_DE_SUPPRESSION } from './worktree-manager-copies'
 import { WorktreeManager } from './worktree-manager'
-import { roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /* Le faux home des tests d'historique : `os.homedir` rend `faux.home` quand il est posé. */
 const faux = vi.hoisted(() => ({ home: undefined as string | undefined }))
@@ -133,6 +133,7 @@ function gestionnaire(
 ): WorktreeManager {
   const git = gitFaux(base, inscrites, retrait)
   return new WorktreeManager({
+    racineCopiesDeTaches: racineDe(racine),
     baseRepo: base,
     worktreeRoot: racine,
     git: (repo, args) => git(repo, args).stdout,
@@ -441,9 +442,11 @@ describe('préservation d’une copie : le crochet du dépôt contrôle son comm
     const { base, worktreeRoot } = depotAvecCrochet()
     const copie = copieAvecTravail(base, worktreeRoot, 'run-nom-1', '// ACME\nexport const n = 1\n')
 
-    const issue = new WorktreeManager({ baseRepo: base, worktreeRoot } as never).preserverEtLiberer(
-      'run-nom-1'
-    )
+    const issue = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(worktreeRoot),
+      baseRepo: base,
+      worktreeRoot
+    } as never).preserverEtLiberer('run-nom-1')
 
     expect(issue).toEqual({ outcome: 'refuse', detail: 'le travail n’a pas pu être préservé' })
     expect(existsSync(join(copie, 'src', 'travail.ts'))).toBe(true)
@@ -458,6 +461,7 @@ describe('préservation d’une copie : le crochet du dépôt contrôle son comm
     const copie = copieAvecTravail(base, worktreeRoot, 'run-nom-2', '// ACME\nexport const n = 1\n')
 
     const issue = await new WorktreeManager({
+      racineCopiesDeTaches: racineDe(worktreeRoot),
       baseRepo: base,
       worktreeRoot
     } as never).preserverEtLibererAsync('run-nom-2')
@@ -473,6 +477,7 @@ describe('préservation d’une copie : le crochet du dépôt contrôle son comm
     const { base, worktreeRoot } = depotAvecCrochet()
     const copie = copieAvecTravail(base, worktreeRoot, 'run-nom-3', '// ACME\nexport const n = 1\n')
     const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(worktreeRoot),
       baseRepo: base,
       worktreeRoot,
       nowFn: () => Date.now() + 30 * UN_JOUR_MS
@@ -490,9 +495,11 @@ describe('préservation d’une copie : le crochet du dépôt contrôle son comm
     const { base, worktreeRoot } = depotAvecCrochet()
     const copie = copieAvecTravail(base, worktreeRoot, 'run-propre-1', 'export const n = 1\n')
 
-    const issue = new WorktreeManager({ baseRepo: base, worktreeRoot } as never).preserverEtLiberer(
-      'run-propre-1'
-    )
+    const issue = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(worktreeRoot),
+      baseRepo: base,
+      worktreeRoot
+    } as never).preserverEtLiberer('run-propre-1')
 
     expect(issue.outcome).toBe('preserve-et-libere')
     expect(existsSync(copie)).toBe(false)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WorktreeManager, resoudreCheminWorker } from './worktree-manager'
+import { racineDe } from './worktree-manager.test-helpers'
 
 /**
  * Le worker d'opérations Git : où on le cherche, et ce qui arrive quand une copie est cassée.
@@ -37,6 +38,7 @@ describe('résolution du chemin du worker', () => {
 describe('inventaire de récupération — une copie cassée n’emporte pas les autres', () => {
   const manager = (_jets: { sur: string }): WorktreeManager =>
     new WorktreeManager({
+      racineCopiesDeTaches: racineDe('C:\\copies'),
       baseRepo: 'C:\\repo',
       worktreeRoot: 'C:\\copies',
       disableAsyncOperations: true,

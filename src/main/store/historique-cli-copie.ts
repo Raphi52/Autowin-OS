@@ -37,8 +37,8 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
  * ET l'antislash donnent chacun un tiret).
  *
  * LE PIÈGE, et pourquoi `cheminsPreserves` existe : un run ne tourne pas seulement DANS la copie,
- * mais aussi dans ses sous-dossiers (`<copie>/agent__run-xxx/1`), qui produisent des dossiers
- * d'historique préfixés par celui de la copie. Il faut donc balayer le préfixe — et un balayage par
+ * mais aussi dans ses sous-dossiers (`<copie>/run-xxx/1`, ou `<copie>/agent__run-xxx/1` pour une copie
+ * rangée sous l'ancienne racine), qui produisent des dossiers d'historique préfixés par celui de la copie. Il faut donc balayer le préfixe — et un balayage par
  * préfixe NU détruirait l'historique d'une copie voisine dont le nom commence pareil : effacer
  * `arena-a` emporterait `arena-a-r1`, observé côte à côte sur ce poste. Tout chemin encore présent
  * est donc passé en préservation et coupe le préfixe.

@@ -2,7 +2,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
-import { git, roots, tempRepo } from './worktree-manager.test-helpers'
+import { racineDe, git, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
  * LE DÉFAUT, vécu le 2026-08-27.
@@ -50,7 +50,11 @@ describe('recensement — une coquille de bureau ne parle pas pour l’arbre pri
     writeFileSync(join(repo, 'travail-en-cours.txt'), 'modification de l’utilisateur\n')
     expect(git(repo, 'status', '--porcelain')).not.toBe('')
 
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
     expect(wm.travauxNonPublies()).toEqual([])
   })
 
@@ -63,7 +67,11 @@ describe('recensement — une coquille de bureau ne parle pas pour l’arbre pri
     git(repo, 'worktree', 'add', '-q', '--detach', bureau, 'HEAD')
     writeFileSync(join(bureau, 'livrable.txt'), 'travail jamais committé\n')
 
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
     expect(wm.travauxNonPublies()).toContain('run-vrai-1')
   })
 })

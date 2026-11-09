@@ -30,6 +30,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { avancerLaBaseDuFil } from '../git/photo-du-code'
 import { ouvrirLaCopieDeTache } from '../copies/copie-de-tache'
 import { WorktreeManager } from '../store/worktree-manager'
+import { racineDe } from '../store/worktree-manager.test-helpers'
 
 /** Vrais dépôts git en tmp : sous charge parallèle, le budget vitest par défaut (5 s) est trop court. */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
@@ -1469,7 +1470,11 @@ describe('fil passé en copie — la porte vers la branche locale, jamais une br
     if (!base.ok) throw new Error(base.raison)
     const racine = mkdtempSync(join(tmpdir(), 'autowin-chat-porte-'))
     dirs.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    })
     return {
       repo,
       remote,
@@ -1758,7 +1763,11 @@ describe('fil passé en copie de la racine unique — la porte par la primitive'
     if (!ouverte.ok) throw new Error(ouverte.raison)
     const fileDeCopies = mkdtempSync(join(tmpdir(), 'autowin-chat-file-'))
     dirs.push(fileDeCopies)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: fileDeCopies })
+    const wm = new WorktreeManager({
+      racineCopiesDeTaches: racineDe(fileDeCopies),
+      baseRepo: repo,
+      worktreeRoot: fileDeCopies
+    })
     return {
       repo,
       copie: ouverte.chemin,

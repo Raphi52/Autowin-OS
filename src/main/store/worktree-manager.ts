@@ -1,12 +1,13 @@
 import type { VerdictBureau } from './verdict-bureau'
 import { existsSync, linkSync, rmSync } from 'node:fs'
-import { isAbsolute, join, resolve } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { WorktreeConflictDiffResult } from '../../shared/worktree-activity-model'
 import { WorktreeOperationClient } from './worktree-operation-client'
-import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
+import { donneesDuWorker, type WorktreeRecoveryInventory } from './worktree-operation-protocol'
 import type { LiaisonDependances } from './dependances-copie-agent'
 import { supprimerArbre, supprimerArbreAsync } from '../fichiers/fs-supprimer'
+import { cheminAncienDeCopieAgent, cheminNeufDeCopieAgent } from '../copies/chemins-de-copies'
 import {
   defaultProcessIdentity,
   prechargerEmpreintesProcessus
@@ -137,6 +138,8 @@ export class WorktreeManager {
   derniereLiaisonDependances?: LiaisonDependances
   readonly baseRepo: string
   readonly worktreeRoot: string
+  /** La racine unique des copies de tâche : toute copie d'agent y naît (voir `pathFor`). */
+  readonly racineCopiesDeTaches: string
   /** Voir {@link gitCommonDir} : mémorisé pour le dépôt de base seul, échec compris. */
   baseCommonDir?: { valeur: string | undefined }
   readonly git: GitRunner
@@ -174,8 +177,13 @@ export class WorktreeManager {
   copiesProtegees: ReadonlySet<string> = new Set<string>()
 
   constructor(opts: WorktreeManagerOptions) {
+    // fix-ok: une copie d'agent n'a de chemin que sous la racine unique ; sans elle, le gestionnaire ne peut rien créer et refuse de naître.
+    if (!opts.racineCopiesDeTaches) {
+      throw new Error('Pas de racine unique des copies : ce gestionnaire ne crée aucune copie.')
+    }
     this.baseRepo = opts.baseRepo
     this.worktreeRoot = opts.worktreeRoot
+    this.racineCopiesDeTaches = opts.racineCopiesDeTaches
     this.git = opts.git ?? defaultGit
     this.tryGitFn = opts.tryGitFn ?? tryGit
     const tryGitInjecte = opts.tryGitFn
@@ -211,12 +219,8 @@ export class WorktreeManager {
         timeoutMs: opts.operationTimeoutMs ?? GIT_COMMAND_TIMEOUT_MS + 2_000,
         workerFactory: () =>
           new Worker(operationWorkerPath, {
-            workerData: {
-              baseRepo: this.baseRepo,
-              worktreeRoot: this.worktreeRoot,
-              ...(this.configuredBaseBranch ? { baseBranch: this.configuredBaseBranch } : {}),
-              requireCanonicalRemote: this.requireCanonicalRemote
-            }
+            // fix-ok: le worker reçoit ses données de `donneesDuWorker`, racine unique comprise : c'est lui qui crée la copie pendant la préparation.
+            workerData: donneesDuWorker(this)
           })
       })
     }
@@ -427,9 +431,18 @@ export class WorktreeManager {
     this.discard(agentId)
   }
 
+  /**
+   * Où vit la copie de cet agent : son ancien emplacement si elle y existe déjà (une copie en cours ou
+   * à publication bloquée s'achève là où elle est), sinon l'emplacement neuf, sous la racine unique.
+   */
   pathFor(agentId: string): string {
     assertSafeId(agentId, 'agentId')
-    return join(this.worktreeRoot, `agent__${agentId}`)
+    const ancien = cheminAncienDeCopieAgent(this.worktreeRoot, agentId)
+    // fix-ok: pathFor lit racineCopiesDeTaches ; la copie neuve va sous la racine unique, et l'ancien emplacement ne sert qu'à reprendre une copie qui y existe déjà.
+    if (existsSync(ancien)) return ancien
+    const neuf = cheminNeufDeCopieAgent(this.racineCopiesDeTaches, agentId)
+    if (neuf === null) throw new Error(`Identifiant de copie refusé : ${agentId}`)
+    return neuf
   }
 
   /** Ce commit est-il connu de la base ? (sans jamais lever : `tryGitFn` rend un code.) */

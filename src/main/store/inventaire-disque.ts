@@ -119,3 +119,22 @@ export function menageDemarrage(): MenageDemarrage[] {
 export function oublierMenageDemarrage(): void {
   menageDuDemarrage.length = 0
 }
+
+/**
+ * Les familles NOMMEES qu'Autowin compte sous sa racine de donnees (jamais les caches de Chromium).
+ * `copies-de-taches` porte les copies de fil et d'agent : sans elle, leur poids sortait du total.
+ */
+export const FAMILLES_AUTOWIN_SUR_DISQUE = [
+  'worktrees',
+  'copies-de-taches',
+  'prompt-observability',
+  'causal-trace',
+  'turn-journals',
+  'run-stdout',
+  'runs',
+  'chat-artifacts',
+  'transcripts',
+  'activity',
+  'trace',
+  'semantic-timeline'
+]

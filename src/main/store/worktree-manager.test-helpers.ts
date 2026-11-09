@@ -14,7 +14,7 @@ import { expect } from 'vitest'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 
@@ -70,10 +70,29 @@ export function tempRepo(): string {
   return dir
 }
 
+/**
+ * La racine unique d'un gestionnaire de test : un dossier FRÈRE de son dossier d'avant, et non un enfant,
+ * pour que ses copies n'apparaissent pas dans la liste de ce dossier. Deux gestionnaires qui partagent un
+ * dossier d'avant partagent cette racine, comme en production. Le chemin ne crée rien : git ouvre les
+ * dossiers qu'il faut, et seul un chemin sous le dossier temporaire est nettoyé après le test.
+ */
+export function racineDe(worktreeRoot: string): string {
+  const racine = `${worktreeRoot}-copies-de-taches`
+  // fix-ok: racineDe ne crée aucun dossier, donc un chemin fictif (`C:/…`) ne touche pas le disque ; le test `worktree-manager.fabrique-worker.test.ts` espionne `mkdirSync` et échoue si ce helper en crée un.
+  if (resolve(worktreeRoot).startsWith(resolve(tmpdir())) && !roots.includes(racine)) {
+    roots.push(racine)
+  }
+  return racine
+}
+
 export function manager(repo: string): WorktreeManager {
   const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
   roots.push(wtRoot)
-  return new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+  return new WorktreeManager({
+    baseRepo: repo,
+    worktreeRoot: wtRoot,
+    racineCopiesDeTaches: racineDe(wtRoot)
+  })
 }
 
 export function detachedCommit(

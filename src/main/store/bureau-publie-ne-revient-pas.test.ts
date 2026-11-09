@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
+import { racineDe } from './worktree-manager.test-helpers'
 
 /**
  * UN BUREAU PUBLIE NE DOIT PLUS REDEVENIR UN BUREAU EN ATTENTE.
@@ -64,7 +65,14 @@ function depot(): string {
 function gestionnaire(repo: string): { manager: WorktreeManager; racine: string } {
   const racine = mkdtempSync(join(tmpdir(), 'autowin-publieroot-'))
   racines.push(racine)
-  return { manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: racine }), racine }
+  return {
+    manager: new WorktreeManager({
+      racineCopiesDeTaches: racineDe(racine),
+      baseRepo: repo,
+      worktreeRoot: racine
+    }),
+    racine
+  }
 }
 
 /**
