@@ -96,7 +96,7 @@ export async function runInner(
     throw new Error("Snapshot runtime manquant dans le coeur d'orchestration")
   }
   if (conversationId || turnId) this.costContextByRun.set(runId, { conversationId, turnId })
-  const { registry, roles, trust } = this.deps
+  const { roles, trust } = this.deps
   const cost = this.costFor(runId)
   // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
   // chaîne de précédence et le plie dans chaque system → source unique, quel que soit le modèle.
@@ -110,6 +110,8 @@ export async function runInner(
     trace.push(s)
     onStep?.(s)
   }
+  // Tous les envois de ce parcours, chemin simple et modèles en parallèle compris.
+  const registry = this.registreDuRun(runId, push)
   /**
    * LES PISTES DEJA PROPOSEES sur ce depot (`scout-memoire.ts`), lues UNE fois, avant tout scout du
    * run : une reparation du scout ne doit pas se voir interdire sa propre liste. Une memoire

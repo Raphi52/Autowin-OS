@@ -86,6 +86,11 @@ export interface SendOptions {
      * `orchestrate` — la fermeture du catalogue, elle, ne tient plus.
      */
     inheritMachineMcp?: boolean
+    /**
+     * Ne servir QUE le serveur d'Autowin, sans les serveurs MCP déclarés par l'utilisateur : une
+     * étape de lot reçoit le seul outil pour écrire au chef (`orchestration/outils-du-lot.ts`).
+     */
+    sansServeursUtilisateur?: boolean
   }
   /** Niveau d'effort choisi dans Agents, si le provider le supporte. */
   reasoningEffort?: string

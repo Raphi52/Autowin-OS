@@ -345,6 +345,7 @@ import { candidatsInternesDuDepot } from '../veille/audit-depot'
 import { dispatcherAvecVeille } from '../veille/dispatch-veille'
 import { deposerOrientationDuFil } from '../conversations/orientations-en-cours-app'
 import type { ContexteIpcChat } from '../index'
+import { lanceurDuLot } from '../orchestration/outils-du-lot'
 
 // Extrait tel quel d’index.ts (lot 5) : l’enregistrement des IPC du chat pesait ~3 500 lignes
 // du démarrage. Le corps est INCHANGÉ ; l’état du module principal arrive par `ctx`. Les `let` du
@@ -3260,6 +3261,14 @@ Le fil reprend ensuite normalement.`
   })
   bus.plansDeLots = coordinateurDesPlans
   suiviDesPlans.coordinateur = coordinateurDesPlans
+  // Les étapes d'un run lancé par un fil de lot écrivent au chef, signées de ce fil.
+  os.setOutilsDuLot((conversationId) =>
+    lanceurDuLot(conversationId, {
+      estUnLot: (fil) => coordinateurDesPlans.planDuFil(fil)?.role === 'enfant',
+      exec: (name, args, fil) => bus.exec(name, args, fil),
+      catalogue: () => bus.catalog()
+    })
+  )
   // POINT D'ENTRÉE LOCAL : un script du poste crée un fil, y lance un tour et le relit,
   // par le même protocole que les outils du chat. Ouvert ICI, une fois `chat_send` et la sonde
   // `tourDeChatActif` câblés. Le jeton n'est jamais journalisé : il ne vit que dans le fichier.

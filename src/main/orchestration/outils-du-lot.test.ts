@@ -1,0 +1,141 @@
+import { describe, expect, it } from 'vitest'
+import type { SendOptions, SendResult } from '../providers/types'
+import { argumentsMcpNoeudSkill } from '../providers/claude'
+import {
+  etapeQuiRecoitLesOutilsDuLot,
+  lanceurDuLot,
+  registreAvecOutilsDuLot
+} from './outils-du-lot'
+
+const specs = [
+  { name: 'ecrire_a_un_fil', description: 'écrire', args: {} },
+  { name: 'orchestrate', description: 'lancer un run', args: {} }
+]
+
+describe('lanceurDuLot — l’outil d’une étape de lot', () => {
+  const appels: Array<{ name: string; fil: string }> = []
+  const deps = {
+    estUnLot: (fil: string) => fil === 'conv-lot',
+    exec: async (name: string, _args: Record<string, unknown>, fil: string) => {
+      appels.push({ name, fil })
+      return { ok: true }
+    },
+    catalogue: () => specs
+  }
+
+  it('rien pour un fil hors plan ou sans fil', () => {
+    expect(lanceurDuLot('conv-seul', deps)).toBeUndefined()
+    expect(lanceurDuLot(undefined, deps)).toBeUndefined()
+  })
+
+  it('signe le message du fil du lot et refuse toute autre commande', async () => {
+    appels.length = 0
+    const lanceur = lanceurDuLot('conv-lot', deps)!
+    await lanceur.exec('ecrire_a_un_fil', { destinataire: 'conv-chef', texte: '?' })
+    const refus = await lanceur.exec('orchestrate', { task: 'x' })
+    expect(appels).toEqual([{ name: 'ecrire_a_un_fil', fil: 'conv-lot' }])
+    expect(refus.ok).toBe(false)
+    expect(lanceur.catalogue!().map((s) => s.name)).toEqual(['ecrire_a_un_fil'])
+  })
+})
+
+describe('etapeQuiRecoitLesOutilsDuLot — quels envois portent l’outil', () => {
+  const envoi = (phaseAppelante: string, extra: Partial<SendOptions> = {}): SendOptions =>
+    ({
+      execution: { cwd: 'C:\\ws', sandbox: 'full-access', phaseAppelante },
+      ...extra
+    }) as SendOptions
+
+  it('une étape build sur claude ou codex, oui', () => {
+    expect(etapeQuiRecoitLesOutilsDuLot('claude', envoi('build'))).toBe(true)
+    expect(etapeQuiRecoitLesOutilsDuLot('codex', envoi('frame'))).toBe(true)
+  })
+
+  it('le juge, un nœud skill, un envoi hors étape ou un fournisseur sans outils natifs, non', () => {
+    expect(etapeQuiRecoitLesOutilsDuLot('claude', envoi('judge'))).toBe(false)
+    expect(etapeQuiRecoitLesOutilsDuLot('claude', envoi('think'))).toBe(false)
+    expect(
+      etapeQuiRecoitLesOutilsDuLot(
+        'claude',
+        envoi('build', { skillNodeTools: { mcpConfig: '{}', allowedTools: [] } })
+      )
+    ).toBe(false)
+    expect(etapeQuiRecoitLesOutilsDuLot('claude', {})).toBe(false)
+    expect(etapeQuiRecoitLesOutilsDuLot('gemini', envoi('build'))).toBe(false)
+  })
+})
+
+describe('registreAvecOutilsDuLot — le registre du run', () => {
+  const resultat: SendResult = { text: 'ok', provider: 'claude', systemInjected: false }
+
+  it('laisse passer tel quel l’envoi du juge, et le serveur est fermé après une étape', async () => {
+    const vus: SendOptions[] = []
+    const registre = {
+      send: async (_id: string, _m: unknown[], opts: SendOptions = {}) => {
+        vus.push(opts)
+        return resultat
+      },
+      ids: () => ['claude']
+    }
+    const lanceur = { exec: async () => ({ ok: true }), catalogue: () => specs }
+    const details: string[] = []
+    const enveloppe = registreAvecOutilsDuLot(
+      registre,
+      () => lanceur,
+      (s) => {
+        if (s.detail) details.push(s.detail)
+      }
+    )
+    const judge = { execution: { cwd: 'C:\\ws', sandbox: 'read-only', phaseAppelante: 'judge' } }
+    const build = { execution: { cwd: 'C:\\ws', sandbox: 'full-access', phaseAppelante: 'build' } }
+    await enveloppe.send('claude', [], judge as SendOptions)
+    await enveloppe.send('claude', [], build as SendOptions)
+    expect(vus[0]?.skillNodeTools).toBeUndefined()
+    expect(vus[1]?.skillNodeTools?.allowedTools).toEqual(['mcp__autowin__ecrire_a_un_fil'])
+    // Les autres méthodes du registre restent celles du registre.
+    expect(enveloppe.ids()).toEqual(['claude'])
+    const serveur = JSON.parse(vus[1]!.skillNodeTools!.mcpConfig).mcpServers.autowin
+    await expect(
+      fetch(serveur.url, { method: 'POST', headers: serveur.headers, body: '{}' })
+    ).rejects.toThrow()
+    expect(details.some((d) => d.includes('outil servi à build pour écrire au chef'))).toBe(true)
+  })
+})
+
+describe('argumentsMcpNoeudSkill — une étape de lot ne reçoit pas les serveurs de l’utilisateur', () => {
+  const serveurUtilisateur = {
+    id: 'perso',
+    nom: 'perso',
+    commande: 'node',
+    args: [],
+    env: {},
+    actif: true
+  }
+  const config = JSON.stringify({
+    mcpServers: { autowin: { type: 'http', url: 'http://127.0.0.1:1' } }
+  })
+
+  it('sansServeursUtilisateur : seul le serveur d’Autowin, et --strict-mcp-config', () => {
+    const args = argumentsMcpNoeudSkill(
+      {
+        skillNodeTools: {
+          mcpConfig: config,
+          allowedTools: ['mcp__autowin__ecrire_a_un_fil'],
+          sansServeursUtilisateur: true
+        }
+      },
+      [serveurUtilisateur] as never
+    )
+    expect(args.strict).toEqual(['--strict-mcp-config'])
+    expect(args.autorises).toEqual(['mcp__autowin__ecrire_a_un_fil'])
+    expect(JSON.parse(args.mcp[1]!).mcpServers).not.toHaveProperty('perso')
+  })
+
+  it('sans le drapeau, la fusion des serveurs de l’utilisateur reste celle d’avant', () => {
+    const args = argumentsMcpNoeudSkill(
+      { skillNodeTools: { mcpConfig: config, allowedTools: ['mcp__autowin__x'] } },
+      [serveurUtilisateur] as never
+    )
+    expect(JSON.parse(args.mcp[1]!).mcpServers).toHaveProperty('perso')
+  })
+})

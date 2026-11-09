@@ -22,7 +22,8 @@ import { identifiantBureauCache } from '../consignes/consigne-bureau-cache'
 import { explainRoleFailure } from '../providers/provider-failure-diagnosis'
 import { retryOnTransientOverload } from '../providers/transient-overload'
 import { promptOutilsNoeudSkill } from '../skills/skill-node-tools'
-import { OrchestrationRuntimeSnapshot, OrchestratorDeps, PhasePromptBlock, RunAgentRef, WorkflowRunOverride, bindingDeRepliPourPhase, jetonDeReservation } from './orchestrator-contrats'
+import { OrchestrationRuntimeSnapshot, OrchestrationStep, OrchestratorDeps, PhasePromptBlock, RunAgentRef, WorkflowRunOverride, bindingDeRepliPourPhase, jetonDeReservation } from './orchestrator-contrats'
+import { registreAvecOutilsDuLot } from './outils-du-lot'
 // Partie hors classe déplacée dans orchestrator-contrats.ts, ré-exportée à l'identique.
 import { run } from './orchestrator-run'
 import { runGreedyPipeline, greedyJudgeAndGate, runGreedyBuildPhase } from './orchestrator-parcours-glouton'
@@ -554,6 +555,17 @@ export class Orchestrator {
   costFor(runId: string): CostSink {
     const context = this.costContextByRun.get(runId)
     return context ? withCostContext(this.deps.cost, context) : this.deps.cost
+  }
+
+  /** Le registre des envois du run : ceux d'une étape de lot portent l'outil pour écrire au chef. */
+  registreDuRun(
+    runId: string,
+    push?: (s: OrchestrationStep) => void
+  ): OrchestratorDeps['registry'] {
+    const fil = this.costContextByRun.get(runId)?.conversationId
+    const outilsDuLot = this.deps.outilsDuLot
+    if (!fil || !outilsDuLot) return this.deps.registry
+    return registreAvecOutilsDuLot(this.deps.registry, () => outilsDuLot(fil), push)
   }
 
   causalWatchPathsFor(cwd: string, runId: string): string[] {
