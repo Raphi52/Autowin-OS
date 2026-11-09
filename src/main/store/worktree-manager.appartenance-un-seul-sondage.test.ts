@@ -62,7 +62,9 @@ describe('ownershipIssue — un seul sondage git-common-dir par copie', () => {
       wm as unknown as { ownershipIssue(p: string): string | undefined }
     ).ownershipIssue(copie)
     expect(issue).toBeUndefined()
-    expect(appels.filter((a) => a.startsWith(copie) && a.includes('--git-common-dir'))).toHaveLength(1)
+    expect(
+      appels.filter((a) => a.startsWith(copie) && a.includes('--git-common-dir'))
+    ).toHaveLength(1)
     // Un seul lancement git sur la copie par verification (etait 3 : gels.jsonl 2026-09-24).
     expect(appels.filter((a) => a.startsWith(copie))).toHaveLength(1)
   })

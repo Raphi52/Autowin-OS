@@ -53,7 +53,12 @@ const monter = (): { repo: string; wm: WorktreeManager } => {
 }
 
 /** Une branche de secours portant un vrai commit, comme en produit `preserverEtLiberer`. */
-const brancheDeSecours = (repo: string, agentId: string, fichier: string, contenu: string): void => {
+const brancheDeSecours = (
+  repo: string,
+  agentId: string,
+  fichier: string,
+  contenu: string
+): void => {
   const depart = git(repo, 'rev-parse', 'HEAD')
   git(repo, 'branch', `autowin/recovery/${agentId}`, depart)
   const wt = mkdtempSync(join(tmpdir(), 'autowin-br-'))

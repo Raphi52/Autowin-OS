@@ -1925,7 +1925,9 @@ describe('AppCommandBus command execution policy', () => {
     }
     // L'utilisateur demande son ecran : seule cette demande autorise un geste reel.
     const os = fakeOs()
-    os.conversations.get('conv-1').messages.push({ role: 'user', content: 'clique sur mon ecran', ts: 2 })
+    os.conversations
+      .get('conv-1')
+      .messages.push({ role: 'user', content: 'clique sur mon ecran', ts: 2 })
     const bus = new AppCommandBus(
       os,
       () => {},
@@ -1949,9 +1951,17 @@ describe('AppCommandBus command execution policy', () => {
       attachments: [image]
     })
     // Premier geste du tour toujours refuse, meme drapeau pose.
-    await bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true }, 'conv-1')
+    await bus.exec(
+      'desktop_act',
+      { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true },
+      'conv-1'
+    )
     await expect(
-      bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true }, 'conv-1')
+      bus.exec(
+        'desktop_act',
+        { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true },
+        'conv-1'
+      )
     ).resolves.toMatchObject({ ok: true, data: { executed: 1 } })
     expect(desktop.act).toHaveBeenCalledWith([{ type: 'click', x: 10, y: 20 }])
   })
@@ -2303,7 +2313,6 @@ describe('AppCommandBus command execution policy', () => {
     expect(reconcile).toHaveBeenCalledWith('run-orphelin', expect.any(Function))
     expect(observedResumeControl).toMatchObject({ usage: { activeCalls: 0 } })
   })
-
 
   it('rattache la demande au run VIVANT au lieu de tenter une reprise refusee', async () => {
     // Mesure (2026-09-18, 06:41 puis 06:45) : le mode auto lance run-1c4e103133ad-1 avec
@@ -2684,7 +2693,9 @@ describe('orchestrate transmet le fichier de la sortie entière', () => {
   })
 
   it('sans sortie d’étape à écrire : la copie de run-livrables, telle que le run la rend', async () => {
-    expect(await lancer([{ phase: 'scout', text: '  ' }])).toBe('D:/donnees/run-livrables/run-abc-1.md')
+    expect(await lancer([{ phase: 'scout', text: '  ' }])).toBe(
+      'D:/donnees/run-livrables/run-abc-1.md'
+    )
   })
 })
 

@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -99,7 +107,10 @@ function busSur(repo: string): AppCommandBus {
     endAsync: async (): Promise<unknown> => undefined,
     end: (): unknown => undefined
   }
-  return new AppCommandBus({ executionWorkspace: repo, worktrees: differe } as never, () => undefined)
+  return new AppCommandBus(
+    { executionWorkspace: repo, worktrees: differe } as never,
+    () => undefined
+  )
 }
 
 describe('edit_file — le bureau porte le fichier VIVANT, pas celui du dernier commit', () => {

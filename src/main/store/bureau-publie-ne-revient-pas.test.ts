@@ -143,7 +143,8 @@ describe('un bureau PUBLIE ne redevient pas un bureau en attente', () => {
 
     manager.reconcileResidues({ balayer: false })
 
-    const survit = existsSync(range) || existsSync(join(racine, 'agent__command-edit-irremplacable'))
+    const survit =
+      existsSync(range) || existsSync(join(racine, 'agent__command-edit-irremplacable'))
     expect(survit).toBe(true)
   })
 })

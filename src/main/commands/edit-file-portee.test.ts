@@ -598,7 +598,11 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
    */
   it('remesure en suite COMPLÈTE quand la portée ne joue aucun test, puis publie sur cette preuve', async () => {
     const { repo, git } = depotDejaRouge()
-    writeFileSync(join(repo, 'orphelin.ts'), 'export const orphelin = (): number => 1' + SAUT, 'utf8')
+    writeFileSync(
+      join(repo, 'orphelin.ts'),
+      'export const orphelin = (): number => 1' + SAUT,
+      'utf8'
+    )
     git('add', '-A')
     git('commit', '-q', '-m', 'fichier de code sans test associe')
 
@@ -641,10 +645,17 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     rmSync(join(repo, 'etranger.test.ts'))
     writeFileSync(
       join(repo, 'package.json'),
-      JSON.stringify({ name: 'depot-neutralise', scripts: { 'test:unit': 'vitest run --passWithNoTests' } }),
+      JSON.stringify({
+        name: 'depot-neutralise',
+        scripts: { 'test:unit': 'vitest run --passWithNoTests' }
+      }),
       'utf8'
     )
-    writeFileSync(join(repo, 'orphelin.ts'), 'export const orphelin = (): number => 1' + SAUT, 'utf8')
+    writeFileSync(
+      join(repo, 'orphelin.ts'),
+      'export const orphelin = (): number => 1' + SAUT,
+      'utf8'
+    )
     git('add', '-A')
     git('commit', '-q', '-m', 'depot sans aucun test')
 
@@ -780,7 +791,10 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
       Buffer.from('// calcul', 'latin1'),
       Buffer.from([0xe9]),
       // CRLF sans sequence d'echappement, comme le reste de ce fichier (cf. `SAUT`).
-      Buffer.from(' vieux fichier' + CRLF + 'export const legacy = (): number => 1' + CRLF, 'latin1')
+      Buffer.from(
+        ' vieux fichier' + CRLF + 'export const legacy = (): number => 1' + CRLF,
+        'latin1'
+      )
     ])
     writeFileSync(join(repo, 'legacy.ts'), octetsLegacy)
     git('add', '-A')

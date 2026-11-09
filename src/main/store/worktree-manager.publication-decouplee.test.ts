@@ -207,7 +207,8 @@ describe('jamais publié sans l’être', () => {
     // Tout passe au vrai git, SAUF les écritures du chemin de publication qu'on fait échouer.
     const tryGitFn = (dir: string, args: string[]) => {
       const cible =
-        (args.includes('update-ref') && args.some((a) => a.startsWith('refs/autowin/publications/'))) ||
+        (args.includes('update-ref') &&
+          args.some((a) => a.startsWith('refs/autowin/publications/'))) ||
         (args.includes('merge') && args.includes('--ff-only'))
       if (cible) {
         interceptions += 1

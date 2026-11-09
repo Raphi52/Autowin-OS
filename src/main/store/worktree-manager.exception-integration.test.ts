@@ -30,7 +30,10 @@ describe('finalisation : une exception inattendue reste diagnosticable', () => {
     roots.push(wtRoot)
 
     const SENTINELLE = 'EPERM: git a été tué par l’antivirus'
-    const tryGitFn = (dir: string, args: string[]): { code: number; stdout: string; stderr: string } => {
+    const tryGitFn = (
+      dir: string,
+      args: string[]
+    ): { code: number; stdout: string; stderr: string } => {
       // Seul le merge d'intégration jette : tout le reste du chemin doit rester réel, sinon on
       // testerait un scénario que la production ne produit jamais.
       if (args.includes('merge') && args.includes('--no-edit')) throw new Error(SENTINELLE)

@@ -747,7 +747,7 @@ describe('récupération des worktrees après redémarrage', () => {
     expect(current.manager.listAgentIds()).toEqual([])
   })
 
-  it("publie un travail accompagné de ses captures de preuve dans Audit/", () => {
+  it('publie un travail accompagné de ses captures de preuve dans Audit/', () => {
     // Mesuré le 2026-08-21 (conv-1362) : le run « fond 3d animé » a produit sa preuve avec
     // `ui-capture --out Audit/accueil-3d-anime.png`, dans un dossier ignoré — et le refus des
     // ignorés non régénérables a bloqué SON PROPRE code, vert, avec le motif `merge-failed`.

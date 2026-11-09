@@ -114,7 +114,11 @@ describe('commitsDejaReferences — une commande, la meme verite', () => {
     const { base, worktreeRoot, copie } = copieOrpheline()
     const orphelin = git(copie, 'rev-parse', 'HEAD')
     const retenu = git(base, 'rev-parse', 'HEAD')
-    const reponse = manager(base, worktreeRoot).commitsDejaReferences([retenu, orphelin, 'pas-un-sha'])
+    const reponse = manager(base, worktreeRoot).commitsDejaReferences([
+      retenu,
+      orphelin,
+      'pas-un-sha'
+    ])
     expect(reponse.get(retenu)).toBe(true)
     expect(reponse.get(orphelin)).toBe(false)
     expect(reponse.get('pas-un-sha')).toBeUndefined()
