@@ -23,7 +23,7 @@ import {
  * Scout (2026-10-22) : 514 appels git faits à la main dans 143 journaux (`status`, `diff`,
  * `log`, `fetch`) et un vrai conflit dans les traces (`>>>>>>> 05a597f5 (conv-1074`). L'app SAVAIT
  * déjà quel fil avait touché quel fichier (`conversation-file-trace-spool.ts`) ; seule l'interface
- * le lisait, et seulement pour le fil affiché. Trois questions, trois sources :
+ * le lisait, et seulement pour le fil affiché. Quatre questions, quatre sources :
  * - un AUTRE FIL a modifié ce fichier sans le commiter → journal des fichiers, recoupé avec le diff
  *   actuel exactement comme l'onglet Fichiers (`conversation-git-state.ts`, `stillOwned`) ;
  * - un RUN ou un autre FIL le change dans sa copie → `git worktree list`, copies de run (`agent__run-*`,
@@ -32,6 +32,10 @@ import {
  *   l'utilisateur, la signaler dénoncerait chaque fichier en cours une seconde fois. Une copie de fil
  *   revient dans le même main que les autres : deux fils qui changent un fichier ne s'écrasent plus,
  *   ils se heurtent à la fusion ;
+ * - posée depuis une copie, il est modifié et non commité dans le DOSSIER PRINCIPAL, où toutes les
+ *   copies reviennent → `git status` de ce dossier, recoupé avec le journal des fichiers comme le
+ *   dossier interrogé : un fil qui y travaille sans copie, ou une retouche à la main, ne se voyait
+ *   qu'au moment où la copie n'arrivait pas à y entrer ;
  * - il a changé EN AMONT → `HEAD..@{u}`, SANS `git fetch` : la commande ne sort pas du poste et
  *   rend la date du dernier fetch, pour que l'agent sache de quand date la réponse.
  */
@@ -62,6 +66,11 @@ export interface ProprietaireDeFichier {
   copiesDeRun: { run: string; etat: string }[]
   /** `toi` : la copie du fil qui pose la question, vue d'un autre dossier (la copie d'un run de ses lots). */
   copiesDeFil: { conversation: string; etat: string; toi?: true }[]
+  /**
+   * Posée depuis une copie : le même chemin dans le dossier principal. `fils` n'y est lu que si le
+   * chemin y est non commité. Absent quand la question vient du dossier principal lui-même.
+   */
+  dossierPrincipal?: { nonCommite: boolean; fils: FilProprietaire[] }
   amont: { branche?: string; commits: string[] }
   resume: string
 }
@@ -74,6 +83,8 @@ export interface ReponseProprietaire {
   copiesDeRunIllisibles: number
   copiesDeFilLues: number
   copiesDeFilIllisibles: number
+  /** Posée depuis une copie dont le dossier principal n'a pas pu être lu : `dossierPrincipal` manque. */
+  dossierPrincipalIllisible?: true
 }
 
 const executer = promisify(execFile)
@@ -189,8 +200,8 @@ interface CopieALire {
 
 interface CopiesDuDepot {
   copies: CopieALire[]
-  /** Le dossier principal du dépôt, où toutes les copies reviennent : sa tête et sa branche. */
-  principal: { tete?: string; branche?: string }
+  /** Le dossier principal du dépôt, où toutes les copies reviennent : son chemin, sa tête, sa branche. */
+  principal: { dossier?: string; tete?: string; branche?: string }
 }
 
 async function copiesDuDepot(workspace: string): Promise<CopiesDuDepot> {
@@ -217,7 +228,15 @@ async function copiesDuDepot(workspace: string): Promise<CopiesDuDepot> {
     const fil = filDUneCopieDeFil(dossier)
     return fil === undefined ? [] : [{ dossier, fil }]
   })
-  return { copies, principal: { tete: champ(premier, 'HEAD'), ...(branche ? { branche } : {}) } }
+  const dossier = champ(premier, 'worktree')
+  return {
+    copies,
+    principal: {
+      ...(dossier ? { dossier } : {}),
+      tete: champ(premier, 'HEAD'),
+      ...(branche ? { branche } : {})
+    }
+  }
 }
 
 /**
@@ -266,6 +285,61 @@ async function cheminsChangesDansLaCopie(
   }
 }
 
+type EtatDansLePrincipal = NonNullable<ProprietaireDeFichier['dossierPrincipal']>
+
+/**
+ * Le relevé du dossier interrogé, refait dans le dossier principal : `git status` borné aux chemins
+ * demandés, puis les fils tracés sur ceux qui y sont non commités. `null` s'il est illisible.
+ * `--no-optional-locks` : d'autres fils y fusionnent leur copie ; un `status` qui rafraîchit l'index
+ * prendrait `index.lock` et ferait échouer leur fusion.
+ */
+async function lireLeDossierPrincipal(
+  dossier: string,
+  relatifs: readonly string[],
+  spoolBase: string,
+  conversationId: string | undefined
+): Promise<Map<string, EtatDansLePrincipal> | null> {
+  let statut: string
+  try {
+    statut = await git(dossier, [
+      '--no-optional-locks',
+      'status',
+      '--porcelain=v1',
+      '-z',
+      '--untracked-files=all',
+      '--',
+      ...relatifs
+    ])
+  } catch {
+    return null
+  }
+  const nonCommites = new Set(cheminsDuStatut(statut).map(cle))
+  const owners = readCurrentPathOwners(dossier, relatifs, spoolBase)
+  const aRecouper = relatifs.some(
+    (relatif, i) => nonCommites.has(cle(relatif)) && (owners[i]?.length ?? 0) > 0
+  )
+  // L'instantané hache tout le diff du dossier : seulement s'il y a un fil à recouper.
+  const empreintes = aRecouper
+    ? new Map(
+        [...(await captureWorkspaceMutationSnapshot(dossier))].map(([path, empreinte]) => [
+          cle(path),
+          empreinte
+        ])
+      )
+    : new Map<string, string>()
+  return new Map(
+    await Promise.all(
+      relatifs.map(async (relatif, i): Promise<[string, EtatDansLePrincipal]> => {
+        const nonCommite = nonCommites.has(cle(relatif))
+        const fils = nonCommite
+          ? await filsDuChemin(dossier, owners[i] ?? [], empreintes, conversationId)
+          : []
+        return [cle(relatif), { nonCommite, fils }]
+      })
+    )
+  )
+}
+
 async function brancheAmont(workspace: string): Promise<string | undefined> {
   try {
     const branche = (
@@ -286,40 +360,75 @@ async function dateDuDernierFetch(workspace: string): Promise<string> {
   }
 }
 
+interface LieuDuNonCommite {
+  /** Accolé à « non commité » : vide pour le dossier interrogé. */
+  ou: string
+  conseilAutreFil: string
+  /** Lu quand aucun fil n'est tracé sur le chemin. */
+  sansFil: string
+}
+
+function constatsDuNonCommite(fils: readonly FilProprietaire[], lieu: LieuDuNonCommite): string[] {
+  const constats: string[] = []
+  const tenus = fils.filter((fil) => fil.diffInchange)
+  const autres = tenus.filter((fil) => !fil.toi)
+  const miens = tenus.filter((fil) => fil.toi)
+  if (autres.length > 0) {
+    constats.push(
+      `modifié et non commité${lieu.ou} par ${autres.map(decrireFil).join(' ; ')} — c'est le ` +
+        `travail d'un AUTRE fil : ${lieu.conseilAutreFil}`
+    )
+  }
+  if (miens.length > 0) {
+    constats.push(
+      `modifié et non commité${lieu.ou} par ce fil (${miens.map(decrireFil).join(' ; ')})`
+    )
+  }
+  if (tenus.length === 0 && fils.length > 0) {
+    constats.push(
+      `touché${lieu.ou} par ${fils.map(decrireFil).join(' ; ')}, puis retouché depuis hors de tout ` +
+        "fil tracé : le diff actuel n'est plus le sien (l'utilisateur à la main, ou un outil hors journal)"
+    )
+  }
+  if (fils.length === 0) constats.push(`modifié et non commité${lieu.ou}, ${lieu.sansFil}`)
+  return constats
+}
+
+const SANS_FIL_TRACE = "sans aucun fil tracé : l'utilisateur à la main, ou un outil hors journal"
+
 /**
  * `copieQuiDemande` : le run ou le fil dont le dossier interrogé est la copie. Seul son agent y écrit,
  * et ses écritures n'ont de trace qu'en fin d'appel : un changement non commité sans fil tracé y est
  * son travail en cours, pas une retouche à la main.
  */
-function resumer(f: Omit<ProprietaireDeFichier, 'resume'>, copieQuiDemande?: string): string {
+function resumer(
+  f: Omit<ProprietaireDeFichier, 'resume'>,
+  copieQuiDemande?: string,
+  dossierPrincipal?: string
+): string {
   if (f.refus) return `refusé : ${f.refus}`
   const constats: string[] = []
-  const tenus = f.fils.filter((fil) => fil.diffInchange)
-  const autres = tenus.filter((fil) => !fil.toi)
-  const miens = tenus.filter((fil) => fil.toi)
   if (f.nonCommite) {
-    if (autres.length > 0) {
-      constats.push(
-        `modifié et non commité par ${autres.map(decrireFil).join(' ; ')} — c'est le travail ` +
-          "d'un AUTRE fil : relis-le juste avant d'écrire, remplacements ciblés, jamais de réécriture entière"
-      )
-    }
-    if (miens.length > 0) {
-      constats.push(`modifié et non commité par ce fil (${miens.map(decrireFil).join(' ; ')})`)
-    }
-    if (tenus.length === 0 && f.fils.length > 0) {
-      constats.push(
-        `touché par ${f.fils.map(decrireFil).join(' ; ')}, puis retouché depuis hors de tout fil ` +
-          "tracé : le diff actuel n'est plus le sien (l'utilisateur à la main, ou un outil hors journal)"
-      )
-    }
-    if (f.fils.length === 0) {
-      constats.push(
-        copieQuiDemande
-          ? `modifié et non commité, le travail en cours de cette copie (${copieQuiDemande})`
-          : "modifié et non commité, sans aucun fil tracé : l'utilisateur à la main, ou un outil hors journal"
-      )
-    }
+    constats.push(
+      ...constatsDuNonCommite(f.fils, {
+        ou: '',
+        conseilAutreFil:
+          "relis-le juste avant d'écrire, remplacements ciblés, jamais de réécriture entière",
+        sansFil: copieQuiDemande
+          ? `le travail en cours de cette copie (${copieQuiDemande})`
+          : SANS_FIL_TRACE
+      })
+    )
+  }
+  if (f.dossierPrincipal?.nonCommite) {
+    // Seul l'agent d'une copie y écrit : la règle « sans fil tracé = travail de la copie » s'arrête là.
+    constats.push(
+      ...constatsDuNonCommite(f.dossierPrincipal.fils, {
+        ou: ` dans le dossier principal (${dossierPrincipal ?? 'du dépôt'})`,
+        conseilAutreFil: "ta copie y reviendra : attends qu'il soit commité, ou pars de sa version",
+        sansFil: SANS_FIL_TRACE
+      })
+    )
   }
   for (const copie of f.copiesDeRun) {
     constats.push(`en cours dans la copie du run ${copie.run} (${copie.etat})`)
@@ -419,11 +528,17 @@ export async function lireProprietairesDeFichiers(entree: {
   ]
   const nonCommites = new Set((etatGit.state?.changes ?? []).map((c) => cle(c.path)))
   const empreintes = new Map([...instantane].map(([path, empreinte]) => [cle(path), empreinte]))
-  const owners = readCurrentPathOwners(
-    workspace,
-    relatifs,
-    entree.spoolBase ?? ensureAutowinAppData()
-  )
+  const spool = entree.spoolBase ?? ensureAutowinAppData()
+  const owners = readCurrentPathOwners(workspace, relatifs, spool)
+  // Posée depuis une copie, la question lit aussi le dossier principal, où cette copie reviendra.
+  const dossierPrincipal =
+    principal.dossier !== undefined && dossierCle(principal.dossier) !== dossierCle(workspace)
+      ? principal.dossier
+      : undefined
+  const dansLePrincipal =
+    dossierPrincipal !== undefined && relatifs.length > 0
+      ? await lireLeDossierPrincipal(dossierPrincipal, relatifs, spool, entree.conversationId)
+      : undefined
   const ownersParCle = new Map(relatifs.map((relatif, i) => [cle(relatif), owners[i] ?? []]))
   const parCopie =
     relatifs.length === 0
@@ -480,9 +595,12 @@ export async function lireProprietairesDeFichiers(entree: {
           const toi = copie.fil === entree.conversationId
           return [{ conversation: copie.fil, etat, ...(toi ? { toi: true as const } : {}) }]
         }),
+        ...(dansLePrincipal
+          ? { dossierPrincipal: dansLePrincipal.get(k) ?? { nonCommite: false, fils: [] } }
+          : {}),
         amont: { ...(amont ? { branche: amont } : {}), commits: commitsAmont.get(k) ?? [] }
       }
-      return { ...fichier, resume: resumer(fichier, copieQuiDemande) }
+      return { ...fichier, resume: resumer(fichier, copieQuiDemande, dossierPrincipal) }
     })
   )
   return {
@@ -492,6 +610,8 @@ export async function lireProprietairesDeFichiers(entree: {
     copiesDeRunIllisibles: parCopie.filter(({ copie, etats }) => copie.run && etats === null)
       .length,
     copiesDeFilLues: parCopie.filter(({ copie, etats }) => copie.fil && etats !== null).length,
-    copiesDeFilIllisibles: parCopie.filter(({ copie, etats }) => copie.fil && etats === null).length
+    copiesDeFilIllisibles: parCopie.filter(({ copie, etats }) => copie.fil && etats === null)
+      .length,
+    ...(dansLePrincipal === null ? { dossierPrincipalIllisible: true as const } : {})
   }
 }

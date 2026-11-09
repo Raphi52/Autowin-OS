@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -66,6 +66,7 @@ interface FichierRendu {
   }[]
   copiesDeRun: { run: string; etat: string }[]
   copiesDeFil: { conversation: string; etat: string; toi?: true }[]
+  dossierPrincipal?: { nonCommite: boolean; fils: FichierRendu['fils'] }
   amont: { branche?: string; commits: string[] }
   resume: string
 }
@@ -345,6 +346,74 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
     expect(fichier.copiesDeRun).toEqual([{ run: 'run-autre-1', etat: 'non commité' }])
     expect(fichier.resume).toContain('le travail en cours de cette copie (run-moi-1)')
     expect(fichier.resume).not.toMatch(/utilisateur à la main/)
+  })
+
+  /*
+   * Posée depuis une copie, la question ne lisait le non commité QUE de cette copie. Le dossier
+   * principal, où toutes les copies reviennent, restait invisible : un fil qui y travaille encore
+   * sans copie, ou une retouche à la main, ne se voyait qu'au moment où la copie n'arrivait pas à y
+   * entrer.
+   */
+  it('depuis une copie, signale le fichier modifié et non commité par un autre fil dans le dossier principal', async () => {
+    donnees()
+    // Sous son vrai nom, comme D:\AutoWinOS : `git worktree list` rend les noms longs, et le journal
+    // des fichiers range une trace sous le nom exact qu'avait le dossier (le dossier temporaire de
+    // Windows peut arriver en nom court, avec un `~1`, et ne s'y retrouverait pas).
+    const ws = realpathSync.native(depot())
+    await bus(ws).exec(
+      'create_file',
+      { path: 'src/partage.ts', content: 'export const a = 1\n' },
+      'conv-a',
+      undefined,
+      'tour-a'
+    )
+    const copie = copieDeFil(ws, 'copies-de-fil', 'conv-b')
+
+    const [fichier] = await demander(bus(copie), ['src/partage.ts'], 'conv-b')
+
+    expect(fichier.nonCommite).toBe(false)
+    expect(fichier.dossierPrincipal).toEqual({
+      nonCommite: true,
+      fils: [
+        expect.objectContaining({
+          conversation: 'conv-a',
+          tour: 'tour-a',
+          toi: false,
+          diffInchange: true
+        })
+      ]
+    })
+    expect(fichier.resume).toContain('dossier principal')
+    expect(fichier.resume).toContain('conv-a')
+    expect(fichier.resume).not.toMatch(/^libre/)
+  })
+
+  it('depuis une copie, dit qu’un changement du dossier principal sans fil tracé est une retouche à la main', async () => {
+    donnees()
+    const ws = depot()
+    const copie = copieDeFil(ws, 'copies-de-fil', 'conv-b')
+    writeFileSync(join(ws, 'src/propre.ts'), 'export const propre = 2 // à la main\n')
+
+    const [fichier] = await demander(bus(copie), ['src/propre.ts'], 'conv-b')
+
+    expect(fichier.dossierPrincipal).toEqual({ nonCommite: true, fils: [] })
+    expect(fichier.resume).toMatch(/dossier principal.*utilisateur à la main/)
+    // La règle « le non commité d'une copie est son travail » ne vaut pas pour le dossier principal.
+    expect(fichier.resume).not.toContain('le travail en cours de cette copie')
+  })
+
+  it('jumeau : depuis une copie, un dossier principal propre laisse le fichier libre ; depuis le principal, rien de neuf', async () => {
+    donnees()
+    const ws = depot()
+    const copie = copieDeFil(ws, 'copies-de-fil', 'conv-b')
+
+    const [depuisLaCopie] = await demander(bus(copie), ['src/propre.ts'], 'conv-b')
+    const [depuisLePrincipal] = await demander(bus(ws), ['src/propre.ts'], 'conv-b')
+
+    expect(depuisLaCopie.dossierPrincipal).toEqual({ nonCommite: false, fils: [] })
+    expect(depuisLaCopie.resume).toMatch(/^libre/)
+    // Interrogé lui-même, le dossier principal est déjà lu par `nonCommite` : pas de second relevé.
+    expect(depuisLePrincipal.dossierPrincipal).toBeUndefined()
   })
 
   it('compte le commit PROPRE d’une copie de run, jamais l’amont qu’elle a reçu à sa création', async () => {

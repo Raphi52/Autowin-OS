@@ -225,7 +225,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
      */
     name: 'proprietaire_fichier',
     description:
-      'À qui est ce fichier ? AVANT d’éditer un fichier d’un dossier partagé : dit s’il est modifié et non commité par un AUTRE fil (conversation, tour, heure), s’il est en cours dans la copie d’un run ou d’un autre fil, et s’il a changé en amont (sans git fetch : `dernierFetch` date la réponse). Remplace git status / git log HEAD..@{u} faits à la main. Lecture seule',
+      'À qui est ce fichier ? AVANT d’éditer un fichier d’un dossier partagé : dit s’il est modifié et non commité par un AUTRE fil (conversation, tour, heure), s’il est en cours dans la copie d’un run ou d’un autre fil, s’il est modifié et non commité dans le dossier principal quand tu travailles dans une copie, et s’il a changé en amont (sans git fetch : `dernierFetch` date la réponse). Remplace git status / git log HEAD..@{u} faits à la main. Lecture seule',
     args: {
       chemins:
         'chemin ou liste de chemins, relatifs au dossier de travail (50 au plus) — ex. ["src/main/commands/commands.ts"]'
