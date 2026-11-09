@@ -179,4 +179,25 @@ describe('depotCiteDansLeMessage', () => {
       'Alerte : une fin de tour pourrait envoyer D:\\Projets\\Contoso vers son serveur.'
     expect(depotCiteDansLeMessage(prompt, ACTIF, existe)).toBeNull()
   })
+
+  /*
+   * Une copie ouverte par l'app (sous `.autowin-data`) n'est jamais l'autre projet que l'utilisateur
+   * aurait oublié de ranger. Un fil rangé dans la copie de son chef (une copie que rien ne notait)
+   * a cité la copie d'un run et y est parti travailler : elle n'est pas imbriquée dans CETTE copie-là.
+   * Entrée qui doit faire échouer : la copie d'agent rendue comme dépôt cité.
+   */
+  it('ne bascule jamais vers une copie ouverte par l app, même hors du dossier actif', () => {
+    const COPIE_DU_CHEF =
+      'D:\\AutoWinOS\\.autowin-data\\autowin-os\\retours-de-tour\\essai__conv-1-1-1'
+    const COPIE_D_AGENT =
+      'D:\\AutoWinOS\\.autowin-data\\autowin-os\\worktrees\\5a94588848d48682\\agent__run-12795ca2f627-1'
+    const existe = disque(
+      COPIE_DU_CHEF,
+      `${COPIE_DU_CHEF}\\.git`,
+      COPIE_D_AGENT,
+      `${COPIE_D_AGENT}\\.git`
+    )
+    const message = `/build Termine le correctif resté non publié dans ${COPIE_D_AGENT} : 13 fichiers.`
+    expect(depotCiteDansLeMessage(message, COPIE_DU_CHEF, existe)).toBeNull()
+  })
 })

@@ -22,7 +22,7 @@
 import type { CarteDesBesoins } from './carte-des-besoins'
 import { carteDesProjetsPartages } from './board-projets-partages'
 import { canonicalProjectPath, estCheminDeDossier } from './project-path'
-import { ancienNomDeCopieDeFil, nomDeCopieDeFil } from './copie-du-fil'
+import { ancienNomDeCopieDeFil, estDansLesDonneesDeLApp, nomDeCopieDeFil } from './copie-du-fil'
 
 /** Au-delà, la liste est refusée : la barre latérale n'a jamais autant de dossiers. */
 export const DOSSIERS_DU_CHAT_MAX = 500
@@ -46,15 +46,6 @@ export function estDossierDuChat(chemin: string | null | undefined): boolean {
     !ancienNomDeCopieDeFil(chemin) &&
     !nomDeCopieDeFil(chemin)
   )
-}
-
-/** Le dossier des données de l'app, quel que soit l'endroit où elle est installée. */
-const DOSSIER_DES_DONNEES_DE_L_APP = '.autowin-data'
-
-function estDansLesDonneesDeLApp(chemin: string | null | undefined): boolean {
-  return (chemin ?? '')
-    .split(/[\\/]/u)
-    .some((segment) => segment.toLowerCase() === DOSSIER_DES_DONNEES_DE_L_APP)
 }
 
 /** La clé de comparaison d'un dossier : `d:/x/`, `D:\x` et `D:\X` sont le même dossier Windows. */

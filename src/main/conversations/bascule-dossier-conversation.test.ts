@@ -445,6 +445,42 @@ describe('dossierDuFilOuvertPar (fil d’un lot)', () => {
     expect(dossierDuFilOuvertPar({ projectPath: '  ' })).toBeUndefined()
     expect(dossierDuFilOuvertPar(undefined)).toBeUndefined()
   })
+
+  /*
+   * Un chef rangé dans une copie de l'app que rien ne note comme SA copie (copie d'un run où il a
+   * basculé, copie d'avant le rangement noté) la transmettait telle quelle : ses lots héritaient de
+   * `copies-de-fil/conv-1725` ou de `worktrees/<h>/agent__run-…`. Entrée qui doit faire échouer :
+   * un lot qui reçoit un chemin sous `.autowin-data`.
+   */
+  it('rend le vrai dépôt quand le chef est rangé dans une copie de l’app non notée', () => {
+    const AGENT =
+      'D:\\AutoWinOS\\.autowin-data\\autowin-os\\worktrees\\5a94588848d48682\\agent__run-12795ca2f627-1'
+    const depotDe = vi.fn((copie: string) => (copie === AGENT ? 'D:\\AutoWinOS' : undefined))
+    expect(dossierDuFilOuvertPar({ projectPath: AGENT }, depotDe)).toBe('D:\\AutoWinOS')
+    expect(dossierDuFilOuvertPar({ projectPath: COPIE }, () => 'D:\\AutoWinOS')).toBe(
+      'D:\\AutoWinOS'
+    )
+  })
+
+  it('aucun dossier plutôt qu’une copie de l’app quand son dépôt ne se lit pas', () => {
+    expect(dossierDuFilOuvertPar({ projectPath: COPIE }, () => undefined)).toBeUndefined()
+    // Un « dépôt » lu encore sous les données de l'app reste une copie : refusé aussi.
+    expect(dossierDuFilOuvertPar({ projectPath: COPIE }, () => COPIE)).toBeUndefined()
+  })
+
+  it('lit le dépôt d’une vraie copie liée sur le disque', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'lot-dossier-'))
+    const depot = join(racine, 'depot')
+    const copie = join(depot, '.autowin-data', 'autowin-os', 'worktrees', 'h', 'agent__run-1')
+    mkdirSync(join(depot, '.git', 'worktrees', 'agent__run-1'), { recursive: true })
+    mkdirSync(copie, { recursive: true })
+    writeFileSync(
+      join(copie, '.git'),
+      `gitdir: ${join(depot, '.git', 'worktrees', 'agent__run-1')}\n`
+    )
+    writeFileSync(join(depot, '.git', 'worktrees', 'agent__run-1', 'commondir'), '../..\n')
+    expect(dossierDuFilOuvertPar({ projectPath: copie })).toBe(depot)
+  })
 })
 
 describe('ouvrirLaCopieDuFilPourLeTour — la garde et les annonces d’avant', () => {

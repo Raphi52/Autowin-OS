@@ -5,6 +5,7 @@ import { estUnPromptDOrdre } from '../conversations/messages-entre-fils-app'
 import { estUneConsigneDeRedemarrage } from '../app/redemarrage-reprise'
 import { formeDuChemin, memeCheminSurDisque } from '../fichiers/meme-chemin'
 import { estUnMessageDuPlan } from '../../shared/plan-de-lots'
+import { estDansLesDonneesDeLApp } from '../../shared/copie-du-fil'
 
 /**
  * LE DEPOT CITE PAR LA DEMANDE — pour aligner le dossier de travail sur ce dont l'utilisateur PARLE.
@@ -89,6 +90,9 @@ export function depotCiteDansLeMessage(
     // .autowin-data) fait partie de CE depot : ce n'est pas l'autre projet que l'utilisateur aurait
     // oublie de ranger. Un dossier parent SANS depot (D:\GIT) continue, lui, de basculer vers ses projets.
     if (depotActif && estDedans(racine, depotActif)) continue
+    // Une copie ouverte par l'app n'est jamais cet autre projet, même quand le fil travaille hors du
+    // dépôt qui la porte (rangé dans une autre copie) : un lot y est parti en citant la copie d'un run.
+    if (estDansLesDonneesDeLApp(racine)) continue
     return racine
   }
   return null

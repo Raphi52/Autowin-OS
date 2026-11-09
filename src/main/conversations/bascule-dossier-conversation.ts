@@ -5,7 +5,8 @@ import { ouvrirLaCopieDeTache, type OuvertureDeCopie } from '../copies/copie-de-
 import { dossierDeCopieDeTache, racineDesCopiesDeTaches } from '../copies/chemins-de-copies'
 import { LONGUEUR_MAX_CHEMIN_DE_COPIE } from '../git/photo-du-code'
 import type { GitRunner } from '../runs/run-autoclose'
-import { DOSSIER_DES_COPIES_DE_FIL } from '../../shared/copie-du-fil'
+import { depotPrincipalSurDisque } from '../git/depot-git'
+import { DOSSIER_DES_COPIES_DE_FIL, estDansLesDonneesDeLApp } from '../../shared/copie-du-fil'
 
 /**
  * POURQUOI un rangement ne pilote PAS le dossier de travail (regle du 2026-09-08).
@@ -209,11 +210,22 @@ export function copieOuTravailleLeFil(
  * sans copie à lui, car le passage du début de tour ne vise que les fils rangés dans le dépôt
  * partagé. Le lot va donc dans le dépôt dont la copie du chef est la copie, et y reçoit la sienne
  * à son premier tour. Un chef rangé ailleurs transmet son dossier tel quel.
+ *
+ * Un chef rangé dans une copie de l'app que rien ne note comme la sienne (la copie d'un run où il a
+ * basculé, une copie d'avant le rangement noté) transmet le dépôt de cette copie, lu sur le disque :
+ * des lots naissaient sinon dans `copies-de-fil/<chef>` ou `worktrees/<h>/agent__run-…`. Dépôt
+ * illisible = aucun dossier, donc le dépôt partagé, plutôt qu'une copie qui n'est à personne.
  */
 export function dossierDuFilOuvertPar(
-  parent: { projectPath?: string; copieDuFil?: unknown } | undefined
+  parent: { projectPath?: string; copieDuFil?: unknown } | undefined,
+  depotDeLaCopie: (copie: string) => string | undefined = depotPrincipalSurDisque
 ): string | undefined {
-  return copieOuTravailleLeFil(parent)?.depot ?? (parent?.projectPath?.trim() || undefined)
+  const depotNote = copieOuTravailleLeFil(parent)?.depot
+  if (depotNote) return depotNote
+  const range = parent?.projectPath?.trim()
+  if (!range || !estDansLesDonneesDeLApp(range)) return range || undefined
+  const depot = depotDeLaCopie(range)?.trim()
+  return depot && !estDansLesDonneesDeLApp(depot) ? depot : undefined
 }
 
 /**

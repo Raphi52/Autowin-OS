@@ -14,6 +14,20 @@
 /** Le dossier, dans les données de l'app, où s'ouvrent les copies de fil. */
 export const DOSSIER_DES_COPIES_DE_FIL = 'copies-de-fil'
 
+/** Le dossier des données de l'app, quel que soit l'endroit où elle est installée. */
+const DOSSIER_DES_DONNEES_DE_L_APP = '.autowin-data'
+
+/**
+ * Le chemin est-il rangé dans les données de l'app ? Tout ce qui y vit est une copie qu'elle a
+ * ouverte (fil, tâche, run d'agent), jamais un projet de l'utilisateur. Le segment `.autowin-data`
+ * est le discriminant déjà retenu par `src/main/app/app-data.ts`.
+ */
+export function estDansLesDonneesDeLApp(chemin: string | null | undefined): boolean {
+  return (chemin ?? '')
+    .split(/[\\/]/u)
+    .some((segment) => segment.toLowerCase() === DOSSIER_DES_DONNEES_DE_L_APP)
+}
+
 /** Un identifiant de fil utilisable comme nom de dossier (même règle que les références git du fil). */
 const ID_DE_FIL = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u
 
