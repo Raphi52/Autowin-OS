@@ -33,7 +33,8 @@ import {
   DETAIL_POINT_DE_REPRISE_VIVANT,
   copieGardeeParUnPointDeReprise,
   tracerRetraitDeCopie,
-  tracerRetraitDeCopieAsync
+  tracerRetraitDeCopieAsync,
+  FETCH_ORIGIN_TIMEOUT_MS
 } from './worktree-manager-outils'
 import { WorktreeManager } from './worktree-manager'
 import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
@@ -1538,7 +1539,7 @@ export function currentBaseBranch(this: WorktreeManager): string {
 
 export function canonicalRemoteBase(
   this: WorktreeManager
-): { ref: string; sha: string } | undefined {
+): { ref: string; sha: string; repli?: string } | undefined {
   const origin = this.tryGitFn(this.baseRepo, ['remote', 'get-url', 'origin'])
   if (origin.code !== 0 || !origin.stdout.trim()) {
     if (this.requireCanonicalRemote) {
@@ -1564,7 +1565,12 @@ export function canonicalRemoteBase(
    * Contrepartie assumée : on peut alors démarrer d'un `origin/main` légèrement en retard. C'est
    * le compromis explicite — la publication, elle, revérifie sa base et refusera si elle a bougé.
    */
-  const fetched = this.tryGitFn(this.baseRepo, ['fetch', '--no-tags', '--prune', 'origin'])
+  // fix-ok: cause mesurée — le fetch d'origine prenait le délai d'une commande git (180 s), et le travail local qui suivait ne tenait plus dans les 2 s restants du budget de l'opération (rejeu sur origin muet).
+  // Délai propre au fetch : au délai d'une commande (180 s), un origin muet épuisait le budget du
+  // lancement (182 s) avant même que le repli sur origin/main serve. Voir FETCH_ORIGIN_TIMEOUT_MS.
+  const fetched = this.tryGitFn(this.baseRepo, ['fetch', '--no-tags', '--prune', 'origin'], {
+    timeoutMs: FETCH_ORIGIN_TIMEOUT_MS
+  })
   const detailFetch = fetched.code === 0 ? '' : causeGit(fetched)
 
   const symbolic = this.tryGitFn(this.baseRepo, [
@@ -1582,7 +1588,10 @@ export function canonicalRemoteBase(
     if (!/^origin\/(?:main|master)$/.test(ref)) continue
     const resolved = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', `${ref}^{commit}`])
     if (resolved.code === 0 && /^[0-9a-f]{40,64}$/i.test(resolved.stdout.trim())) {
-      return { ref, sha: resolved.stdout.trim() }
+      // Repli : le fetch a échoué, la base vient du local. `repli` dit pourquoi ; describeForLaunch le trace.
+      return fetched.code === 0
+        ? { ref, sha: resolved.stdout.trim() }
+        : { ref, sha: resolved.stdout.trim(), repli: detailFetch || 'fetch d’origine en échec' }
     }
   }
   // Aucune référence canonique, MÊME en local. Là, le refus est légitime — et il nomme la cause

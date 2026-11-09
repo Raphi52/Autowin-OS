@@ -21,6 +21,7 @@ import {
   OptionsDeRetrait,
   RAISON_NON_NOMMEE,
   copieGardeeParUnPointDeReprise,
+  tracerRepliDeLancement,
   tracerRetraitDeCopie,
   tracerRetraitDeCopieAsync
 } from './worktree-manager-outils'
@@ -426,6 +427,17 @@ export function describe(this: WorktreeManager, agentId: string): WorktreeRunCon
 export function describeForLaunch(this: WorktreeManager, agentId: string): WorktreeRunContext {
   const local = this.describe(agentId)
   const remote = this.canonicalRemoteBase()
+  // Repli sur la base locale : le lancement le trace, et une trace qui ne s'écrit pas bloque en le disant.
+  // fix-ok: cause mesurée — le repli ne laissait aucune trace (test rouge : ENOENT sur .lancements.jsonl ; rejeu origin muet : succès à 32,6 s sans ligne avant correctif, une ligne « repli: origin/main » après).
+  if (remote?.repli) {
+    const traceManquante = tracerRepliDeLancement(
+      this.worktreeRoot,
+      agentId,
+      remote.ref,
+      remote.repli
+    )
+    if (traceManquante) throw new Error(`Lancement bloqué : ${traceManquante}`)
+  }
   let sourceSha = local.baseSha
   let excludedLocalCommits: string[] | undefined
   if (remote) {

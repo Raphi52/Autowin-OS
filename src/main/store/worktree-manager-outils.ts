@@ -2,7 +2,7 @@
 // classe et ses modules voisins ; ré-exportés par worktree-manager.ts pour les appelants.
 import { execFile, execFileSync } from 'node:child_process'
 import type { EntreeBalayage } from './balayage-retention'
-import { appendFileSync, realpathSync } from 'node:fs'
+import { appendFileSync, mkdirSync, realpathSync } from 'node:fs'
 import { appendFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import type { WorktreeOperationWorkerLike } from './worktree-operation-client'
@@ -14,6 +14,18 @@ export const SAFE_ID = /^[A-Za-z0-9_-]+$/
 /** Un SHA git tel que `rev-parse` le rend : c'est ce qu'on accepte comme adresse de travail. */
 export const HEX_SHA = /^[0-9a-f]{7,40}$/i
 export const GIT_COMMAND_TIMEOUT_MS = Number(process.env.AUTOWIN_GIT_TIMEOUT_MS ?? 180_000)
+
+/**
+ * Budget du `git fetch` d'origine au lancement, distinct du délai d'une commande git.
+ *
+ * Le fetch est OPTIONNEL : son échec est toléré, le lancement repart alors d'`origin/main` déjà
+ * connu. Au délai d'une commande (180 s), un origin muet tenait donc le lancement presque tout
+ * entier, et la limite de l'opération (182 s) coupait un lancement qui aurait réussi. MESURÉ : un
+ * fetch sain prend de 0,56 à 1,58 s sur l'origine réelle (trois essais, médiane 0,72 s), et de 0,18
+ * à 0,22 s sur une origine locale. 30 s en est plus de dix-huit fois la pire mesure, et laisse 152 s
+ * à l'opération pour le reste.
+ */
+export const FETCH_ORIGIN_TIMEOUT_MS = 30_000
 
 /**
  * Budget de l'inventaire de récupération, distinct de celui d'une commande git.
@@ -100,14 +112,63 @@ export interface GitRunner {
   (repo: string, args: string[]): string
 }
 
+// fix-ok: cause mesurée — aucune commande git du worker n'était signalée au fil principal (test rouge : observerGit absent, 4 échecs sur 4 dans worktree-manager-outils.etapes-git.test.ts) ; sans ce signal, un délai ne peut pas dire ce qui attendait.
+/**
+ * Une commande git vue du dehors : son début, puis sa fin avec son code. Le worker installe un
+ * observateur (`observerGit`) qui renvoie ces signaux au fil principal pendant que la commande tourne.
+ */
+export type EvenementGit =
+  | { phase: 'debut'; id: number; commande: string; ms: number }
+  | { phase: 'fin'; id: number; commande: string; ms: number; code: number }
+
+let observateurGit: ((evenement: EvenementGit) => void) | undefined
+
+/**
+ * Identifiant d'une commande, unique dans le thread. Les commandes asynchrones tournent en parallèle :
+ * sans identifiant, la fin de l'une passerait pour la fin de l'autre, et le délai nommerait à tort
+ * une commande déjà terminée (fix-ok: cause mesurée — voir worktree-operation-client.test.ts).
+ */
+let prochainIdGit = 0
+
+/**
+ * Installe l'observateur des commandes git DE CE THREAD. Un module est chargé une fois par thread :
+ * le worker l'installe sans toucher au fil principal, qui le laisse à `undefined` et ne change pas.
+ */
+export function observerGit(observateur: ((evenement: EvenementGit) => void) | undefined): void {
+  observateurGit = observateur
+}
+
+/** Étiquette lisible d'une commande : ses premiers arguments, sans les options `-c clé=valeur`. */
+export function libelleCommandeGit(args: string[]): string {
+  let sansOption = args
+  while (sansOption[0] === '-c') sansOption = sansOption.slice(2)
+  return `git ${sansOption.slice(0, 4).join(' ')}`.slice(0, 120)
+}
+
 export const defaultGit: GitRunner = (repo, args) => {
-  const stdout = execFileSync('git', args, {
-    cwd: repo,
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout: GIT_COMMAND_TIMEOUT_MS,
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
+  const commande = libelleCommandeGit(args)
+  const id = ++prochainIdGit
+  observateurGit?.({ phase: 'debut', id, commande, ms: Date.now() })
+  let stdout: string
+  try {
+    stdout = execFileSync('git', args, {
+      cwd: repo,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: GIT_COMMAND_TIMEOUT_MS,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+  } catch (err) {
+    observateurGit?.({
+      phase: 'fin',
+      id,
+      commande,
+      ms: Date.now(),
+      code: (err as { status?: number }).status ?? 1
+    })
+    throw err
+  }
+  observateurGit?.({ phase: 'fin', id, commande, ms: Date.now(), code: 0 })
   return args.includes('-z') ? stdout : stdout.trim()
 }
 
@@ -115,28 +176,39 @@ export function parseNullSeparatedPaths(stdout: string): string[] {
   return stdout.split('\0').filter((path) => path.length > 0)
 }
 
-/** Comme defaultGit mais ne jette PAS : renvoie code + sorties (pour détecter un conflit de merge). */
+/**
+ * Comme defaultGit mais ne jette PAS : renvoie code + sorties (pour détecter un conflit de merge).
+ * `options.timeoutMs` remplace le délai d'une commande pour un appel qui a son propre budget.
+ */
 export function tryGit(
   repo: string,
-  args: string[]
+  args: string[],
+  options: { timeoutMs?: number } = {}
 ): { code: number; stdout: string; stderr: string } {
+  const commande = libelleCommandeGit(args)
+  const id = ++prochainIdGit
+  observateurGit?.({ phase: 'debut', id, commande, ms: Date.now() })
+  let resultat: { code: number; stdout: string; stderr: string }
   try {
     const stdout = execFileSync('git', args, {
       cwd: repo,
       encoding: 'utf8',
       windowsHide: true,
-      timeout: GIT_COMMAND_TIMEOUT_MS,
+      timeout: options.timeoutMs ?? GIT_COMMAND_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'pipe']
     })
-    return { code: 0, stdout, stderr: '' }
+    resultat = { code: 0, stdout, stderr: '' }
   } catch (err) {
     const e = err as { status?: number; stdout?: Buffer | string; stderr?: Buffer | string }
-    return {
+    resultat = {
       code: e.status ?? 1,
       stdout: e.stdout?.toString() ?? '',
       stderr: e.stderr?.toString() ?? ''
     }
   }
+  // Après le try : un observateur qui jetterait ne doit pas être lu comme un échec de git.
+  observateurGit?.({ phase: 'fin', id, commande, ms: Date.now(), code: resultat.code })
+  return resultat
 }
 
 /**
@@ -148,23 +220,33 @@ export function tryGit(
  * travail lui-meme est legitime ; c'est sa forme SYNCHRONE sur le thread principal qui gele l'app.
  *
  * Rien d'autre ne change : memes arguments, meme repertoire, meme timeout, meme forme de reponse.
+ * L'observateur voit aussi cette commande (début, fin, même identifiant) : sans lui, un délai qui
+ * attend une commande asynchrone nommerait « aucune commande en cours », à tort.
  */
 export function tryGitAsync(
   repo: string,
   args: string[]
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
+    const commande = libelleCommandeGit(args)
+    const id = ++prochainIdGit
+    observateurGit?.({ phase: 'debut', id, commande, ms: Date.now() })
     execFile(
       'git',
       args,
       { cwd: repo, encoding: 'utf8', windowsHide: true, timeout: GIT_COMMAND_TIMEOUT_MS },
       (erreur, stdout, stderr) => {
         const statut = (erreur as { code?: number } | null)?.code
-        resolve({
-          code: erreur ? (typeof statut === 'number' ? statut : 1) : 0,
-          stdout: String(stdout ?? ''),
-          stderr: String(stderr ?? '')
-        })
+        const code = erreur ? (typeof statut === 'number' ? statut : 1) : 0
+        try {
+          observateurGit?.({ phase: 'fin', id, commande, ms: Date.now(), code })
+        } finally {
+          resolve({
+            code,
+            stdout: String(stdout ?? ''),
+            stderr: String(stderr ?? '')
+          })
+        }
       }
     )
   })
@@ -462,6 +544,12 @@ export const RAISON_NON_NOMMEE = 'retrait sans raison nommée'
  */
 export const JOURNAL_DES_RETRAITS = '.retraits.jsonl'
 
+/**
+ * Journal des lancements qui ont repris une base LOCALE faute de fetch d'origine. Même place et même
+ * raison d'être que le journal des retraits : un fichier à la racine, que le balayage ne touche pas.
+ */
+export const JOURNAL_DES_LANCEMENTS = '.lancements.jsonl'
+
 export function copieGardeeParUnPointDeReprise(
   copiesProtegees: ReadonlySet<string>,
   path: string
@@ -490,6 +578,28 @@ export function tracerRetraitDeCopie(
     return undefined
   } catch (error) {
     return `trace du retrait non écrite : ${error instanceof Error ? error.message : String(error)}`
+  }
+}
+
+/**
+ * Trace un REPLI DÉJÀ DÉCIDÉ : le lancement part d'`origin/main` local, le fetch ayant échoué. La
+ * trace ne peut plus l'empêcher ; un échec d'écriture est donc rendu, pour que le lancement le nomme.
+ */
+export function tracerRepliDeLancement(
+  racine: string,
+  agentId: string,
+  ref: string,
+  cause: string
+): string | undefined {
+  try {
+    mkdirSync(racine, { recursive: true })
+    appendFileSync(
+      join(racine, JOURNAL_DES_LANCEMENTS),
+      `${JSON.stringify({ quand: new Date().toISOString(), run: agentId, repli: ref, cause })}\n`
+    )
+    return undefined
+  } catch (error) {
+    return `trace du repli non écrite : ${error instanceof Error ? error.message : String(error)}`
   }
 }
 

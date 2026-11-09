@@ -71,5 +71,18 @@ export type WorktreeOperationRequest =
 export type WorktreeOperationResponse =
   | { type: 'prepared'; agentSha: string; baseSha: string }
   | { type: 'integrated'; integratedSha: string; agentSha: string; baseSha: string }
-  | { type: 'result'; value: unknown }
-  | { type: 'error'; error: string }
+  /**
+   * `termineA` : l'heure (ms) où le worker a FINI l'opération. Le délai juge sur elle, et non sur
+   * l'heure où le fil principal reçoit la réponse : un fil principal tenu peut la recevoir après
+   * l'échéance, alors que le travail était fini à temps (ou ne l'était pas).
+   */
+  | { type: 'result'; value: unknown; termineA: number }
+  | { type: 'error'; error: string; termineA: number }
+  /**
+   * Une commande git du worker, signalée PENDANT qu'elle tourne. C'est la seule trace de ce qu'une
+   * opération attend : au délai, le fil principal nomme la commande démarrée et jamais finie.
+   * Ce n'est pas un résultat : le client le lit sans terminer l'opération. L'identifiant relie le
+   * début à sa fin, quand plusieurs commandes tournent à la fois.
+   */
+  | { type: 'etape'; phase: 'debut'; id: number; commande: string; ms: number }
+  | { type: 'etape'; phase: 'fin'; id: number; commande: string; ms: number; code: number }
