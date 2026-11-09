@@ -218,6 +218,12 @@ describe('preparerCodeDev : une copie de travail d agent est reconstruite, puis 
     expect(
       estCopieDeTravail(String.raw`D:\AutoWinOS\.autowin-data\autowin-os\copies-de-fil\conv-1710`)
     ).toBe(true)
+    // La racine unique des copies de fil et d'agent (`NOM_RACINE_COPIES_DE_TACHES`,
+    // src/main/copies/chemins-de-copies.ts) : sans elle, `--code-dev` y demandait « npm run dev ».
+    expect(
+      estCopieDeTravail(String.raw`D:\AutoWinOS\.autowin-data\autowin-os\copies-de-taches\conv-1`)
+    ).toBe(true)
+    expect(estCopieDeTravail('D:/projets/copies-de-taches/AutoWinOS')).toBe(false)
     expect(estCopieDeTravail('D:/AutoWinOS')).toBe(false)
     expect(estCopieDeTravail('D:/projets/copies-de-fil/AutoWinOS')).toBe(false)
     expect(estCopieDeTravail('D:/projets/worktrees/AutoWinOS')).toBe(false)

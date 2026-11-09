@@ -123,6 +123,73 @@ export function lignesDuJournal(texte, id) {
 
 const lireJson = (chemin) => JSON.parse(readFileSync(chemin, 'utf8'))
 
+const STATUTS_DE_MESSAGE = ['streaming', 'completed', 'failed', 'cancelled', 'interrupted']
+
+/**
+ * Ce qui empêche l'app de relire ce fil, champ par champ ; vide si rien. Pure.
+ *
+ * Un seul fil refusé fait mettre de côté TOUT `conversations.json` au démarrage
+ * (`ecarterStoreIllisible`) : l'instance démarre alors vide, et la capture montre un écran sans fil
+ * au lieu de dire pourquoi. Le fil est donc vérifié AVANT d'être déposé.
+ *
+ * Recopie de `isConversation` / `isConversationMessage` (src/main/store/conversations-disk.ts),
+ * qu'un script Node ne peut pas charger. Seuls les champs exigés et les plus simples y sont : un
+ * champ facultatif mal formé plus rare (`parts`, `runtime`, `attachments`, `forkedFrom`…) n'est
+ * pas vu ici. `semer-conversation.test.mjs` passe chaque cas par le vrai chargement de l'app.
+ */
+export function defautsDeConversation(valeur) {
+  if (!valeur || typeof valeur !== 'object' || Array.isArray(valeur)) return ['pas un objet']
+  const defauts = []
+  const champ = (nom, valide, cible = valeur, prefixe = '') => {
+    if (cible[nom] === undefined) defauts.push(`${prefixe}${nom} manquant`)
+    else if (!valide(cible[nom])) defauts.push(`${prefixe}${nom} invalide (${montrer(cible[nom])})`)
+  }
+  const texte = (v) => typeof v === 'string'
+  const nombre = (v) => Number.isFinite(v)
+  const facultatif = (nom, valide) => {
+    if (valeur[nom] !== undefined && !valide(valeur[nom]))
+      defauts.push(`${nom} invalide (${montrer(valeur[nom])})`)
+  }
+  champ('id', (v) => texte(v) && v.length > 0)
+  champ('title', texte)
+  champ('provider', texte)
+  champ('messages', Array.isArray)
+  champ('createdAt', nombre)
+  champ('updatedAt', nombre)
+  facultatif('schemaVersion', (v) => v === 2 || v === 3)
+  facultatif('projectPath', texte)
+  facultatif('categorie', texte)
+  facultatif('runPaths', (v) => Array.isArray(v) && v.every(texte))
+  if (!Array.isArray(valeur.messages)) return defauts
+  const vus = new Set()
+  valeur.messages.forEach((message, index) => {
+    const prefixe = `messages[${index}].`
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+      defauts.push(`messages[${index}] pas un objet`)
+      return
+    }
+    champ('role', (v) => v === 'user' || v === 'assistant', message, prefixe)
+    champ('content', texte, message, prefixe)
+    champ('ts', nombre, message, prefixe)
+    if (message.status !== undefined && !STATUTS_DE_MESSAGE.includes(message.status))
+      defauts.push(`${prefixe}status invalide (${montrer(message.status)})`)
+    // Sans `messageId`, l'app en déduit un unique par position : seuls les identifiants écrits
+    // peuvent manquer ou se répéter.
+    if (message.messageId === undefined) return
+    if (!texte(message.messageId) || message.messageId === '')
+      defauts.push(`${prefixe}messageId invalide (${montrer(message.messageId)})`)
+    else if (vus.has(message.messageId))
+      defauts.push(`${prefixe}messageId en double (${message.messageId})`)
+    else vus.add(message.messageId)
+  })
+  return defauts
+}
+
+const montrer = (valeur) => {
+  const texte = JSON.stringify(valeur) ?? String(valeur)
+  return /^"[^"]*"$/.test(texte) ? texte.slice(1, -1) : texte.slice(0, 40)
+}
+
 /** Même nom que `NOM_JOURNAL_MESSAGES_FILS` (src/shared/messages-entre-fils.ts, conv-1139). */
 const NOM_MESSAGES_FILS = 'messages-entre-fils.jsonl'
 
@@ -176,7 +243,8 @@ export function messagesEntreFilsDe(texte, id) {
 
 /**
  * Copie la conversation `id` de `source` vers `destination` (deux racines de données). Rend ce qui a
- * été copié, ou `{ ok: false, echec }` sans rien écrire quand la conversation n'existe pas.
+ * été copié, ou `{ ok: false, echec }` sans rien écrire quand la conversation n'existe pas ou que
+ * l'app ne pourrait pas la relire (`defautsDeConversation`).
  */
 export function semerConversation({ source, destination, id }) {
   if (!estIdDeConversation(id)) return { ok: false, echec: `conversation-id-invalide(${id})` }
@@ -190,6 +258,11 @@ export function semerConversation({ source, destination, id }) {
   const archivee = existsSync(archive)
   if (!entree && lignes.length === 0 && !archivee)
     return { ok: false, echec: `conversation-introuvable(${id})` }
+  // Seul le fil du stockage est vérifié : c'est lui qui, refusé, viderait toute l'instance. Une
+  // ligne de journal ou une archive refusée ne fait qu'écarter ce fil, et l'ouverture le dit.
+  const defauts = entree ? defautsDeConversation(entree) : []
+  if (defauts.length > 0)
+    return { ok: false, echec: `conversation-invalide(${id} : ${defauts.join(', ')})` }
 
   mkdirSync(destination, { recursive: true })
   const ecrits = []

@@ -2,7 +2,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { loadConversations } from '../src/main/store/conversations-disk.ts'
 import {
+  defautsDeConversation,
   emplacementsDeConversation,
   lignesDuJournal,
   racineDonneesInstance,
@@ -26,16 +28,23 @@ const ecrire = (chemin, contenu) => {
   writeFileSync(chemin, contenu)
 }
 const ligne = (objet) => JSON.stringify({ schema: 'autowin.conversation-change/v1', ...objet })
+/** Un fil que l'app accepte : les six champs qu'elle exige, rien de plus. */
+const fil = (id, title, autres = {}) => ({
+  id,
+  title,
+  provider: 'claude',
+  messages: [],
+  createdAt: 1,
+  updatedAt: 2,
+  ...autres
+})
 
 /** Une racine de données avec DEUX conversations : seule la première doit passer. */
 function racineSource() {
   const source = temporaire()
   ecrire(
     join(source, 'conversations.json'),
-    JSON.stringify([
-      { id: 'conv-955', title: 'la bonne', messages: [] },
-      { id: 'conv-1', title: 'une autre', messages: [] }
-    ])
+    JSON.stringify([fil('conv-955', 'la bonne'), fil('conv-1', 'une autre')])
   )
   ecrire(
     join(source, 'conversations.json.journal.jsonl'),
@@ -67,7 +76,7 @@ describe('semerConversation — une conversation copiée dans l’instance cach�
 
     expect(rapport.ok).toBe(true)
     expect(JSON.parse(readFileSync(join(destination, 'conversations.json'), 'utf8'))).toEqual([
-      { id: 'conv-955', title: 'la bonne', messages: [] }
+      fil('conv-955', 'la bonne')
     ])
     const journal = readFileSync(join(destination, 'conversations.json.journal.jsonl'), 'utf8')
     expect(journal).toContain('"turnId":"t1"')
@@ -192,6 +201,91 @@ describe('semerConversation — une conversation copiée dans l’instance cach�
       lignesDuJournal(`${ligne({ op: 'delete', id: 'conv-9' })}\n{ casse\n\n`, 'conv-9')
     ).toHaveLength(1)
   })
+})
+
+describe('semerConversation — le fil est vérifié avant d’être déposé', () => {
+  it('refuse un fil sans provider, createdAt ni updatedAt, en les nommant, sans rien écrire', () => {
+    // Le fil d'exemple du 08/11 : l'app aurait mis de côté tout le stockage de l'instance, qui
+    // démarrait alors vide (« 0 demande » sur le Board) sans rien dire.
+    const source = temporaire()
+    ecrire(
+      join(source, 'conversations.json'),
+      JSON.stringify([{ id: 'conv-990', title: 'exemple', messages: [], projectPath: 'D:/x' }])
+    )
+    const destination = join(temporaire(), 'instance')
+    const rapport = semerConversation({ source, destination, id: 'conv-990' })
+    expect(rapport).toEqual({
+      ok: false,
+      echec:
+        'conversation-invalide(conv-990 : provider manquant, createdAt manquant, updatedAt manquant)'
+    })
+    expect(existsSync(destination)).toBe(false)
+  })
+
+  it('nomme le message fautif et son champ', () => {
+    expect(
+      defautsDeConversation(
+        fil('conv-1', 't', {
+          messages: [
+            { role: 'user', content: 'ok', ts: 1 },
+            { role: 'assistant', content: 'sans heure' },
+            { role: 'system', content: 'x', ts: 3, status: 'bidon' }
+          ]
+        })
+      )
+    ).toEqual([
+      'messages[1].ts manquant',
+      'messages[2].role invalide (system)',
+      'messages[2].status invalide (bidon)'
+    ])
+  })
+
+  // La règle de l'app vit dans du TypeScript qu'un script Node ne charge pas : elle est recopiée.
+  // Ce test la tient à jour — chaque cas passe par le VRAI chargement des conversations.
+  const message = (autres = {}) => ({ role: 'user', content: 'x', ts: 1, ...autres })
+  const sansChamp = (champ) => {
+    const valeur = fil('conv-5', 'cas')
+    delete valeur[champ]
+    return valeur
+  }
+  const cas = {
+    valide: fil('conv-5', 'cas', { messages: [message()], projectPath: 'D:/x', schemaVersion: 3 }),
+    'sans id': sansChamp('id'),
+    'id vide': fil('', 'cas'),
+    'sans title': sansChamp('title'),
+    'sans provider': sansChamp('provider'),
+    'sans messages': sansChamp('messages'),
+    'sans createdAt': sansChamp('createdAt'),
+    'sans updatedAt': sansChamp('updatedAt'),
+    'createdAt en texte': fil('conv-5', 'cas', { createdAt: '2026-11-08' }),
+    'message sans ts': fil('conv-5', 'cas', { messages: [{ role: 'user', content: 'x' }] }),
+    'message sans content': fil('conv-5', 'cas', { messages: [{ role: 'user', ts: 1 }] }),
+    'message au rôle inconnu': fil('conv-5', 'cas', { messages: [message({ role: 'system' })] }),
+    'message au statut inconnu': fil('conv-5', 'cas', { messages: [message({ status: 'fini' })] }),
+    'message pas un objet': fil('conv-5', 'cas', { messages: ['bonjour'] }),
+    'messageId en double': fil('conv-5', 'cas', {
+      messages: [message({ messageId: 'm1' }), message({ messageId: 'm1' })]
+    }),
+    'messageId vide': fil('conv-5', 'cas', { messages: [message({ messageId: '' })] }),
+    'schemaVersion inconnue': fil('conv-5', 'cas', { schemaVersion: 1 }),
+    'projectPath pas un texte': fil('conv-5', 'cas', { projectPath: 4 }),
+    'categorie pas un texte': fil('conv-5', 'cas', { categorie: ['a'] }),
+    'runPaths pas des textes': fil('conv-5', 'cas', { runPaths: [1] })
+  }
+  for (const [nom, valeur] of Object.entries(cas)) {
+    it(`dit comme l’app : ${nom}`, () => {
+      const stockage = join(temporaire(), 'conversations.json')
+      writeFileSync(stockage, JSON.stringify([valeur]))
+      let accepte = true
+      try {
+        loadConversations(stockage)
+      } catch {
+        accepte = false
+      }
+      expect(accepte).toBe(nom === 'valide')
+      expect(defautsDeConversation(valeur).length === 0).toBe(accepte)
+    })
+  }
 })
 
 describe('--conversation — refusée hors de l’instance cachée', () => {

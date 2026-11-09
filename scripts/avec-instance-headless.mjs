@@ -301,7 +301,7 @@ function construireCopie(racine) {
  * retours à un tour, `dossierDesRetours` de `src/main/ipc/chat.ts`). Pure.
  */
 export function estCopieDeTravail(racine) {
-  return /[\\/]\.autowin-data[\\/](.*[\\/])?(worktrees|retours-de-tour|copies-de-fil)[\\/]/i.test(
+  return /[\\/]\.autowin-data[\\/](.*[\\/])?(worktrees|retours-de-tour|copies-de-fil|copies-de-taches)[\\/]/i.test(
     String(racine)
   )
 }
