@@ -151,3 +151,29 @@ describe('copies de travail des fils', () => {
     expect(dossiersDuBoard(['D:\\AutoWinOS'], [COPIE], [])).toEqual(['D:\\AutoWinOS'])
   })
 })
+
+/**
+ * Tout dossier rangé dans les données de l'app est une copie qu'elle a ouverte pour un agent : un
+ * fil qui y travaille (un lot de plan repris dans la copie d'un run) l'ajoutait à la liste au
+ * lancement suivant, comme un nouveau dossier de travail. Entrée qui doit faire échouer : une copie
+ * d'agent `worktrees/<h>/agent__run-…` ou `copies-de-taches/<fil>` acceptée, ou un vrai projet refusé.
+ */
+describe('copies ouvertes par l’app pour ses agents', () => {
+  const COPIE_D_AGENT =
+    'D:\\AutoWinOS\\.autowin-data\\autowin-os\\worktrees\\5a94588848d48682\\agent__run-12795ca2f627-1'
+
+  it('ne sont jamais des dossiers du Chat, quel que soit leur rangement', () => {
+    expect(estDossierDuChat(COPIE_D_AGENT)).toBe(false)
+    expect(estDossierDuChat('d:/AutoWinOS/.Autowin-Data/autowin-os/copies-de-taches/conv-1')).toBe(
+      false
+    )
+    expect(estDossierDuChat('D:\\AutoWinOS\\.autowin-data')).toBe(false)
+    // Un vrai projet dont le nom ressemble ne sort pas.
+    expect(estDossierDuChat('D:\\projets\\autowin-data')).toBe(true)
+    expect(estDossierDuChat('D:\\BrainRotRoyale')).toBe(true)
+  })
+
+  it('sortent de la liste relue, donc aussi celles déjà mémorisées', () => {
+    expect(dossiersDuChatLisibles(['D:\\AutoWinOS', COPIE_D_AGENT])).toEqual(['D:\\AutoWinOS'])
+  })
+})

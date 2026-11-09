@@ -32,9 +32,29 @@ export const DOSSIERS_DU_CHAT_MAX = 500
  * (`copies-de-fil/<fil>`, ou `essai__<fil>-<instant>-<rang>` avant elle, `src/main/git/photo-du-code.ts`). L'app l'ouvre seule pour chaque
  * fil, et le fil y passe seul : ce n'est pas un dossier de l'utilisateur. Sans cette règle, chaque
  * fil ajoutait sa copie au menu « Ranger dans… » et au Board, par les dossiers des fils.
+ *
+ * Plus largement, RIEN de ce qui vit dans les données de l'app (`.autowin-data`) n'est un dossier de
+ * l'utilisateur : les copies d'agents (`worktrees/<h>/agent__run-…`), de tâches et de fils y sont
+ * toutes. Lister chaque forme de copie laissait passer la suivante : un lot de plan repris dans la
+ * copie d'un run l'inscrivait comme nouveau dossier de travail au lancement suivant. Le segment
+ * `.autowin-data` est le discriminant déjà retenu par `src/main/app/app-data.ts`.
  */
 export function estDossierDuChat(chemin: string | null | undefined): boolean {
-  return estCheminDeDossier(chemin) && !ancienNomDeCopieDeFil(chemin) && !nomDeCopieDeFil(chemin)
+  return (
+    estCheminDeDossier(chemin) &&
+    !estDansLesDonneesDeLApp(chemin) &&
+    !ancienNomDeCopieDeFil(chemin) &&
+    !nomDeCopieDeFil(chemin)
+  )
+}
+
+/** Le dossier des données de l'app, quel que soit l'endroit où elle est installée. */
+const DOSSIER_DES_DONNEES_DE_L_APP = '.autowin-data'
+
+function estDansLesDonneesDeLApp(chemin: string | null | undefined): boolean {
+  return (chemin ?? '')
+    .split(/[\\/]/u)
+    .some((segment) => segment.toLowerCase() === DOSSIER_DES_DONNEES_DE_L_APP)
 }
 
 /** La clé de comparaison d'un dossier : `d:/x/`, `D:\x` et `D:\X` sont le même dossier Windows. */
