@@ -24,12 +24,13 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   renameSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
 import { supprimerArbreAsync } from '../fichiers/fs-supprimer'
 import {
@@ -688,6 +689,11 @@ async function reprendreSansFile(
       bilan.echecs.push({ chemin, raison: 'c’est un lien, pas une copie : rien n’est supprimé' })
       continue
     }
+    // La copie d'un autre dépôt se reprend par la passe de SON dépôt : celle-ci la retirerait depuis le mauvais.
+    const copieDeLaFiche = nom.startsWith(PREFIXE_EN_CREATION)
+      ? join(racine, nom.slice(PREFIXE_EN_CREATION.length))
+      : chemin
+    if (existsSync(copieDeLaFiche) && copieDUnAutreDepot(copieDeLaFiche, entree.depot)) continue
     const resultat = nom.startsWith(PREFIXE_EN_CREATION)
       ? await defaireUneCreationCoupee(racine, nom, entree.depot, git)
       : await finirLeRetrait(chemin, entree.depot, git)
@@ -947,6 +953,50 @@ async function raisonSiPasLaCopie(copie: string, git: GitRunner): Promise<string
   if (!racine || !memeDossier(racine, copie))
     return `« ${copie} » n’est pas une copie git : rien n’est touché.`
   return null
+}
+
+/**
+ * LA COPIE EST-ELLE CELLE D'UN AUTRE DÉPÔT ? Le dépôt se lit dans le fichier `.git` de la copie, qui nomme son
+ * enregistrement `<dépôt>/.git/worktrees/<nom>`, comparé au dossier commun de `depot`. `git worktree list` n'est pas
+ * utilisé : son échec ne doit jamais faire passer la copie d'un autre dépôt pour la sienne. Pas de `.git` : création
+ * coupée, traitée comme avant. Un `.git` qu'on ne sait pas lire, ou qui ne nomme pas cet enregistrement, est laissé
+ * en place.
+ */
+// fix-ok: un projet lié a un .git fichier ; son dossier commun se lit dans ce fichier, pas dans <projet>/.git/worktrees
+export function copieDUnAutreDepot(copie: string, depot: string): boolean {
+  const dotGit = join(copie, '.git')
+  if (!existsSync(dotGit)) return false
+  if (estUnDossier(dotGit)) return true
+  let texte: string
+  try {
+    texte = readFileSync(dotGit, 'utf8')
+  } catch {
+    return true
+  }
+  const cible = /^gitdir:\s*(.+?)\s*$/mu.exec(texte)?.[1]
+  if (cible === undefined) return true
+  const commun = dossierGitCommun(depot)
+  return commun === null || !memeDossier(dirname(resolve(copie, cible)), join(commun, 'worktrees'))
+}
+
+/**
+ * Le dossier `.git` commun de `depot`, où vivent les enregistrements de ses copies (`worktrees/<nom>`). Un projet
+ * lié (`git worktree`) a un `.git` qui est un FICHIER : il renvoie à `<principal>/.git/worktrees/<nom>`, dont le
+ * commun est `<principal>/.git`. `null` si ce dossier ne se lit pas : la copie reste alors en place.
+ */
+function dossierGitCommun(depot: string): string | null {
+  const dotGit = join(depot, '.git')
+  if (estUnDossier(dotGit)) return dotGit
+  let texte: string
+  try {
+    texte = readFileSync(dotGit, 'utf8')
+  } catch {
+    return null
+  }
+  const cible = /^gitdir:\s*(.+?)\s*$/mu.exec(texte)?.[1]
+  if (cible === undefined) return null
+  const worktrees = dirname(resolve(depot, cible))
+  return basename(worktrees) === 'worktrees' ? dirname(worktrees) : null
 }
 
 function estUnLien(chemin: string): boolean {

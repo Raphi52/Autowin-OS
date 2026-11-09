@@ -21,6 +21,7 @@ import { lireLaBaseDuFil, refDeBaseDuFil } from '../git/photo-du-code'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import { dossierDeCopieDeTache, racineDesCopiesDeTaches } from './chemins-de-copies'
 import {
+  copieDUnAutreDepot,
   entrerLeTravailDeLaCopie,
   ouvrirLaCopieDeTache,
   reprendreLesSuppressionsCoupees,
@@ -37,6 +38,87 @@ const git = async (cwd: string, ...args: string[]): Promise<string> =>
 const dossiers: string[] = []
 afterEach(() => {
   for (const dossier of dossiers.splice(0)) supprimerArbre(dossier)
+})
+
+describe('copieDUnAutreDepot — lu dans le fichier .git de la copie, sans appeler git', () => {
+  function decor(): {
+    depot: string
+    autre: string
+    copie: string
+    copieDeLAutre: string
+    racine: string
+  } {
+    const racine = mkdtempSync(join(tmpdir(), 'copie-depot-'))
+    dossiers.push(racine)
+    const depot = join(racine, 'depot')
+    const autre = join(racine, 'autre')
+    mkdirSync(join(depot, '.git', 'worktrees', 'conv-1'), { recursive: true })
+    mkdirSync(join(autre, '.git', 'worktrees', 'conv-2'), { recursive: true })
+    const copie = join(racine, 'copie-du-depot')
+    const copieDeLAutre = join(racine, 'copie-de-l-autre')
+    mkdirSync(copie)
+    mkdirSync(copieDeLAutre)
+    writeFileSync(join(copie, '.git'), `gitdir: ${join(depot, '.git', 'worktrees', 'conv-1')}\n`)
+    writeFileSync(
+      join(copieDeLAutre, '.git'),
+      `gitdir: ${join(autre, '.git', 'worktrees', 'conv-2')}\n`
+    )
+    return { depot, autre, copie, copieDeLAutre, racine }
+  }
+
+  it('une copie qui nomme l’enregistrement du dépôt est la sienne ; celle d’un autre dépôt ne l’est pas', () => {
+    const { depot, autre, copie, copieDeLAutre } = decor()
+    expect(copieDUnAutreDepot(copie, depot)).toBe(false)
+    expect(copieDUnAutreDepot(copieDeLAutre, autre)).toBe(false)
+    expect(copieDUnAutreDepot(copieDeLAutre, depot)).toBe(true)
+    expect(copieDUnAutreDepot(copie, autre)).toBe(true)
+  })
+
+  it('sans fichier .git (création coupée), la copie est traitée comme avant', () => {
+    const { depot, racine } = decor()
+    const sansGit = join(racine, 'sans-git')
+    mkdirSync(sansGit)
+    expect(copieDUnAutreDepot(sansGit, depot)).toBe(false)
+  })
+
+  it('un .git qui est un dépôt à part, ou qu’on ne rattache à aucun enregistrement, reste en place', () => {
+    const { depot, racine } = decor()
+    const dossierGit = join(racine, 'depot-a-part')
+    mkdirSync(join(dossierGit, '.git'), { recursive: true })
+    expect(copieDUnAutreDepot(dossierGit, depot)).toBe(true)
+    const sansGitdir = join(racine, 'sans-gitdir')
+    mkdirSync(sansGitdir)
+    writeFileSync(join(sansGitdir, '.git'), 'texte sans enregistrement\n')
+    expect(copieDUnAutreDepot(sansGitdir, depot)).toBe(true)
+  })
+
+  it('un projet lié (git worktree) : sa copie est la sienne, et celle d’un autre dépôt ne l’est pas', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'copie-depot-lie-'))
+    dossiers.push(racine)
+    const principal = join(racine, 'principal')
+    mkdirSync(join(principal, '.git', 'worktrees', 'conv-1'), { recursive: true })
+    // Le projet lié n'a pas de dossier .git : son fichier .git renvoie vers le dépôt principal.
+    const lie = join(racine, 'lie')
+    mkdirSync(lie)
+    writeFileSync(join(lie, '.git'), `gitdir: ${join(principal, '.git', 'worktrees', 'lie')}\n`)
+    const copie = join(racine, 'copie-du-lie')
+    mkdirSync(copie)
+    writeFileSync(
+      join(copie, '.git'),
+      `gitdir: ${join(principal, '.git', 'worktrees', 'conv-1')}\n`
+    )
+    const autre = join(racine, 'autre')
+    mkdirSync(join(autre, '.git', 'worktrees', 'conv-2'), { recursive: true })
+    const copieDeLAutre = join(racine, 'copie-de-l-autre')
+    mkdirSync(copieDeLAutre)
+    writeFileSync(
+      join(copieDeLAutre, '.git'),
+      `gitdir: ${join(autre, '.git', 'worktrees', 'conv-2')}\n`
+    )
+    expect(copieDUnAutreDepot(copie, lie)).toBe(false)
+    expect(copieDUnAutreDepot(copieDeLAutre, lie)).toBe(true)
+    expect(copieDUnAutreDepot(copie, autre)).toBe(true)
+  })
 })
 
 interface Temoin {

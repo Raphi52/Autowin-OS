@@ -24,7 +24,7 @@ import {
   ouvrirCopieDeLaPhoto,
   photographierLeCode
 } from '../git/photo-du-code'
-import { defaultGitRunner } from '../runs/run-autoclose'
+import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import { lierLesDependances } from '../store/dependances-copie-agent'
 import { encoderCheminCli, suivreSessionEntreDossiers } from '../store/historique-cli-copie'
 import {
@@ -816,5 +816,207 @@ describe('menageDesCopiesDeTaches — copies sous la racine unique, par la primi
     expect(await git(repo, 'show', 'HEAD:b.txt')).toBe('un\ndeux\nTROIS')
     expect(readFileSync(join(copie, 'b.txt'), 'utf8')).toBe('UN\ndeux\ntrois\n')
     expect(uneEntreeEstEnAttente(dossierDeDonnees, 'conv-7')).toBe(true)
+  })
+})
+
+describe('menageDesCopiesDeTaches — une copie d’un autre dépôt que celui de la passe', () => {
+  async function autreDepot(racine: string): Promise<string> {
+    const tiers = join(racine, 'tiers')
+    mkdirSync(tiers)
+    await git(tiers, 'init', '-b', 'main')
+    await git(tiers, 'config', 'user.name', 'Test')
+    await git(tiers, 'config', 'user.email', 'test@example.invalid')
+    writeFileSync(join(tiers, 'b.txt'), 'tiers\n')
+    await git(tiers, 'add', '-A')
+    await git(tiers, 'commit', '-m', 'base')
+    return tiers
+  }
+
+  it('la passe d’un autre dépôt ne retire pas cette copie, même âgée ; celle de son dépôt la retire', async () => {
+    const { repo, retours } = await depot()
+    const dossierDeDonnees = dirname(retours)
+    const tiers = await autreDepot(dirname(retours))
+    const ouverte = await ouvrirLaCopieDeTache({
+      dossierDeDonnees,
+      depot: tiers,
+      tache: 'conv-T',
+      sansDistant: true
+    })
+    if (!ouverte.ok) throw new Error(ouverte.raison)
+    const copie = join(racineDesCopiesDeTaches(dossierDeDonnees), 'conv-T')
+    const passe = (depotDeLaPasse: string) =>
+      menageDesCopiesDeTaches({
+        dossierDeDonnees,
+        depot: depotDeLaPasse,
+        lireFils: () => [],
+        tourEnCours: () => false,
+        decrocher: () => {},
+        maintenant: () => MAINTENANT,
+        racinesHistoriqueCli: () => []
+      })
+
+    const dAutowin = await passe(repo)
+    expect(dAutowin.supprimees).not.toContain(copie)
+    expect(dAutowin.echecs).toEqual([])
+    expect(existsSync(copie)).toBe(true)
+    expect(await git(tiers, 'worktree', 'list')).toContain('conv-T')
+
+    const deSonDepot = await passe(tiers)
+    expect(deSonDepot.supprimees).toEqual([copie])
+    expect(existsSync(copie)).toBe(false)
+  })
+
+  it('la reprise d’une création coupée d’un autre dépôt attend la passe de ce dépôt', async () => {
+    const { repo, retours } = await depot()
+    const dossierDeDonnees = dirname(retours)
+    const tiers = await autreDepot(dirname(retours))
+    const ouverte = await ouvrirLaCopieDeTache({
+      dossierDeDonnees,
+      depot: tiers,
+      tache: 'conv-U',
+      sansDistant: true
+    })
+    if (!ouverte.ok) throw new Error(ouverte.raison)
+    const racine = racineDesCopiesDeTaches(dossierDeDonnees)
+    const copie = join(racine, 'conv-U')
+    const fiche = join(racine, 'en-creation__conv-U')
+    writeFileSync(fiche, '')
+    const passe = (depotDeLaPasse: string) =>
+      menageDesCopiesDeTaches({
+        dossierDeDonnees,
+        depot: depotDeLaPasse,
+        lireFils: () => [],
+        tourEnCours: () => false,
+        decrocher: () => {},
+        maintenant: () => MAINTENANT,
+        racinesHistoriqueCli: () => []
+      })
+
+    const dAutowin = await passe(repo)
+    expect(dAutowin.echecs).toEqual([])
+    expect(existsSync(copie)).toBe(true)
+    expect(existsSync(fiche)).toBe(true)
+
+    await passe(tiers)
+    expect(existsSync(copie)).toBe(false)
+    expect(existsSync(fiche)).toBe(false)
+  })
+
+  it('la copie d’un projet lié, identique à sa base, est retirée par la passe de ce projet, pas par celle d’un autre dépôt', async () => {
+    const { repo, retours } = await depot()
+    const dossierDeDonnees = dirname(retours)
+    const principal = await autreDepot(dirname(retours))
+    const lie = join(dirname(retours), 'tiers-lie')
+    await git(principal, 'worktree', 'add', '-b', 'feature', lie)
+    const ouverte = await ouvrirLaCopieDeTache({
+      dossierDeDonnees,
+      depot: lie,
+      tache: 'conv-P',
+      sansDistant: true
+    })
+    if (!ouverte.ok) throw new Error(ouverte.raison)
+    const copie = join(racineDesCopiesDeTaches(dossierDeDonnees), 'conv-P')
+    const passe = (depotDeLaPasse: string) =>
+      menageDesCopiesDeTaches({
+        dossierDeDonnees,
+        depot: depotDeLaPasse,
+        lireFils: () => [],
+        tourEnCours: () => false,
+        decrocher: () => {},
+        maintenant: () => MAINTENANT,
+        racinesHistoriqueCli: () => []
+      })
+
+    const dAutowin = await passe(repo)
+    expect(dAutowin.supprimees).not.toContain(copie)
+    expect(existsSync(copie)).toBe(true)
+
+    const deSonProjet = await passe(lie)
+    expect(deSonProjet.echecs).toEqual([])
+    expect(deSonProjet.supprimees).toEqual([copie])
+    expect(existsSync(copie)).toBe(false)
+  })
+
+  // Le dépôt d'une copie se lit dans son fichier `.git` : la liste git peut échouer sans changer le dépôt de la copie.
+  async function gitSansLaListe(): Promise<GitRunner> {
+    const gitReel = await defaultGitRunner()
+    return (args, cwd, options) => {
+      if (args[0] === 'worktree' && args[1] === 'list')
+        return Promise.reject(new Error('git ne répond pas (simulé)'))
+      return gitReel(args, cwd, options)
+    }
+  }
+
+  it('sans la liste git, la passe d’Autowin ne retire pas la copie d’un autre dépôt ; celle de son dépôt la retire', async () => {
+    const { repo, retours } = await depot()
+    const dossierDeDonnees = dirname(retours)
+    const tiers = await autreDepot(dirname(retours))
+    const ouverte = await ouvrirLaCopieDeTache({
+      dossierDeDonnees,
+      depot: tiers,
+      tache: 'conv-V',
+      sansDistant: true
+    })
+    if (!ouverte.ok) throw new Error(ouverte.raison)
+    const copie = join(racineDesCopiesDeTaches(dossierDeDonnees), 'conv-V')
+    const runGit = await gitSansLaListe()
+    const passe = (depotDeLaPasse: string) =>
+      menageDesCopiesDeTaches({
+        dossierDeDonnees,
+        depot: depotDeLaPasse,
+        runGit,
+        lireFils: () => [],
+        tourEnCours: () => false,
+        decrocher: () => {},
+        maintenant: () => MAINTENANT,
+        racinesHistoriqueCli: () => []
+      })
+
+    const dAutowin = await passe(repo)
+    expect(dAutowin.supprimees).not.toContain(copie)
+    expect(existsSync(copie)).toBe(true)
+    expect(await git(tiers, 'worktree', 'list')).toContain('conv-V')
+
+    const deSonDepot = await passe(tiers)
+    expect(deSonDepot.supprimees).toEqual([copie])
+    expect(existsSync(copie)).toBe(false)
+  })
+
+  it('sans la liste git, la passe d’Autowin ne défait pas la création coupée d’un autre dépôt', async () => {
+    const { repo, retours } = await depot()
+    const dossierDeDonnees = dirname(retours)
+    const tiers = await autreDepot(dirname(retours))
+    const ouverte = await ouvrirLaCopieDeTache({
+      dossierDeDonnees,
+      depot: tiers,
+      tache: 'conv-W',
+      sansDistant: true
+    })
+    if (!ouverte.ok) throw new Error(ouverte.raison)
+    const racine = racineDesCopiesDeTaches(dossierDeDonnees)
+    const copie = join(racine, 'conv-W')
+    const fiche = join(racine, 'en-creation__conv-W')
+    writeFileSync(fiche, '')
+    const runGit = await gitSansLaListe()
+    const passe = (depotDeLaPasse: string) =>
+      menageDesCopiesDeTaches({
+        dossierDeDonnees,
+        depot: depotDeLaPasse,
+        runGit,
+        lireFils: () => [],
+        tourEnCours: () => false,
+        decrocher: () => {},
+        maintenant: () => MAINTENANT,
+        racinesHistoriqueCli: () => []
+      })
+
+    const dAutowin = await passe(repo)
+    expect(dAutowin.echecs).toEqual([])
+    expect(existsSync(copie)).toBe(true)
+    expect(existsSync(fiche)).toBe(true)
+
+    await passe(tiers)
+    expect(existsSync(copie)).toBe(false)
+    expect(existsSync(fiche)).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,8 @@ import {
   commitsPublies,
   decisionGitApresFil,
   estDepotAutowin,
+  estUnDepotGit,
+  depotsDesCopiesDeFil,
   CALME_AVANT_PUBLICATION_MS,
   FileGitApresFil,
   filDeLaPasse,
@@ -206,6 +208,41 @@ describe('estDepotAutowin', () => {
   })
 })
 
+// fix-ok: l'ouverture d'une copie se trie sur estUnDepotGit ; ce test en tient le contrat, un dépôt git seul.
+describe('estUnDepotGit', () => {
+  const dossiers: string[] = []
+  afterEach(() => {
+    for (const dossier of dossiers.splice(0)) rmSync(dossier, { recursive: true, force: true })
+  })
+  function dossierVide(): string {
+    const dossier = mkdtempSync(join(tmpdir(), 'autowin-depot-git-'))
+    dossiers.push(dossier)
+    return dossier
+  }
+
+  it('un dossier qui porte son .git est un dépôt, quel que soit son projet', () => {
+    const depot = dossierVide()
+    execFileSync('git', ['init', '-q', depot])
+    expect(estUnDepotGit(depot)).toBe(true)
+  })
+
+  it('une copie liée (un .git fichier) est un dépôt : elle a son propre arbre de travail', () => {
+    const copie = dossierVide()
+    writeFileSync(join(copie, '.git'), 'gitdir: D:/ailleurs/.git/worktrees/copie\n')
+    expect(estUnDepotGit(copie)).toBe(true)
+  })
+
+  it('un sous-dossier de dépôt, un dossier nu ou absent ne sont pas un dépôt', () => {
+    const depot = dossierVide()
+    execFileSync('git', ['init', '-q', depot])
+    const sousDossier = join(depot, 'src')
+    mkdirSync(sousDossier)
+    expect(estUnDepotGit(sousDossier)).toBe(false)
+    expect(estUnDepotGit(dossierVide())).toBe(false)
+    expect(estUnDepotGit(join(depot, 'absent'))).toBe(false)
+  })
+})
+
 describe('bandeauPublie', () => {
   const commits = [
     { sha: '1a2b3c4d', sujet: 'fix(chat): le bouton <revient> (conv-9)' },
@@ -381,7 +418,8 @@ describe('blocDuTour — le rail aussi quand le fil ou l’enchaînement auto pu
   })
 
   it('publier-isole.ps1 compte quand il est LANCÉ, pas quand une lecture le nomme (vu dans conv-1590)', () => {
-    const lance = "Bash · powershell -NoProfile -File scripts/publier-isole.ps1 -Message 'fix (conv-9)'"
+    const lance =
+      "Bash · powershell -NoProfile -File scripts/publier-isole.ps1 -Message 'fix (conv-9)'"
     const lu =
       'Bash · git fetch -q origin; for f in scripts/publier-isole.ps1; do [ "$(git rev-parse origin/main:$f)" = "$(git hash-object $f)" ] && echo identique; done'
     expect(lignesGitDuTour([lance, lu])).toEqual([lance.slice('Bash · '.length)])
@@ -848,5 +886,41 @@ describe('commitsPublies — lu sur un vrai dépôt et son distant', () => {
     git(racine, 'config', 'user.name', 'Test')
     git(racine, 'commit', '--allow-empty', '-m', 'init')
     expect(await lireAmont(runGit, racine)).toBeUndefined()
+  })
+})
+
+describe('depotsDesCopiesDeFil', () => {
+  const dossiers: string[] = []
+  afterEach(() => {
+    for (const dossier of dossiers.splice(0)) rmSync(dossier, { recursive: true, force: true })
+  })
+  function depotGit(): string {
+    const depot = mkdtempSync(join(tmpdir(), 'autowin-depots-copies-'))
+    dossiers.push(depot)
+    execFileSync('git', ['init', '-q', depot])
+    return depot
+  }
+
+  it('rend le dépôt de l’app et chaque dépôt où un fil a sa copie, une seule fois chacun', () => {
+    const app = depotGit()
+    const autreDepot = depotGit()
+    expect(
+      depotsDesCopiesDeFil(
+        [
+          { copieDuFil: { depot: autreDepot } },
+          { copieDuFil: { depot: autreDepot } },
+          { copieDuFil: { depot: app } },
+          {}
+        ],
+        app
+      )
+    ).toEqual([app, autreDepot])
+  })
+
+  it('ne rend jamais un dossier qui n’est pas un dépôt git, ni le dépôt de l’app s’il ne l’est pas', () => {
+    const app = depotGit()
+    const disparu = join(app, 'pas-un-depot')
+    expect(depotsDesCopiesDeFil([{ copieDuFil: { depot: disparu } }], app)).toEqual([app])
+    expect(depotsDesCopiesDeFil([], join(app, 'absent'))).toEqual([])
   })
 })

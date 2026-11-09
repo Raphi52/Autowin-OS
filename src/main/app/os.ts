@@ -1066,7 +1066,12 @@ export class AutowinOS {
       // Relevé AVANT la lecture du journal : un tour fini entre les deux y a déjà tout écrit.
       const enCours = autresToursEnCours?.() ?? []
       const worktrees = this.worktrees
-      const depot = this.worktreeManager?.baseRepo
+      // Le dépôt de la porte est celui DU FIL, noté sur sa copie : un projet lié ou un autre dépôt git ne se devine
+      // pas dans sa copie. Le dépôt d'Autowin ne sert que de repli, pour un fil qui n'a pas de copie notée.
+      // fix-ok: sans le dépôt du fil, la porte viserait Autowin et le travail d'un projet lié n'entrerait pas dans sa branche.
+      const depot =
+        this.conversations.get(tour.conversationId)?.copieDuFil?.depot ??
+        this.worktreeManager?.baseRepo
       const report = await publierTourDeChat({
         ...tour,
         autresToursEnCours: enCours,

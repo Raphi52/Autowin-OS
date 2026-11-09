@@ -369,16 +369,22 @@ export async function publierTourDeChat(input: {
   openPr?: PrOpener
   /**
    * LA PORTE VERS MAIN d'un fil qui travaille dans SA copie (`garderLeTravailDuFil`) : `depot` est le
-   * dépôt que `publication` fait avancer. Un tour dont le dossier est une copie détachée de ce dépôt
-   * passe par elle, et par elle seule. Absent = publication d'avant pour tous les dossiers.
+   * dépôt DU FIL (celui où sa copie a été ouverte, noté sur le fil), que `publication` fait avancer. Un tour
+   * dont le dossier est une copie détachée de ce dépôt passe par elle, et par elle seule. Absent = publication
+   * d'avant pour tous les dossiers.
    */
   porte?: { depot: string; publication: PublicationDUneCopie; dossierDeDonnees?: string }
 }): Promise<AutoCloseReport | undefined> {
   const { conversationId, turnId, debut } = input
   if (!debut.repo) return undefined
   const runGit = input.runGit ?? (await defaultGitRunner())
-  if (input.porte && (await estUneCopieDetacheeDuDepot(debut.repo, input.porte.depot, runGit)))
-    return passerLaPorte(input, debut.repo, input.porte, runGit)
+  if (input.porte) {
+    // Le dépôt de la porte est celui DU FIL (sa copie notée, `porte.depot`), jamais le premier `worktree` lu dans la
+    // copie : une copie liée nomme le dépôt principal, pas le projet qui l'a ouverte.
+    // fix-ok: lu dans la copie, le premier worktree est le dépôt principal : le travail d'un projet lié partirait sur sa branche.
+    if (await estUneCopieDetacheeDuDepot(debut.repo, input.porte.depot, runGit))
+      return passerLaPorte(input, debut.repo, input.porte, runGit)
+  }
   const autresToursEnCours = (input.autresToursEnCours ?? []).filter((dossier) => dossier.trim())
   const racines = await cheminsReels([
     debut.repo,

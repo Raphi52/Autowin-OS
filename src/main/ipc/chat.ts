@@ -185,6 +185,7 @@ import { consommerReprise } from '../app/redemarrage-reprise'
 import {
   avertissementDossierConversation,
   copieOuTravailleLeFil,
+  dossierDeLectureDuFil,
   dossierDuFilOuvertPar,
   ecrireReglageCopieParFil,
   lireReglageCopieParFil,
@@ -216,7 +217,9 @@ import {
   blocDuTour,
   commitsPublies,
   decisionGitApresFil,
+  depotsDesCopiesDeFil,
   estDepotAutowin,
+  estUnDepotGit,
   FileGitApresFil,
   filDeLaPasse,
   lireAmont,
@@ -2311,22 +2314,25 @@ Le fil reprend ensuite normalement.`
 
   /**
    * LE FIL PASSE DANS SA COPIE AU DÉBUT DE SON TOUR (`preparerLeDossierDuTour`). Le dépôt partagé est
-   * celui d'où tourne l'app, et seulement s'il est le dépôt d'Autowin : ailleurs, rien ne change.
-   * Une copie qui ne s'ouvre pas, même par une panne de git, est DITE dans le fil, et le tour part
-   * là où il était : le passage ne coûte jamais la réponse. Une question seule n'en ouvre pas de neuve.
+   * celui du fil (sa copie d'abord, son dossier rangé ensuite) dès que c'est un dépôt git ; ailleurs,
+   * rien ne change. Une copie qui ne s'ouvre pas, même par une panne de git, est DITE dans le fil, et le
+   * tour part là où il était : le passage ne coûte jamais la réponse. Une question seule n'en ouvre pas de neuve.
    */
   const passerLeFilDansSaCopie = async (
     conversationId: string,
     messages: Message[]
   ): Promise<void> => {
-    const depot = os.executionWorkspace
+    const fil = os.conversations.get(conversationId)
+    // fix-ok: le dépôt est celui du fil, quel qu'il soit ; limité au dépôt d'Autowin, un autre dépôt git n'aurait jamais de copie.
+    const depot =
+      fil?.copieDuFil?.depot ?? dossierDeLectureDuFil(fil?.projectPath, os.executionWorkspace)
     const annoncer = (ligne: string): void => {
       os.conversations.append(conversationId, { role: 'assistant', content: ligne })
       broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
     }
     const issue = await preparerLeDossierDuTour({
-      fil: os.conversations.get(conversationId),
-      depotPartage: estDepotAutowin(depot) ? depot : null,
+      fil,
+      depotPartage: estUnDepotGit(depot) ? depot : null,
       actif: lireReglageCopieParFil(reglageCopieParFil()),
       questionSeule: estUneQuestionSansAction(
         [...messages].reverse().find((m) => m.role === 'user')?.content
@@ -2971,14 +2977,15 @@ Le fil reprend ensuite normalement.`
 
   /*
    * LE MÉNAGE DES COPIES DE FIL (`menage-des-copies-de-fil.ts`) : la copie d'un fil fini, identique à
-   * ce que sa porte a déjà publié, quitte le disque, et le fil revient au dossier partagé. Seulement
-   * sur le dépôt d'Autowin, le seul où les fils reçoivent une copie. Première passe 5 min après le
-   * démarrage et non au démarrage : les tours repris s'enregistrent d'abord, et un tour en cours ne
-   * perd jamais sa copie. Puis toutes les heures, comme les ménages voisins.
+   * ce que sa porte a déjà publié, quitte le disque, et le fil revient au dossier partagé. Une passe par
+   * dépôt git où un fil a sa copie : une copie ne se range que par le dépôt qui l'a ouverte. Première
+   * passe 5 min après le démarrage et non au démarrage : les tours repris s'enregistrent d'abord, et un
+   * tour en cours ne perd jamais sa copie. Puis toutes les heures, comme les ménages voisins.
    */
   const passeDuMenageDesCopies = (): void => {
-    const depot = os.executionWorkspace
-    if (!estDepotAutowin(depot)) return
+    const depotDeLApp = os.executionWorkspace
+    const depots = depotsDesCopiesDeFil(os.conversations.list(), depotDeLApp)
+    if (!depots.length) return
     void pendantOperation('timer:balayage:copiesDeFil', async () => {
       const menage: Pick<
         Parameters<typeof menageDesCopiesDeTaches>[0],
@@ -2990,31 +2997,38 @@ Le fil reprend ensuite normalement.`
           os.conversations.revenirDeLaCopie(id)
         }
       }
-      // Les copies de la racine unique passent par la primitive ; les copies d'avant, encore là, par leur passe.
-      const copiesAvant = await menageDesCopiesDeFil({
-        dossierDesRetours: dossierDesRetours(),
-        dossierDesCopiesDeFil: dossierDesCopiesDeFil(),
-        depot,
-        ...menage
-      })
-      const copiesRacine = await menageDesCopiesDeTaches({
-        dossierDeDonnees: ensureAutowinAppData(appDataRoot),
-        depot,
-        titreDuCommit: titreDeLaReprise,
-        // Le fil avait dit « Autowin retentera » : il lui dit maintenant que c'est entré.
-        annoncerLaReprise: (tache) => {
-          os.conversations.append(tache, {
-            role: 'assistant',
-            content: 'Le travail refusé à la fin du tour est entré dans main.'
+      // Les copies d'avant, encore là, gardent leur passe : ce sont celles d'Autowin, sur son dépôt seul.
+      const copiesAvant = estDepotAutowin(depotDeLApp)
+        ? await menageDesCopiesDeFil({
+            dossierDesRetours: dossierDesRetours(),
+            dossierDesCopiesDeFil: dossierDesCopiesDeFil(),
+            depot: depotDeLApp,
+            ...menage
           })
-          broadcast({ type: 'refresh', scope: 'chat', convId: tache })
-        },
-        ...menage
-      })
+        : { supprimees: [], gardees: [], echecs: [] }
+      // Les copies de la racine unique passent par la primitive, une passe par dépôt.
+      const bilansRacine: Array<Awaited<ReturnType<typeof menageDesCopiesDeTaches>>> = []
+      for (const depot of depots)
+        bilansRacine.push(
+          await menageDesCopiesDeTaches({
+            dossierDeDonnees: ensureAutowinAppData(appDataRoot),
+            depot,
+            titreDuCommit: titreDeLaReprise,
+            // Le fil avait dit « Autowin retentera » : il lui dit maintenant que c'est entré.
+            annoncerLaReprise: (tache) => {
+              os.conversations.append(tache, {
+                role: 'assistant',
+                content: 'Le travail refusé à la fin du tour est entré dans main.'
+              })
+              broadcast({ type: 'refresh', scope: 'chat', convId: tache })
+            },
+            ...menage
+          })
+        )
       const bilan = {
-        supprimees: [...copiesAvant.supprimees, ...copiesRacine.supprimees],
-        gardees: [...copiesAvant.gardees, ...copiesRacine.gardees],
-        echecs: [...copiesAvant.echecs, ...copiesRacine.echecs]
+        supprimees: [...copiesAvant.supprimees, ...bilansRacine.flatMap((b) => b.supprimees)],
+        gardees: [...copiesAvant.gardees, ...bilansRacine.flatMap((b) => b.gardees)],
+        echecs: [...copiesAvant.echecs, ...bilansRacine.flatMap((b) => b.echecs)]
       }
       if (bilan.supprimees.length) broadcast({ type: 'refresh', scope: 'conversations' })
       if (bilan.supprimees.length || bilan.echecs.length)

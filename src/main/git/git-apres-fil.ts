@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { formeDuChemin } from '../fichiers/meme-chemin'
 import { deposerFichier, relireFichier } from '../gel/ecriture-hors-fil'
 import type { StatutDuPlan } from '../../shared/plan-de-lots'
 import type { IssueDePasse } from './git-apres-fil-sans-tour'
@@ -104,6 +105,33 @@ export function estDepotAutowin(dossier: string): boolean {
   } catch {
     return false
   }
+}
+
+/**
+ * Le dossier est-il un dépôt git à sa racine ? Un `.git` s'y trouve : un dossier, ou un fichier pour une copie
+ * liée (son propre arbre de travail). Un sous-dossier de dépôt n'en est pas un. Ce tri ouvre une copie de travail
+ * pour n'importe quel dépôt ; l'envoi vers un serveur reste réservé à `estDepotAutowin`.
+ */
+// fix-ok: l'ouverture se trie sur ce test et non sur estDepotAutowin, sinon aucun autre dépôt git n'aurait de copie.
+export function estUnDepotGit(dossier: string): boolean {
+  return existsSync(join(dossier, '.git'))
+}
+
+/**
+ * Les dépôts à ranger : celui de l'app en tête, s'il est un dépôt git, puis ceux où un fil a sa copie. Une passe du
+ * ménage tourne par dépôt, car une copie ne se range que par le dépôt qui l'a ouverte. Chaque dépôt n'est rendu qu'une fois.
+ */
+export function depotsDesCopiesDeFil(
+  fils: ReadonlyArray<{ copieDuFil?: { depot: string } }>,
+  depotDeLApp: string
+): string[] {
+  const vus = new Map<string, string>()
+  for (const depot of [depotDeLApp, ...fils.map((fil) => fil.copieDuFil?.depot)]) {
+    if (!depot || !estUnDepotGit(depot)) continue
+    const cle = formeDuChemin(depot)
+    if (!vus.has(cle)) vus.set(cle, depot)
+  }
+  return [...vus.values()]
 }
 
 /** Ce que le coordinateur des plans dit d'un fil (`planDuFil`), réduit à ce qu'il faut ici. */

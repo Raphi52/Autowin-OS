@@ -8,8 +8,7 @@ import { sourceProcessPrincipal } from '../app/source-process-principal.test-hel
  * Ici, seul l'ORDRE, qu'aucune exécution n'atteint : `tourCompteDesReception` est une fonction
  * locale de `registerChatIpc`. Un passage placé après la lecture du dossier du tour ferait partir
  * la photo de début de tour, donc la porte, dans le dossier partagé.
- * fix-ok: cause mesurée — la 2e édition ajoute le contrôle du dossier des copies, la 3e n'est que la
- * mise en forme signalée par `npx prettier --check`.
+ * fix-ok: ordre du passage dans la copie, épinglé par le texte du source (aucune exécution ne l'atteint).
  */
 const source = sourceProcessPrincipal()
 const pilote = source.slice(source.indexOf('const tourCompteDesReception: typeof lancerTour'))
@@ -43,11 +42,14 @@ describe('une copie par fil — au début du tour', () => {
     expect(bloc).toContain("[...messages].reverse().find((m) => m.role === 'user')?.content")
   })
 
-  it('relit le réglage à chaque tour, et ne vise que le dépôt d’Autowin', () => {
+  // fix-ok: prettier découpe la ligne d'appel ; le test épingle des morceaux stables, pas la ligne entière.
+  it('relit le réglage à chaque tour, et vise le dépôt git du fil, quel qu’il soit', () => {
     const passage = source.slice(source.indexOf('const passerLeFilDansSaCopie = async ('))
     const bloc = passage.slice(0, passage.indexOf('const tourCompteDesReception'))
     expect(bloc).toContain('actif: lireReglageCopieParFil(reglageCopieParFil())')
-    expect(bloc).toContain('depotPartage: estDepotAutowin(depot) ? depot : null')
+    expect(bloc).toContain('depotPartage: estUnDepotGit(depot) ? depot : null')
+    expect(bloc).toContain('fil?.copieDuFil?.depot ??')
+    expect(bloc).toContain('dossierDeLectureDuFil(fil?.projectPath, os.executionWorkspace)')
     // l'ouverture vit dans bascule-dossier-conversation.ts ; cet épinglage suit son appel, dossier racine et dépôt compris.
     // La copie s'ouvre sous la racine unique (`copies-de-taches\<fil>`), par la primitive, et plus sous `copies-de-fil`.
     expect(bloc).toContain('ouvrirLaCopieDuFilPourLeTour({')
@@ -80,10 +82,15 @@ describe('le ménage des copies de fil', () => {
     expect(corps.slice(retour - 80, retour)).toContain('args[4] === undefined')
   })
 
-  it('passe toutes les heures, sur le dépôt d’Autowin, sans toucher un fil en cours', () => {
+  it('passe toutes les heures, une fois par dépôt où un fil a sa copie, sans toucher un fil en cours', () => {
     const passe = source.slice(source.indexOf('const passeDuMenageDesCopies = (): void => {'))
     const bloc = passe.slice(0, passe.indexOf('setInterval(passeDuMenageDesCopies'))
-    expect(bloc).toContain('if (!estDepotAutowin(depot)) return')
+    expect(bloc).toContain(
+      'const depots = depotsDesCopiesDeFil(os.conversations.list(), depotDeLApp)'
+    )
+    expect(bloc).toContain('for (const depot of depots)')
+    // Les copies d'avant restent celles d'Autowin : leur passe ne tourne que sur son dépôt.
+    expect(bloc).toContain('estDepotAutowin(depotDeLApp)')
     expect(bloc).toContain('tourEnCours: (id) => activeChatTurns.isInFlight(id)')
     expect(bloc).toContain('os.conversations.revenirDeLaCopie(id)')
     // Les copies d'aujourd'hui ET celles d'avant (`retours-de-tour/essai__…`).

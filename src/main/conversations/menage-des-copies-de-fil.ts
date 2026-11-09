@@ -13,6 +13,7 @@ import {
 } from '../store/historique-cli-copie'
 import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
 import {
+  copieDUnAutreDepot,
   entrerLeTravailDeLaCopie,
   PREFIXE_EN_CREATION,
   PREFIXE_ENTREE_EN_ATTENTE,
@@ -432,6 +433,8 @@ export async function menageDesCopiesDeTaches(
       continue
     const chemin = join(racine, nom)
     if (!identiteDeLaCopie(chemin)) continue
+    // Une copie d'un autre dépôt se range par la passe de SON dépôt : celle-ci ne la lit pas et ne la retire pas.
+    if (copieDUnAutreDepot(chemin, entree.depot)) continue
     // la passe horaire refait l'entrée que la porte a refusée (fichier visé modifié), sans nouveau tour : sans
     // cette reprise, le travail restait dans la copie jusqu'au prochain tour du fil. Un travail jamais refusé n'est pas
     // touché, et une entrée refusée n'est refaite que si aucun tour de ce fil ne tourne.
