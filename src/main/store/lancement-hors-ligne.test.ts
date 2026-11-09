@@ -90,6 +90,7 @@ describe('lancer une conversation quand origin ne repond pas', () => {
     const wm = new WorktreeManager({
       baseRepo: repo,
       worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine),
       tryGitFn: (dossier, args, options) => {
         appels.push({ args, timeoutMs: options?.timeoutMs })
         return tryGit(dossier, args, options)
@@ -113,7 +114,11 @@ describe('lancer une conversation quand origin ne repond pas', () => {
     git(repo, 'update-ref', 'refs/remotes/origin/main', attendu)
     const racine = mkdtempSync(join(tmpdir(), 'autowin-repli-trace-'))
     roots.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine)
+    })
 
     expect(wm.describeForLaunch('conv-repli')).toMatchObject({
       canonicalBaseRef: 'origin/main',
@@ -143,7 +148,11 @@ describe('lancer une conversation quand origin ne repond pas', () => {
     git(repo, 'remote', 'add', 'origin', origine)
     const racine = mkdtempSync(join(tmpdir(), 'autowin-repli-ok-'))
     roots.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine)
+    })
 
     wm.describeForLaunch('conv-repli-ok')
     expect(existsSync(join(racine, JOURNAL_DES_LANCEMENTS))).toBe(false)
@@ -160,7 +169,11 @@ describe('lancer une conversation quand origin ne repond pas', () => {
     // La racine des copies est un FICHIER : le journal ne peut pas s'y écrire.
     const racine = join(dossier, 'racine-fichier')
     writeFileSync(racine, 'pas un dossier')
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine)
+    })
 
     expect(() => wm.describeForLaunch('conv-sans-trace')).toThrow(/trace du repli non écrite/)
   })
@@ -183,7 +196,11 @@ describe('lancer une conversation quand origin ne repond pas', () => {
     git(repo, 'remote', 'add', 'origin', origine)
     const racine = mkdtempSync(join(tmpdir(), 'autowin-fetch-ok-'))
     roots.push(racine)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      racineCopiesDeTaches: racineDe(racine)
+    })
 
     expect(wm.describeForLaunch('conv-1')).toMatchObject({
       canonicalBaseRef: 'origin/main',
