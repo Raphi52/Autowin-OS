@@ -91,6 +91,88 @@ function lireJsonl(fichier) {
   }
 }
 
+/** Toutes les traces de consignes du dossier `prompt-observability`. */
+function lireTraces(dossier) {
+  const traces = []
+  for (const f of fs.existsSync(dossier) ? fs.readdirSync(dossier) : []) {
+    if (f.endsWith('.jsonl')) traces.push(...lireJsonl(path.join(dossier, f)))
+  }
+  return traces
+}
+
+/**
+ * La session d'une trace de consignes. Le chat écrit `sessionId` dans sa trace ; une étape de run
+ * (learn, git…) ne l'écrit pas, et seul l'argument `--resume` de son appel la nomme. Une étape qui
+ * ouvre une session neuve n'a ni l'un ni l'autre : elle reste sans session, rien n'est deviné.
+ */
+export function sessionDeLaTrace(trace) {
+  if (trace.sessionId) return trace.sessionId
+  const argv = trace.options?.argv
+  if (!Array.isArray(argv)) return undefined
+  const i = argv.lastIndexOf('--resume')
+  const id = i >= 0 ? argv[i + 1] : undefined
+  return typeof id === 'string' && id && !id.startsWith('-') ? id : undefined
+}
+
+/**
+ * Les reprises cassées : relancées moins d'une heure après le passage précédent de la même session,
+ * et pourtant réécrites en entier. `sessions` : sorties d'`analyserSession` ; `traces` : les
+ * enregistrements de `prompt-observability` ; `initDe` : l'événement `init` du CLI d'une session.
+ */
+export function classerCassures({ sessions, traces, initDe = (s) => s.init || {}, depuisMs = 0 }) {
+  const parSession = new Map()
+  for (const s of sessions) {
+    if (!s.sessionId || s.debutMs === undefined || s.finMs === undefined) continue
+    const liste = parSession.get(s.sessionId) || []
+    liste.push(s)
+    parSession.set(s.sessionId, liste)
+  }
+  // Traces des consignes, rangées par session.
+  const parTrace = new Map()
+  for (const o of traces) {
+    const id = sessionDeLaTrace(o)
+    if (!id || !o.ts) continue
+    const liste = parTrace.get(id) || []
+    liste.push(o)
+    parTrace.set(id, liste)
+  }
+  // La trace d'un appel : la plus proche de sa FIN (elle s'écrit quand l'appel rend la main).
+  const traceDe = (s) => {
+    const liste = parTrace.get(s.sessionId) || []
+    let meilleure
+    for (const o of liste) {
+      const d = Math.abs(Date.parse(o.ts) - s.finMs)
+      if (d < 120_000 && (!meilleure || d < meilleure.d)) meilleure = { o, d }
+    }
+    return meilleure?.o
+  }
+  const cassees = []
+  for (const s of sessions) {
+    const c = s.socleCout
+    if (s.reprise !== true || !c?.froid || !s.sessionId || s.debutMs < depuisMs) continue
+    const avant = (parSession.get(s.sessionId) || []).filter((x) => x !== s && x.finMs <= s.debutMs)
+    if (!avant.length) continue
+    const prec = avant.reduce((a, b) => (a.finMs > b.finMs ? a : b))
+    const inactiviteMin = (s.debutMs - prec.finMs) / 60000
+    if (inactiviteMin > MEMOIRE_RELECTURE_MIN) continue
+    const ta = traceDe(prec)
+    const tb = traceDe(s)
+    const { cause, detail } = causeDeLaCassure(
+      { init: initDe(prec), prompt: ta && ta !== tb ? ta : undefined },
+      { init: initDe(s), prompt: tb && ta !== tb ? tb : undefined }
+    )
+    cassees.push({
+      session: s.sessionId,
+      debut: new Date(s.debutMs).toISOString(),
+      inactiviteMin: Math.round(inactiviteMin * 10) / 10,
+      usd: Math.round(c.ecritureUsd * 100) / 100,
+      cause,
+      detail
+    })
+  }
+  return cassees
+}
+
 async function principal() {
   const args = process.argv.slice(2)
   const opt = (nom, defaut) => {
@@ -120,62 +202,13 @@ async function principal() {
     s.fichier = path.join(dossierSorties, f)
     sessions.push(s)
   }
-  const parSession = new Map()
-  for (const s of sessions) {
-    if (!s.sessionId || s.debutMs === undefined || s.finMs === undefined) continue
-    const liste = parSession.get(s.sessionId) || []
-    liste.push(s)
-    parSession.set(s.sessionId, liste)
-  }
-  // Traces des consignes, rangées par session.
-  const traces = new Map()
-  const dossierTraces = path.join(data, 'prompt-observability')
-  for (const f of fs.existsSync(dossierTraces) ? fs.readdirSync(dossierTraces) : []) {
-    if (!f.endsWith('.jsonl')) continue
-    for (const o of lireJsonl(path.join(dossierTraces, f))) {
-      if (!o.sessionId || !o.ts) continue
-      const liste = traces.get(o.sessionId) || []
-      liste.push(o)
-      traces.set(o.sessionId, liste)
-    }
-  }
-  // La trace d'un appel : la plus proche de sa FIN (elle s'écrit quand l'appel rend la main).
-  const traceDe = (s) => {
-    const liste = traces.get(s.sessionId) || []
-    let meilleure
-    for (const o of liste) {
-      const d = Math.abs(Date.parse(o.ts) - s.finMs)
-      if (d < 120_000 && (!meilleure || d < meilleure.d)) meilleure = { o, d }
-    }
-    return meilleure?.o
-  }
-  const initDe = (s) =>
-    lireJsonl(s.fichier).find((e) => e.type === 'system' && e.subtype === 'init') || {}
-
-  const cassees = []
-  for (const s of sessions) {
-    const c = s.socleCout
-    if (s.reprise !== true || !c?.froid || !s.sessionId || s.debutMs < depuisMs) continue
-    const avant = (parSession.get(s.sessionId) || []).filter((x) => x !== s && x.finMs <= s.debutMs)
-    if (!avant.length) continue
-    const prec = avant.reduce((a, b) => (a.finMs > b.finMs ? a : b))
-    const inactiviteMin = (s.debutMs - prec.finMs) / 60000
-    if (inactiviteMin > MEMOIRE_RELECTURE_MIN) continue
-    const ta = traceDe(prec)
-    const tb = traceDe(s)
-    const { cause, detail } = causeDeLaCassure(
-      { init: initDe(prec), prompt: ta && ta !== tb ? ta : undefined },
-      { init: initDe(s), prompt: tb && ta !== tb ? tb : undefined }
-    )
-    cassees.push({
-      session: s.sessionId,
-      debut: new Date(s.debutMs).toISOString(),
-      inactiviteMin: Math.round(inactiviteMin * 10) / 10,
-      usd: Math.round(c.ecritureUsd * 100) / 100,
-      cause,
-      detail
-    })
-  }
+  const cassees = classerCassures({
+    sessions,
+    traces: lireTraces(path.join(data, 'prompt-observability')),
+    initDe: (session) =>
+      lireJsonl(session.fichier).find((e) => e.type === 'system' && e.subtype === 'init') || {},
+    depuisMs
+  })
   cassees.sort((a, b) => b.usd - a.usd)
   const parCause = new Map()
   for (const c of cassees) {
