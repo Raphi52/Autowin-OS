@@ -73,7 +73,8 @@ class ProviderQuiEcritAuChef implements ProviderAdapter {
 
 const orchestrateur = (
   provider: ProviderAdapter,
-  executes: Array<{ name: string; args: Record<string, unknown> }>
+  executes: Array<{ name: string; args: Record<string, unknown> }>,
+  dossiers: Array<string | undefined> = []
 ): Orchestrator =>
   new Orchestrator({
     registry: new ProviderRegistry().register(provider),
@@ -88,8 +89,9 @@ const orchestrateur = (
     execPhases: ['build'],
     sleep: async () => undefined,
     // Seul conv-lot est le fil d'un lot : les autres n'ont aucun outil.
-    outilsDuLot: (fil: string) =>
-      fil === 'conv-lot'
+    outilsDuLot: (fil: string, dossier?: string) => {
+      if (fil === 'conv-lot') dossiers.push(dossier)
+      return fil === 'conv-lot'
         ? {
             exec: async (name: string, args: Record<string, unknown>) => {
               executes.push({ name, args })
@@ -100,23 +102,33 @@ const orchestrateur = (
                 name: 'ecrire_a_un_fil',
                 description: "Écrire à l'agent d'un autre fil",
                 args: { destinataire: 'le fil visé', texte: 'le message' }
-              }
+              },
+              {
+                name: 'proprietaire_fichier',
+                description: 'À qui est ce fichier ?',
+                args: { chemins: 'chemin ou liste de chemins' }
+              },
+              { name: 'remember', description: 'Retenir', args: { title: 't', fact: 'f' } }
             ]
           }
         : undefined
+    }
   })
 
 const lancer = (o: Orchestrator, fil: string): Promise<unknown> =>
   o.run('corrige le défaut nommé', undefined, undefined, undefined, undefined, '', [], fil)
 
-describe('étapes d’un run de lot : ecrire_a_un_fil pour écrire au chef', () => {
-  it('le build d’un fil de lot reçoit ecrire_a_un_fil, et lui seul', async () => {
+describe('étapes d’un run de lot : écrire au chef, savoir à qui est un fichier', () => {
+  it('le build d’un fil de lot reçoit ecrire_a_un_fil et proprietaire_fichier, et eux seuls', async () => {
     const provider = new ProviderQuiEcritAuChef()
     const executes: Array<{ name: string; args: Record<string, unknown> }> = []
     await lancer(orchestrateur(provider, executes), 'conv-lot')
     const build = provider.appels.find((o) => o.execution?.phaseAppelante === 'build')
-    expect(build?.skillNodeTools?.allowedTools).toEqual(['mcp__autowin__ecrire_a_un_fil'])
-    expect(provider.outilsListes).toEqual(['ecrire_a_un_fil'])
+    expect(build?.skillNodeTools?.allowedTools).toEqual([
+      'mcp__autowin__ecrire_a_un_fil',
+      'mcp__autowin__proprietaire_fichier'
+    ])
+    expect(provider.outilsListes).toEqual(['ecrire_a_un_fil', 'proprietaire_fichier'])
     // Rien d'hérité du poste : l'étape reste privée des autres serveurs MCP.
     expect(build?.skillNodeTools?.inheritMachineMcp).not.toBe(true)
     expect(build?.skillNodeTools?.sansServeursUtilisateur).toBe(true)
@@ -139,6 +151,16 @@ describe('étapes d’un run de lot : ecrire_a_un_fil pour écrire au chef', () 
     expect(provider.reponses.ecrire_a_un_fil?.isError).not.toBe(true)
     expect(provider.reponses.remember?.isError).toBe(true)
     expect(provider.reponses.remember?.texte).toContain('REFUSÉ')
+  })
+
+  it('le lanceur du lot reçoit le dossier de l’étape, là où proprietaire_fichier doit répondre', async () => {
+    const provider = new ProviderQuiEcritAuChef()
+    const dossiers: Array<string | undefined> = []
+    await lancer(orchestrateur(provider, [], dossiers), 'conv-lot')
+    const builds = provider.appels.filter((o) => o.execution?.phaseAppelante === 'build')
+    expect(builds.length).toBeGreaterThan(0)
+    expect(dossiers).toEqual(builds.map((o) => o.execution?.cwd))
+    expect(dossiers.every((d) => typeof d === 'string' && d.length > 0)).toBe(true)
   })
 
   it('un run hors plan de lots ne reçoit aucun outil', async () => {

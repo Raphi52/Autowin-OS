@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { SendOptions, SendResult } from '../providers/types'
 import { argumentsMcpNoeudSkill } from '../providers/claude'
@@ -9,6 +13,7 @@ import {
 
 const specs = [
   { name: 'ecrire_a_un_fil', description: 'écrire', args: {} },
+  { name: 'proprietaire_fichier', description: 'à qui est ce fichier', args: {} },
   { name: 'orchestrate', description: 'lancer un run', args: {} }
 ]
 
@@ -35,7 +40,44 @@ describe('lanceurDuLot — l’outil d’une étape de lot', () => {
     const refus = await lanceur.exec('orchestrate', { task: 'x' })
     expect(appels).toEqual([{ name: 'ecrire_a_un_fil', fil: 'conv-lot' }])
     expect(refus.ok).toBe(false)
-    expect(lanceur.catalogue!().map((s) => s.name)).toEqual(['ecrire_a_un_fil'])
+    expect(lanceur.catalogue!().map((s) => s.name)).toEqual([
+      'ecrire_a_un_fil',
+      'proprietaire_fichier'
+    ])
+  })
+
+  it('proprietaire_fichier répond depuis la copie de l’étape, qui ne se dénonce pas elle-même', async () => {
+    // Par le bus, la commande lirait le dossier du FIL du lot : la copie du run y serait une copie
+    // parmi d'autres, et l'agent lirait son propre travail comme celui d'un autre run.
+    appels.length = 0
+    const ws = mkdtempSync(join(tmpdir(), 'autowin-lot-proprio-'))
+    const git = (cwd: string, ...args: string[]): void => {
+      execFileSync('git', args, { cwd })
+    }
+    git(ws, 'init', '-q', '-b', 'main')
+    git(ws, 'config', 'user.email', 't@t')
+    git(ws, 'config', 'user.name', 't')
+    mkdirSync(join(ws, 'src'))
+    writeFileSync(join(ws, 'src/a.ts'), 'export const a = 1\n')
+    git(ws, 'add', '.')
+    git(ws, 'commit', '-q', '-m', 'init')
+    const copies = mkdtempSync(join(tmpdir(), 'autowin-lot-copies-'))
+    const copieDeLEtape = join(copies, 'agent__run-etape-1')
+    const autreRun = join(copies, 'agent__run-voisin-1')
+    git(ws, 'worktree', 'add', '-q', '--detach', copieDeLEtape)
+    git(ws, 'worktree', 'add', '-q', '--detach', autreRun)
+    writeFileSync(join(copieDeLEtape, 'src/a.ts'), 'export const a = 2 // étape\n')
+    writeFileSync(join(autreRun, 'src/a.ts'), 'export const a = 3 // voisin\n')
+
+    const lanceur = lanceurDuLot('conv-lot', deps, copieDeLEtape)!
+    const r = await lanceur.exec('proprietaire_fichier', { chemins: ['src/a.ts'] })
+
+    expect(r.ok).toBe(true)
+    const [fichier] = (r.data as { fichiers: Array<Record<string, unknown>> }).fichiers
+    expect(fichier?.copiesDeRun).toEqual([{ run: 'run-voisin-1', etat: 'non commité' }])
+    expect(String(fichier?.resume)).toContain('cette copie (run-etape-1)')
+    // Lu sur place, jamais renvoyé au bus du fil.
+    expect(appels).toEqual([])
   })
 })
 
@@ -79,9 +121,13 @@ describe('registreAvecOutilsDuLot — le registre du run', () => {
     }
     const lanceur = { exec: async () => ({ ok: true }), catalogue: () => specs }
     const details: string[] = []
+    const dossiers: Array<string | undefined> = []
     const enveloppe = registreAvecOutilsDuLot(
       registre,
-      () => lanceur,
+      (dossier) => {
+        dossiers.push(dossier)
+        return lanceur
+      },
       (s) => {
         if (s.detail) details.push(s.detail)
       }
@@ -91,14 +137,19 @@ describe('registreAvecOutilsDuLot — le registre du run', () => {
     await enveloppe.send('claude', [], judge as SendOptions)
     await enveloppe.send('claude', [], build as SendOptions)
     expect(vus[0]?.skillNodeTools).toBeUndefined()
-    expect(vus[1]?.skillNodeTools?.allowedTools).toEqual(['mcp__autowin__ecrire_a_un_fil'])
+    expect(vus[1]?.skillNodeTools?.allowedTools).toEqual([
+      'mcp__autowin__ecrire_a_un_fil',
+      'mcp__autowin__proprietaire_fichier'
+    ])
+    // Le lanceur reçoit le dossier de l'étape : proprietaire_fichier y répond.
+    expect(dossiers).toEqual(['C:\\ws'])
     // Les autres méthodes du registre restent celles du registre.
     expect(enveloppe.ids()).toEqual(['claude'])
     const serveur = JSON.parse(vus[1]!.skillNodeTools!.mcpConfig).mcpServers.autowin
     await expect(
       fetch(serveur.url, { method: 'POST', headers: serveur.headers, body: '{}' })
     ).rejects.toThrow()
-    expect(details.some((d) => d.includes('outil servi à build pour écrire au chef'))).toBe(true)
+    expect(details.some((d) => d.includes('outils du lot servis à build'))).toBe(true)
   })
 })
 

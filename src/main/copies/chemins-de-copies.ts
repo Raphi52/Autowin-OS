@@ -8,6 +8,7 @@
  * Ce module calcule seulement où une copie doit vivre. Il ne déplace ni ne crée rien.
  */
 import { basename, dirname, join } from 'node:path'
+import { ancienNomDeCopieDeFil, nomDeCopieDeFil } from '../../shared/copie-du-fil'
 
 export const NOM_RACINE_COPIES_DE_TACHES = 'copies-de-taches'
 
@@ -73,6 +74,23 @@ export function runDUneCopieDeRun(dossier: string): string | undefined {
   const neuve = agentIdDeCopieNeuve(nom)
   const sousLaRacineUnique = basename(dirname(dossier)) === NOM_RACINE_COPIES_DE_TACHES
   return sousLaRacineUnique && neuve?.startsWith('run-') ? neuve : undefined
+}
+
+/**
+ * Le fil d'une copie de fil, d'après son dossier : `conv-<n>` sous la racine unique, `copies-de-fil/<fil>`
+ * ou l'ancien `essai__<fil>-<instant>-<rang>`. Tout autre dossier n'est pas une copie de fil : `undefined`.
+ */
+export function filDUneCopieDeFil(dossier: string): string | undefined {
+  const ancienne = ancienNomDeCopieDeFil(dossier)
+  if (ancienne) return ancienne.fil
+  const avant = nomDeCopieDeFil(dossier)
+  if (avant) return avant.fil
+  const nom = basename(dossier)
+  const parent = dirname(dossier)
+  const sousLaRacineUnique = basename(parent) === NOM_RACINE_COPIES_DE_TACHES
+  return sousLaRacineUnique && estUneCopieDeFil(nom) && dossierDeCopieDeTache(parent, nom) !== null
+    ? nom
+    : undefined
 }
 
 /**

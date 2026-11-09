@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process'
-import { statSync } from 'node:fs'
+import { realpathSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { ensureAutowinAppData } from '../app/app-data'
-import { runDUneCopieDeRun } from '../copies/chemins-de-copies'
+import { filDUneCopieDeFil, runDUneCopieDeRun } from '../copies/chemins-de-copies'
 import { readGitState } from '../git/git-read-main'
 import {
   normalizeWorkspaceTracePath,
@@ -26,10 +26,12 @@ import {
  * le lisait, et seulement pour le fil affiché. Trois questions, trois sources :
  * - un AUTRE FIL a modifié ce fichier sans le commiter → journal des fichiers, recoupé avec le diff
  *   actuel exactement comme l'onglet Fichiers (`conversation-git-state.ts`, `stillOwned`) ;
- * - un RUN le change dans sa copie → `git worktree list`, copies de run seulement (`agent__run-*` ou
- *   `copies-de-taches/run-*`) : une copie
- *   `agent__command-verify-*` est un INSTANTANÉ du dossier de l'utilisateur, la signaler dénoncerait
- *   chaque fichier en cours une seconde fois ;
+ * - un RUN ou un autre FIL le change dans sa copie → `git worktree list`, copies de run (`agent__run-*`,
+ *   `copies-de-taches/run-*`) et copies de fil (`copies-de-taches/conv-*`, `copies-de-fil/<fil>`,
+ *   `essai__<fil>-…`) seulement : une copie `agent__command-verify-*` est un INSTANTANÉ du dossier de
+ *   l'utilisateur, la signaler dénoncerait chaque fichier en cours une seconde fois. Une copie de fil
+ *   revient dans le même main que les autres : deux fils qui changent un fichier ne s'écrasent plus,
+ *   ils se heurtent à la fusion ;
  * - il a changé EN AMONT → `HEAD..@{u}`, SANS `git fetch` : la commande ne sort pas du poste et
  *   rend la date du dernier fetch, pour que l'agent sache de quand date la réponse.
  */
@@ -58,6 +60,8 @@ export interface ProprietaireDeFichier {
   nonCommite?: boolean
   fils: FilProprietaire[]
   copiesDeRun: { run: string; etat: string }[]
+  /** `toi` : la copie du fil qui pose la question, vue d'un autre dossier (la copie d'un run de ses lots). */
+  copiesDeFil: { conversation: string; etat: string; toi?: true }[]
   amont: { branche?: string; commits: string[] }
   resume: string
 }
@@ -68,6 +72,8 @@ export interface ReponseProprietaire {
   dernierFetch?: string
   copiesDeRunLues: number
   copiesDeRunIllisibles: number
+  copiesDeFilLues: number
+  copiesDeFilIllisibles: number
 }
 
 const executer = promisify(execFile)
@@ -81,8 +87,20 @@ function cle(path: string): string {
   return workspaceTracePathKey(path)
 }
 
+/**
+ * Le vrai chemin sur le disque : `git worktree list` écrit les noms longs, le dossier qui pose la
+ * question peut arriver en nom court Windows (8.3, avec un `~1`) et ne plus se reconnaître.
+ */
+function cheminReel(path: string): string {
+  try {
+    return realpathSync.native(path)
+  } catch {
+    return resolve(path)
+  }
+}
+
 function dossierCle(path: string): string {
-  const normalise = resolve(path).replaceAll('\\', '/').replace(/\/+$/, '')
+  const normalise = cheminReel(path).replaceAll('\\', '/').replace(/\/+$/, '')
   return process.platform === 'win32' ? normalise.toLowerCase() : normalise
 }
 
@@ -162,26 +180,44 @@ async function filsDuChemin(
   return fils.sort((a, b) => b.le.localeCompare(a.le))
 }
 
-interface CopieDeRun {
-  run: string
+/** Une copie à lire : celle d'un run (`run`) ou celle d'un fil (`fil`), jamais les deux. */
+interface CopieALire {
   dossier: string
+  run?: string
+  fil?: string
 }
 
-async function copiesDeRun(workspace: string): Promise<CopieDeRun[]> {
+interface CopiesDuDepot {
+  copies: CopieALire[]
+  /** Le dossier principal du dépôt, où toutes les copies reviennent : sa tête et sa branche. */
+  principal: { tete?: string; branche?: string }
+}
+
+async function copiesDuDepot(workspace: string): Promise<CopiesDuDepot> {
   const sortie = await git(workspace, ['worktree', 'list', '--porcelain']).catch(() => '')
   const ici = dossierCle(workspace)
-  return (
-    sortie
-      .split(/\r?\n/)
-      .filter((ligne) => ligne.startsWith('worktree '))
-      .map((ligne) => ligne.slice('worktree '.length).trim())
-      .filter((dossier) => dossierCle(dossier) !== ici)
-      // fix-ok: une copie de run se reconnaît à son dossier, sous l'une ou l'autre racine ; une copie de commande ou de fil n'est jamais signalée.
-      .flatMap((dossier) => {
-        const run = runDUneCopieDeRun(dossier)
-        return run === undefined ? [] : [{ run, dossier }]
-      })
-  )
+  // `git worktree list` rend le dossier principal en premier, puis un bloc par copie.
+  const blocs = sortie
+    .split(/\r?\n\r?\n/)
+    .map((bloc) => bloc.split(/\r?\n/))
+    .filter((lignes) => lignes[0]?.startsWith('worktree '))
+  const champ = (lignes: string[] | undefined, nom: string): string | undefined =>
+    lignes
+      ?.find((ligne) => ligne.startsWith(`${nom} `))
+      ?.slice(nom.length + 1)
+      .trim()
+  const premier = blocs[0]
+  const branche = champ(premier, 'branch')?.replace(/^refs\/heads\//, '')
+  const copies = blocs.slice(1).flatMap((lignes): CopieALire[] => {
+    const dossier = champ(lignes, 'worktree') ?? ''
+    if (dossierCle(dossier) === ici) return []
+    // Une copie se reconnaît à son dossier ; une copie de commande n'est jamais signalée.
+    const run = runDUneCopieDeRun(dossier)
+    if (run !== undefined) return [{ dossier, run }]
+    const fil = filDUneCopieDeFil(dossier)
+    return fil === undefined ? [] : [{ dossier, fil }]
+  })
+  return { copies, principal: { tete: champ(premier, 'HEAD'), ...(branche ? { branche } : {}) } }
 }
 
 /**
@@ -192,7 +228,7 @@ async function copiesDeRun(workspace: string): Promise<CopieDeRun[]> {
  * travail du run.
  */
 async function cheminsChangesDansLaCopie(
-  copie: CopieDeRun,
+  copie: CopieALire,
   relatifs: readonly string[],
   connus: readonly string[]
 ): Promise<Map<string, string> | null> {
@@ -250,7 +286,12 @@ async function dateDuDernierFetch(workspace: string): Promise<string> {
   }
 }
 
-function resumer(f: Omit<ProprietaireDeFichier, 'resume'>): string {
+/**
+ * `copieQuiDemande` : le run ou le fil dont le dossier interrogé est la copie. Seul son agent y écrit,
+ * et ses écritures n'ont de trace qu'en fin d'appel : un changement non commité sans fil tracé y est
+ * son travail en cours, pas une retouche à la main.
+ */
+function resumer(f: Omit<ProprietaireDeFichier, 'resume'>, copieQuiDemande?: string): string {
   if (f.refus) return `refusé : ${f.refus}`
   const constats: string[] = []
   const tenus = f.fils.filter((fil) => fil.diffInchange)
@@ -274,12 +315,22 @@ function resumer(f: Omit<ProprietaireDeFichier, 'resume'>): string {
     }
     if (f.fils.length === 0) {
       constats.push(
-        "modifié et non commité, sans aucun fil tracé : l'utilisateur à la main, ou un outil hors journal"
+        copieQuiDemande
+          ? `modifié et non commité, le travail en cours de cette copie (${copieQuiDemande})`
+          : "modifié et non commité, sans aucun fil tracé : l'utilisateur à la main, ou un outil hors journal"
       )
     }
   }
   for (const copie of f.copiesDeRun) {
     constats.push(`en cours dans la copie du run ${copie.run} (${copie.etat})`)
+  }
+  for (const copie of f.copiesDeFil) {
+    constats.push(
+      copie.toi
+        ? `en cours dans la copie de ce fil, ${copie.conversation} (${copie.etat})`
+        : `en cours dans la copie du fil ${copie.conversation} (${copie.etat}) — le travail ` +
+            "d'un AUTRE fil, qui reviendra dans main : pars de sa version ou attends-le"
+    )
   }
   if (f.amont.commits.length > 0) {
     constats.push(
@@ -291,7 +342,7 @@ function resumer(f: Omit<ProprietaireDeFichier, 'resume'>): string {
   const dernier = f.fils[0]
   return dernier
     ? `libre : aucun changement non commité ; dernier fil tracé : ${decrireFil(dernier)}`
-    : 'libre : aucun changement non commité, aucun fil, aucune copie de run, rien en amont'
+    : 'libre : aucun changement non commité, aucun fil, aucune copie de run ni de fil, rien en amont'
 }
 
 /**
@@ -346,16 +397,26 @@ export async function lireProprietairesDeFichiers(entree: {
     git(workspace, ['rev-parse', '--verify', '--quiet', reference])
       .then((s) => s.trim() || undefined)
       .catch(() => undefined)
-  const [etatGit, instantane, copies, amont, dernierFetch, tete, teteAmont] = await Promise.all([
+  const [etatGit, instantane, depot, amont, dernierFetch, tete, teteAmont] = await Promise.all([
     readGitState(workspace, 0),
     captureWorkspaceMutationSnapshot(workspace),
-    copiesDeRun(workspace),
+    copiesDuDepot(workspace),
     brancheAmont(workspace),
     dateDuDernierFetch(workspace),
     sha('HEAD'),
     sha('@{u}')
   ])
-  const connus = [tete, teteAmont].filter((s): s is string => Boolean(s))
+  const { copies, principal } = depot
+  const copieQuiDemande = runDUneCopieDeRun(workspace) ?? filDUneCopieDeFil(workspace)
+  // Le main du dossier principal et sa branche distante sont connus AUSSI : posée depuis une copie de
+  // fil mise à jour plus tôt, la question prenait pour leur travail les commits de main que les autres
+  // copies avaient reçus depuis.
+  const amontPrincipal = principal.branche ? await sha(`${principal.branche}@{u}`) : undefined
+  const connus = [
+    ...new Set(
+      [tete, teteAmont, principal.tete, amontPrincipal].filter((s): s is string => Boolean(s))
+    )
+  ]
   const nonCommites = new Set((etatGit.state?.changes ?? []).map((c) => cle(c.path)))
   const empreintes = new Map([...instantane].map(([path, empreinte]) => [cle(path), empreinte]))
   const owners = readCurrentPathOwners(
@@ -394,6 +455,7 @@ export async function lireProprietairesDeFichiers(entree: {
           refus: 'chemin hors du dossier de travail, ou dans .git',
           fils: [],
           copiesDeRun: [],
+          copiesDeFil: [],
           amont: { commits: [] }
         }
         return { ...refuse, resume: resumer(refuse) }
@@ -410,17 +472,26 @@ export async function lireProprietairesDeFichiers(entree: {
         ),
         copiesDeRun: parCopie.flatMap(({ copie, etats }) => {
           const etat = etats?.get(k)
-          return etat ? [{ run: copie.run, etat }] : []
+          return etat && copie.run !== undefined ? [{ run: copie.run, etat }] : []
+        }),
+        copiesDeFil: parCopie.flatMap(({ copie, etats }) => {
+          const etat = etats?.get(k)
+          if (!etat || copie.fil === undefined) return []
+          const toi = copie.fil === entree.conversationId
+          return [{ conversation: copie.fil, etat, ...(toi ? { toi: true as const } : {}) }]
         }),
         amont: { ...(amont ? { branche: amont } : {}), commits: commitsAmont.get(k) ?? [] }
       }
-      return { ...fichier, resume: resumer(fichier) }
+      return { ...fichier, resume: resumer(fichier, copieQuiDemande) }
     })
   )
   return {
     fichiers,
     ...(amont ? { dernierFetch } : {}),
-    copiesDeRunLues: parCopie.filter(({ etats }) => etats !== null).length,
-    copiesDeRunIllisibles: parCopie.filter(({ etats }) => etats === null).length
+    copiesDeRunLues: parCopie.filter(({ copie, etats }) => copie.run && etats !== null).length,
+    copiesDeRunIllisibles: parCopie.filter(({ copie, etats }) => copie.run && etats === null)
+      .length,
+    copiesDeFilLues: parCopie.filter(({ copie, etats }) => copie.fil && etats !== null).length,
+    copiesDeFilIllisibles: parCopie.filter(({ copie, etats }) => copie.fil && etats === null).length
   }
 }

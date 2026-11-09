@@ -3258,13 +3258,18 @@ Le fil reprend ensuite normalement.`
   })
   bus.plansDeLots = coordinateurDesPlans
   suiviDesPlans.coordinateur = coordinateurDesPlans
-  // Les étapes d'un run lancé par un fil de lot écrivent au chef, signées de ce fil.
-  os.setOutilsDuLot((conversationId) =>
-    lanceurDuLot(conversationId, {
-      estUnLot: (fil) => coordinateurDesPlans.planDuFil(fil)?.role === 'enfant',
-      exec: (name, args, fil) => bus.exec(name, args, fil),
-      catalogue: () => bus.catalog()
-    })
+  // Les étapes d'un run lancé par un fil de lot écrivent au chef, signées de ce fil, et lisent à qui
+  // est un fichier depuis la copie de leur run (`dossier`).
+  os.setOutilsDuLot((conversationId, dossier) =>
+    lanceurDuLot(
+      conversationId,
+      {
+        estUnLot: (fil) => coordinateurDesPlans.planDuFil(fil)?.role === 'enfant',
+        exec: (name, args, fil) => bus.exec(name, args, fil),
+        catalogue: () => bus.catalog()
+      },
+      dossier
+    )
   )
   // POINT D'ENTRÉE LOCAL : un script du poste crée un fil, y lance un tour et le relit,
   // par le même protocole que les outils du chat. Ouvert ICI, une fois `chat_send` et la sonde

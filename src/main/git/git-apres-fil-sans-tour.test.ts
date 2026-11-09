@@ -17,6 +17,7 @@ function fichier(partiel: Partial<ProprietaireDeFichier> = {}): ProprietaireDeFi
     nonCommite: true,
     fils: [{ conversation: 'conv-1', le: '2026-11-05T06:00:00Z', toi: true, diffInchange: true }],
     copiesDeRun: [],
+    copiesDeFil: [],
     amont: { commits: [] },
     resume: '',
     ...partiel
@@ -41,7 +42,9 @@ function deps(partiel: Partial<DepsSansTour> = {}) {
     proprietaires: async (chemins) => ({
       fichiers: chemins.map((chemin) => fichier({ chemin })),
       copiesDeRunLues: 0,
-      copiesDeRunIllisibles: 0
+      copiesDeRunIllisibles: 0,
+      copiesDeFilLues: 0,
+      copiesDeFilIllisibles: 0
     }),
     typer: async () => ({ statut: 'sans-objet' }),
     verifier: async () => ({ statut: 'vert', commande: 'vitest', testsJoues: 3 }),
@@ -129,7 +132,9 @@ describe('publierSansTour', () => {
           })
         ],
         copiesDeRunLues: 0,
-        copiesDeRunIllisibles: 0
+        copiesDeRunIllisibles: 0,
+        copiesDeFilLues: 0,
+        copiesDeFilIllisibles: 0
       })
     })
     const issue = await publierSansTour(d, { ...passe, fichiers: ['src/a.ts', 'src/b.ts'] })
@@ -179,7 +184,9 @@ describe('publierSansTour', () => {
       proprietaires: async () => ({
         fichiers: [fichier({ nonCommite: false })],
         copiesDeRunLues: 0,
-        copiesDeRunIllisibles: 0
+        copiesDeRunIllisibles: 0,
+        copiesDeFilLues: 0,
+        copiesDeFilIllisibles: 0
       })
     })
     expect(await publierSansTour(d, passe)).toEqual({
@@ -208,7 +215,9 @@ describe('publierSansTour', () => {
           })
         ],
         copiesDeRunLues: 0,
-        copiesDeRunIllisibles: 0
+        copiesDeRunIllisibles: 0,
+        copiesDeFilLues: 0,
+        copiesDeFilIllisibles: 0
       })
     })
     await publierSansTour(d, {
@@ -280,7 +289,9 @@ describe('publierSansTour', () => {
       proprietaires: async (chemins) => ({
         fichiers: vusParTroisFils(chemins),
         copiesDeRunLues: 8,
-        copiesDeRunIllisibles: 0
+        copiesDeRunIllisibles: 0,
+        copiesDeFilLues: 0,
+        copiesDeFilIllisibles: 0
       })
     })
 
@@ -310,7 +321,13 @@ describe('publierSansTour', () => {
             vuAFinDeTour('conv-1575')
           ]
         })
-        return { fichiers, copiesDeRunLues: 0, copiesDeRunIllisibles: 0 }
+        return {
+          fichiers,
+          copiesDeRunLues: 0,
+          copiesDeRunIllisibles: 0,
+          copiesDeFilLues: 0,
+          copiesDeFilIllisibles: 0
+        }
       }
     })
 
@@ -327,7 +344,9 @@ describe('publierSansTour', () => {
           fichier({ chemin, fils: [vuAFinDeTour('conv-1', true)] })
         ),
         copiesDeRunLues: 0,
-        copiesDeRunIllisibles: 0
+        copiesDeRunIllisibles: 0,
+        copiesDeFilLues: 0,
+        copiesDeFilIllisibles: 0
       })
     })
 
@@ -355,7 +374,9 @@ describe('publierSansTour', () => {
           fichier({ chemin, fils: [vuAFinDeTour('conv-1641', true)] })
         ),
         copiesDeRunLues: 1,
-        copiesDeRunIllisibles: 0
+        copiesDeRunIllisibles: 0,
+        copiesDeFilLues: 0,
+        copiesDeFilIllisibles: 0
       }),
       autreTourEnCours: () => true
     })

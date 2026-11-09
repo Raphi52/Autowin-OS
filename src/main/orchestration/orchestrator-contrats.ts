@@ -907,10 +907,11 @@ export interface OrchestratorDecompositionDeps {
    */
   skillCommands?: () => LanceurCommandeSkill | undefined
   /**
-   * L'outil des étapes d'un run lancé par un fil de lot (`ecrire_a_un_fil`, signé de ce fil), en
-   * liaison tardive comme `skillCommands`. Rend rien pour un fil hors plan : aucun outil.
+   * Les outils des étapes d'un run lancé par un fil de lot (`ecrire_a_un_fil` et `proprietaire_fichier`,
+   * signés de ce fil), en liaison tardive comme `skillCommands`. `dossier` est celui de l'étape, la copie
+   * de son run. Rend rien pour un fil hors plan : aucun outil.
    */
-  outilsDuLot?: (conversationId: string) => LanceurCommandeSkill | undefined
+  outilsDuLot?: (conversationId: string, dossier?: string) => LanceurCommandeSkill | undefined
   /** Source du devis actif, portee par l'ExecutionSupervisor local au run. */
   currentExecutionQuote?: () => ExecutionQuote | undefined
   /** Compteurs locaux du run, persistes avec chaque checkpoint pour une reprise sans reset. */

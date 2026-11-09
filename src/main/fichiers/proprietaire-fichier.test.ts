@@ -65,6 +65,7 @@ interface FichierRendu {
     vuSeulement?: true
   }[]
   copiesDeRun: { run: string; etat: string }[]
+  copiesDeFil: { conversation: string; etat: string; toi?: true }[]
   amont: { branche?: string; commits: string[] }
   resume: string
 }
@@ -246,6 +247,104 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
     const [fichier] = await demander(bus(ws), ['src/propre.ts'], 'conv-b')
 
     expect(fichier.copiesDeRun).toEqual([{ run: 'run-def456-1', etat: 'non commité' }])
+  })
+
+  /*
+   * Chaque fil travaille dans sa copie, et toutes reviennent dans le même main : deux fils qui changent
+   * le même fichier ne s'écrasent plus, ils se heurtent à la fusion. L'outil ne lisait que les copies de
+   * run : les 8 copies de fil vivantes du 09/11/2026 lui étaient invisibles. Trois emplacements existent :
+   * la racine unique, `copies-de-fil/<fil>` et l'ancien `retours-de-tour/essai__<fil>-<instant>-<rang>`.
+   */
+  const copieDeFil = (ws: string, ...segments: string[]): string => {
+    const dossier = join(mkdtempSync(join(tmpdir(), 'autowin-proprio-fils-')), ...segments)
+    execFileSync('git', ['worktree', 'add', '-q', '--detach', dossier], { cwd: ws })
+    return dossier
+  }
+
+  it('signale le fichier en cours dans la copie d’un autre fil, sous ses trois emplacements', async () => {
+    donnees()
+    const ws = depot()
+    const neuve = copieDeFil(ws, 'copies-de-taches', 'conv-neuf')
+    const avant = copieDeFil(ws, 'copies-de-fil', 'conv-avant')
+    const ancienne = copieDeFil(ws, 'retours-de-tour', 'essai__conv-vieux-1794057684868-1')
+    for (const copie of [neuve, avant, ancienne]) {
+      writeFileSync(join(copie, 'src/propre.ts'), 'export const propre = 5 // fil\n')
+    }
+
+    const [fichier] = await demander(bus(ws), ['src/propre.ts'], 'conv-b')
+
+    expect(fichier.copiesDeFil.map((c) => [c.conversation, c.etat, c.toi ?? false]).sort()).toEqual(
+      [
+        ['conv-avant', 'non commité', false],
+        ['conv-neuf', 'non commité', false],
+        ['conv-vieux', 'non commité', false]
+      ]
+    )
+    expect(fichier.copiesDeRun).toEqual([])
+    expect(fichier.resume).toContain('copie du fil conv-neuf')
+    expect(fichier.resume).not.toMatch(/^libre/)
+  })
+
+  it('dit au fil que la copie qui tient le fichier est la SIENNE', async () => {
+    donnees()
+    const ws = depot()
+    const sienne = copieDeFil(ws, 'copies-de-fil', 'conv-b')
+    writeFileSync(join(sienne, 'src/propre.ts'), 'export const propre = 6 // ce fil\n')
+
+    const [fichier] = await demander(bus(ws), ['src/propre.ts'], 'conv-b')
+
+    expect(fichier.copiesDeFil).toEqual([
+      { conversation: 'conv-b', etat: 'non commité', toi: true }
+    ])
+    expect(fichier.resume).toContain('copie de ce fil')
+  })
+
+  it('depuis une copie de fil en retard sur main, ne prend pas main pour le travail des autres copies', async () => {
+    // Une copie de fil est remise à jour avec main à chaque tour : une copie mise à jour APRÈS celle qui
+    // pose la question porte des commits de main que la sienne n'a pas encore. Comptés comme « commité
+    // dans la copie, pas encore intégré », ils dénonçaient chaque fichier changé dans main entre-temps.
+    donnees()
+    const ws = depot()
+    const git = (cwd: string, ...args: string[]): void => {
+      execFileSync('git', args, { cwd })
+    }
+    const demandeur = copieDeFil(ws, 'copies-de-fil', 'conv-b')
+    writeFileSync(join(ws, 'src/propre.ts'), 'export const propre = 7 // main avance\n')
+    git(ws, 'commit', '-q', '-am', 'main avance')
+    copieDeFil(ws, 'copies-de-fil', 'conv-a-jour')
+    copieDeFil(ws, 'agent__run-a-jour-1')
+    const avecTravail = copieDeFil(ws, 'copies-de-fil', 'conv-travail')
+    writeFileSync(join(avecTravail, 'src/propre.ts'), 'export const propre = 8 // travail\n')
+    git(avecTravail, 'commit', '-q', '-am', 'travail du fil')
+
+    const [fichier] = await demander(bus(demandeur), ['src/propre.ts'], 'conv-b')
+
+    expect(fichier.copiesDeRun).toEqual([])
+    expect(fichier.copiesDeFil).toEqual([
+      { conversation: 'conv-travail', etat: 'commité dans la copie, pas encore intégré' }
+    ])
+  })
+
+  it('depuis la copie d’un run, son travail non commité est le sien, pas « l’utilisateur à la main »', async () => {
+    // Une étape de lot pose la question depuis la copie de son run. Ses propres écritures n'ont pas
+    // encore de trace (posée en fin d'appel) : sans cette règle, chaque fichier qu'elle venait de
+    // modifier lui était rendu comme retouché par l'utilisateur.
+    donnees()
+    const ws = depot()
+    const copies = mkdtempSync(join(tmpdir(), 'autowin-proprio-copies-'))
+    const sienne = join(copies, 'agent__run-moi-1')
+    const autre = join(copies, 'agent__run-autre-1')
+    execFileSync('git', ['worktree', 'add', '-q', '--detach', sienne], { cwd: ws })
+    execFileSync('git', ['worktree', 'add', '-q', '--detach', autre], { cwd: ws })
+    writeFileSync(join(sienne, 'src/propre.ts'), 'export const propre = 2 // ce run\n')
+    writeFileSync(join(autre, 'src/propre.ts'), 'export const propre = 3 // autre run\n')
+
+    const [fichier] = await demander(bus(sienne), ['src/propre.ts'], 'conv-lot')
+
+    expect(fichier.nonCommite).toBe(true)
+    expect(fichier.copiesDeRun).toEqual([{ run: 'run-autre-1', etat: 'non commité' }])
+    expect(fichier.resume).toContain('le travail en cours de cette copie (run-moi-1)')
+    expect(fichier.resume).not.toMatch(/utilisateur à la main/)
   })
 
   it('compte le commit PROPRE d’une copie de run, jamais l’amont qu’elle a reçu à sa création', async () => {

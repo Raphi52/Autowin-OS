@@ -560,7 +560,10 @@ export class AutowinOS {
   private resultatsDesRuns?: () => ReadonlyMap<string, ClasseResultatRun>
   /** Outils Brain d'un noeud skill, branches apres creation du bus (cf. `setSkillCommandRunner`). */
   private skillCommandRunner?: LanceurCommandeSkill
-  private outilsDuLot?: (conversationId: string) => LanceurCommandeSkill | undefined
+  private outilsDuLot?: (
+    conversationId: string,
+    dossier?: string
+  ) => LanceurCommandeSkill | undefined
   /** Dossier des états d'orchestration reprenables (survie niveau 3). */
   private readonly orchestrationStateRoot = join(ensureAutowinAppData(), 'run-state')
   /** Premier départ et dernière activité réelle de chaque run : la péremption de 36 h en dépend. */
@@ -808,7 +811,7 @@ export class AutowinOS {
         fermerBureauCacheSiOuvert(racineScriptsHorsArchive(app.getAppPath()), demande),
       // Lue A CHAQUE phase, pas figee ici : le bus de commandes n'existe pas encore a cet instant.
       skillCommands: () => this.skillCommandRunner,
-      outilsDuLot: (conversationId) => this.outilsDuLot?.(conversationId),
+      outilsDuLot: (conversationId, dossier) => this.outilsDuLot?.(conversationId, dossier),
       // verify-replay EN PROD (opt-in via AUTOWIN_VERIFY_REPLAY) : rejoue la vérif au gate au lieu
       // de croire l'evidence sur parole. Off par défaut (voir resolveVerifyReplayConfig).
       ...resolveVerifyReplayConfig(),
@@ -1147,7 +1150,9 @@ export class AutowinOS {
   }
 
   /** Branche l'outil des étapes d'un run de lot, une fois le coordinateur des plans créé. */
-  setOutilsDuLot(outils: (conversationId: string) => LanceurCommandeSkill | undefined): void {
+  setOutilsDuLot(
+    outils: (conversationId: string, dossier?: string) => LanceurCommandeSkill | undefined
+  ): void {
     this.outilsDuLot = outils
   }
 

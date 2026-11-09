@@ -557,7 +557,7 @@ export class Orchestrator {
     return context ? withCostContext(this.deps.cost, context) : this.deps.cost
   }
 
-  /** Le registre des envois du run : ceux d'une étape de lot portent l'outil pour écrire au chef. */
+  /** Le registre des envois du run : ceux d'une étape de lot portent les outils du lot. */
   registreDuRun(
     runId: string,
     push?: (s: OrchestrationStep) => void
@@ -565,7 +565,7 @@ export class Orchestrator {
     const fil = this.costContextByRun.get(runId)?.conversationId
     const outilsDuLot = this.deps.outilsDuLot
     if (!fil || !outilsDuLot) return this.deps.registry
-    return registreAvecOutilsDuLot(this.deps.registry, () => outilsDuLot(fil), push)
+    return registreAvecOutilsDuLot(this.deps.registry, (dossier) => outilsDuLot(fil, dossier), push)
   }
 
   causalWatchPathsFor(cwd: string, runId: string): string[] {
