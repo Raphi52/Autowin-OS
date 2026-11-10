@@ -54,8 +54,12 @@ interface SuiviDuFichier {
   editions: number
   /** Les lignes de jeton écrites par le run, telles qu'elles doivent se retrouver dans le fichier. */
   jetons?: string[]
-  /** La session prévenue en dernier : elle porte déjà l'avertissement, un autre agent du run non. */
-  signale?: string
+  /**
+   * Les sessions déjà prévenues pour CE fichier : chacune ne l'est qu'une fois, tant qu'aucun jeton
+   * n'a été présent entre-temps. Une liste, et non la dernière session : deux agents qui alternent
+   * se re-prévenaient à chaque retour.
+   */
+  signales?: string[]
 }
 
 /**
@@ -150,11 +154,13 @@ export function decisionSignalDeCause(
   const presents = [...jetons].filter((ligne) => contenu === undefined || contenu.includes(ligne))
   // Plafond : un fichier très réécrit ne fait pas grossir l'état du run sans fin.
   suivi.jetons = presents.slice(-20)
-  // Un jeton présent efface l'avertissement donné : s'il disparaît ensuite, l'agent est prévenu à nouveau.
-  if (presents.length) delete suivi.signale
+  // Un jeton présent efface les avertissements donnés : s'il disparaît ensuite, chaque agent est prévenu à nouveau.
+  if (presents.length) delete suivi.signales
   const session = String(entree.session_id ?? '')
-  const signaler = suivi.editions >= reglage.seuil && !presents.length && suivi.signale !== session
-  if (signaler) suivi.signale = session
+  const prevenus = Array.isArray(suivi.signales) ? suivi.signales : []
+  const signaler =
+    suivi.editions >= reglage.seuil && !presents.length && !prevenus.includes(session)
+  if (signaler) suivi.signales = [...prevenus, session]
   etat[cle] = suivi
   disque.ecrire(disque.etat, JSON.stringify(etat))
   if (!signaler) return

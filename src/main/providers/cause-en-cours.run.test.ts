@@ -127,6 +127,20 @@ describe('signal de cause — tenu au niveau du run', () => {
     expect(contexte(neuf())).toContain(`5 édits de ${FICHIER}`)
     expect(neuf()).toBe('')
   })
+
+  it('deux agents qui alternent : chacun est prévenu une fois, même si l’autre l’a été entre-temps', () => {
+    const { lancement, ecrire } = run()
+    ecrire('const a = 2\n')
+    const premier = lancement('e2dd8f5a')
+    premier()
+    premier()
+    expect(contexte(premier())).toContain(`3 édits de ${FICHIER}`)
+    // Le second agent est prévenu à son tour : cela n'efface pas l'avertissement du premier.
+    const second = lancement('972bf003')
+    expect(contexte(second())).toContain(`4 édits de ${FICHIER}`)
+    expect(premier()).toBe('')
+    expect(second()).toBe('')
+  })
 })
 
 describe('signalDeCauseDuLancement — où vit l’état', () => {
