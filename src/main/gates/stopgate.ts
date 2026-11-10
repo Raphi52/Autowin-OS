@@ -285,6 +285,14 @@ export function refusEnProgres(entree: {
   return entree.note > entree.meilleureNote
 }
 
+/** Début du motif d'arrêt du refus répété, dans ses deux formes (jusqu'au vert, ou borné). */
+const DEBUT_FREIN_REFUS_REPETE = 'Réparation interrompue : le même refus est revenu'
+
+/** Ce motif d'arrêt est-il le frein du refus répété (et non un code périmé, une panne de juges…) ? */
+export function estFreinDuRefusRepete(arret: string | undefined): boolean {
+  return !!arret && arret.startsWith(DEBUT_FREIN_REFUS_REPETE)
+}
+
 export function arretDeLaReparation(entree: {
   /** Nombre de réparations DÉJÀ tentées. */
   tentative: number

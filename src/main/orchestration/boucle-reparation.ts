@@ -1,9 +1,11 @@
 import {
   arretDeLaReparation,
+  estFreinDuRefusRepete,
   libelleDuPassageDeReparation,
   memeRefus,
   refusEnProgres
 } from '../gates/stopgate'
+import { reservesMineuresAuFrein } from '../juge/objections-juge'
 
 /**
  * POURQUOI CE MODULE — objection du juge, tour
@@ -42,6 +44,32 @@ export function traceDuPassage(
 ): string | undefined {
   if (attempt <= 0) return undefined
   return libelleDuPassageDeReparation(attempt, plafondDur, jusquAuVert, phase)
+}
+
+/**
+ * AU FREIN, UN TRAVAIL QUI N'A PLUS QUE DES REMARQUES MINEURES EST LIVRÉ AVEC SES RÉSERVES.
+ *
+ * Trois conditions, toutes nécessaires : l'arrêt est le frein du refus répété (pas un code périmé
+ * ni une panne de juges) ; le refus vient du verdict du juge et de lui SEUL (aucune case de la
+ * demande non tenue, aucun travail non livré, aucun test du juge modifié) ; ce verdict ne porte que
+ * des MINEUR (`reservesMineuresAuFrein`). Rend les réserves à écrire sous le résultat, `[]` sinon.
+ */
+export function reservesLivreesAuFrein(entree: {
+  arret: string | undefined
+  /** Le verdict rendu par le juge DANS ce passage ; absent si le contrôle a refusé avant lui. */
+  verdictDuPassage: string | undefined
+  /** Les motifs du refus sont exactement ceux que ce verdict produit à lui seul. */
+  refusDuVerdictSeul: boolean
+}): string[] {
+  if (!estFreinDuRefusRepete(entree.arret)) return []
+  if (!entree.verdictDuPassage || !entree.refusDuVerdictSeul) return []
+  return reservesMineuresAuFrein(entree.verdictDuPassage)
+}
+
+/** La ligne de trace d'une livraison au frein : elle dit pourquoi le run n'est pas rouge. */
+export function ligneDeLivraisonAuFrein(reserves: readonly string[]): string {
+  const nombre = `${reserves.length} remarque${reserves.length > 1 ? 's' : ''} mineure${reserves.length > 1 ? 's' : ''}`
+  return `Livré avec réserves : le même refus est revenu plusieurs fois de suite et il ne reste que ${nombre} — rejouer ne converge plus, elles sont écrites sous le résultat.`
 }
 
 /** La decision de fin de passage : rejouer, ou s'arreter en nommant le motif. */

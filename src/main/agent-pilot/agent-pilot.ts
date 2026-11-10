@@ -49,7 +49,7 @@ import { emetteurDuTour } from './emission-du-tour'
 import { lecturesDuTour } from './lectures-du-tour'
 import { messageDuTour } from './message-du-tour'
 import { piecesJointesDuFil } from './pieces-jointes-du-fil'
-import { jouerLaRouteSansModele } from './route-directe'
+import { jouerLaRouteSansModele, type RepriseApresArret } from './route-directe'
 import { sessionDuTour } from './session-du-tour'
 import { systemeDuTour } from './systeme-du-tour'
 // État mutable du tour (lot 3).
@@ -395,8 +395,11 @@ export class AgentPilot {
       tourEstClos
     })
     // Phase nommée : orchestration sans le modèle, agent-pilot/route-directe.ts (lot 2).
+    // Arrêt au contrôle final d'une phase nommée : le tour continue avec le modèle, qui lit la
+    // cause et relance (`RepriseApresArret`, agent-pilot/route-directe.ts).
+    let repriseApresArret: RepriseApresArret | undefined
     if (routeSansModele) {
-      await jouerLaRouteSansModele({
+      repriseApresArret = await jouerLaRouteSansModele({
         tache: directRoute?.task ?? '',
         deuxLecturesDuTour,
         fermerSurLaQuestionDesLectures,
@@ -408,7 +411,7 @@ export class AgentPilot {
         conversationId,
         deposerCompteRendu: (id, texte) => this.deposerCompteRendu(id, texte)
       })
-      return
+      if (!repriseApresArret) return
     }
     // Attendue après la recherche Brain si la demande change l'affichage, sinon lue en parallèle.
     const lecturesAvantRendu = lancerAvantLeModele()
@@ -487,6 +490,14 @@ export class AgentPilot {
      * qu'ICI, même si les gardes anti-boucle (`invalidQuestionRecoveryAvailable`, etc.) restent
      * locales à chaque cas puisqu'elles portent un sens métier différent par motif.
      */
+    if (repriseApresArret) {
+      // La relance du tour est celle que le modèle va faire : un second arrêt clôt le tour.
+      etat.relancesApresArretRestantes = 0
+      etat.orchestrationOutcome = repriseApresArret.issue
+      etat.compteRenduOrchestration = repriseApresArret.compteRendu
+      convo.push(`RÉSULTATS:
+${repriseApresArret.pourLeModele}`)
+    }
     const recoveryReasons: MotifDeRallonge[] = []
     const grantRecoveryIteration = (reason: MotifDeRallonge): void => {
       recoveryReasons.push(reason)

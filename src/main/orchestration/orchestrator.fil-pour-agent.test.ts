@@ -146,7 +146,8 @@ describe('le fil voyage aussi jusqu’à l’agent Codex', () => {
       src.indexOf('spawnSurvivable({'),
       src.indexOf('spawnSurvivable({') + 400
     )
-    expect(appel).toMatch(/env: environnementCodex\(process\.env, \{ \.\.\.execution\.agentEnv,/)
+    // `\s*` : l'objet se replie sur plusieurs lignes dès qu'une source d'environnement s'ajoute.
+    expect(appel).toMatch(/env: environnementCodex\(process\.env, \{\s*\.\.\.execution\.agentEnv,/)
   })
 })
 

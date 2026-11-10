@@ -372,7 +372,32 @@ const HORS_PERIMETRE =
  */
 const MARQUEUR_DOSSIER_JOINT = '=== DOSSIER DE PREUVE AUTOWIN OS ==='
 
-export function ciblesNommees(task: string): string[] {
+/**
+ * Un chemin cité AVEC sa lettre de lecteur (`D:/Depot/src/x.ts:12`), ramené au chemin dans son dépôt.
+ *
+ * Un run écrit dans une copie du dépôt : ses chemins modifiés finissent par `src/x.ts`, jamais par
+ * `depot/src/x.ts`. Comparée telle quelle, la cible était manquée quoi que fasse le build, et le
+ * refus revenait à chaque passage. Le dépôt est le dossier le plus proche du fichier qui porte un
+ * `.git` ; s'il n'y en a pas, le chemin cité reste tel quel.
+ */
+function relatifAuDepot(
+  lecteur: string,
+  chemin: string,
+  existe: (chemin: string) => boolean
+): string {
+  const segments = chemin.split('/')
+  for (let i = segments.length - 1; i >= 1; i--) {
+    if (existe(`${lecteur}:/${segments.slice(0, i).join('/')}/.git`)) {
+      return segments.slice(i).join('/')
+    }
+  }
+  return chemin
+}
+
+export function ciblesNommees(
+  task: string,
+  existe: (chemin: string) => boolean = existsSync
+): string[] {
   const demande = task.split(MARQUEUR_DOSSIER_JOINT)[0].split(ENTETE_CONTEXTE_COMMUN)[0]
   const texte = demande.normalize('NFD').replace(/\p{Diacritic}/gu, '')
   const cibles: string[] = []
@@ -386,7 +411,12 @@ export function ciblesNommees(task: string): string[] {
     if (MENTION_DE_REFERENCE.test(clauseAvantChemin(texte, index))) continue
     const avantParenthese = avantParentheseOuverte(texte, index)
     if (avantParenthese !== undefined && QUESTION_DE_LECTURE.test(avantParenthese)) continue
-    const chemin = normalized(match[1])
+    const lecteur = /(?<![A-Za-z])([A-Za-z]):[\\/]$/.exec(
+      texte.slice(Math.max(0, index - 3), index)
+    )
+    const chemin = lecteur
+      ? relatifAuDepot(lecteur[1], normalized(match[1]), existe)
+      : normalized(match[1])
     if (!cibles.includes(chemin)) cibles.push(chemin)
   }
   return cibles
@@ -461,7 +491,7 @@ export function cibleNommeeTouchee(
   evidence: readonly ExecutionEvidence[],
   existe: (chemin: string) => boolean = existsSync
 ): 'sans-objet' | 'touchee' | 'manquee' {
-  const cibles = ciblesNommees(task)
+  const cibles = ciblesNommees(task, existe)
   if (cibles.length === 0) return 'sans-objet'
   const touches = evidence
     .filter((item) => item.kind === 'mutation' && successfulEvidence(item))

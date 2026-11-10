@@ -1573,6 +1573,30 @@ function lireLeBlocage(gateReasons: unknown): {
   return { ...(BLOCAGES[brut] ? { lecture: BLOCAGES[brut] } : {}), brut, fichiers }
 }
 
+/**
+ * Un arrêt au contrôle final que le chat peut reprendre lui-même dans le tour.
+ *
+ * Le contrôle a refusé le travail (preuve manquante, objection du juge, case non tenue) : la cause
+ * est écrite dans l'issue, et la lire puis relancer avec une tâche corrigée est à la portée du chat.
+ * Un blocage d'intégration n'en est pas un : soit l'app le reprend déjà seule, soit il attend un
+ * arbitrage humain — relancer un run par-dessus doublerait la reprise ou écraserait un choix.
+ */
+export function arretAuControleRelancable(outcome: OrchestrationOutcome): boolean {
+  if (outcome.gateBlocked !== true) return false
+  if (!orchestrationEnEchec(outcome)) return false
+  return lireLeBlocage(outcome.gateReasons).brut === undefined
+}
+
+/** Ce que le chat lit après un tel arrêt : la cause d'abord, puis UNE relance corrigée. */
+export const CONSIGNE_RELANCE_APRES_ARRET =
+  'Le travail s’est ARRÊTÉ au contrôle final. Ne rends pas la main sur cet arrêt : lis la cause ' +
+  'nommée ci-dessus (et le RUN.md cité si elle ne suffit pas), puis relance `orchestrate` UNE fois ' +
+  'dans ce tour avec une tâche qui traite précisément cette cause — ce qui manquait, la preuve ' +
+  'attendue, ou la demande reformulée si le contrôle exige ce que personne n’a demandé. Jamais la ' +
+  'même tâche mot pour mot : le run l’a déjà rejouée. Ne relance PAS si la cause est hors de ta ' +
+  'portée (limite d’usage, accord ou geste de l’utilisateur, action destructrice) : écris alors ta ' +
+  'clôture en nommant la cause et ce qui manque.'
+
 /** Les blocages que la base lève d'elle-même, sans geste de l'agent ni arbitrage de l'utilisateur. */
 const BLOCAGES_QUI_SE_LEVENT_SEULS = new Set(['base-dirty', 'base-in-progress'])
 const RAISON_D_INTEGRATION_EN_COURS = 'intégration locale non terminée'
@@ -1656,6 +1680,10 @@ function ligneDeRelecture(verdict: unknown): string | undefined {
   return `Relecture indépendante : ${valide ? 'validée' : 'refusée'}${surCent}.`
 }
 
+/** Motifs du contrôle final remis au modèle : assez pour lire la cause, bornés pour le contexte. */
+const MOTIFS_POUR_LE_MODELE_MAX = 8
+const MOTIF_POUR_LE_MODELE_LONGUEUR_MAX = 1500
+
 /** Corps commun : `plafondDuResultat` absent = résultat entier. */
 function composerLIssue(
   ok: boolean,
@@ -1725,6 +1753,27 @@ function composerLIssue(
   // attend se lisait « la relecture n'a pas eu lieu ».
   const relecture = ligneDeRelecture(outcome.verdictDuJuge)
   if (relecture) lines.push(relecture)
+  /*
+   * LA CAUSE EST ÉCRITE POUR LE MODÈLE. Le compte rendu d'un arrêt au contrôle final disait
+   * « corriger la cause nommée ci-dessus » sans en nommer aucune : les motifs du contrôle ne
+   * vivaient que dans le panneau « Pourquoi » de l'écran. Le chat, qui doit lire la cause avant de
+   * relancer (`CONSIGNE_RELANCE_APRES_ARRET`), n'avait rien à lire. L'écran garde son panneau.
+   */
+  if (plafondDuResultat === undefined && gateBlocked && !blocage.brut) {
+    const motifs = (Array.isArray(outcome.gateReasons) ? outcome.gateReasons : [])
+      .filter((motif): motif is string => typeof motif === 'string' && motif.trim().length > 0)
+      .slice(0, MOTIFS_POUR_LE_MODELE_MAX)
+      .map((motif) =>
+        motif.length > MOTIF_POUR_LE_MODELE_LONGUEUR_MAX
+          ? `${motif.slice(0, MOTIF_POUR_LE_MODELE_LONGUEUR_MAX)}…`
+          : motif
+      )
+    if (motifs.length > 0) {
+      lines.push('Cause, selon le contrôle final :', ...motifs.map((motif) => `- ${motif}`))
+    }
+    const fiche = asString(outcome.runPath)
+    if (fiche) lines.push(`Fiche du run : ${fiche}`)
+  }
   if (blocage.fichiers.length > 0) {
     lines.push(`Fichiers en cause : ${blocage.fichiers.join(', ')}`)
   }

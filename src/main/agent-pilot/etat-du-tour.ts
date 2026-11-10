@@ -13,6 +13,12 @@ export interface EtatDuTour {
   // appartient au controleur du run courant ; un second run exige un nouveau message utilisateur.
   orchestrationIssued: boolean
   /**
+   * Relances encore permises après un arrêt au contrôle final (`arretAuControleRelancable`).
+   * Une seule : le chat lit la cause et relance une tâche corrigée, au lieu de rendre la main sur
+   * « reprendre le travail arrêté ». Un second arrêt clôt le tour, pour borner la dépense.
+   */
+  relancesApresArretRestantes: number
+  /**
    * L'ISSUE de l'orchestration jouee dans ce tour, gardee pour la joindre au `done` FINAL.
    *
    * Le tour n'est plus clos mecaniquement sur cette issue (le modele redige desormais la cloture),
@@ -328,6 +334,7 @@ export function etatInitialDuTour(entree: {
   return {
     timingWritten: false,
     orchestrationIssued: false,
+    relancesApresArretRestantes: 1,
     orchestrationOutcome: undefined,
     refusRememberAuxiliaire: undefined,
     depotMemoireCeTour: false,

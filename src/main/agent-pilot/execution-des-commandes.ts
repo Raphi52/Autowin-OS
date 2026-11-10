@@ -12,6 +12,8 @@ import {
 import { cleDEchec } from '../chat/chat-turn-messages'
 import { tacheAvecLectureRetenue } from '../chat/deux-lectures'
 import {
+  arretAuControleRelancable,
+  CONSIGNE_RELANCE_APRES_ARRET,
   formatOrchestrationOutcome,
   formatOrchestrationOutcomePourLeModele,
   isDeliveredOrchestrationOutcome,
@@ -377,6 +379,23 @@ export async function executerLesCommandes(
         etat.commandesEnEchecNonRattrape.add(cleOrchestration)
         etat.actionIdParEchec.set(cleOrchestration, actionId)
       }
+      /*
+       * UN ARRÊT AU CONTRÔLE FINAL NE REND PLUS LA MAIN : le chat lit la cause et relance.
+       *
+       * Le verrou du tour interdisait tout second run, et le modèle recevait « écris ta clôture » :
+       * le tour finissait sur « 👉 reprendre le travail arrêté », que l'utilisateur devait relancer
+       * à la main (110 runs arrêtés sur 298 du 03 au 10/11/2026). Une relance est rendue, une
+       * seule, et pour une tâche CORRIGÉE : la boucle du run a déjà rejoué la même demande.
+       */
+      const relanceOfferte =
+        r.ok &&
+        !signal?.aborted &&
+        etat.relancesApresArretRestantes > 0 &&
+        arretAuControleRelancable(outcome ?? {})
+      if (relanceOfferte) {
+        etat.relancesApresArretRestantes -= 1
+        etat.orchestrationIssued = false
+      }
       const closureNotice = deliveryClosed
         ? 'Clôture Autowin : gate validé, RUN fermé green ; aucune autre orchestration ni aucun second judge ne sont nécessaires dans ce tour.'
         : 'Clôture Autowin : résultat terminal rendu ; aucune autre orchestration n’est relancée dans ce tour.'
@@ -421,14 +440,22 @@ export async function executerLesCommandes(
         )
       )
       results.push(
-        `${token.name} → ISSUE AUTORITATIVE DU PIPELINE (elle fait foi contre tout rapport ` +
-          `provisoire d'un worker ; aucune autre orchestration ne sera acceptée dans ce tour) :
+        relanceOfferte
+          ? `${token.name} → ISSUE AUTORITATIVE DU PIPELINE (elle fait foi contre tout rapport ` +
+              `provisoire d'un worker) :
 ` +
-          compteRenduPourLeModele +
-          `
+              compteRenduPourLeModele +
+              `
+
+${CONSIGNE_RELANCE_APRES_ARRET}`
+          : `${token.name} → ISSUE AUTORITATIVE DU PIPELINE (elle fait foi contre tout rapport ` +
+              `provisoire d'un worker ; aucune autre orchestration ne sera acceptée dans ce tour) :
+` +
+              compteRenduPourLeModele +
+              `
 
 Écris maintenant ta clôture pour l'utilisateur à partir de CES faits, sans en ` +
-          `inventer d'autres et sans contredire cette issue.`
+              `inventer d'autres et sans contredire cette issue.`
       )
       tokenIndex += 1
       continue

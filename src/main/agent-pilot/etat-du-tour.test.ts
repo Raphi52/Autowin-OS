@@ -39,6 +39,8 @@ const entree = (conversationId: string | undefined): Parameters<typeof etatIniti
 const attendu = {
   timingWritten: false,
   orchestrationIssued: false,
+  // Une relance par tour après un arrêt au contrôle final.
+  relancesApresArretRestantes: 1,
   orchestrationOutcome: undefined,
   refusRememberAuxiliaire: undefined,
   depotMemoireCeTour: false,

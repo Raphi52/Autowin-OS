@@ -1,6 +1,11 @@
 // Parcours séquentiel (scout → frame → build → clean → judge) — méthodes de la classe Orchestrator déplacées telles quelles depuis
 // orchestrator.ts ; elles s'exécutent avec `this` = l'instance, via les délégués de la classe.
-import { deciderDuPassage, traceDuPassage } from './boucle-reparation'
+import {
+  deciderDuPassage,
+  ligneDeLivraisonAuFrein,
+  reservesLivreesAuFrein,
+  traceDuPassage
+} from './boucle-reparation'
 import { randomUUID } from 'node:crypto'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from '../verify/evidence-digest'
 import {
@@ -2225,6 +2230,8 @@ export async function runInner(
    * `reservesMineuresDuScout`) : ajoutés au résultat rendu, jamais perdus. Vidé à chaque jugement.
    */
   let reservesDuJuge: string[] = []
+  /** Ces réserves viennent d'une livraison au frein du refus répété, pas d'un `/scout` nommé. */
+  let livreAuFrein = false
   /**
    * Les objections d'une RELECTURE SEULE qui a refusé en les nommant (piste 5
    * `defautsDeLaRelectureSeule`) : la relecture est livrée, et ces défauts du travail relu sont
@@ -3312,6 +3319,28 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       )
     })
     if (passage.arret) {
+      // Au frein du refus répété, des remarques mineures seules ne jettent pas le travail : il est
+      // livré avec ses réserves (`reservesLivreesAuFrein`). Le refus doit venir du verdict SEUL.
+      const refusDuVerdict = evaluateClosure({
+        status: 'green',
+        dod: dodDuVerdict(false, lastJudgeText),
+        travauxNonLivres: []
+      }).reasons
+      const reservesAuFrein = reservesLivreesAuFrein({
+        arret: passage.arret,
+        verdictDuPassage: r.refusAvantJuge ? undefined : lastJudgeText,
+        refusDuVerdictSeul:
+          gate.reasons.length === refusDuVerdict.length &&
+          gate.reasons.every((motif, i) => motif === refusDuVerdict[i])
+      })
+      if (reservesAuFrein.length > 0) {
+        valid = true
+        gate = { blocked: false, reasons: [] }
+        reservesDuJuge = reservesAuFrein
+        livreAuFrein = true
+        push({ step: 'gate', role: 'gate', detail: ligneDeLivraisonAuFrein(reservesAuFrein) })
+        break
+      }
       gate.reasons.push(passage.arret)
       /**
        * LE MOTIF EST AUSSI POUSSE DANS LA TRACE, et pas seulement dans le resultat.
@@ -3346,7 +3375,8 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     // Les MINEUR gardés sur un `/scout` nommé suivent le résultat rendu (vide sinon).
     result: resultatAvecReservesDuJuge(
       texteRendu(),
-      valid && !gate.blocked ? reservesDuJuge : []
+      valid && !gate.blocked ? reservesDuJuge : [],
+      livreAuFrein
     ),
     valid,
     gateBlocked: gate.blocked,

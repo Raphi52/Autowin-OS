@@ -303,6 +303,29 @@ export function reservesMineuresDuScout(phaseNommee: string | undefined, text: s
 }
 
 /**
+ * AU FREIN DU REFUS RÉPÉTÉ, DES MINEUR SEULS SONT DES RÉSERVES, PAS UN ÉCHEC.
+ *
+ * Mesuré sur les runs du 03 au 10/11/2026 : 42 arrêtés par « le même refus est revenu 3 fois de
+ * suite ». Sur une grande part, le dernier verdict ne portait que des MINEUR, avec des notes de 80 à
+ * 86 et parfois « VALIDE » en première ligne ; le build les corrigeait, le juge en relevait d'autres,
+ * et le frein rendait rouge et non intégré un travail que le juge trouvait bon.
+ *
+ * « Tout MINEUR bloque » reste vrai : chaque MINEUR relance une réparation. Mais quand le frein mord
+ * et qu'il ne reste QUE des MINEUR, rejouer ne converge plus et jeter le travail coûte plus que ces
+ * remarques : il est livré, les réserves écrites sous le résultat.
+ *
+ * Rend les textes des MINEUR, `[]` sinon : un MAJEUR, une puce nue, un refus sans objection et un
+ * écart d'étendue (une partie de la demande manque) gardent le blocage.
+ */
+export function reservesMineuresAuFrein(text: string): string[] {
+  const objections = objectionsClassees(text, false)
+  if (objections.length === 0) return []
+  if (!objections.every((o) => o.gravite === 'MINEUR')) return []
+  if (objections.some((o) => /^\**\s*etendue\b/.test(normaliser(o.texte)))) return []
+  return objections.map((o) => o.texte)
+}
+
+/**
  * UNE RELECTURE SEULE QUI A NOMMÉ CE QU'ELLE A VU EST LIVRÉE (piste 5).
  *
  * Mesuré : quatre `/judge` sans autre phase ont fini
@@ -354,12 +377,19 @@ const RESERVES_MAX = 8
 const RESERVE_LONGUEUR_MAX = 500
 
 /** Le résultat rendu à l'utilisateur, suivi des réserves du juge en section dédiée ; intact sans réserve. */
-export function resultatAvecReservesDuJuge(resultat: string, reserves: readonly string[]): string {
+export function resultatAvecReservesDuJuge(
+  resultat: string,
+  reserves: readonly string[],
+  auFrein = false
+): string {
   if (reserves.length === 0) return resultat
   const puces = reserves
     .slice(0, RESERVES_MAX)
     .map((r) => `- ${r.length > RESERVE_LONGUEUR_MAX ? `${r.slice(0, RESERVE_LONGUEUR_MAX)}…` : r}`)
-  return `${resultat}\n\n## Réserves du juge (non corrigées)\nLe juge les a classées MINEUR. Sur un \`/scout\`, elles ne relancent pas l'analyse : vérifie-les avant d'agir sur la piste concernée.\n${puces.join('\n')}`
+  const pourquoi = auFrein
+    ? 'Le juge les a classées MINEUR. La réparation a été rejouée plusieurs fois sans les épuiser : le travail est livré, ces remarques restent à traiter si elles comptent pour toi.'
+    : "Le juge les a classées MINEUR. Sur un `/scout`, elles ne relancent pas l'analyse : vérifie-les avant d'agir sur la piste concernée."
+  return `${resultat}\n\n## Réserves du juge (non corrigées)\n${pourquoi}\n${puces.join('\n')}`
 }
 
 const MARQUE_TEST = /\bTEST:/g

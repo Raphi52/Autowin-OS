@@ -1,6 +1,8 @@
 // La route SANS modèle : une phase nommée (« /scout … », « /build … ») part droit à l'orchestration,
 // précédée du contrôle des deux lectures. Sortie telle quelle de AgentPilot.chat() (lot 2).
 import {
+  arretAuControleRelancable,
+  CONSIGNE_RELANCE_APRES_ARRET,
   formatOrchestrationOutcome,
   formatOrchestrationOutcomePourLeModele,
   type OrchestrationOutcome
@@ -13,6 +15,20 @@ import type { ExecutionDeCommande } from './commandes-du-tour'
 import type { PilotEventVariant } from './evenements'
 import { commandResultSucceeded, failedOrchestrationOutcome } from './issue-des-commandes'
 import type { LecturesDuTour } from './lectures-du-tour'
+
+/**
+ * Ce que la route rend quand le run s'est ARRÊTÉ au contrôle final et que le chat peut le reprendre
+ * (`arretAuControleRelancable`) : le tour n'est pas clos, le modèle lit la cause et relance une
+ * tâche corrigée. Sans cela, une phase nommée finissait toujours sur « reprendre le travail
+ * arrêté », sans qu'aucun modèle n'ait lu pourquoi (run judge-panda-as-fait-lancer-commande-mwasivzu).
+ */
+export interface RepriseApresArret {
+  /** L'issue entière et la consigne de relance, poussées dans le fil du modèle. */
+  pourLeModele: string
+  /** Le compte rendu affiché si le modèle ne dit rien. */
+  compteRendu: string
+  issue: Record<string, unknown>
+}
 
 export async function jouerLaRouteSansModele(
   entree: Pick<
@@ -28,7 +44,7 @@ export async function jouerLaRouteSansModele(
     conversationId: string | undefined
     deposerCompteRendu: (conversationId: string, texte: string) => void
   }
-): Promise<void> {
+): Promise<RepriseApresArret | undefined> {
   const {
     deuxLecturesDuTour,
     fermerSurLaQuestionDesLectures,
@@ -45,7 +61,7 @@ export async function jouerLaRouteSansModele(
   const issueDeLaRoute = await deuxLecturesDuTour('avant-d-agir')
   if (issueDeLaRoute?.kind === 'question') {
     await fermerSurLaQuestionDesLectures('lectures:0', issueDeLaRoute.lectures)
-    return
+    return undefined
   }
   if (issueDeLaRoute?.kind === 'retenue') {
     annoncerLaLectureRetenue(issueDeLaRoute)
@@ -86,6 +102,27 @@ export async function jouerLaRouteSansModele(
     formatOrchestrationOutcome(result.ok, issueDuRun, erreurDuRun),
     directiveNotice
   )
+  const issuePourLeModele = bornerResultatDeCommande(
+    'orchestrate',
+    pagesHtmlEnTexte(
+      avecAvisEnTete(
+        formatOrchestrationOutcomePourLeModele(result.ok, issueDuRun, erreurDuRun),
+        directiveNotice
+      )
+    )
+  )
+  if (issueDuRun && !signal?.aborted && arretAuControleRelancable(issueDuRun)) {
+    return {
+      pourLeModele:
+        `orchestrate → ISSUE AUTORITATIVE DU PIPELINE (elle fait foi contre tout rapport ` +
+        `provisoire d'un worker) :
+${issuePourLeModele}
+
+${CONSIGNE_RELANCE_APRES_ARRET}`,
+      compteRendu,
+      issue: issueDuRun as Record<string, unknown>
+    }
+  }
   /**
    * Ce tour n'a JAMAIS atteint le modele : on garde son compte-rendu pour le lui donner au tour
    * suivant. Sans ce depot, il se voit demander « on a bien fait tout le processus ? » a propos
@@ -96,19 +133,7 @@ export async function jouerLaRouteSansModele(
    * Les pages `html-render` du run y passent en texte visible AVANT la borne : ce compte-rendu reste
    * ensuite dans la session du modele pour tous les tours suivants.
    */
-  if (conversationId)
-    deposerCompteRendu(
-      conversationId,
-      bornerResultatDeCommande(
-        'orchestrate',
-        pagesHtmlEnTexte(
-          avecAvisEnTete(
-            formatOrchestrationOutcomePourLeModele(result.ok, issueDuRun, erreurDuRun),
-            directiveNotice
-          )
-        )
-      )
-    )
+  if (conversationId) deposerCompteRendu(conversationId, issuePourLeModele)
   emit({
     kind: 'done',
     text: compteRendu,
@@ -117,5 +142,5 @@ export async function jouerLaRouteSansModele(
       : failedOrchestrationOutcome(result.error),
     usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }
   })
-  return
+  return undefined
 }
