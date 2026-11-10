@@ -229,7 +229,11 @@ import {
   behaviourRendererOptions
 } from './ipc/ipc-senders'
 import { createWindowing } from './app/window'
-import { claudeExeEnCours, maybeUpdateClaudeCli } from './providers/claude-cli-update'
+import {
+  claudeExeEnCours,
+  maybeUpdateClaudeCli,
+  versionsDuCliClaude
+} from './providers/claude-cli-update'
 import { hydraterClesFournisseurs } from './app/env-reload'
 import {
   CLES_FOURNISSEURS,
@@ -1388,30 +1392,36 @@ const modelCatalog = new ModelCatalogRefresher(
 // topologie AVANT le refresh empêche un ancien roles.json de survivre à tout le démarrage.
 syncRuntimeTopology(agentTopology)
 const agentModelsReady = modelCatalog.refresh(true)
-// MISE A JOUR DU CLI CLAUDE, en tache de fond, au plus une fois par 12 h. C'est LUI qui porte la
-// liste de modeles : mesure du 2026-09-09, `claude-fable-5-1` n'existait dans aucune source tant que
+// MISE A JOUR DU CLI CLAUDE, en tache de fond, des qu'une version est publiee (sinon au plus une fois
+// par 12 h, quand les versions sont illisibles). C'est LUI qui porte la liste de modeles : mesure du 2026-09-09, `claude-fable-5-1` n'existait dans aucune source tant que
 // le binaire installe restait en 2.1.251. On ne bloque PAS le demarrage dessus ; quand la mise a jour
 // aboutit, la taille/date du binaire changent, donc le rafraichissement suivant du catalogue rescanne
 // et les nouveaux modeles apparaissent sans redemarrer l'app.
 // Binaire occupe (agents survivants, autre session Claude Code) : la mise a jour echouait a coup sur
 // et bloquait 12 h (vecu le 2026-10-01). Elle est REPORTEE et retentee toutes les 15 min.
 const REESSAI_MISE_A_JOUR_CLI_MS = 15 * 60_000
+// La verification ne partait qu'au demarrage : une app restee ouverte, ou relancee moins de 12 h
+// apres la derniere tentative, gardait l'ancien CLI, donc l'ancienne liste de modeles (Fable 5.2,
+// publie le 2026-11-09 a 20:02, n'est arrive qu'au redemarrage de 01:15). Elle revient maintenant
+// toutes les 30 min ; le module ne lance `claude update` que si une version nouvelle est publiee.
+const VERIFICATION_CLI_MS = 30 * 60_000
 const tenterMiseAJourCli = (): void => {
   void maybeUpdateClaudeCli(join(app.getPath('userData'), 'claude-cli-update.json'), {
-    binaireEnUsage: claudeExeEnCours
+    binaireEnUsage: claudeExeEnCours,
+    versions: (bin) => versionsDuCliClaude(bin)
   })
     .then((resultat) => {
-      if (resultat.outcome === 'skipped') return
-      console.log(
-        `[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`
-      )
-      if (resultat.outcome === 'postponed') {
-        setTimeout(tenterMiseAJourCli, REESSAI_MISE_A_JOUR_CLI_MS).unref()
+      if (resultat.outcome !== 'skipped') {
+        console.log(
+          `[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`
+        )
       }
       if (resultat.outcome === 'updated') void modelCatalog.refresh(true)
+      return resultat.outcome === 'postponed' ? REESSAI_MISE_A_JOUR_CLI_MS : VERIFICATION_CLI_MS
     })
-    .catch(() => {
-      // Deja neutralise dans le module : rien a faire ici.
+    .catch(() => VERIFICATION_CLI_MS)
+    .then((delai) => {
+      setTimeout(tenterMiseAJourCli, delai).unref()
     })
 }
 tenterMiseAJourCli()

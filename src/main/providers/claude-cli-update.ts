@@ -10,9 +10,15 @@
 // paquet systeme) laisse l'app fonctionner avec le CLI en place. Aucun rescan a forcer : le scan du
 // binaire est memoise sur sa TAILLE et sa DATE (`claude-cli-catalog.ts`), qui changent toutes deux a
 // la mise a jour — le rafraichisseur de catalogue (60 s) reprend donc les nouveaux ids tout seul.
+//
+// UNE PUBLICATION NOUVELLE PASSE LA FENETRE. Un nouveau modele arrive avec une nouvelle version du
+// CLI : attendre 12 h la retardait d'autant. Quand la version installee et la version publiee sur npm
+// sont lisibles, une version publiee jamais tentee declenche la mise a jour tout de suite ; une
+// version deja a jour ne lance rien. Une publication deja tentee (canal « stable », installation qui
+// n'avance pas) retombe sous la fenetre, pour ne pas relancer `claude update` en boucle.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, dirname } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { execFileHorsFil, type ErreurHorsFil } from '../gel/execution-hors-fil'
 import { resolveClaudeBin, signalerMiseAJourClaudeCli } from './claude'
 
@@ -23,24 +29,81 @@ const UPDATE_TIMEOUT_MS = 180_000
 
 interface UpdateStamp {
   attemptedAt: number
+  /** Version publiee visee par cette tentative, quand elle etait lisible. */
+  publiee?: string
 }
 
 function readStamp(stampPath: string): UpdateStamp | undefined {
   try {
     const parsed = JSON.parse(readFileSync(stampPath, 'utf8')) as UpdateStamp
-    return Number.isFinite(parsed.attemptedAt) ? parsed : undefined
+    if (!Number.isFinite(parsed.attemptedAt)) return undefined
+    return {
+      attemptedAt: parsed.attemptedAt,
+      ...(typeof parsed.publiee === 'string' ? { publiee: parsed.publiee } : {})
+    }
   } catch {
     return undefined
   }
 }
 
-function writeStamp(stampPath: string, attemptedAt: number): void {
+function writeStamp(stampPath: string, attemptedAt: number, publiee?: string): void {
   try {
     mkdirSync(dirname(stampPath), { recursive: true })
-    writeFileSync(stampPath, JSON.stringify({ attemptedAt }), 'utf8')
+    writeFileSync(
+      stampPath,
+      JSON.stringify({ attemptedAt, ...(publiee ? { publiee } : {}) }),
+      'utf8'
+    )
   } catch {
     // Marqueur = confort : son echec d'ecriture ne doit pas empecher la mise a jour elle-meme.
   }
+}
+
+/** Le paquet npm du CLI : `claude update` suit son etiquette `latest` par defaut. */
+const PAQUET_CLI = '@anthropic-ai/claude-code'
+
+/** Versions lues ; un champ absent = illisible, et la fenetre de 12 h decide seule. */
+export interface VersionsCli {
+  installee?: string
+  publiee?: string
+}
+
+/**
+ * Version du paquet npm qui porte le binaire (`…/@anthropic-ai/claude-code/bin/claude.exe`). Tout
+ * autre emplacement (installateur natif, `CLAUDE_BIN`) rend `undefined` : on ne devine pas.
+ */
+export function versionInstallee(bin: string): string | undefined {
+  try {
+    const paquet = JSON.parse(
+      readFileSync(join(dirname(dirname(bin)), 'package.json'), 'utf8')
+    ) as {
+      name?: unknown
+      version?: unknown
+    }
+    return paquet.name === PAQUET_CLI && typeof paquet.version === 'string'
+      ? paquet.version
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Derniere version publiee sur npm (~3,5 Ko lus) ; hors ligne ou refus = `undefined`. */
+export async function versionPubliee(fetchFn: typeof fetch = fetch): Promise<string | undefined> {
+  try {
+    const reponse = await fetchFn(`https://registry.npmjs.org/${PAQUET_CLI}/latest`, {
+      signal: AbortSignal.timeout(5_000)
+    })
+    if (!reponse.ok) return undefined
+    const manifeste = (await reponse.json()) as { version?: unknown }
+    return typeof manifeste.version === 'string' ? manifeste.version : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export async function versionsDuCliClaude(bin: string): Promise<VersionsCli> {
+  return { installee: versionInstallee(bin), publiee: await versionPubliee() }
 }
 
 export interface ClaudeCliUpdateResult {
@@ -70,13 +133,22 @@ export async function maybeUpdateClaudeCli(
      * jamais en usage (comportement d'avant) ; le demarrage branche `claudeExeEnCours`.
      */
     binaireEnUsage?: (bin: string) => Promise<boolean>
+    /** Versions installee et publiee ; absent = seule la fenetre decide (comportement d'avant). */
+    versions?: (bin: string) => Promise<VersionsCli>
   } = {}
 ): Promise<ClaudeCliUpdateResult> {
   const now = options.now ?? Date.now()
   const windowMs = options.windowMs ?? CLAUDE_CLI_UPDATE_WINDOW_MS
   const stamp = readStamp(stampPath)
-  if (stamp && now - stamp.attemptedAt < windowMs) return { outcome: 'skipped' }
+  const dansLaFenetre = Boolean(stamp && now - stamp.attemptedAt < windowMs)
+  if (dansLaFenetre && !options.versions) return { outcome: 'skipped' }
   const bin = options.bin ?? resolveClaudeBin()
+  const versions = options.versions ? await options.versions(bin).catch(() => undefined) : undefined
+  const installee = versions?.installee
+  const publiee = versions?.publiee
+  if (installee && publiee && installee === publiee) return { outcome: 'skipped' }
+  const publicationJamaisTentee = Boolean(installee && publiee && stamp?.publiee !== publiee)
+  if (dansLaFenetre && !publicationJamaisTentee) return { outcome: 'skipped' }
   // Binaire occupe : la mise a jour echouerait a coup sur. On ne lance rien et on ne MARQUE rien,
   // pour que la tentative suivante n'attende pas la fenetre entiere.
   if (await (options.binaireEnUsage?.(bin) ?? Promise.resolve(false)).catch(() => false)) {
@@ -87,7 +159,7 @@ export async function maybeUpdateClaudeCli(
   }
   // Marqueur ECRIT AVANT la tentative : un echec repete (hors ligne) ne doit pas relancer un spawn
   // a chaque demarrage.
-  writeStamp(stampPath, now)
+  writeStamp(stampPath, now, publiee)
   const run = options.run ?? runClaudeUpdate
   try {
     const enCours = run(bin)
