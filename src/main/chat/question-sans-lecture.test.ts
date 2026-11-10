@@ -153,12 +153,12 @@ describe('lecture Bash composée (conv-861)', () => {
   it('compte une lecture précédée de commandes neutres ou d’affectations', () => {
     expect(
       statusEstUneLecture(
-        "Bash · cd /d/AutoWinOS; date '+%H:%M'; tail -2 .arena/arenagame/essais/nuit-2026-09-25/journal.txt; ls .arena/arenag"
+        "Bash · cd /d/AutoWinOS; date '+%H:%M'; tail -2 .arena/banc-roblox/essais/nuit-2026-09-25/journal.txt; ls .arena/banc-r"
       )
     ).toBe(true)
     expect(
       statusEstUneLecture(
-        "Bash · N=/d/AutoWinOS/.arena/arenagame/essais/nuit-2026-09-25; date '+%m-%d %H:%M'; tail -12 $N/journal.txt"
+        "Bash · N=/d/AutoWinOS/.arena/banc-roblox/essais/nuit-2026-09-25; date '+%m-%d %H:%M'; tail -12 $N/journal.txt"
       )
     ).toBe(true)
     expect(

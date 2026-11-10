@@ -5,16 +5,16 @@ import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
 /**
  * FAUSSE ALERTE « tu as ANNONCÉ ce que tu allais faire, sans rien faire ».
  *
- * Mesuré le 2026-09-22 : le tour avait créé `.arena/arenagame/lance-bras.sh` (Write),
- * modifié `skills/arenagame/SKILL.md` (Edit) et joué deux tests (Bash) — et le garde a répondu
+ * Mesuré le 2026-09-22 : le tour avait créé `.arena/banc-roblox/lance-bras.sh` (Write),
+ * modifié `skills/banc-roblox/SKILL.md` (Edit) et joué deux tests (Bash) — et le garde a répondu
  * « aucune commande n'a été exécutée ». Cause : `anyActionExecuted` n'est levé que par un `<cmd>`
  * Autowin ; les outils NATIFS du modèle passent par `chunk.status`, où seule la LECTURE était
  * reconnue (`statusEstUneLecture`). Le garde a donc exigé de refaire un travail déjà fait.
  */
 describe('statusEstUneAction — un outil natif qui agit compte comme une action', () => {
   it('Write, Edit, MultiEdit et NotebookEdit sont des actions', () => {
-    expect(statusEstUneAction('Write · D:/AutoWinOS/.arena/arenagame/lance-bras.sh')).toBe(true)
-    expect(statusEstUneAction('Edit · skills/arenagame/SKILL.md')).toBe(true)
+    expect(statusEstUneAction('Write · D:/AutoWinOS/.arena/banc-roblox/lance-bras.sh')).toBe(true)
+    expect(statusEstUneAction('Edit · skills/banc-roblox/SKILL.md')).toBe(true)
     expect(statusEstUneAction('MultiEdit · a.ts')).toBe(true)
     expect(statusEstUneAction('NotebookEdit · n.ipynb')).toBe(true)
   })
@@ -93,7 +93,7 @@ describe('statusEstUneAction sur une commande composée (conv-861)', () => {
  */
 describe('statutComplet : la commande entière est jugée (conv-861)', () => {
   const longue =
-    'R=/c/Users/x/.claude/runs; DEST=/d/AutoWinOS/.arena/arenagame/essais/t4-2026-09-24/runs; ' +
+    'R=/c/Users/x/.claude/runs; DEST=/d/AutoWinOS/.arena/banc-roblox/essais/t4-2026-09-24/runs; ' +
     'for d in t4-a-2 t4-b-1; do cp -rp "$R/$d" "$DEST/$d" && rm -r "$R/$d"; done'
   const coupe = `Bash · ${longue.slice(0, 120)}`
 

@@ -26,7 +26,7 @@ Propre à cette skill : la règle 4 bis (jumeau d'acceptation, mesurée). Les au
    d'acceptation, et n'ajoute aucun refus que le contrat n'implique pas.** Chaque test « ceci est refusé » a son voisin
    « le cas légal le plus proche est accepté » (même borne, de l'autre côté). Un refus trop large casse autant qu'un
    refus manquant, et une restriction inventée (achat « unique », limite par jour) casse l'appelant qui suit le contrat.
-   Mesuré sur le banc arenagame : une emprise fermée (`<=` au lieu de `<`) refusait la rangée du fond et a fait perdre
+   Mesuré sur le banc Roblox : une emprise fermée (`<=` au lieu de `<`) refusait la rangée du fond et a fait perdre
    deux règles d'élixir pourtant justes (nuit, m3) ; avec le jumeau, 35/35 aux trois manches suivantes. Un
    refus inventé dans la boutique a coûté un cas caché à 2 bras sur 4 (nuit, m1), puis au seul bras sans
    cette consigne (appel nu, nuit, m5).

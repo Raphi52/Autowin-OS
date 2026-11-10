@@ -31,7 +31,7 @@ const cloture = (prompt: string): string => `✅ Fait
 
 AUTOWIN_PROMPT_V1: ${prompt}`
 const ATTENTE =
-  'Quand D:/AutoWinOS/.arena/arenagame/essais/nuit-2026-09-26-iso/fin.txt existe, compare notes et coûts réels de la nuit à bras isolés à ceux de la nuit du 26'
+  'Quand D:/AutoWinOS/.arena/banc-roblox/essais/nuit-2026-09-26-iso/fin.txt existe, compare notes et coûts réels de la nuit à bras isolés à ceux de la nuit du 26'
 const base = { actif: true, occupe: false, brouillonPresent: false, maintenant }
 const fil = (prompt: string, ts?: number): Msg[] => [
   humain('Lance la nuit', ts),

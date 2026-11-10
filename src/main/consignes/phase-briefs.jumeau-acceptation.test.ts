@@ -6,7 +6,7 @@ import { PHASE_BRIEFS } from './phase-briefs'
  *
  * Le corps de skills/build/SKILL.md n'est injecte que si l'utilisateur tape /build (commands.ts).
  * Un run automatique ne voit que PHASE_BRIEFS.build. Or la regle 4 bis (jumeau d'acceptation) est
- * la seule de la skill mesuree : 35/35 sur le banc arenagame avec elle, cas caches perdus sans
+ * la seule de la skill mesuree : 35/35 sur le banc Roblox avec elle, cas caches perdus sans
  * (refus trop large `<=` au lieu de `<`, refus invente « achat unique »).
  */
 describe('brief BUILD — jumeau d acceptation (regle 4 bis)', () => {

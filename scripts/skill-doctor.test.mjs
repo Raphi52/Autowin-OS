@@ -163,7 +163,7 @@ describe('mesurerUsages — les trois chemins de chargement', () => {
     expect([...usages.values()].reduce((n, u) => n + u.modele, 0)).toBe(1)
   })
 
-  // Le rapport passait `arenagame` de « 4×, 36 jours » à « 5×, aujourd'hui » sur un seul appel refusé
+  // Le rapport passait `banc-roblox` de « 4×, 36 jours » à « 5×, aujourd'hui » sur un seul appel refusé
   // parce que la skill était désactivée (/judge conv-1369).
   it('ne compte pas un skill_charger refusé, ni pour l usage ni pour les jetons', () => {
     const resultat = (turnId, ms, content) => ({
@@ -335,7 +335,7 @@ describe('construireRapport — mêmes règles que claude.exe', () => {
     expect(texte).toContain('Réglages › Skills est en lecture seule')
   })
 
-  // /judge du 2026-10-31 (conv-1369) : après avoir coupé terrain et arenagame, le rapport écrivait
+  // /judge du 2026-10-31 (conv-1369) : après avoir coupé terrain et une autre skill, le rapport écrivait
   // encore « 32 skills » pour une liste de 30.
   it('le total ne compte que la liste, et nomme les skills désactivées', () => {
     const rapport = construireRapport({

@@ -13,9 +13,9 @@ const RACINE = join(__dirname, '../../..')
 const CHEMIN = /`((?:src|skills)\/[A-Za-z0-9_\-./]+\.[A-Za-z0-9]+)`/g
 
 /**
- * Skills IGNORÉES par git : présentes sur ce disque, mais hors du dépôt. Exemple : `arenagame`, sortie
- * du dépôt par e889422f (« usage personnel », `.gitignore` : `skills/arenagame/`). Ses chemins
- * (`src/shared/Partie.luau`) désignent le projet Roblox de ses bras, pas ce dépôt : le test était
+ * Skills IGNORÉES par git : présentes sur ce disque, mais hors du dépôt. Exemple : une skill
+ * d'usage personnel, sortie du dépôt par e889422f et ignorée par `.gitignore` (supprimée depuis). Ses
+ * chemins (`src/shared/Partie.luau`) désignaient le projet Roblox de ses bras, pas ce dépôt : le test était
  * rouge sur ce poste et vert sur une copie propre. Seules les skills IGNORÉES sortent du contrôle ;
  * une skill neuve pas encore commitée reste contrôlée. Sans git (code 128), rien n'est filtré.
  */
@@ -43,7 +43,6 @@ describe('chemins de dépôt cités par les skills', () => {
       const r = spawnSync('git', ['ls-files', '--error-unmatch', chemin], { cwd: RACINE })
       expect(r.status, `${chemin} est suivie par git : elle doit rester contrôlée`).not.toBe(0)
     }
-    expect(skills).not.toContain('arenagame')
   })
 
   it('scanne bien le kit (sinon l’assertion suivante ne prouve rien)', () => {

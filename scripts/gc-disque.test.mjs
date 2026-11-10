@@ -372,7 +372,7 @@ describe('outils', () => {
       expect(protegeDuDepot(rel)).toBe(true)
     for (const rel of [
       'artifacts/',
-      '.arena/arenagame/',
+      '.arena/banc-roblox/',
       'electron.vite.config.1.mjs',
       'scripts/__pycache__/'
     ])

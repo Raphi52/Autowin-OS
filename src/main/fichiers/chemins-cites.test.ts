@@ -34,7 +34,7 @@ import type { PipelinePhase } from '../skills/skill-pipeline'
  * fix-ok: premier passage du 05/11 sur les vrais textes, 6 rouges mesurés et AUCUN chemin réellement
  * cassé — 3 suffixes de ligne (`objections-juge.ts:30`, `claude.ts:821`, `verify-command.ts:75`),
  * 1 span désapparié par une clôture ``` (consigne du chat), 2 absents voulus (ABSENTS_VOULUS) ; et la
- * skill ignorée `skills/arenagame/` du poste citait les chemins de son propre projet.
+ * skill ignorée `skills/banc-roblox/` du poste citait les chemins de son propre projet.
  */
 
 // La racine se lit depuis CE fichier, pas depuis le dossier où vitest a été lancé.
@@ -116,7 +116,7 @@ describe('extraction des chemins cités', () => {
 
 /**
  * Les SKILL.md du dépôt, tels que les agents les reçoivent : suivis par git, ou nouveaux et non
- * ignorés. Une skill IGNORÉE (`.gitignore`, ex. `skills/arenagame/`) vit sur le poste seulement et
+ * ignorés. Une skill IGNORÉE (`.gitignore`, ex. `skills/banc-roblox/`) vit sur le poste seulement et
  * cite les chemins de SON projet, pas de celui-ci : hors de portée, comme `.autowin-data/`.
  */
 function skillsDuDepot(): Array<[string, string]> {

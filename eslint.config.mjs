@@ -14,7 +14,7 @@ export default defineConfig(
      * du lint plutot que de la corriger.
      *
      * `bench/runs` et les dossiers `essais` de `.arena` sont des copies de travail GENEREES par les bancs et les
-     * arenas (ignorees par git : bench/.gitignore, .arena/arenagame/.gitignore). `bench/runs`
+     * arenas (ignorees par git : bench/.gitignore). `bench/runs`
      * contenait 6 copies completes de `src` : 13 957 des 16 442 fichiers lintes, et plus de 400 s
      * pour un lint sans cache (mesure du 2026-09-23).
      */
@@ -27,10 +27,6 @@ export default defineConfig(
       // Copies de bras extraites pour la notation juge (ex. juge-t4/bras/, non suivies par git) :
       // meme nature generee que essais/, 8 erreurs de lint le 2026-09-26.
       '.arena/**/bras/**',
-      // Banc arenagame SORTI du depot le 2026-09-26 (commit e889422f, .gitignore:81) : usage personnel,
-      // garde sur le disque local mais plus suivi. Le lint du depot ne doit pas le noter : ses
-      // nouveaux dossiers (juge-iso/, hd/) rendaient le lint rouge le 2026-09-27 (2 erreurs).
-      '.arena/arenagame/**',
       '**/node_modules',
       '**/dist',
       '**/out',

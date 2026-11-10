@@ -8,7 +8,7 @@ import { enumererFichiersLisibles, enumererFichiersLisiblesDetail } from './read
  * LA RECHERCHE S'ARRÊTAIT AU PLAFOND EN SILENCE, AU FOND D'UN SEUL ARBRE.
  *
  * Mesuré le 2026-09-22 : `find_in_files` avec `dir: D:/AutoWinOS` n'a pas trouvé
- * `.arena/arenagame/lance-bras.sh`, qui existait. Le parcours en PROFONDEUR avait rempli les
+ * `.arena/banc-roblox/lance-bras.sh`, qui existait. Le parcours en PROFONDEUR avait rempli les
  * 20 000 fichiers du plafond avec `bench/runs/` (≈ 17 000 fichiers de copies d'essais) et laissé
  * 10 dossiers jamais visités — et la réponse portait `tronque: false`.
  * Deux corrections : parcours PAR NIVEAUX (le peu profond passe avant le fond d'un gros arbre)
@@ -20,15 +20,15 @@ describe('enumererFichiersLisibles — plafond atteint', () => {
     const profond = join(racine, 'bench/runs/r1/copie/src/a/b')
     mkdirSync(profond, { recursive: true })
     for (let i = 0; i < 30; i++) writeFileSync(join(profond, `f${i}.ts`), 'x', 'utf8')
-    mkdirSync(join(racine, '.arena/arenagame'), { recursive: true })
-    writeFileSync(join(racine, '.arena/arenagame/lance-bras.sh'), 'cible', 'utf8')
+    mkdirSync(join(racine, '.arena/banc-roblox'), { recursive: true })
+    writeFileSync(join(racine, '.arena/banc-roblox/lance-bras.sh'), 'cible', 'utf8')
     return racine
   }
 
   it('un fichier peu profond est vu avant le fond d’un gros arbre', () => {
     const racine = arbre()
     try {
-      expect(enumererFichiersLisibles(racine, '', 10)).toContain('.arena/arenagame/lance-bras.sh')
+      expect(enumererFichiersLisibles(racine, '', 10)).toContain('.arena/banc-roblox/lance-bras.sh')
     } finally {
       rmSync(racine, { recursive: true, force: true })
     }
