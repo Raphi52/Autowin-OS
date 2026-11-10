@@ -23,7 +23,7 @@ const JOURNAL = [
   'Bash · npx vitest run src/shared/etapes-du-tour.test.ts'
 ]
 
-async function monter(done: boolean, statusLog = JOURNAL, turnId?: string, pensee = '') {
+async function monter(done: boolean, statusLog = JOURNAL, turnId?: string) {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
@@ -31,7 +31,7 @@ async function monter(done: boolean, statusLog = JOURNAL, turnId?: string, pense
     await act(async () => {
       root.render(
         createElement(ThinkingBlock, {
-          text: pensee,
+          text: '',
           done: fini,
           status: journal.at(-1)!,
           statusLog: journal,
@@ -75,8 +75,7 @@ describe('bloc Étapes', () => {
   })
 
   it('disposition « Côte à côte » (conv-303) : Raisonnement et Actions sur une ligne, Étapes dessous, même largeur', async () => {
-    // Une pensée écrite : sans texte, pendant le tour, la capsule Raisonnement ne s'affiche pas.
-    const { host, demonter } = await monter(false, JOURNAL, undefined, 'je pèse les options')
+    const { host, demonter } = await monter(false)
     const cadre = host.querySelector('[data-testid="tour-blocs"]') as HTMLElement
     expect(cadre).not.toBeNull()
     // La ligne du haut porte les DEUX capsules, dans cet ordre, et rien d'autre.

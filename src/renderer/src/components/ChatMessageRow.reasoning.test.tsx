@@ -44,23 +44,4 @@ describe('ChatMessageRow', () => {
     await act(async () => root.unmount())
     host.remove()
   })
-
-  it('ne pose aucun bloc pour une bulle en cours qui n’a encore rien écrit', async () => {
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    const root = createRoot(host)
-    const message = {
-      role: 'assistant',
-      content: '',
-      parts: [],
-      done: false
-    } as unknown as Msg
-    await act(async () => {
-      root.render(createElement(ChatMessageRow, { message, index: 0 } as never))
-    })
-    expect(host.querySelector('[data-testid="tour-blocs"]'), 'pas de bloc vide').toBeNull()
-    expect(host.querySelector('[data-testid="thinking-block"]')).toBeNull()
-    await act(async () => root.unmount())
-    host.remove()
-  })
 })

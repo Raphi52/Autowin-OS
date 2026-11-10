@@ -621,6 +621,10 @@ function TacheDeLaFrise({ action }: { action: ActionFrise }): React.JSX.Element 
  * suite du tour pense dans une bulle neuve ; celle du dessus reste en cours, mais sa pensée a fini à
  * `finDuRaisonnement`. Le compteur s'y fige sans toucher à la mémoire du tour : elle est PARTAGÉE
  * par `turnId` avec la bulle de relève, qui doit continuer de compter.
+ *
+ * UN AUTRE TOUR REPART (2026-11-10 : « un bloc raisonnement vide dans lequel y a écrit 25 mins »,
+ * sur un tour vieux de 3 min). Les bulles du fil sont identifiées par leur position : d'un fil à
+ * l'autre, ce bloc reste monté et reçoit le tour d'une autre conversation.
  */
 function useChronoDuRaisonnement(
   turnId: string | undefined,
@@ -635,6 +639,18 @@ function useChronoDuRaisonnement(
     return { debut: memorise?.debut ?? Date.now() }
   })
   const [maintenant, setMaintenant] = useState(() => chronoVu?.fin ?? Date.now())
+  // Le bloc peut recevoir le tour d'un AUTRE fil sans être remonté. Son chrono repart alors de la
+  // mémoire de CE tour : garder celui du tour précédent affichait sa durée sous le tour suivant.
+  // Sans mémoire, le premier battement date le début (l'heure ne se lit pas pendant le rendu). Un
+  // identifiant qui ARRIVE (bulle d'attente, puis premier évènement) reste le même tour.
+  const [tourCompte, setTourCompte] = useState(turnId)
+  if (tourCompte !== turnId) {
+    setTourCompte(turnId)
+    if (tourCompte !== undefined) {
+      const memorise = chronoMemorise(turnId)
+      setChrono(done || !memorise ? memorise : { debut: memorise.debut })
+    }
+  }
   const chrono = chronoDepuisLeDebutDuTour(chronoVu, debutDuTour)
   const debut = chrono?.debut
   const fin = chrono?.fin
@@ -655,7 +671,8 @@ function useChronoDuRaisonnement(
       window.clearTimeout(premier)
       window.clearInterval(id)
     }
-  }, [done, relaye])
+    // `tourCompte` : un autre tour bat tout de suite, sans attendre la seconde suivante.
+  }, [done, relaye, tourCompte])
   // Memorise le debut (et, tour fini, la fin) pour qu'un remontage ne reparte pas de zero.
   useEffect(() => {
     if (!turnId || debut === undefined) return
@@ -757,10 +774,6 @@ export function ThinkingBlock({
     finDuRaisonnement
   )
   const penseeClose = done || finDuRaisonnement !== undefined
-  // Un tour EN COURS dont la pensée n'a encore rien écrit n'a rien à montrer : la capsule n'aurait
-  // qu'un chrono qui grimpe sur du vide. Un tour clos ou une pensée relayée garde sa capsule, même
-  // sans texte : le tour terminé sans pensée la garde (2026-09-12).
-  const raisonnementAffiche = penseeClose || pensee.trim() !== ''
   const secondesActions = secondesDesActions(frise)
   const journal = useMemo(
     () => (statusLog?.length ? statusLog : status ? [status] : []),
@@ -782,26 +795,24 @@ export function ThinkingBlock({
   return (
     <div className="tour-blocs" data-testid="tour-blocs">
       <div className="tour-blocs-rang">
-        {raisonnementAffiche && (
-          <BlocRepliable
-            testid="thinking-block"
-            classe="thinking-block--raisonnement"
-            rond={<RondDIcone>{ICONE_RAISONNEMENT}</RondDIcone>}
-            libelle={penseeClose ? t('pensee.raisonnementTermine') : t('pensee.raisonnement')}
-            live={!penseeClose}
-            compteurs={
-              secondesPensee !== null && (
-                <span className="thinking-secondes" data-testid="thinking-block-secondes">
-                  {dureeLisible(secondesPensee)}
-                </span>
-              )
-            }
-            {...(dernierePensee ? { entete: dernierePensee } : {})}
-            corps={pensee}
-            contenu={<FilDePensee texte={pensee} />}
-            dependances={[text]}
-          />
-        )}
+        <BlocRepliable
+          testid="thinking-block"
+          classe="thinking-block--raisonnement"
+          rond={<RondDIcone>{ICONE_RAISONNEMENT}</RondDIcone>}
+          libelle={penseeClose ? t('pensee.raisonnementTermine') : t('pensee.raisonnement')}
+          live={!penseeClose}
+          compteurs={
+            secondesPensee !== null && (
+              <span className="thinking-secondes" data-testid="thinking-block-secondes">
+                {dureeLisible(secondesPensee)}
+              </span>
+            )
+          }
+          {...(dernierePensee ? { entete: dernierePensee } : {})}
+          corps={pensee}
+          contenu={<FilDePensee texte={pensee} />}
+          dependances={[text]}
+        />
         {actions && (
           <BlocRepliable
             testid="action-block"
