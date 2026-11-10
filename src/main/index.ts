@@ -254,6 +254,7 @@ import {
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './modeles/model-refresh'
 import { loadAgentTopology, type IncidentTopologie } from './topologie/topology-disk'
+import { amorcerReglageDeDepart } from './profil/reglage-de-depart'
 import type { AgentTopology, SlotBinding } from './topologie/topology'
 import {
   assertRuntimeTopologyAvailable,
@@ -1381,6 +1382,15 @@ const modelCatalog = new ModelCatalogRefresher(
       // Les défauts de rôle (provider-only) se résolvent désormais par alias de famille
       // contre le catalogue découvert ; les bindings existants (modèle explicite) restent intacts.
       os.roles.setCatalog(agentModels)
+      // Poste neuf (aucune topologie sur disque) : le profil « Défaut » devient son réglage, une
+      // seule fois. Ici et pas au chargement du module : il faut le catalogue découvert.
+      amorcerReglageDeDepart({
+        cheminTopologie: agentTopologyPath,
+        models: agentModels,
+        roles: os.roles.all(),
+        petitesTachesDejaReglees: os.roles.getPetitesTaches() !== undefined,
+        poserPetitesTaches: (binding) => os.setPetitesTaches(binding)
+      })
       agentTopology = loadAgentTopology(agentTopologyPath, agentModels, signalerIncidentTopologie)
       syncRuntimeTopology(agentTopology)
       os.setTaskReadiness(runtimeTopologyReadiness(agentTopology))
