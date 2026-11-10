@@ -19,6 +19,7 @@ import { StringDecoder } from 'node:string_decoder'
 import { closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import {
   copyFile as copyFileAsync,
+  mkdir as mkdirAsync,
   mkdtemp as mkdtempAsync,
   rm as rmAsync,
   stat as statAsync,
@@ -1355,6 +1356,11 @@ export function avecSignalDeCause(
  * lancements en lecture seule n'ont aucune édition à compter. Pas de `opts.conversationId` ici :
  * l'orchestrateur ne le passe pas (mesuré), et un run porte son fil dans `agentEnv`.
  *
+ * L'ÉTAT, lui, vit au niveau du RUN (`cause-en-cours/<run>.json` du dossier de données) : le dossier
+ * de réglages meurt avec chaque lancement, et le jeton écrit par un agent était oublié du suivant. Le
+ * run se reconnaît à `AUTOWIN_HDESK_ID`, seul identifiant dérivé du run que l'orchestrateur passe à
+ * l'adaptateur. Sans lui, l'état reste à côté du script.
+ *
  * Écriture impossible → `undefined`, sans lever : dans `send`, une exception retirerait TOUS les
  * réglages du lancement, gardes comprises, pour un simple avertissement perdu.
  */
@@ -1365,7 +1371,14 @@ export async function signalDeCauseDuLancement(
   if (!execution || execution.sandbox === 'read-only') return undefined
   const script = join(dossierReglages, 'cause-en-cours.mjs')
   try {
-    await writeFileAsync(script, scriptHookCauseEnCours(execution.cwd), 'utf8')
+    const run = execution.agentEnv?.AUTOWIN_HDESK_ID?.trim() ?? ''
+    let etatDuRun: string | undefined
+    if (/^[A-Za-z0-9_-]{1,120}$/.test(run)) {
+      const dossier = join(autowinAppDataRoot(), 'cause-en-cours')
+      await mkdirAsync(dossier, { recursive: true })
+      etatDuRun = join(dossier, `${run}.json`)
+    }
+    await writeFileAsync(script, scriptHookCauseEnCours(execution.cwd, etatDuRun), 'utf8')
     return script
   } catch {
     return undefined

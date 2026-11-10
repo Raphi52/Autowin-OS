@@ -9,11 +9,12 @@ import { detailRefusFixGate, SEUIL_FIX_GATE } from '../gates/hooks'
  *
  * `detectBlindFixLoop` ne change pas et refuse toujours pareil. Ce module ajoute seulement un hook
  * du CLI, APRÈS chaque outil d'édition, qui prévient l'agent à côté du résultat de son outil. Le CLI
- * lance le script dans un autre process, sans ce module : son état tient dans un fichier du dossier
- * de réglages de l'agent, nettoyé avec lui.
+ * lance le script dans un autre process, sans ce module : son état tient dans un fichier.
  *
- * LIMITE VOULUE : ce dossier est propre à UN agent lancé. Le compte repart donc à zéro à chaque
- * étape, alors que le contrôle final additionne toutes celles du run.
+ * UN ÉTAT PAR RUN, comme le contrôle final qui additionne toutes les étapes du run. Tenu par lancement
+ * (dans le dossier de réglages de l'agent), il oubliait le jeton écrit par l'agent précédent : sur
+ * 233 avertissements relus dans les transcriptions, 41 visaient un fichier qui portait déjà son jeton
+ * (run-080cb6b764d3-1, chemins-cites). Sans run connu, l'état reste dans le dossier de réglages.
  */
 
 /**
@@ -51,8 +52,10 @@ interface DisqueDuHook {
 
 interface SuiviDuFichier {
   editions: number
-  jeton: boolean
-  signale: boolean
+  /** Les lignes de jeton écrites par le run, telles qu'elles doivent se retrouver dans le fichier. */
+  jetons?: string[]
+  /** La session prévenue en dernier : elle porte déjà l'avertissement, un autre agent du run non. */
+  signale?: string
 }
 
 /**
@@ -126,12 +129,32 @@ export function decisionSignalDeCause(
   const etat: Record<string, SuiviDuFichier> = disque.existe(disque.etat)
     ? JSON.parse(disque.lire(disque.etat))
     : {}
-  const suivi = etat[cle] ?? { editions: 0, jeton: false, signale: false }
+  const suivi: SuiviDuFichier = etat[cle] ?? { editions: 0 }
   // Un appel d'outil = un compte, même en échec : `fichiersEditesParLeRun` ne filtre pas sur `ok`.
   suivi.editions += 1
-  if (reussie && ecrites.some((ligne) => jeton.test(ligne))) suivi.jeton = true
-  const signaler = suivi.editions >= reglage.seuil && !suivi.jeton && !suivi.signale
-  if (signaler) suivi.signale = true
+  const jetons = new Set(Array.isArray(suivi.jetons) ? suivi.jetons : [])
+  if (reussie)
+    for (const ligne of ecrites) if (jeton.test(ligne) && ligne.trim()) jetons.add(ligne.trim())
+  /*
+   * UN JETON NE VAUT QUE TANT QUE SA LIGNE EST DANS LE FICHIER : l'état dure tout le run, et une
+   * réécriture ou un retour arrière peut l'avoir retirée entre deux agents. Recherche par inclusion,
+   * car un jeton peut être écrit au milieu d'une ligne. Fichier illisible : rien ne prouve que la
+   * ligne a disparu, le jeton reste (le hook ne doit jamais avertir sur une panne de lecture).
+   */
+  let contenu: string | undefined
+  try {
+    contenu = disque.lire(disque.resoudre(reglage.racine, plat))
+  } catch {
+    contenu = undefined
+  }
+  const presents = [...jetons].filter((ligne) => contenu === undefined || contenu.includes(ligne))
+  // Plafond : un fichier très réécrit ne fait pas grossir l'état du run sans fin.
+  suivi.jetons = presents.slice(-20)
+  // Un jeton présent efface l'avertissement donné : s'il disparaît ensuite, l'agent est prévenu à nouveau.
+  if (presents.length) delete suivi.signale
+  const session = String(entree.session_id ?? '')
+  const signaler = suivi.editions >= reglage.seuil && !presents.length && suivi.signale !== session
+  if (signaler) suivi.signale = session
   etat[cle] = suivi
   disque.ecrire(disque.etat, JSON.stringify(etat))
   if (!signaler) return
@@ -152,8 +175,10 @@ export function decisionSignalDeCause(
  *
  * @param racine dossier de travail du run, fixé au lancement : le `cwd` lu par le hook suit les
  * `cd` de l'agent, et la clé d'un fichier changerait en cours de route.
+ * @param fichierDEtat l'état du RUN, commun à tous ses agents. Absent : un fichier à côté du script,
+ * donc propre à ce lancement.
  */
-export function scriptHookCauseEnCours(racine: string): string {
+export function scriptHookCauseEnCours(racine: string, fichierDEtat?: string): string {
   const reglage: ReglageDuSignal = {
     racine,
     seuil: SEUIL_FIX_GATE,
@@ -166,7 +191,7 @@ const decision = ${decisionSignalDeCause.toString()};
 const detail = ${detailRefusFixGate.toString()};
 const reglage = ${JSON.stringify(reglage)};
 const disque = {
-  etat: join(dirname(process.argv[1]), ${JSON.stringify(FICHIER_D_ETAT)}),
+  etat: ${fichierDEtat ? JSON.stringify(fichierDEtat) : `join(dirname(process.argv[1]), ${JSON.stringify(FICHIER_D_ETAT)})`},
   existe: existsSync,
   lire: (chemin) => readFileSync(chemin, 'utf8'),
   ecrire: (chemin, texte) => writeFileSync(chemin, texte, 'utf8'),

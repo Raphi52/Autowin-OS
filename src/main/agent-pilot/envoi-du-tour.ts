@@ -60,6 +60,7 @@ export async function appelDuModele(
     onProviderJournal,
     partiesDuMessage,
     nomsDuTour,
+    etatRecuParLeModele,
     chatSessions,
     oublierSession,
     persisterSession,
@@ -458,6 +459,8 @@ export async function appelDuModele(
       await outilsDeCetEnvoi?.arreter()
     }
   }
+  // L'envoi est accepté : le modèle a reçu l'état de ce tour, qui devient la base du diff suivant.
+  etatRecuParLeModele()
   emit({
     kind: 'prompt-call',
     iteration: i,

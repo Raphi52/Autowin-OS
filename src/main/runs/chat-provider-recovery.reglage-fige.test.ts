@@ -128,7 +128,9 @@ describe('câblage : la reprise et le tour passent chaque réglage à sa place',
       /const bindingDuChat =\s*bindingOverride \?\? recovery\?\.runtimeBinding \?\? os\.roles\.getBinding\('orchestrator'\)/
     )
     // Le tri des questions ne touche jamais un modèle figé (choisi pour le fil) ni une reprise.
-    expect(tour).toMatch(/sansAction:\s*!bindingOverride && !recovery && !continuation/)
+    // Les trois termes, dans cet ordre et liés par `&&` : la mise en forme les coupe sur plusieurs
+    // lignes, la comparaison ne dépend donc d'aucun retour à la ligne.
+    expect(tour).toMatch(/sansAction:\s*!bindingOverride\s*&&\s*!recovery\s*&&\s*!continuation\b/)
     const journal = tour.slice(tour.indexOf("kind: 'provider-journal'"))
     expect(journal.slice(0, 300)).toContain(
       '...(bindingOverride ? { bindingFige: bindingOverride } : {})'

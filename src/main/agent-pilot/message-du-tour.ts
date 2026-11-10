@@ -38,6 +38,12 @@ export type MessageDuTour = {
   /** Le fil du tour, mutable : la boucle d'itérations y ajoute les échanges suivants. */
   convo: string[]
   contextBlocksDuTour: () => Array<{ name: string; chars: number }>
+  /**
+   * À appeler quand le fournisseur a ACCEPTÉ un envoi de ce tour : l'état poussé devient la base de
+   * comparaison du tour suivant. Jamais avant : le diff suivant se calcule contre ce que le modèle a
+   * reçu, et un envoi en échec ne lui a rien remis. Sans effet au deuxième appel.
+   */
+  etatRecuParLeModele: () => void
 }
 
 export function messageDuTour(entree: {
@@ -238,8 +244,13 @@ export function messageDuTour(entree: {
   // « go », « ok » : la suite désignée est jointe par le code (relance-sans-cible.ts).
   const relanceSansCible = blocRelanceSansCible(history)
   if (relanceSansCible) blocsDuTour.push({ name: 'relanceSansCible', text: relanceSansCible })
-  // Ce qui vient detre pousse devient la reference du prochain tour de CETTE conversation.
-  dernierEtatPousse.set(cleEtat, snapshot)
+  // La référence du prochain tour de CETTE conversation n'avance qu'une fois l'envoi accepté.
+  let baseAvancee = false
+  const etatRecuParLeModele = (): void => {
+    if (baseAvancee) return
+    baseAvancee = true
+    dernierEtatPousse.set(cleEtat, snapshot)
+  }
   const nomsDuTour = new Map(blocsDuTour.map((bloc) => [bloc.text, bloc.name]))
   const convo: string[] = blocsDuTour.map((bloc) => bloc.text)
   /** Decomposition NOMMEE de ce qui part cote user, relue a l'instant de l'envoi. */
@@ -254,6 +265,7 @@ export function messageDuTour(entree: {
     blocsDuTour,
     nomsDuTour,
     convo,
-    contextBlocksDuTour
+    contextBlocksDuTour,
+    etatRecuParLeModele
   }
 }
