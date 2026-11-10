@@ -196,8 +196,8 @@ describe('ChatView — le gel de la liste nomme les lignes redessinées et leur 
    * rendu. ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION SAUTE : cette même liste chargée
    * d'un bloc. Sans mise en page mesurable (banc de test), le premier passage pose le plancher de 40
    * lignes, en tête : le fil le plus récent (`c1348`) y est, le plus ancien (`c0`) pas encore.
-   * Compté dans le DOM : le compteur du gel (`lignes`) compte des fils distincts, et « Récent » en
-   * double certains, donc 40 lignes à l'écran font 20 fils distincts.
+   * Compté dans le DOM, pas avec le compteur du gel (`lignes`) : il compte des fils distincts, et
+   * « Récent » en reprend certains, si bien qu'une ligne à l'écran n'est pas un fil.
    */
   it('au démarrage, 1 349 fils ⇒ le premier passage pose 40 lignes à l’écran, en tête', async () => {
     geler()
@@ -209,7 +209,7 @@ describe('ChatView — le gel de la liste nomme les lignes redessinées et leur 
     const premier = signauxListe(signaux).find(([, , d]) => (d?.liste?.lignes ?? 0) > 0)
     expect(premier, 'la liste a dessiné des lignes').toBeDefined()
     const [ms, , detail] = premier!
-    // fix-ok: mesuré — 40 lignes .conv-item pour 20 fils distincts (compteur lignes = 20) : la borne se compte sur le DOM.
+    // fix-ok: cause mesurée — le compteur `lignes` compte des fils, pas les lignes posées : la borne se compte sur le DOM.
     expect(
       posees,
       `premier passage : ${posees} lignes à l’écran, ${detail!.liste!.lignes} fils distincts, ${Math.round(ms)} ms`
