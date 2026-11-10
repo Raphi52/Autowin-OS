@@ -69,6 +69,20 @@ export function installRafShim(): void {
   })
 }
 
+/**
+ * La liste se dessine par tranches après son premier rendu : attend que le fil `dernierId`, le plus
+ * bas de la liste, soit dessiné. Borné : une liste qui ne le dessine jamais fait échouer l'assertion
+ * qui suit, au lieu de bloquer le test.
+ */
+export async function attendreLaListe(container: HTMLElement, dernierId: string): Promise<void> {
+  for (let tour = 0; tour < 500; tour += 1) {
+    if (container.querySelector(`.conv-item[data-conversation-id="${dernierId}"]`)) return
+    await act(async () => {
+      await new Promise((fin) => setTimeout(fin, 10))
+    })
+  }
+}
+
 export async function mountChat(
   mockApi: Record<string, unknown>,
   props: Record<string, unknown> = {}

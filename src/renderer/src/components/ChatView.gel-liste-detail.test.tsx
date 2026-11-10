@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
+  attendreLaListe,
   chatApi,
   conversation,
   installRafShim,
@@ -118,4 +119,69 @@ describe('ChatView — le gel de la liste nomme les lignes redessinées et leur 
     expect(lignes).toBeGreaterThanOrEqual(1)
     expect(lignes).toBeLessThanOrEqual(4)
   })
+
+  /** 1 349 fils : la liste du 10/11 au démarrage, « 1 349 lignes » dans un seul passage. */
+  const fils1349 = (): Array<Record<string, unknown>> =>
+    Array.from({ length: 1349 }, (_, i) => ({
+      ...conversation(`c${i}`),
+      messageCount: 1,
+      updatedAt: 1_000 + i
+    }))
+
+  /** La vue monte avec `store` chargé d'un bloc, comme au démarrage de l'app. */
+  function montageDemarrage(
+    store: Array<Record<string, unknown>>,
+    signaux: Signal[]
+  ): Record<string, unknown> {
+    return chatApi({
+      conversations: vi.fn(async () => structuredClone(store)),
+      signalerGelRenderer: vi.fn((...a: unknown[]) => signaux.push(a as Signal))
+    })
+  }
+
+  /**
+   * AU DÉMARRAGE, la liste reçoit 1 349 fils d'un coup : le gel du 10/11 a compté « 1 349 lignes »
+   * dans UN seul passage (1 261 ms). ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION SAUTE :
+   * cette même liste chargée d'un bloc. Le premier passage qui dessine des lignes n'en dessine qu'une
+   * fenêtre, en tête : le fil le plus récent (`c1348`) y est, le plus ancien (`c0`, tout en bas) pas
+   * encore. Borne : 40 lignes au plus au premier passage.
+   */
+  it('au démarrage, 1 349 fils ⇒ le premier passage ne dessine qu’une fenêtre, en tête', async () => {
+    const signaux: Signal[] = []
+    harness = await mountChat(montageDemarrage(fils1349(), signaux))
+    await laisserPasser()
+
+    // Le signal porte la durée mesurée par le Profiler de la liste : c'est le chiffre du gel.
+    const premier = signauxListe(signaux).find(([, , d]) => (d?.liste?.lignes ?? 0) > 0)
+    expect(premier, 'la liste a dessiné des lignes').toBeDefined()
+    const [ms, , detail] = premier!
+    const lignes = detail!.liste!.lignes
+    expect(
+      lignes,
+      `premier passage : ${lignes} lignes en ${Math.round(ms)} ms`
+    ).toBeLessThanOrEqual(40)
+    expect(lignes).toBeGreaterThanOrEqual(1)
+    expect(
+      harness!.container.querySelector('.conv-item[data-conversation-id="c1348"]')
+    ).not.toBeNull()
+    expect(harness!.container.querySelector('.conv-item[data-conversation-id="c0"]')).toBeNull()
+  }, 60_000)
+
+  /**
+   * JUMEAU de la borne ci-dessus : la fenêtre ne doit faire perdre aucun fil. Une fois la liste
+   * entièrement dessinée, les 1 349 fils sont dans le DOM, le plus ancien compris.
+   */
+  it('une fois la liste dessinée, aucun des 1 349 fils ne manque', async () => {
+    harness = await mountChat(montageDemarrage(fils1349(), []))
+    await laisserPasser()
+    await attendreLaListe(harness!.container, 'c0')
+
+    const dessines = new Set(
+      Array.from(
+        harness!.container.querySelectorAll<HTMLElement>('.conv-item[data-conversation-id]'),
+        (el) => el.dataset.conversationId
+      )
+    )
+    expect(dessines.size).toBe(1349)
+  }, 60_000)
 })

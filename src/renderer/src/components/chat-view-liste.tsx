@@ -38,6 +38,7 @@ import {
 import { presenceDepuisRunsVivants } from './run-presence'
 import { visibleScopedRuns } from './workflows-panel-sections'
 import { useDebutProgressif } from './fil-progressif'
+import { useLignesDessinees } from './liste-progressive'
 import {
   messageKey,
   askReponseDuFil,
@@ -126,6 +127,18 @@ export type ListeDesConversationsCtx = {
   showRuns: boolean
   surviole: string | null
   toggleConvSelection: (id: string) => void
+}
+
+/**
+ * Un groupe replié cache ses fils, sauf pendant une recherche : chercher, c'est vouloir voir. Une
+ * seule règle, pour le rendu comme pour le compte des lignes à dessiner.
+ */
+function groupeReplie(
+  cle: string,
+  requete: string,
+  replies: Readonly<Record<string, boolean>>
+): boolean {
+  return !requete.trim() && estReplie(cle, replies)
 }
 
 // Type de retour inféré : l'objet des valeurs que ChatView.tsx relit après l'appel.
@@ -811,12 +824,34 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     rangerDans
   })
   actionsListeRef.current = { loadConv, basculerDansMosaique, toggleConvSelection, rangerDans }
+  const lignesAffichables = useMemo(
+    () =>
+      groupes.reduce(
+        (total, groupe) =>
+          groupeReplie(groupe.key, convQuery, groupesReplies) ? total : total + groupe.items.length,
+        0
+      ),
+    [groupes, convQuery, groupesReplies]
+  )
+  const lignesDessinees = useLignesDessinees(lignesAffichables)
+  // Combien de fils chaque groupe dessine : les premiers de la liste, dans l'ordre d'affichage
+  // (« Récent » d'abord). Le reste attend la tranche suivante ; l'en-tête du groupe reste affiché.
+  const quotasDeGroupe = useMemo(() => {
+    let restant = lignesDessinees
+    return groupes.map((groupe) => {
+      if (groupeReplie(groupe.key, convQuery, groupesReplies)) return 0
+      const quota = Math.min(groupe.items.length, restant)
+      restant -= quota
+      return quota
+    })
+  }, [groupes, convQuery, groupesReplies, lignesDessinees])
   const lignesListe = useMemo(
     () =>
-      groupes.map((groupe) => {
+      groupes.map((groupe, indexGroupe) => {
         // Une RECHERCHE en cours deplie tout : un resultat cache dans un dossier replie
         // faisait croire que la conversation n'existait plus (« je tape 170, ca me montre rien »).
-        const replie = !convQuery.trim() && estReplie(groupe.key, groupesReplies)
+        const replie = groupeReplie(groupe.key, convQuery, groupesReplies)
+        const quota = quotasDeGroupe[indexGroupe] ?? 0
         return (
           <Fragment key={groupe.key}>
             {/*
@@ -861,7 +896,8 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
             </div>
             {!replie &&
               rangerSousLeurChef(groupe.items, liensDeLots, langue).map(
-                ({ entree, niveau, lot }) => {
+                ({ entree, niveau, lot }, rang) => {
+                  if (rang >= quota) return null
                   const { conversation: c, snippet } = entree.hit
                   return (
                     <LigneConversation
@@ -907,7 +943,8 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
       convViewMode,
       selectedConvIds,
       mosaicIds,
-      basculerGroupe
+      basculerGroupe,
+      quotasDeGroupe
     ]
   )
 
