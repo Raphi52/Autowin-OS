@@ -859,9 +859,8 @@ const LigneDuFil = memo(
             d'arret de la saisie. Les styles `.msg.assistant > .msg-meta` restent : l'en-tete
             « Bureau cache » de HdeskTv.tsx porte le meme balisage. */}
         {/* Le raisonnement se lit ICI, repliable, écrit en direct pendant que le modèle pense.
-            L'attente AVANT le premier fragment de pensée passe par le MÊME bloc (corps vide) :
-            l'ancien placeholder texte « réflexion… » etait un vestige qui court-circuitait le
-            bloc depliable et donnait l'impression d'une retrogradation. */}
+            Une bulle qui n'a encore ni pensée, ni action, ni statut ne pose AUCUN bloc : l'attente
+            posait sinon une capsule Raisonnement vide, dont le chrono grimpait sur du vide. */}
         {/* LES DEUX BLOCS SURVIVENT A LA FIN DU TOUR (demande du 2026-09-12 : « les blocs action et
             raisonnement doivent pas disparaitre a la fin du tour »). Avant, la condition exigeait
             `message.reasoning` des que le tour etait clos : sur un modele dont la pensee arrive
@@ -873,10 +872,9 @@ const LigneDuFil = memo(
           // plus tard) se lirait à rebours de la colonne.
           noeud(`comprehension-${rang}`, natureDuBloc(bloc), undefined, rendreBloc(bloc, rang))
         )}
-        {(message.reasoning ||
+        {(message.reasoning?.trim() ||
           message.providerStatusLog?.length ||
-          message.providerStatus ||
-          (!message.done && message.parts.length === 0)) &&
+          message.providerStatus) &&
           noeud(
             'tour',
             'tour',

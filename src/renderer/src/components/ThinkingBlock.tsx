@@ -757,6 +757,10 @@ export function ThinkingBlock({
     finDuRaisonnement
   )
   const penseeClose = done || finDuRaisonnement !== undefined
+  // Un tour EN COURS dont la pensée n'a encore rien écrit n'a rien à montrer : la capsule n'aurait
+  // qu'un chrono qui grimpe sur du vide. Un tour clos ou une pensée relayée garde sa capsule, même
+  // sans texte : le tour terminé sans pensée la garde (2026-09-12).
+  const raisonnementAffiche = penseeClose || pensee.trim() !== ''
   const secondesActions = secondesDesActions(frise)
   const journal = useMemo(
     () => (statusLog?.length ? statusLog : status ? [status] : []),
@@ -778,24 +782,26 @@ export function ThinkingBlock({
   return (
     <div className="tour-blocs" data-testid="tour-blocs">
       <div className="tour-blocs-rang">
-        <BlocRepliable
-          testid="thinking-block"
-          classe="thinking-block--raisonnement"
-          rond={<RondDIcone>{ICONE_RAISONNEMENT}</RondDIcone>}
-          libelle={penseeClose ? t('pensee.raisonnementTermine') : t('pensee.raisonnement')}
-          live={!penseeClose}
-          compteurs={
-            secondesPensee !== null && (
-              <span className="thinking-secondes" data-testid="thinking-block-secondes">
-                {dureeLisible(secondesPensee)}
-              </span>
-            )
-          }
-          {...(dernierePensee ? { entete: dernierePensee } : {})}
-          corps={pensee}
-          contenu={<FilDePensee texte={pensee} />}
-          dependances={[text]}
-        />
+        {raisonnementAffiche && (
+          <BlocRepliable
+            testid="thinking-block"
+            classe="thinking-block--raisonnement"
+            rond={<RondDIcone>{ICONE_RAISONNEMENT}</RondDIcone>}
+            libelle={penseeClose ? t('pensee.raisonnementTermine') : t('pensee.raisonnement')}
+            live={!penseeClose}
+            compteurs={
+              secondesPensee !== null && (
+                <span className="thinking-secondes" data-testid="thinking-block-secondes">
+                  {dureeLisible(secondesPensee)}
+                </span>
+              )
+            }
+            {...(dernierePensee ? { entete: dernierePensee } : {})}
+            corps={pensee}
+            contenu={<FilDePensee texte={pensee} />}
+            dependances={[text]}
+          />
+        )}
         {actions && (
           <BlocRepliable
             testid="action-block"

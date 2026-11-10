@@ -80,11 +80,11 @@ describe('capsule Raisonnement — compteur de secondes', () => {
   })
 
   it('ne repart pas de zéro quand le bloc est démonté puis remonté pendant le tour', () => {
-    monter({ text: '', done: false, turnId: 'tour-b' })
+    monter({ text: 'je pèse', done: false, turnId: 'tour-b' })
     avancer(5_000)
     demonter()
     avancer(4_000)
-    monter({ text: '', done: false, turnId: 'tour-b' })
+    monter({ text: 'je pèse', done: false, turnId: 'tour-b' })
     expect(compteur()).toBe('9 s')
   })
 
@@ -133,7 +133,7 @@ describe('capsule Raisonnement — compteur de secondes', () => {
     rendre({ text: '', done: true, turnId: 'tour-rallume' })
     demonter()
     avancer(6_000)
-    monter({ text: '', done: false, turnId: 'tour-rallume' })
+    monter({ text: 'je pèse', done: false, turnId: 'tour-rallume' })
     expect(compteur(), 'depuis le début du tour, pas depuis la fausse clôture').toBe('15 s')
     avancer(5_000)
     expect(compteur(), 'un tour en cours avance').toBe('20 s')
@@ -147,7 +147,7 @@ describe('capsule Raisonnement — compteur de secondes', () => {
     monter({ text: '', done: true, turnId: 'tour-rallume-sur-place' })
     expect(compteur()).toBe('4 s')
     avancer(3_000)
-    rendre({ text: '', done: false, turnId: 'tour-rallume-sur-place' })
+    rendre({ text: 'je pèse', done: false, turnId: 'tour-rallume-sur-place' })
     avancer(0)
     expect(compteur(), 'dès le premier battement, sans attendre une seconde').toBe('7 s')
     avancer(2_000)
@@ -160,7 +160,7 @@ describe('capsule Raisonnement — compteur de secondes', () => {
   it('compte depuis le DÉBUT du tour, pas depuis le retour sur la conversation', () => {
     const debutDuTour = Date.now()
     avancer(40_000)
-    monter({ text: '', done: false, turnId: 'tour-en-fond', debutDuTour })
+    monter({ text: 'je pèse', done: false, turnId: 'tour-en-fond', debutDuTour })
     expect(compteur(), 'le tour tourne depuis 40 s').toBe('40 s')
     avancer(5_000)
     expect(compteur()).toBe('45 s')
@@ -172,9 +172,9 @@ describe('capsule Raisonnement — compteur de secondes', () => {
   it('adopte le début du tour qui arrive APRÈS le montage (premier événement daté)', () => {
     const debutDuTour = Date.now()
     avancer(20_000)
-    monter({ text: '', done: false, turnId: 'tour-date-tard' })
+    monter({ text: 'je pèse', done: false, turnId: 'tour-date-tard' })
     expect(compteur()).toBe('0 s')
-    rendre({ text: '', done: false, turnId: 'tour-date-tard', debutDuTour })
+    rendre({ text: 'je pèse', done: false, turnId: 'tour-date-tard', debutDuTour })
     expect(compteur()).toBe('20 s')
   })
 
@@ -187,6 +187,20 @@ describe('capsule Raisonnement — compteur de secondes', () => {
     demonter()
     monter({ text: '', done: true, turnId: 'tour-memo-tardif', debutDuTour })
     expect(compteur(), 'depuis le début réel, pas depuis le montage').toBe('35 s')
+  })
+
+  // Une capsule sans texte, pendant le tour, n'a qu'un chrono qui grimpe sur du vide : elle ne
+  // s'affiche donc pas. Le chrono part, lui, du début du tour quand la première pensée arrive.
+  it('ne montre aucune capsule Raisonnement tant que le tour en cours n’a rien écrit', () => {
+    const debutDuTour = Date.now()
+    monter({ text: '', done: false, turnId: 'tour-vide', debutDuTour })
+    avancer(90_000)
+    expect(host!.querySelector('[data-testid="thinking-block"]'), 'pas de capsule vide').toBeNull()
+    expect(compteur()).toBeNull()
+    rendre({ text: 'je pèse', done: false, turnId: 'tour-vide', debutDuTour })
+    expect(compteur(), 'le chrono part du début du tour, pas de la première pensée').toBe(
+      '1 min 30 s'
+    )
   })
 
   it('passe en minutes au-delà de 59 s', () => {
