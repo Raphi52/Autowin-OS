@@ -25,6 +25,7 @@ import {
 } from '../skills/skill-pipeline'
 import type { LectureRetenue } from './lectures-du-tour'
 import { blocRelanceSansCible } from './relance-sans-cible'
+import type { EtatPousseParFil } from './persistance-entre-tours'
 
 export type MessageDuTour = {
   /** /draft en cours : le choix passe par les boutons du bloc, jamais par `ask`. */
@@ -54,7 +55,7 @@ export function messageDuTour(entree: {
   /** Sessions qui portent déjà les règles de travail visuel entières (absent : aucune). */
   visuelDejaEnvoye?: Set<string>
   rappelDejaEnvoye: Map<string, Set<string>>
-  dernierEtatPousse: Map<string, unknown>
+  dernierEtatPousse: EtatPousseParFil
   consommerCompteRendu: (conversationId: string) => string | undefined
 }): MessageDuTour {
   const {

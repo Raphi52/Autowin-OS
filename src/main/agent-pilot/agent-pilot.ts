@@ -94,6 +94,7 @@ import {
 } from './reponse-du-tour'
 import {
   consommerCompteRenduEnAttente,
+  creerEtatPousseParFil,
   deposerCompteRenduEnAttente,
   hydraterSessionsDuChat,
   oublierSessionPersistee,
@@ -216,8 +217,11 @@ export class AgentPilot {
    * cote MESSAGE, il change a chaque tour, donc il nest jamais mis en cache et se repaie PLEIN
    * TARIF. Mesure : 3 043 caracteres par tour, dont 2 821 pour la seule
    * liste des skills, identique dun tour a lautre.
+   *
+   * Elle survit au redémarrage : la session reprise est rétablie depuis le disque, et sans sa base le
+   * premier tour repris renverrait cet état ENTIER. D'où la persistance par fil (`runs/etat-pousse-store.ts`).
    */
-  private readonly dernierEtatPousse = new Map<string, unknown>()
+  private readonly dernierEtatPousse = creerEtatPousseParFil()
 
   /** Extraits de rappel deja envoyes dans la session courante de chaque conversation. */
   private readonly rappelDejaEnvoye = new Map<string, Set<string>>()

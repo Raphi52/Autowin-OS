@@ -1,5 +1,5 @@
-// Caches du chat entre deux tours (compte rendu non vu, sessions CLI), sortis des méthodes privées
-// de AgentPilot (lot 1). La classe garde des méthodes minces du même nom ; ses cartes
+// Caches du chat entre deux tours (compte rendu non vu, sessions CLI, base de l'état), sortis des
+// méthodes privées de AgentPilot (lot 1). La classe garde des méthodes minces du même nom ; ses cartes
 // mémoire restent privées et sont passées en argument.
 import { forgetChatSession, loadChatSessions, saveChatSession } from '../runs/chat-session-store'
 import {
@@ -7,6 +7,7 @@ import {
   lireCompteRenduNonVu,
   oublierCompteRenduNonVu
 } from '../runs/compte-rendu-non-vu-store'
+import { deposerEtatPousse, lireEtatPousse } from '../runs/etat-pousse-store'
 import { bornerResultatDeCommande } from '../chat/resultat-de-commande-borne'
 
 /**
@@ -83,5 +84,31 @@ export function oublierSessionPersistee(conversationId: string): void {
     forgetChatSession(conversationId)
   } catch {
     /* best-effort : une entree perimee sur disque sera de toute facon rejetee par sa `key` */
+  }
+}
+
+/**
+ * La base de comparaison de l'état, PAR FIL. La mémoire d'abord (chemin chaud de chaque tour), puis le
+ * disque, une fois par fil et par processus. Même forme qu'une `Map` pour les appelants : ils n'ont pas
+ * à savoir où elle vit.
+ */
+export interface EtatPousseParFil {
+  get(conversationId: string): unknown
+  set(conversationId: string, etat: unknown): void
+}
+
+export function creerEtatPousseParFil(): EtatPousseParFil {
+  const memoire = new Map<string, unknown>()
+  return {
+    get(conversationId) {
+      if (memoire.has(conversationId)) return memoire.get(conversationId)
+      const surDisque = lireEtatPousse(conversationId)
+      if (surDisque !== undefined) memoire.set(conversationId, surDisque)
+      return surDisque
+    },
+    set(conversationId, etat) {
+      memoire.set(conversationId, etat)
+      deposerEtatPousse(conversationId, etat)
+    }
   }
 }
