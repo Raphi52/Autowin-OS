@@ -3,7 +3,8 @@ import { buildOrchestratorModelGroups, type RuntimeModel } from './chat-view-mod
 
 /**
  * Le sélecteur d'orchestrateur du Chat ne doit exposer QUE la dernière version de chaque
- * famille de modèle — les versions antérieures sont du bruit dans la popup.
+ * famille de modèle — les versions antérieures sont du bruit dans la popup. ChatGPT fait
+ * exception : le CLI déclare chacune de ses versions, toutes restent (cas plus bas).
  *
  * Entrées de RÉFUTATION (celles qui font tomber ce test si le filtre est faux) :
  *  - `claude-sonnet-4-5` : famille DIFFÉRENTE d'Opus, un filtre trop grossier la supprimerait ;
@@ -88,5 +89,40 @@ describe('popup orchestrateur — dernière version seulement', () => {
       m('cli', 'claude-sonnet-4-5')
     ]).groups
     expect(modelsDe(groups)).toEqual(['cli:claude-opus-4-8', 'cli:claude-sonnet-4-5'])
+  })
+
+  /**
+   * ChatGPT (fournisseur `codex`) n'obéit pas à la règle Claude : le CLI déclare `gpt-6-luna` ET
+   * `gpt-5.6-luna` pour le même compte. Sans exemption, les deux partagent la clé de famille
+   * `gpt-luna` et le menu n'en garde qu'un.
+   * Entrée de RÉFUTATION : `gpt-5.6-luna` doit survivre à côté de `gpt-6-luna`.
+   */
+  it('garde toutes les versions que le CLI ChatGPT déclare pour le compte', () => {
+    const groups = buildOrchestratorModelGroups([
+      m('codex', 'gpt-6-luna'),
+      m('codex', 'gpt-5.6-luna'),
+      m('codex', 'gpt-5.6-terra')
+    ]).groups
+    expect(modelsDe(groups).sort()).toEqual([
+      'codex:gpt-5.6-luna',
+      'codex:gpt-5.6-terra',
+      'codex:gpt-6-luna'
+    ])
+  })
+
+  it('ne touche PAS à la règle pour Claude, à côté de ChatGPT', () => {
+    // Entrée de RÉFUTATION d'une correction trop large : exempter TOUT le menu ferait revenir
+    // claude-opus-4-5, que la règle doit toujours écarter.
+    const groups = buildOrchestratorModelGroups([
+      m('cli', 'claude-opus-4-8'),
+      m('cli', 'claude-opus-4-5'),
+      m('codex', 'gpt-6-luna'),
+      m('codex', 'gpt-5.6-luna')
+    ]).groups
+    expect(modelsDe(groups).sort()).toEqual([
+      'cli:claude-opus-4-8',
+      'codex:gpt-5.6-luna',
+      'codex:gpt-6-luna'
+    ])
   })
 })

@@ -1472,7 +1472,15 @@ function modelFamilyKey(model: string): string {
 }
 
 /**
+ * Fournisseurs dont chaque entrée du catalogue est un modèle à part entière. Le CLI Codex déclare
+ * pour le compte `gpt-6-luna` ET `gpt-5.6-luna` ; la clé de famille les fondait en un seul modèle.
+ * Leurs entrées restent toutes, la règle « une version par famille » ne vaut que pour les autres.
+ */
+const FOURNISSEURS_SANS_REDUCTION_DE_VERSION = new Set(['codex'])
+
+/**
  * Ne conserve que la version la PLUS RÉCENTE de chaque famille, par fournisseur.
+ * Les fournisseurs de FOURNISSEURS_SANS_REDUCTION_DE_VERSION sont gardés en entier.
  * Le modèle actuellement lié est toujours gardé — sinon le menu perdrait sa propre sélection.
  */
 function keepLatestVersionPerFamily(
@@ -1481,6 +1489,7 @@ function keepLatestVersionPerFamily(
 ): OrchestratorModelOption[] {
   const meilleur = new Map<string, OrchestratorModelOption>()
   for (const option of options) {
+    if (FOURNISSEURS_SANS_REDUCTION_DE_VERSION.has(option.provider)) continue
     const cle = `${option.provider}|${modelFamilyKey(option.model)}`
     const tenant = meilleur.get(cle)
     if (!tenant) {
@@ -1497,6 +1506,7 @@ function keepLatestVersionPerFamily(
   const gardés = new Set(meilleur.values())
   return options.filter(
     (option) =>
+      FOURNISSEURS_SANS_REDUCTION_DE_VERSION.has(option.provider) ||
       gardés.has(option) ||
       (current?.provider === option.provider && current?.model === option.model)
   )
