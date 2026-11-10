@@ -356,6 +356,7 @@ import { lancerScoutVeille } from '../veille/scout-claude'
 import { candidatsInternesDuDepot } from '../veille/audit-depot'
 import { dispatcherAvecVeille } from '../veille/dispatch-veille'
 import { deposerOrientationDuFil } from '../conversations/orientations-en-cours-app'
+import { declarerUltrathinkTape, ultrathinkEnPleinTour } from '../chat/ultrathink-du-tour'
 import type { ContexteIpcChat } from '../index'
 import { lanceurDuLot } from '../orchestration/outils-du-lot'
 
@@ -4105,7 +4106,11 @@ Le fil reprend ensuite normalement.`
       // un appel du CLI Claude peut durer 16 minutes (tour 2e218711 : saisie ts
       // 1793225455947 absente du premier appel, lue au second). Doublée sur disque, le contrôle
       // avant chaque outil la remet.
-      deposerOrientationDuFil(conversationId, queued[queued.length - 1])
+      // « ultrathink » TAPÉ dans ce message : le reste du tour monte en réflexion. Le niveau se
+      // fixe au lancement du CLI : le contrôle coupe donc l'appel en cours après son outil
+      // (`coupe`), et la boucle pilote le relance plus haut avec ce message.
+      const coupe = ultrathinkEnPleinTour(conversationId, directive)
+      deposerOrientationDuFil(conversationId, queued[queued.length - 1], { coupe })
       broadcast({ type: 'refresh', scope: 'directives' })
       // La directive est acceptee -> elle devient un VRAI message du fil. Sans cette ecriture, le
       // seul temoin etait un recu vivant dans la memoire de l'ecran : un rechargement l'effacait et
@@ -4123,6 +4128,13 @@ Le fil reprend ensuite normalement.`
       return { ok: true }
     }
   )
+
+  // Le champ de saisie déclare, juste avant l'envoi, qu'une personne y a TAPÉ « ultrathink » : sans
+  // cette déclaration, le mot ne monte la réflexion d'aucun tour (`chat/ultrathink-du-tour.ts`).
+  ipcMain.handle('os:ultrathink:tape', (event, rawTexte: string) => {
+    assertTrustedRendererSender(event, 'Ultrathink typed statement')
+    return { ok: declarerUltrathinkTape(guardString(rawTexte, 'texte')) }
+  })
 
   /**
    * FILET DE SÉCURITÉ DU TEXTE UTILISATEUR — appelé AVANT tout envoi, quelle que soit la suite.

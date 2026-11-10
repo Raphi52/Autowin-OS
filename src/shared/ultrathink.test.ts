@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { demandeUltrathink, effortAvecUltrathink } from './ultrathink'
+import {
+  demandeUltrathink,
+  effortAvecUltrathink,
+  saisieArriveeDUnBloc,
+  ultrathinkResteTape
+} from './ultrathink'
 
 describe('demandeUltrathink — le mot-clé dans le message', () => {
   it.each([
@@ -59,4 +64,77 @@ describe('effortAvecUltrathink — le niveau de réflexion du tour', () => {
     expect(effortAvecUltrathink('medium', undefined)).toBe('medium')
     expect(effortAvecUltrathink(undefined, undefined)).toBeUndefined()
   })
+})
+
+describe('ultrathinkResteTape — le mot ne compte que tapé par la personne', () => {
+  const suivre = (
+    etapes: Array<[apres: string, tape: boolean]>,
+    depart = { texte: '', tape: false }
+  ): boolean =>
+    etapes.reduce(
+      (etat, [apres, tape]) => ({
+        texte: apres,
+        tape: ultrathinkResteTape({ avant: etat.texte, apres, dejaTape: etat.tape, tape })
+      }),
+      depart
+    ).tape
+
+  it('tapé lettre à lettre : compte dès que le mot est complet', () => {
+    expect(suivre([['ultrathin', true]])).toBe(false)
+    expect(
+      suivre([
+        ['ultrathin', true],
+        ['ultrathink', true]
+      ])
+    ).toBe(true)
+  })
+
+  it('collé, ou posé par l’app (suite proposée, brouillon rendu) : ne compte pas', () => {
+    expect(suivre([['ultrathink corrige a.ts', false]])).toBe(false)
+  })
+
+  it('un mot collé ne devient pas tapé parce qu’on tape autour', () => {
+    expect(
+      suivre([
+        ['ultrathink corrige', false],
+        ['ultrathink corrige a.ts', true]
+      ])
+    ).toBe(false)
+  })
+
+  it('un mot tapé le reste quand du texte est collé ou ajouté par l’app ensuite', () => {
+    expect(
+      suivre([
+        ['ultrathink', true],
+        ['ultrathink voici le journal collé', false]
+      ])
+    ).toBe(true)
+  })
+
+  it('effacé puis retapé : compte ; effacé : ne compte plus', () => {
+    expect(
+      suivre([
+        ['ultrathink corrige', false],
+        ['corrige', true],
+        ['ultrathink corrige', true]
+      ])
+    ).toBe(true)
+    expect(
+      suivre([
+        ['ultrathink', true],
+        ['', true]
+      ])
+    ).toBe(false)
+  })
+})
+
+describe('saisieArriveeDUnBloc — frappe ou texte arrivé d’un bloc', () => {
+  it.each(['insertFromPaste', 'insertFromDrop', 'insertReplacementText', 'historyUndo'])(
+    '« %s » arrive d’un bloc',
+    (type) => expect(saisieArriveeDUnBloc(type)).toBe(true)
+  )
+  it.each(['insertText', 'insertCompositionText', 'deleteContentBackward', undefined])(
+    '« %s » est de la frappe',
+    (type) => expect(saisieArriveeDUnBloc(type)).toBe(false)
+  )
 })

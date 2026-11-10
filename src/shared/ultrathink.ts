@@ -45,3 +45,41 @@ export function effortAvecUltrathink<E extends string>(
   if (cible === undefined) return actuel
   return actuel !== undefined && rang(actuel) >= rang(cible) ? actuel : cible
 }
+
+/**
+ * Les façons dont un texte arrive D'UN BLOC dans le champ de saisie (`InputEvent.inputType`) :
+ * collage, glisser-déposer, remplacement proposé par le correcteur, annuler/rétablir. Tout le reste
+ * est de la frappe. Un type absent (événement sans détail) compte comme de la frappe.
+ */
+const SAISIES_D_UN_BLOC = new Set([
+  'insertFromPaste',
+  'insertFromPasteAsQuotation',
+  'insertFromDrop',
+  'insertFromYank',
+  'insertReplacementText',
+  'historyUndo',
+  'historyRedo'
+])
+
+export function saisieArriveeDUnBloc(inputType: string | undefined): boolean {
+  return inputType !== undefined && SAISIES_D_UN_BLOC.has(inputType)
+}
+
+/**
+ * Le mot-clé du brouillon a-t-il été TAPÉ par la personne ? Même règle que Claude Code : seul un mot
+ * tapé monte la réflexion, jamais un texte collé, une suite proposée ou un brouillon rempli par
+ * l'app — sinon l'app, ou un texte copié d'ailleurs, lancerait seule des tours plus chers.
+ *
+ * Suivi à chaque changement du brouillon : le mot qui APPARAÎT prend l'origine de ce changement
+ * (`tape`), un mot déjà là garde la sienne, un mot parti l'oublie.
+ */
+export function ultrathinkResteTape(changement: {
+  avant: string
+  apres: string
+  dejaTape: boolean
+  /** Vrai si ce changement vient de la frappe ; faux s'il est arrivé d'un bloc. */
+  tape: boolean
+}): boolean {
+  if (!demandeUltrathink(changement.apres)) return false
+  return demandeUltrathink(changement.avant) ? changement.dejaTape : changement.tape
+}

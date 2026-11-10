@@ -224,3 +224,115 @@ describe('contrôle avant chaque outil : orientations de l’utilisateur (script
     expect(appeler({ tool_name: 'Read', tool_input: {} }).stdout).toContain('oriente')
   })
 })
+
+/*
+ * « ultrathink » tapé pendant un tour monte le reste du tour. Le niveau de réflexion du CLI se fixe
+ * à son lancement : l'orientation demande donc la COUPE de l'appel en cours, que l'app relance.
+ * Entrée qui doit faire échouer ces tests : une orientation à coupe remise comme une autre (le tour
+ * finirait au niveau bas), ou soldée par le contrôle (l'app ne la retrouverait plus pour relancer).
+ */
+describe('orientation qui demande la coupe de l’appel en cours', () => {
+  it('le journal ne la remet pas et ne la solde pas : elle reste à l’app', () => {
+    const io = ioMemoire()
+    deposerOrientation(io, 'j', { id: 'o1', at: 1000, fil: 'conv-1', texte: 'regarde aussi b.ts' })
+    deposerOrientation(io, 'j', {
+      id: 'o2',
+      at: 1100,
+      fil: 'conv-1',
+      texte: 'ultrathink et c.ts',
+      coupe: true
+    })
+    const avant = io.texte
+    const r = livrerOrientationsEnAttente(
+      io,
+      { fil: 'conv-1', journal: 'j', depuis: 900 },
+      2000,
+      lignesDuJournal
+    )
+    expect(r).toEqual({ texte: '', ids: [], coupe: true })
+    expect(io.texte).toBe(avant)
+    // L'app relit les deux quand l'appel s'arrête : aucune n'est perdue, aucune ne part deux fois.
+    expect(
+      solderOrientations(
+        io,
+        'j',
+        'conv-1',
+        ['regarde aussi b.ts', 'ultrathink et c.ts'],
+        3000,
+        'tour',
+        lignesDuJournal
+      )
+    ).toEqual(['regarde aussi b.ts', 'ultrathink et c.ts'])
+    expect(
+      livrerOrientationsEnAttente(
+        io,
+        { fil: 'conv-1', journal: 'j', depuis: 900 },
+        4000,
+        lignesDuJournal
+      )
+    ).toBeUndefined()
+  })
+
+  describe('script réel du contrôle', () => {
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'garde-coupe-'))
+      script = join(dir, 'garde.mjs')
+      writeFileSync(
+        script,
+        scriptHookGardes(() => undefined),
+        'utf8'
+      )
+      journal = join(dir, NOM_JOURNAL_ORIENTATIONS)
+    })
+    afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+    const deposer = (coupe: boolean): void =>
+      writeFileSync(
+        journal,
+        `${JSON.stringify({ type: 'orientation', id: 'o1', at: 5, fil: 'conv-1240', texte: 'ultrathink et c.ts', ...(coupe ? { coupe: true } : {}) })}\n`
+      )
+
+    it('arrête l’appel au prochain outil, sans remettre l’orientation ni la noter remise', () => {
+      ecrireConf(0)
+      deposer(true)
+      const r = appeler({ tool_name: 'Read', tool_input: { file_path: 'x' } })
+      expect(r.status).toBe(0)
+      const sortie = JSON.parse(r.stdout)
+      expect(sortie.continue).toBe(false)
+      expect(sortie.stopReason).toContain('niveau de réflexion plus haut')
+      expect(sortie.hookSpecificOutput).toBeUndefined()
+      expect(lignesDuJournal(readFileSync(journal, 'utf8'))).toHaveLength(1)
+    })
+
+    it('jumeau : la même orientation sans coupe est remise sans arrêter l’appel', () => {
+      ecrireConf(0)
+      deposer(false)
+      const sortie = JSON.parse(appeler({ tool_name: 'Read', tool_input: {} }).stdout)
+      expect(sortie.continue).toBeUndefined()
+      expect(sortie.hookSpecificOutput.additionalContext).toContain('ultrathink et c.ts')
+    })
+
+    it('un message d’un autre fil en attente n’est pas noté remis par un appel coupé', () => {
+      ecrireConf(0)
+      deposer(true)
+      const messages = join(dir, NOM_JOURNAL_MESSAGES_FILS)
+      writeFileSync(
+        messages,
+        `${JSON.stringify({ type: 'message', id: 'm1', at: 1, de: { fil: 'conv-A' }, a: 'conv-1240', nature: 'info', texte: 'info m1' })}\n`
+      )
+      const avant = readFileSync(messages, 'utf8')
+      expect(JSON.parse(appeler({ tool_name: 'Read', tool_input: {} }).stdout).continue).toBe(false)
+      expect(readFileSync(messages, 'utf8')).toBe(avant)
+    })
+
+    it('un outil refusé reste refusé : la coupe attend l’outil suivant', () => {
+      ecrireConf(0)
+      deposer(true)
+      const refus = JSON.parse(
+        appeler({ tool_name: 'Bash', tool_input: { command: 'git reset --hard' } }).stdout
+      )
+      expect(refus.hookSpecificOutput.permissionDecision).toBe('deny')
+      expect(refus.continue).toBeUndefined()
+    })
+  })
+})

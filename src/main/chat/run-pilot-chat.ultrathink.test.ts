@@ -7,14 +7,17 @@ import type { ImportedModel } from '../modeles/models'
 import type { RoleBinding } from '../profil/roles'
 import { ConversationStore } from '../store/conversations'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
+import { declarerUltrathinkTape, ultrathinkEnPleinTour } from './ultrathink-du-tour'
 
 /**
- * « ULTRATHINK » DANS LE MESSAGE MONTE LA RÉFLEXION DE CE TOUR SEUL.
+ * « ULTRATHINK » TAPÉ DANS LE MESSAGE MONTE LA RÉFLEXION DE CE TOUR SEUL.
  *
  * Le vrai tour de chat tourne sur le vrai stockage, avec un faux modèle qui note le réglage reçu :
  * c'est ce réglage qui part au moteur, et celui que le fil enregistre pour le tour.
- * Entrée qui doit faire échouer ce test : un tour qui ignore le mot-clé, qui garde la réflexion
- * montée au message suivant, ou qui envoie une question « ultrathink » au modèle des petites tâches.
+ * Entrée qui doit faire échouer ce test : un tour qui ignore le mot tapé, qui monte sur un mot que
+ * personne n'a tapé (suite proposée, autre fil, tâche planifiée), qui garde la réflexion montée au
+ * message suivant, qui envoie une question « ultrathink » au modèle des petites tâches, ou qui
+ * ignore le mot envoyé pendant que le tour travaille.
  */
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
@@ -58,20 +61,28 @@ const CATALOGUE = [
 /** Position du réglage du tour dans l'appel au pilote (`turnPilot.chat`, run-pilot-chat.ts). */
 const RANG_DU_REGLAGE = 9
 
-function banc(): {
+function banc(pendantLAppel?: (filId: string) => void): {
   store: ConversationStore
   filId: string
   lancer: ReturnType<typeof createRunPilotChat>
+  /** Le réglage de chaque appel, tel qu'il était à son ENTRÉE. */
   reglagesRecus: () => RoleBinding[]
+  /** Le réglage que la boucle du tour relit à chaque appel au modèle (le même objet, vivant). */
+  reglageDuTour: () => RoleBinding
 } {
   const store = new ConversationStore(() => Date.parse('2026-11-10T10:00:00+01:00'))
   const fil = store.create({ title: 'U', provider: 'claude' })
-  const chat = vi.fn(async (..._args: unknown[]) => ({ text: 'fait' }))
+  const aLEntree: RoleBinding[] = []
+  const chat = vi.fn(async (...args: unknown[]) => {
+    aLEntree.push({ ...(args[RANG_DU_REGLAGE] as RoleBinding) })
+    pendantLAppel?.(fil.id)
+    return { text: 'fait' }
+  })
   const os = avecRepli({
     waitUntilReady: async () => {},
     roles: {
       bindingDesPetitesTaches: () => PETITES_TACHES,
-      // Routage des questions ALLUMÉ : sans le mot-clé, une question part sur les petites tâches.
+      // Routage des questions ALLUMÉ : sans mot tapé, une question part sur les petites tâches.
       routageChatLectureSeuleActif: () => true,
       getBinding: () => CHAT,
       getCatalog: () => CATALOGUE
@@ -95,32 +106,38 @@ function banc(): {
     store,
     filId: fil.id,
     lancer: createRunPilotChat(deps),
-    reglagesRecus: () => chat.mock.calls.map((appel) => appel[RANG_DU_REGLAGE] as RoleBinding)
+    reglagesRecus: () => aLEntree,
+    reglageDuTour: () => chat.mock.calls.at(-1)?.[RANG_DU_REGLAGE] as RoleBinding
   }
 }
 
 const message = (content: string): [{ role: 'user'; content: string }] => [
   { role: 'user', content }
 ]
+/** Ce que fait le champ de saisie avant l'envoi d'un message dont le mot a été tapé à la main. */
+const tape = (content: string): [{ role: 'user'; content: string }] => {
+  declarerUltrathinkTape(content)
+  return message(content)
+}
 
-describe('ultrathink dans un tour de chat', () => {
+describe('ultrathink tapé dans le message qui ouvre un tour', () => {
   it('le tour part à xhigh, et le fil l’enregistre', async () => {
     const { store, filId, lancer, reglagesRecus } = banc()
-    await lancer(FENETRE, message('ultrathink corrige a.ts'), filId)
+    await lancer(FENETRE, tape('ultrathink corrige a.ts'), filId)
     expect(reglagesRecus()).toEqual([{ ...CHAT, reasoningEffort: 'xhigh' }])
     expect(store.messagesOf(filId).at(-1)?.runtime?.reasoningEffort).toBe('xhigh')
   })
 
-  it('jumeau : le même message sans le mot-clé garde le réglage du chat', async () => {
+  it('jumeau : le même message que personne n’a tapé (suite proposée, autre fil, tâche) ne monte rien', async () => {
     const { store, filId, lancer, reglagesRecus } = banc()
-    await lancer(FENETRE, message('corrige a.ts'), filId)
+    await lancer(FENETRE, message('ultrathink corrige a.ts'), filId)
     expect(reglagesRecus()).toEqual([CHAT])
     expect(store.messagesOf(filId).at(-1)?.runtime?.reasoningEffort).toBe('medium')
   })
 
-  it('le message suivant, sans le mot-clé, repart au réglage du chat', async () => {
+  it('le message suivant, sans le mot, repart au réglage du chat', async () => {
     const { filId, lancer, reglagesRecus } = banc()
-    await lancer(FENETRE, message('ultrathink corrige a.ts'), filId)
+    await lancer(FENETRE, tape('ultrathink corrige a.ts'), filId)
     await lancer(
       FENETRE,
       [
@@ -133,15 +150,65 @@ describe('ultrathink dans un tour de chat', () => {
     expect(reglagesRecus().map((reglage) => reglage.reasoningEffort)).toEqual(['xhigh', 'medium'])
   })
 
-  it('une question « ultrathink » garde le modèle du chat au lieu des petites tâches', async () => {
+  it('la déclaration ne sert qu’une fois : le même texte renvoyé par l’app ne monte plus', async () => {
     const { filId, lancer, reglagesRecus } = banc()
-    await lancer(FENETRE, message('pourquoi ce test échoue ? ultrathink'), filId)
+    await lancer(FENETRE, tape('ultrathink corrige a.ts'), filId)
+    await lancer(FENETRE, message('ultrathink corrige a.ts'), filId)
+    expect(reglagesRecus().map((reglage) => reglage.reasoningEffort)).toEqual(['xhigh', 'medium'])
+  })
+
+  it('une question « ultrathink » tapée garde le modèle du chat au lieu des petites tâches', async () => {
+    const { filId, lancer, reglagesRecus } = banc()
+    await lancer(FENETRE, tape('pourquoi ce test échoue ? ultrathink'), filId)
     expect(reglagesRecus()).toEqual([{ ...CHAT, reasoningEffort: 'xhigh' }])
   })
 
-  it('jumeau : la même question sans le mot-clé part sur les petites tâches', async () => {
+  it('jumeau : la même question non tapée part sur les petites tâches', async () => {
     const { filId, lancer, reglagesRecus } = banc()
-    await lancer(FENETRE, message('pourquoi ce test échoue ?'), filId)
+    await lancer(FENETRE, message('pourquoi ce test échoue ? ultrathink'), filId)
     expect(reglagesRecus()).toEqual([PETITES_TACHES])
+  })
+
+  it('le réglage du rôle n’est jamais modifié', async () => {
+    const { filId, lancer } = banc()
+    await lancer(FENETRE, tape('ultrathink corrige a.ts'), filId)
+    expect(CHAT.reasoningEffort).toBe('medium')
+  })
+})
+
+describe('ultrathink tapé dans un message envoyé pendant que le tour travaille', () => {
+  const ENVOI = 'ultrathink regarde aussi b.ts'
+
+  it('le reste du tour monte : la boucle relit xhigh à son prochain appel', async () => {
+    let coupe: boolean | undefined
+    const { filId, lancer, reglagesRecus, reglageDuTour } = banc((fil) => {
+      declarerUltrathinkTape(ENVOI)
+      coupe = ultrathinkEnPleinTour(fil, ENVOI)
+    })
+    await lancer(FENETRE, message('corrige a.ts'), filId)
+    // L'appel en cours était parti au réglage du chat ; il doit être coupé pour repartir plus haut.
+    expect(reglagesRecus()).toEqual([CHAT])
+    expect(coupe).toBe(true)
+    expect(reglageDuTour().reasoningEffort).toBe('xhigh')
+    expect(CHAT.reasoningEffort).toBe('medium')
+  })
+
+  it('jumeau : le même envoi que personne n’a tapé ne monte rien', async () => {
+    let coupe: boolean | undefined
+    const { filId, lancer, reglageDuTour } = banc((fil) => {
+      coupe = ultrathinkEnPleinTour(fil, ENVOI)
+    })
+    await lancer(FENETRE, message('corrige a.ts'), filId)
+    expect(coupe).toBe(false)
+    expect(reglageDuTour().reasoningEffort).toBe('medium')
+  })
+
+  it('le tour fini, un envoi tapé ne monte plus rien, et le tour suivant repart au réglage du chat', async () => {
+    const { filId, lancer, reglagesRecus } = banc()
+    await lancer(FENETRE, message('corrige a.ts'), filId)
+    declarerUltrathinkTape(ENVOI)
+    expect(ultrathinkEnPleinTour(filId, ENVOI)).toBe(false)
+    await lancer(FENETRE, message('corrige c.ts'), filId)
+    expect(reglagesRecus()).toEqual([CHAT, CHAT])
   })
 })

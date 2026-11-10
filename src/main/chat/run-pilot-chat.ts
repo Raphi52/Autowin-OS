@@ -102,8 +102,7 @@ import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
 import { contenusDesToursArretes } from '../app/reprise-apres-arret'
 import { contenusDesAvisDeLApp, demandeSansAction } from './deux-lectures'
-import { bindingAvecUltrathink } from './ultrathink-du-tour'
-import { demandeUltrathink } from '../../shared/ultrathink'
+import { bindingAvecUltrathink, consommerUltrathinkTape, suivreLeTour } from './ultrathink-du-tour'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
 import { solderOrientationsDuFil } from '../conversations/orientations-en-cours-app'
 import { estUnFluxDeBloc } from '../commands/montrer-bloc-command'
@@ -277,23 +276,32 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     // fix-ok: cause mesurée — chaque tour partait sur `orchestrator` (Opus) sans tri : 374 tours en
     // lecture seule sur 7 jours, 362 $ au tarif Opus (turn-journals + cost.jsonl).
     const derniereDemande = [...messages].reverse().find((m) => m.role === 'user')?.content
-    // « ultrathink » dans le message demande PLUS de réflexion : une question qui le porte garde le
-    // modèle du chat au lieu de partir sur les petites tâches, et le tour monte en réflexion.
-    const turnRuntimeBinding = bindingAvecUltrathink(
-      bindingDuTourChat({
-        chat: bindingDuChat,
-        petitesTaches: os.roles.bindingDesPetitesTaches(),
-        routageActif: os.roles.routageChatLectureSeuleActif(),
-        sansAction:
-          !bindingOverride &&
-          !recovery &&
-          !continuation &&
-          !demandeUltrathink(derniereDemande) &&
-          demandeSansAction(derniereDemande)
-      }),
-      derniereDemande,
-      () => os.roles.getCatalog()
-    )
+    // « ultrathink » TAPÉ par la personne (l'écran le déclare avant l'envoi) demande PLUS de réflexion :
+    // une question qui le porte garde le modèle du chat au lieu de partir sur les petites tâches, et
+    // le tour monte. Un message arrivé autrement (suite proposée, autre fil, tâche) ne monte rien.
+    const ultrathinkTape = !recovery && consommerUltrathinkTape(derniereDemande)
+    // COPIE du tour : un « ultrathink » envoyé pendant qu'il travaille monte CE réglage
+    // (`ultrathinkEnPleinTour`), que la boucle relit à chaque appel — jamais celui du rôle.
+    const turnRuntimeBinding = {
+      ...bindingAvecUltrathink(
+        bindingDuTourChat({
+          chat: bindingDuChat,
+          petitesTaches: os.roles.bindingDesPetitesTaches(),
+          routageActif: os.roles.routageChatLectureSeuleActif(),
+          sansAction:
+            !bindingOverride &&
+            !recovery &&
+            !continuation &&
+            !ultrathinkTape &&
+            demandeSansAction(derniereDemande)
+        }),
+        ultrathinkTape,
+        () => os.roles.getCatalog()
+      )
+    }
+    const finDuSuiviUltrathink = conversationId
+      ? suivreLeTour(conversationId, turnRuntimeBinding, () => os.roles.getCatalog())
+      : undefined
     // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
     // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
     const turnStartedAtMs = performance.now()
@@ -1878,6 +1886,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       }
     } finally {
       tourClos = true
+      finDuSuiviUltrathink?.()
       // Aucun minuteur de rafale ne survit au tour.
       journalDuPilote.vider()
       // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.

@@ -40,7 +40,7 @@ import {
 } from './composer-dictee'
 import { Spinner } from './Spinner'
 import type { PropositionSuite } from '../../../shared/prompt-suivant'
-import { demandeUltrathink } from '../../../shared/ultrathink'
+import { saisieArriveeDUnBloc, ultrathinkResteTape } from '../../../shared/ultrathink'
 
 /** Où le volume de capture est mémorisé : un micro trop faible doit se régler UNE fois, pas à chaque dictée. */
 const CLE_GAIN_DICTEE = 'autowin.dictee.gain'
@@ -62,6 +62,18 @@ interface ApiWhisper {
   whisperInstaller?: () => Promise<{ installe: boolean }>
 }
 const apiWhisper = (): ApiWhisper | undefined => (window as unknown as { api?: ApiWhisper }).api
+
+/**
+ * Déclare à l'app qu'une personne a TAPÉ « ultrathink » dans le texte qui part. Appelé avant
+ * l'envoi : la déclaration précède le message, quel que soit son chemin (tour, orientation, file).
+ * Sans pont (tests, aperçu hors Electron), rien ne part et le mot ne monte rien.
+ */
+function declarerUltrathinkTape(texte: string): void {
+  const api = (
+    window as unknown as { api?: { declarerUltrathinkTape?: (texte: string) => Promise<unknown> } }
+  ).api
+  void api?.declarerUltrathinkTape?.(texte)?.catch(() => undefined)
+}
 
 const pontWhisper = (): ((wav: Uint8Array) => Promise<string>) | undefined => {
   const api = apiWhisper()
@@ -299,9 +311,29 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       onPresence(present)
     }, [present, onPresence])
 
-    function pousserTexte(value: string): void {
+    /**
+     * Le « ultrathink » du brouillon a-t-il été tapé à la main ? Seul ce cas monte la réflexion
+     * (règle de Claude Code) : collé, proposé ou rempli par l'app, le mot reste du texte.
+     */
+    const [ultrathinkTape, setUltrathinkTape] = useState(false)
+    function suivreUltrathink(apres: string, tape: boolean): void {
+      setUltrathinkTape((deja) =>
+        ultrathinkResteTape({ avant: input, apres, dejaTape: deja, tape })
+      )
+    }
+
+    /** `tape` : vrai seulement pour la frappe au clavier dans le champ. */
+    function pousserTexte(value: string, tape = false): void {
+      suivreUltrathink(value, tape)
       setInput(value)
       props.onDraftInput(value)
+    }
+
+    /** Envoi ou mise en file du brouillon : l'app apprend d'abord si son « ultrathink » est tapé. */
+    function envoyer(): void {
+      if (ultrathinkTape) declarerUltrathinkTape(input)
+      if (props.busy && props.hasActiveConversation) props.onQueue()
+      else props.onSend()
     }
 
     function acceptSlash(cmd: SlashCommand): void {
@@ -419,7 +451,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     // (react-hooks, « Cannot access variable before it is declared »).
     // fix-ok: ChatComposer.tsx — insererAuCurseur lisait insererSansEffacer avant sa déclaration (eslint 244:44)
     useImperativeHandle(ref, () => ({
-      setInput: (value: string) => setInput(value),
+      // Texte posé par l'écran (brouillon rendu, suite proposée) : jamais de la frappe.
+      setInput: (value: string) => {
+        suivreUltrathink(value, false)
+        setInput(value)
+      },
       focus: () => inputRef.current?.focus(),
       focusAt: (caret: number) => {
         const el = inputRef.current
@@ -696,9 +732,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               })}
             </div>
           ) : null}
-          {/* Le mot-clé est reconnu AVANT l'envoi, par la règle même qui décidera du tour : on
-              sait qu'il a pris sans attendre la réponse. */}
-          {demandeUltrathink(input) ? (
+          {/* Affiché seulement quand le mot a été TAPÉ : c'est le seul cas où il montera la
+              réflexion. On sait qu'il a pris avant l'envoi, sans attendre la réponse. */}
+          {ultrathinkTape ? (
             <span
               className="composer-ultrathink"
               data-testid="composer-ultrathink"
@@ -736,7 +772,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               rows={1}
               value={input}
               onChange={(e) => {
-                pousserTexte(e.target.value)
+                pousserTexte(
+                  e.target.value,
+                  !saisieArriveeDUnBloc((e.nativeEvent as InputEvent).inputType)
+                )
                 setSlashDismissed(false)
                 setSlashIndex(0)
                 setMentionDismissed(false)
@@ -816,8 +855,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
                   if (props.onBtw()) return
-                  if (props.busy && props.hasActiveConversation) props.onQueue()
-                  else props.onSend()
+                  envoyer()
                 }
               }}
               onPaste={(e) => {
@@ -924,8 +962,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                   props.onResume()
                   return
                 }
-                if (props.busy && props.hasActiveConversation) props.onQueue()
-                else props.onSend()
+                envoyer()
               }}
               disabled={
                 props.busy

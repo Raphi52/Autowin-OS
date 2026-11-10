@@ -1173,6 +1173,12 @@ const api = {
     commande?: string
   }> => ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive, attachments),
   /**
+   * Le champ de saisie déclare, juste avant l'envoi, qu'une personne a TAPÉ « ultrathink » dans ce
+   * texte. Sans cette déclaration, le mot ne monte la réflexion d'aucun tour.
+   */
+  declarerUltrathinkTape: (texte: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('os:ultrathink:tape', texte),
+  /**
    * Écrit le texte de l'utilisateur sur disque AVANT qu'il ne parte. Filet de dernier recours : un
    * texte qui ne produit aucun tour (orientation, file d'attente) reste retrouvable malgré tout.
    */

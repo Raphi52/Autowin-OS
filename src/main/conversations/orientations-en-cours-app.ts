@@ -39,15 +39,26 @@ const ioNode: IoJournalOrientations = {
   }
 }
 
-/** Double dans le journal une orientation que l'app vient de mettre dans la file du tour. */
+/**
+ * Double dans le journal une orientation que l'app vient de mettre dans la file du tour.
+ * `coupe` : le contrôle arrête l'appel en cours après son outil au lieu de la remettre, pour que la
+ * boucle pilote le relance avec elle (un « ultrathink » tapé monte le reste du tour).
+ */
 export function deposerOrientationDuFil(
   fil: string,
   texte: string,
+  options: { coupe?: boolean } = {},
   io: IoJournalOrientations = ioNode,
   journal = cheminJournalOrientations()
 ): void {
   try {
-    deposerOrientation(io, journal, { id: randomUUID(), at: Date.now(), fil, texte })
+    deposerOrientation(io, journal, {
+      id: randomUUID(),
+      at: Date.now(),
+      fil,
+      texte,
+      ...(options.coupe ? { coupe: true as const } : {})
+    })
   } catch (e) {
     console.warn('[orientations] dépôt impossible, relecture entre deux appels seulement', e)
   }

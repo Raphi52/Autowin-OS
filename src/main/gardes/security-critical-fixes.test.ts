@@ -866,7 +866,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   retrait, dans `ipc/chat.ts` — la vue detachee est supprimee (elle s'ouvrait en fenetre
     //   separee par-dessus l'app sans qu'aucun bouton ne la propose plus) : `window:detach-view`.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(301)
+    // MISE A JOUR 2026-11-10 — 301 -> 302, MESURE par ce test (rouge a 302) : un seul ajout, aucun
+    //   retrait, dans `ipc/chat.ts`, garde `assertTrustedRendererSender(event, 'Ultrathink typed
+    //   statement')` des sa PREMIERE ligne : `os:ultrathink:tape` — le champ de saisie declare
+    //   qu'une personne a tape « ultrathink » dans le texte qu'elle envoie. Il n'accepte qu'une
+    //   chaine, gardee en memoire deux heures au plus, et ne peut que monter la reflexion d'UN
+    //   tour qui porte ce texte : il n'ecrit rien sur disque. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(302)
     expect(unguarded).toEqual([])
   })
 

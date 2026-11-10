@@ -35,6 +35,12 @@ export interface OrientationEnCours {
   at: number
   fil: string
   texte: string
+  /**
+   * L'appel en cours doit s'ARRÊTER après son outil au lieu de recevoir cette orientation : l'app
+   * le relance avec elle. Sert à « ultrathink » envoyé pendant un tour : le niveau de réflexion du
+   * CLI se fixe à son lancement, il faut donc un nouvel appel pour monter le reste du tour.
+   */
+  coupe?: true
 }
 
 export interface SoldeOrientations {
@@ -56,14 +62,15 @@ export interface IoJournalOrientations {
  * Remet à `conf.fil` les orientations ni remises ni soldées, déposées depuis le début de CET appel
  * au modèle (`conf.depuis`) : une orientation plus ancienne appartient à un appel fini ou à une vie
  * précédente de l'app (la file en mémoire ne survit pas à un redémarrage), elle ne doit pas
- * ressurgir dans un autre tour. `undefined` = rien à remettre.
+ * ressurgir dans un autre tour. `undefined` = rien à remettre ; `coupe` = rien n'est remis, l'appel
+ * doit s'arrêter pour que l'app le relance.
  */
 export function livrerOrientationsEnAttente(
   io: IoJournalOrientations,
   conf: { fil: string; journal: string; depuis: number },
   maintenant: number,
   decouper: (texte: string) => Array<Record<string, unknown>>
-): { texte: string; ids: string[] } | undefined {
+): { texte: string; ids: string[]; coupe?: true } | undefined {
   const lignes = decouper(io.lire(conf.journal))
   const soldes = new Set<string>()
   for (const l of lignes) {
@@ -82,6 +89,9 @@ export function livrerOrientationsEnAttente(
       !soldes.has(l.id)
   )
   if (!attente.length) return undefined
+  // Une orientation qui demande la coupe n'est NI remise NI soldée ici : elle reste dans la file de
+  // l'app, qui la relit dès que l'appel s'arrête et relance le modèle avec toutes celles en attente.
+  if (attente.some((o) => o.coupe === true)) return { texte: '', ids: [], coupe: true }
   const heure = (ms: unknown): string => {
     const d = new Date(typeof ms === 'number' ? ms : 0)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`

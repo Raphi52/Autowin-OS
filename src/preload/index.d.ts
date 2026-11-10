@@ -834,6 +834,8 @@ interface ChatApi {
     /** Commande de skill reconnue (`scout`, `judge`…) quand `motif` vaut `commande`. */
     commande?: string
   }>
+  /** Déclare, avant l'envoi, qu'une personne a tapé « ultrathink » dans ce texte (seul cas qui monte la réflexion). */
+  declarerUltrathinkTape: (texte: string) => Promise<{ ok: boolean }>
   /** Écrit le texte de l'utilisateur sur disque AVANT son envoi — filet contre les textes sans tour. */
   journaliserSaisie: (
     conversationId: string,

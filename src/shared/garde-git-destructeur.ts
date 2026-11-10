@@ -522,7 +522,17 @@ const messagesEnAttente = (j) => {
 // la boucle pilote ne la relit qu'entre deux appels.
 // Même chemin que les messages entre fils ; seules celles déposées depuis le début de CET appel
 // (« depuis », posé par Autowin dans reservation.json) partent. Toute panne = rien, jamais un refus.
+// Lues UNE fois par outil : la remise les solde, une seconde lecture ne rendrait plus rien.
+let orientationsLues = null;
+const lireOrientations = () => {
+  if (orientationsLues === null) orientationsLues = orientationsDuJournal() || false;
+  return orientationsLues || undefined;
+};
 const orientationsEnAttente = () => {
+  const r = lireOrientations();
+  return r && !r.coupe ? r.texte : undefined;
+};
+const orientationsDuJournal = () => {
   try {
     const conf = confReservation();
     if (!conf || process.env.AUTOWIN_CONVERSATION_ID === conf.fil || typeof conf.depuis !== 'number') return undefined;
@@ -533,8 +543,7 @@ const orientationsEnAttente = () => {
       ajouter: (p, ligne) => fs.appendFileSync(p, ligne + '\\n', 'utf8')
     };
     const journal = path.join(path.dirname(conf.registre), ${JSON.stringify(NOM_JOURNAL_ORIENTATIONS)});
-    const r = livrerOrientationsEnAttente(io, { fil: conf.fil, journal, depuis: conf.depuis }, Date.now(), lignesDuJournal);
-    return r ? r.texte : undefined;
+    return livrerOrientationsEnAttente(io, { fil: conf.fil, journal, depuis: conf.depuis }, Date.now(), lignesDuJournal);
   } catch { return undefined; }
 };
 // RAPPELS AU BON MOMENT (conv-1457, shared/rappels-outils.ts) : le texte d'une règle d'AGENTS.md
@@ -616,6 +625,16 @@ process.stdin.on('end', () => {
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));
+    process.exit(0);
+  }
+  // UNE ORIENTATION DEMANDE LA COUPE (« ultrathink » tapé pendant le tour) : le niveau de réflexion du
+  // CLI se fixe à son lancement, donc l'appel s'arrête ici et Autowin le relance plus haut avec
+  // l'orientation, restée dans sa file. Mesuré sur le CLI 2.1.321 : l'outil en cours finit, puis
+  // l'appel se clôt sans erreur (terminal_reason « hook_stopped »), session reprenable. Avant les
+  // messages entre fils : ils resteraient notés remis sans avoir été lus.
+  const coupe = lireOrientations();
+  if (coupe && coupe.coupe) {
+    process.stdout.write(JSON.stringify({ continue: false, stopReason: 'Autowin relance cet appel avec le message de l’utilisateur, à un niveau de réflexion plus haut.' }));
     process.exit(0);
   }
   // Pas de refus : les orientations de l'utilisateur PUIS les messages en attente partent avec cet
