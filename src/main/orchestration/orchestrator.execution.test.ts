@@ -359,6 +359,15 @@ describe('Orchestrator execution contract', () => {
     expect(consigneCandidatesBrain('\\\\nas1\\Brain')).not.toContain('perso:')
   })
 
+  it('un nœud qui a brain_read ne reçoit pas l’invitation à lire le fichier brut', () => {
+    const avec = consigneCandidatesBrain('\\\\nas1\\Brain', undefined, { brainRead: true })
+    expect(avec).toContain('avec `brain_read`. Ignore les autres')
+    expect(avec).not.toContain('en lisant le fichier')
+    expect(avec).not.toContain('<chemin>')
+    // Sans l'option, la consigne d'une phase garde la lecture directe.
+    expect(consigneCandidatesBrain('\\\\nas1\\Brain')).toContain('en lisant le fichier')
+  })
+
   /*
    * BRAIN PERSO DANS LE CONTEXTE DES RUNS (2026-10-28, demande utilisateur : « étends le
    * Brain perso au contexte des travaux lancés en arrière-plan : cherche aussi dans le Brain perso,

@@ -696,21 +696,25 @@ export async function runInner(
     phaseContextNames.set(text, name)
     return text
   }
+  /**
+   * La consigne Brain se compose PAR NŒUD (voir `contextEntriesForPhase`) : un nœud skill qui a
+   * `brain_read` ouvre les notes avec lui, une phase lit le fichier elle-même.
+   */
+  const consigneBrainPour = (brainRead: boolean): string =>
+    consigneCandidatesBrain(
+      scopedBrain.navigation?.root,
+      listePerso
+        ? { racine: persoScoped?.navigation?.root ?? envPerso?.AUTOWIN_BRAIN_ROOT }
+        : undefined,
+      { brainRead }
+    )
   const phaseContext: string[] = [
     ...(memoryEcho ? [contexteNomme('memoryEcho', memoryEcho)] : []),
     ...(causalMemory ? [contexteNomme('causalMemory', causalMemory)] : []),
     ...(brainContext
       ? [
           contexteNomme('brainContext', brainContext),
-          contexteNomme(
-            'brainPriorite',
-            consigneCandidatesBrain(
-              scopedBrain.navigation?.root,
-              listePerso
-                ? { racine: persoScoped?.navigation?.root ?? envPerso?.AUTOWIN_BRAIN_ROOT }
-                : undefined
-            )
-          )
+          contexteNomme('brainPriorite', consigneBrainPour(false))
         ]
       : []),
     contexteNomme('tache', taskContext),
@@ -737,13 +741,16 @@ export async function runInner(
    */
   const contextEntriesForPhase = (phase: NodePhase): Array<{ name: string; text: string }> => {
     const mission = analysisMission(phase)
-    const entries = phaseContext.map((entry) => ({
-      name: phaseContextNames.get(entry) ?? 'non nommé',
-      text:
-        mission && entry === taskContext
-          ? `BESOIN GLOBAL (contexte, pas une action immédiate) : ${taskBody}`
-          : entry
-    }))
+    // Un nœud skill a `brain_read` dès qu'un lanceur lui est servi : l'outil natif et la boucle texte
+    // partagent ce lanceur (`lanceurDuNoeud`, `lanceurOutils`). Une phase du pipeline n'en a jamais.
+    const brainRead = !isPipelinePhase(phase) && lanceurQuiCompte() !== undefined
+    const entries = phaseContext.map((entry) => {
+      const name = phaseContextNames.get(entry) ?? 'non nommé'
+      if (mission && entry === taskContext) {
+        return { name, text: `BESOIN GLOBAL (contexte, pas une action immédiate) : ${taskBody}` }
+      }
+      return { name, text: name === 'brainPriorite' ? consigneBrainPour(brainRead) : entry }
+    })
     return mission ? [{ name: 'missionAnalyse', text: mission }, ...entries] : entries
   }
   const userContextForPhase = (phase: NodePhase): string =>

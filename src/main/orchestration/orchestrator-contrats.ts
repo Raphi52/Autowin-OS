@@ -1166,11 +1166,21 @@ export function porterVersPhaseSuivante(texte: string): string {
  * d'ouvrir, parce que toutes les phases n'ont pas les mêmes outils : un nœud skill a `brain_read`,
  * une phase du pipeline lit le fichier elle-même (elle tourne avec les droits de lecture complets) —
  * d'où la RACINE, sans laquelle un chemin `knowledge/…` ne mène nulle part hors du serveur.
+ *
+ * `brainRead` : le nœud a `brain_read`. Il ouvre alors les notes avec ce seul outil : l'invitation à
+ * lire le fichier brut contournerait le condensé des notes (`brain-condenseur.ts`). Une phase du
+ * pipeline n'a pas l'outil : elle garde la lecture directe.
  */
-export function consigneCandidatesBrain(racine?: string, perso?: { racine?: string }): string {
-  const ouvrir = racine
-    ? `avec \`brain_read\` si tu l'as, sinon en lisant le fichier \`${racine}/<chemin>\``
-    : 'avec `brain_read`'
+export function consigneCandidatesBrain(
+  racine?: string,
+  perso?: { racine?: string },
+  options: { brainRead?: boolean } = {}
+): string {
+  const lectureDirecte = !options.brainRead
+  const ouvrir =
+    racine && lectureDirecte
+      ? `avec \`brain_read\` si tu l'as, sinon en lisant le fichier \`${racine}/<chemin>\``
+      : 'avec `brain_read`'
   const base =
     `Ci-dessus : les notes CANDIDATES du Brain pour cette tâche (titre, chemin, taille), PAS leur contenu. ` +
     `Ouvre EN ENTIER celles qui servent ta tâche, autant qu'il en faut, ${ouvrir}. ` +
@@ -1180,9 +1190,10 @@ export function consigneCandidatesBrain(racine?: string, perso?: { racine?: stri
    * BRAIN PERSO : ses notes vivent sous une AUTRE racine. Sans cette phrase, une phase
    * sans `brain_read` lirait `<racine de l'équipe>/perso:knowledge/…`, un fichier qui n'existe pas.
    */
-  const ouvrirPerso = perso.racine
-    ? `avec \`brain_read\` en GARDANT le préfixe si tu l'as, sinon en lisant le fichier \`${perso.racine}/<chemin sans le préfixe>\``
-    : 'avec `brain_read` en GARDANT le préfixe'
+  const ouvrirPerso =
+    perso.racine && lectureDirecte
+      ? `avec \`brain_read\` en GARDANT le préfixe si tu l'as, sinon en lisant le fichier \`${perso.racine}/<chemin sans le préfixe>\``
+      : 'avec `brain_read` en GARDANT le préfixe'
   return `${base} Les notes préfixées \`${PREFIXE_NOTE_PERSO}\` viennent du Brain PERSO de l'utilisateur (privé) : ouvre-les ${ouvrirPerso}.`
 }
 

@@ -283,6 +283,62 @@ describe('boucle d’outils d’un nœud skill, dans un run réel', () => {
   })
 })
 
+/**
+ * Un nœud skill qui a `brain_read` n'est pas invité à lire le fichier brut : cette lecture
+ * contournerait le condensé du chat. Une phase du pipeline, elle, garde la lecture directe.
+ */
+describe('consigne Brain d’un nœud skill selon qu’il a brain_read', () => {
+  const contexte =
+    'ACME BRAIN REFERENCE DATA\n\nNotes candidates.\n\n' +
+    '### Candidate 1 — Note 1\n`knowledge/domain/note-1.md` · 3 Ko'
+  const lanceur = { exec: async () => ({ ok: true, data: 'ok' }) }
+  /** Le texte de CHAQUE appel au modèle, dans l'ordre : le premier est celui du nœud. */
+  const appelsDuRun = async (phases: string[], avecLanceur: boolean): Promise<string[]> => {
+    const provider = new ProviderOutilleur(['Livrable.'])
+    await new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
+      execPhases: phases as never,
+      retrieveBrain: async (query) => ({
+        context: contexte,
+        status: 'found',
+        structuredContext: {
+          preamble: 'ACME BRAIN REFERENCE DATA',
+          sources: [{ path: 'knowledge/domain/note-1.md', content: contexte }]
+        },
+        navigation: { query, minDense: 0.25, root: '\\\\nas1\\partage\\Team Brain', candidates: [] }
+      }),
+      ...(avecLanceur ? { skillCommands: () => lanceur } : {})
+    }).run('remets-toi dans ce dépôt')
+    return provider.recus.map((messages) =>
+      messages.map((message) => String(message.content)).join('\n')
+    )
+  }
+
+  it('un nœud skill qui a brain_read reçoit « avec brain_read » seul, sans invitation au fichier', async () => {
+    const [premier] = await appelsDuRun(['think'], true)
+    expect(premier).toContain('avec `brain_read`. Ignore les autres')
+    expect(premier).not.toContain('sinon en lisant le fichier')
+  })
+
+  it('un nœud skill SANS brain_read garde la lecture du fichier brut', async () => {
+    const [premier] = await appelsDuRun(['think'], false)
+    expect(premier).toContain('sinon en lisant le fichier')
+  })
+
+  it('une phase du pipeline garde la lecture du fichier brut, lanceur branché', async () => {
+    const appels = await appelsDuRun(['build'], true)
+    expect(appels.some((texte) => texte.includes('sinon en lisant le fichier'))).toBe(true)
+  })
+})
+
 /*
  * L'étape learn a écrit 2 notes au Brain (inbox/, 18/10 22:34) et la bulle a affiché
  * « Brain : aucune leçon proposée ». Ses `remember` passent par le lanceur des nœuds, sans tour :

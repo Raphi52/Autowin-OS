@@ -26,6 +26,8 @@ import type { RoleModelConfig } from '../profil/roles'
  * lisent la note brute avec `Read`, sous la racine que donne `consigneCandidatesBrain`. Choix : une phase
  * ne se coupe pas sur le seul volume (même règle que sa sortie, passée entière à la suivante :
  * `porterVersPhaseSuivante`, `orchestrator-contrats.ts`). Ne leur donne pas `brain_read` sans revoir ce choix.
+ * Un nœud skill qui a `brain_read` n'est pas invité à lire le fichier brut (option `brainRead` de
+ * `consigneCandidatesBrain`) : il ouvre les notes avec le condensé.
  */
 
 /** En dessous, la note passe telle quelle. */
