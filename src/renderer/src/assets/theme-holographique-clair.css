@@ -1980,11 +1980,12 @@
   mask: none;
   clip-path: var(--nv-chanfrein-anneau);
 }
-/* Le panneau « Bureaux caches » est un volet du Chat comme les autres : memes coins coupes, meme
-   satin, meme anneau. Il n'a pas de bord (HdeskGestionView.css, `border: 0`) : sa boite exterieure
-   est deja celle du trait. Son `::before` est le lisere du haut (`.lisere-dessus`, ViewPage.css),
-   etire ici en cadre entier. */
-:root[data-theme='holographique-clair'] .cosmic-outline .hdesk-gestion-view {
+/* Les panneaux « Bureaux caches » et « Navigateur integre » sont des volets du Chat comme les
+   autres : memes coins coupes, meme satin, meme anneau. Ils n'ont pas de bord (HdeskGestionView.css
+   et NavigateurIntegre.css, `border: 0`) : leur boite exterieure est deja celle du trait. Leur
+   `::before` est le lisere du haut (`.lisere-dessus`, ViewPage.css), etire ici en cadre entier.
+   Ils entrent aussi comme eux (bloc ENTREE-CHANFREIN, plus bas). */
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.hdesk-gestion-view, .navigateur-panneau) {
   border-radius: 0;
   box-shadow: none;
   clip-path: var(--nv-chanfrein-forme);
@@ -1999,7 +2000,7 @@
     var(--nv-satin) fixed;
   transition: var(--nv-lumiere-transition);
 }
-:root[data-theme='holographique-clair'] .cosmic-outline .hdesk-gestion-view::before {
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.hdesk-gestion-view, .navigateur-panneau)::before {
   inset: 0;
   height: auto;
   border-radius: 0;
@@ -2565,6 +2566,7 @@
 :root[data-theme='holographique-clair'] {
   --nv-entree-lumiere: rgba(255, 255, 255, 0.97);
 }
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.hdesk-gestion-view, .navigateur-panneau)[data-entree-chanfrein],
 :root[data-theme='holographique-clair'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],
 :root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein],
 :root[data-theme='holographique-clair'] .theme-serious .rail[data-entree-chanfrein] {
@@ -2630,6 +2632,7 @@
       color-mix(in srgb, var(--nv-satin-c) calc(var(--ch-fond) * 100%), transparent) 80%
     );
 }
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.hdesk-gestion-view, .navigateur-panneau)[data-entree-chanfrein] > *,
 :root[data-theme='holographique-clair'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein] > *,
 :root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] > *,
 :root[data-theme='holographique-clair'] .theme-serious .rail[data-entree-chanfrein] > * {
@@ -4745,6 +4748,7 @@
    le satin (`--ch-fond`, bloc ENTREE-CHANFREIN de theme-nebuleuse-verre.css). Laisse tel quel, il
    flottait seul en haut de cadres encore vides, avant meme leurs coins (capture du 2026-10-16). Memes
    teintes que le lisere de repos, ci-dessus : a la fin de l'entree, rien ne saute. */
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.hdesk-gestion-view, .navigateur-panneau)[data-entree-chanfrein],
 :root[data-theme='holographique-clair'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],
 :root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein],
 :root[data-theme='holographique-clair'] .theme-serious .rail[data-entree-chanfrein] {

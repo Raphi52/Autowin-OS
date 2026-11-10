@@ -45,7 +45,8 @@
  * demande de l'utilisateur. Un bureau fermé se rouvre par « Nouveau bureau ». Le moteur rend encore
  * cette liste (lireRecents, hdesk-gestion.ts) : ce panneau ne la lit plus.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { jouerEntreeCadre } from '../entree-cascade'
 import { Spinner } from './Spinner'
 import type { GesteTv, ImageTv, ResultatGeste } from '../../../main/bureau/hdesk-tv'
 import {
@@ -216,6 +217,9 @@ export function HdeskGestionView({
   const [retourGeste, setRetourGeste] = useState<string | null>(null)
   const [pleinCadre, setPleinCadre] = useState(false)
   const [largeur, setLargeur] = useState(largeurMemorisee)
+  // Le panneau n'est monté qu'à l'ouverture : son montage dessine ses bords, si le thème les anime.
+  const cadreRef = useRef<HTMLElement>(null)
+  useLayoutEffect(() => (cadreRef.current ? jouerEntreeCadre(cadreRef.current) : undefined), [])
   const piloteRef = useRef<string | null>(null)
   const listeLueRef = useRef<readonly BureauGere[]>([])
   // La clé et pas le tableau : ChatView peut rendre un tableau neuf aux mêmes fils.
@@ -802,6 +806,7 @@ export function HdeskGestionView({
         />
       )}
       <aside
+        ref={cadreRef}
         className={`lisere-dessus hdesk-gestion-view${pleinCadre ? ' is-plein-cadre' : ''}`}
         style={pleinCadre ? undefined : { width: `${largeur}px` }}
         aria-label={t('hdesk.titre')}

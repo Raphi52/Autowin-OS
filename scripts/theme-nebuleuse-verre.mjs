@@ -535,6 +535,7 @@ const COMPLEMENT_CLAIR = `
    le satin (\`--ch-fond\`, bloc ENTREE-CHANFREIN de theme-nebuleuse-verre.css). Laisse tel quel, il
    flottait seul en haut de cadres encore vides, avant meme leurs coins (capture du 2026-10-16). Memes
    teintes que le lisere de repos, ci-dessus : a la fin de l'entree, rien ne saute. */
+:root[data-theme='${CLAIR_ID}'] .cosmic-outline :is(.hdesk-gestion-view, .navigateur-panneau)[data-entree-chanfrein],
 :root[data-theme='${CLAIR_ID}'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],
 :root[data-theme='${CLAIR_ID}'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein],
 :root[data-theme='${CLAIR_ID}'] .theme-serious .rail[data-entree-chanfrein] {

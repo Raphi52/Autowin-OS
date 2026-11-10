@@ -146,7 +146,7 @@ export const SECOURS_MS = 5000
  * qu'a ~1 s. Seul le cadre (coins, traits, satin, lumiere) entre ; ce qu'il contient est la d'emblee.
  */
 export const SURFACES_CHANFREIN =
-  '.view-page, .home-view__masthead, .home-tile__panel, .conv-pane, .chat, .runs-pane'
+  '.view-page, .home-view__masthead, .home-tile__panel, .conv-pane, .chat, .runs-pane, .hdesk-gestion-view, .navigateur-panneau'
 export const ATTRIBUT_CHANFREIN = 'data-entree-chanfrein'
 export const NOM_ANIMATION_CHANFREIN = 'entree-chanfrein'
 /** Duree de l'entree d'un cadre (variante choisie : 1 s) — app-shell.css la porte, le test les lie. */

@@ -26,6 +26,7 @@ export const SELECTEUR_PANNEAUX = [
   '.cosmic-outline .conv-pane',
   '.cosmic-outline .runs-pane',
   '.cosmic-outline .hdesk-gestion-view',
+  '.cosmic-outline .navigateur-panneau',
   '.cosmic-outline .chat',
   '.view-page',
   '.home-tile__panel',

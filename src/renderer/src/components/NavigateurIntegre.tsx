@@ -22,6 +22,7 @@
  * Contrat : `src/shared/navigateur.ts` ; API : `window.api.navigateur` (`src/preload/index.d.ts`).
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { jouerEntreeCadre } from '../entree-cascade'
 import type {
   ElementChoisiNavigateur,
   EtatNavigateur,
@@ -138,6 +139,8 @@ export function NavigateurIntegre({
   const [maintenant, setMaintenant] = useState(0)
 
   const racineRef = useRef<HTMLElement | null>(null)
+  // Le panneau n'est monté qu'à l'ouverture : son montage dessine ses bords, si le thème les anime.
+  useLayoutEffect(() => (racineRef.current ? jouerEntreeCadre(racineRef.current) : undefined), [])
   const zoneRef = useRef<HTMLDivElement | null>(null)
   const adresseRef = useRef<HTMLInputElement | null>(null)
   const listeOngletsRef = useRef<HTMLDivElement | null>(null)
