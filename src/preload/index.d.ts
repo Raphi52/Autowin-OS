@@ -115,9 +115,6 @@ export interface ClaudeAccountsPayload {
   accounts: ClaudeAccountEntry[]
 }
 
-/** Les styles de la mascotte du bureau, tels que le pont les expose. */
-type StyleMascotteApi = 'magicien' | 'basique' | 'machine' | 'panda1' | 'panda2' | 'panda3'
-
 interface ChatApi {
   captureTestPage: () => Promise<string>
   capturerElement?: (rect: RectNavigateur) => Promise<string | null>
@@ -322,9 +319,9 @@ interface ChatApi {
   /** La mascotte du bureau : affichée ou masquée, choix gardé par le moteur. */
   mascotteAffichee: () => Promise<boolean>
   afficherMascotte: (affichee: boolean) => Promise<boolean>
-  /** Le style de la mascotte du bureau : magicien, bille basique, machine ou l'un des trois pandas. */
-  styleMascotte: () => Promise<StyleMascotteApi>
-  choisirStyleMascotte: (style: StyleMascotteApi) => Promise<StyleMascotteApi>
+  /** Le style de la mascotte du bureau : le magicien ou la bille basique. */
+  styleMascotte: () => Promise<'magicien' | 'basique' | 'machine'>
+  choisirStyleMascotte: (style: 'magicien' | 'basique' | 'machine') => Promise<'magicien' | 'basique' | 'machine'>
   themeMascotte: (theme: string) => Promise<boolean>
   /** La vraie page de la mascotte, pour l'accueil d'un fil vide. */
   mascottePage: () => Promise<{ html: string; largeur: number; hauteur: number }>

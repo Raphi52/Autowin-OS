@@ -70,21 +70,15 @@ type ReglageMascotte = {
  * magicien : c'est la mascotte que l'utilisateur vient de faire dessiner, le choix sert à revenir à
  * la bille.
  */
-/**
- * `machine` : la petite machine de NieR, rendue en 3D ; c'est elle que montre le thème NieR.
- * `panda1`, `panda2`, `panda3` : trois pandas rendus en 3D, chacun avec son visuel et ses gestes
- * (le classique, celui au bambou, celui à l'écharpe). Un autre animal choisi dans l'accueil ne les
- * change pas : ce sont toujours des pandas.
- */
-export const STYLES_PANDA = ['panda1', 'panda2', 'panda3'] as const
-export type StylePanda = (typeof STYLES_PANDA)[number]
-export const STYLES_MASCOTTE = ['magicien', 'basique', 'machine', ...STYLES_PANDA] as const
+/** `machine` : la petite machine de NieR, rendue en 3D ; c'est elle que montre le thème NieR. */
+export const STYLES_MASCOTTE = ['magicien', 'basique', 'machine'] as const
 export type StyleMascotte = (typeof STYLES_MASCOTTE)[number]
 export const STYLE_MASCOTTE_PAR_DEFAUT: StyleMascotte = 'magicien'
 
 export function estUnStyleMascotte(valeur: unknown): valeur is StyleMascotte {
   return (STYLES_MASCOTTE as readonly unknown[]).includes(valeur)
 }
+
 /** Tout le fichier ; absent ou abîmé, chaque champ prend sa valeur par défaut. */
 function lireReglage(env: NodeJS.ProcessEnv): ReglageMascotte {
   return {

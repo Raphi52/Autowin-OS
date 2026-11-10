@@ -6,16 +6,9 @@ import './MascotteReglage.css'
 /** L'erreur est gardée par sa CLÉ, pour qu'un changement de langue la retraduise. */
 type ErreurMascotte = 'mascotte.erreurLecture' | 'mascotte.erreurEnregistrement'
 
-/** Les six styles : magicien, basique, machine et trois pandas ; le moteur refuse tout autre texte. */
-type StyleMascotte = 'magicien' | 'basique' | 'machine' | 'panda1' | 'panda2' | 'panda3'
-const STYLES: readonly StyleMascotte[] = [
-  'magicien',
-  'basique',
-  'machine',
-  'panda1',
-  'panda2',
-  'panda3'
-]
+/** Les deux styles ; le moteur refuse tout autre texte. */
+type StyleMascotte = 'magicien' | 'basique' | 'machine'
+const STYLES: readonly StyleMascotte[] = ['magicien', 'basique', 'machine']
 
 /**
  * Settings · Interface — « Mascotte du bureau » (2026-10-25).

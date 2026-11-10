@@ -25,14 +25,6 @@ import {
   zoneDesCartes
 } from './mascotte'
 import { CENTRE_BILLE, RAYON_GLYPHE } from './mascotte-personnage'
-import {
-  PANDA1_CALME,
-  PANDA1_TRAVAIL,
-  PANDA2_CALME,
-  PANDA2_TRAVAIL,
-  PANDA3_CALME,
-  PANDA3_TRAVAIL
-} from './mascotte-panda-images'
 import { disposerPopups, htmlDePopup, type Rect } from '../app/notification-popup'
 
 const VIDE = { toursEnCours: 0, runsActifs: 0, filsEnAttente: [], filsEnEchec: [] }
@@ -612,63 +604,4 @@ describe('mascotte du bureau — style machine (conv-346)', () => {
     expect(pointSurLaBille({ x: g.croix.x + 9, y: g.croix.y + 9 }, 'machine')).toBe(true)
     expect(pointSurLaBille({ x: 2, y: 130 }, 'machine')).toBe(false)
   })
-})
-
-describe('mascotte du bureau — trois pandas 3D (planches Blender)', () => {
-  const planchesDe = {
-    panda1: { calme: PANDA1_CALME, travail: PANDA1_TRAVAIL },
-    panda2: { calme: PANDA2_CALME, travail: PANDA2_TRAVAIL },
-    panda3: { calme: PANDA3_CALME, travail: PANDA3_TRAVAIL }
-  }
-
-  for (const style of ['panda1', 'panda2', 'panda3'] as const) {
-    const { calme, travail } = planchesDe[style]
-    const autres = (['panda1', 'panda2', 'panda3'] as const)
-      .filter((autre) => autre !== style)
-      .map((autre) => planchesDe[autre])
-
-    it(`${style} : ses 2 planches PNG, sans script, et rejoue celle du repos par défaut`, () => {
-      const html = htmlDeMascotte(style)
-      expect(html.match(/data:image\/png;base64,/gu)).toHaveLength(2)
-      expect(html).toContain('img-src data:')
-      expect(html).not.toMatch(/<script/iu)
-      expect(html).toMatch(/\.bw\{[^}]*var\(--calme\)[^}]*steps\(16\)/u)
-    })
-
-    it(`${style} : embarque SES planches, jamais celles d'un autre panda`, () => {
-      const html = htmlDeMascotte(style)
-      expect(html).toContain(calme)
-      expect(html).toContain(travail)
-      for (const autre of autres) {
-        expect(html).not.toContain(autre.calme)
-        expect(html).not.toContain(autre.travail)
-      }
-    })
-
-    it(`${style} : chaque état allume ses effets ; la planche du travail remplace celle du repos`, () => {
-      const css = (etat: 'calme' | 'travail' | 'attente' | 'probleme') =>
-        cssDeLEtat({ etat, pastille: etat === 'calme' ? null : '1', fil: null }, style)
-      expect(css('calme')).toContain('body .z{display:block}')
-      expect(css('calme')).not.toContain('var(--travail)')
-      expect(css('travail')).toContain('var(--travail)')
-      expect(css('travail')).toContain('body .sh{animation-duration:1.2s}')
-      expect(css('attente')).toContain('content:"✓"')
-      expect(css('probleme')).toContain('content:"!"')
-      expect(css('travail')).toContain('content:"1"')
-    })
-
-    it(`${style} : le corps et la croix restent cliquables, le vide sous elle laisse passer`, () => {
-      const g = geometrieMascotte(style)
-      expect(pointSurLaBille({ x: g.centre.x, y: g.centre.y }, style)).toBe(true)
-      expect(pointSurLaBille({ x: g.croix.x + 9, y: g.croix.y + 9 }, style)).toBe(true)
-      expect(pointSurLaBille({ x: 2, y: 130 }, style)).toBe(false)
-    })
-
-    it(`${style} : à l’accueil, il suit la règle de la bille basique (pas de grimoire)`, () => {
-      expect(cssDeLAccueil('eveil', 0, style)).toBe('')
-      expect(cssDeLAccueil('lecture', 0, style)).toBe(
-        cssDeLEtat({ etat: 'travail', pastille: null, fil: null }, style)
-      )
-    })
-  }
 })
