@@ -1481,6 +1481,7 @@ Le fil reprend ensuite normalement.`
     os,
     profiles,
     agentModelsReady,
+    lireModeles: () => ctx.agentModels,
     lireTopologie,
     appliquerTopologie,
     broadcastRolesRefresh

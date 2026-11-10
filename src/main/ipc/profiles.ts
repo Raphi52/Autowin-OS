@@ -18,6 +18,13 @@ import { migrateTopologyShape } from '../topologie/topology'
 import type { AgentTopology } from '../topologie/topology'
 import type { AutowinOS } from '../app/os'
 import type { ProfileStore, AutowinProfile } from '../profil/profile-store'
+import {
+  ID_DU_PROFIL_DEFAUT,
+  avecProfilDefaut,
+  profilParDefaut,
+  type ProfilDefaut
+} from '../profil/profil-defaut'
+import type { ImportedModel } from '../modeles/models'
 
 /** Ce que les canaux de profils prenaient dans `index.ts` — désormais passé explicitement. */
 export type ProfilesIpcDeps = {
@@ -25,6 +32,8 @@ export type ProfilesIpcDeps = {
   profiles: ProfileStore
   /** Le catalogue de modèles : attendu avant toute écriture, comme dans `index.ts`. */
   agentModelsReady: Promise<unknown>
+  /** Le catalogue courant : le profil « Défaut » se construit dessus, à chaque appel. */
+  lireModeles: () => ImportedModel[]
   /** La topologie courante, LUE à l'instant de l'appel (elle est réassignée ailleurs). */
   lireTopologie: () => AgentTopology
   /** Persiste la topologie, resynchronise les rôles et rend celle qui a été retenue. */
@@ -37,13 +46,17 @@ export function registerProfilesIpc({
   os,
   profiles,
   agentModelsReady,
+  lireModeles,
   lireTopologie,
   appliquerTopologie,
   broadcastRolesRefresh
 }: ProfilesIpcDeps): void {
+  // « Défaut » est porté par le code : présent sur chaque poste, jamais écrit dans le fichier.
+  const defaut = (): ProfilDefaut | null => profilParDefaut(lireModeles(), os.roles.all())
+  const tous = (): AutowinProfile[] => avecProfilDefaut(profiles.list(), defaut())
   ipcMain.handle('os:profiles:list', (event) => {
     assertTrustedRendererSender(event, 'Workflow profiles')
-    return profiles.list().map((profile) => ({
+    return tous().map((profile) => ({
       ...profile,
       topology: migrateTopologyShape(profile.topology) as AgentTopology
     }))
@@ -62,22 +75,31 @@ export function registerProfilesIpc({
      * accepte une forme que rien ne verifie.
      */
     const verifie = guardProfile(profile)
+    if (verifie.id === ID_DU_PROFIL_DEFAUT) {
+      throw new Error('Le profil « Défaut » est fourni avec l’application : il ne se remplace pas')
+    }
     const safe = {
       ...verifie,
       topology: lireTopologie(),
       roles: os.roles.all(),
       updatedAt: new Date().toISOString()
     }
-    return profiles.save(safe as AutowinProfile)
+    profiles.save(safe as AutowinProfile)
+    return tous()
   })
   ipcMain.handle('os:profiles:apply', async (event, id: string) => {
     assertTrustedRendererSender(event, 'Profiles')
     await agentModelsReady
-    const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
+    const profile = tous().find((item) => item.id === guardString(id, 'profile.id'))
     if (!profile) throw new Error('Profil introuvable')
     // Rétrocompat : un profil sauvegardé avant un panel récent peut ne pas l'avoir → on migre
     // la forme avant validation (sinon assertTopology jetterait « Profil introuvable/incohérent »).
     const topology = appliquerTopologie(migrateTopologyShape(profile.topology) as AgentTopology)
+    // « Défaut » règle aussi le modèle des petites tâches, que la topologie ne porte pas.
+    if (profile.id === ID_DU_PROFIL_DEFAUT) {
+      const petites = defaut()?.petitesTaches
+      if (petites) os.setPetitesTaches(petites)
+    }
     // `roles` reste dans le schéma des anciens profils pour la lecture rétrocompatible, mais Agent
     // Studio n'édite que `topology`. Le réappliquer ici recréerait une seconde autorité invisible.
     broadcastRolesRefresh()
