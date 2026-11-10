@@ -41,7 +41,7 @@ export function useLignesDessinees(total: number): {
   dessinees: number
   refZone: (zone: HTMLElement | null) => void
 } {
-  // fix-ok: mesuré — 1 369 lignes .conv-item en un passage = 347 ms ; 40 lignes = 23 ms (happy-dom).
+  // fix-ok: cause mesurée — monter la base entière en un seul passage est le gel au démarrage ; le premier passage reste borné.
   const [dessinees, setDessinees] = useState(LIGNES_AU_PREMIER_RENDU)
   const mesuree = useRef(false)
   useEffect(() => {

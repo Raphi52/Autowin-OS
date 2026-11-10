@@ -354,4 +354,130 @@ describe('ChatView — fils d’un plan de lots rangés sous leur fil chef', () 
     expect(ordre).not.toContain('A1')
     expect(ordre).not.toContain('B3')
   }, 60_000)
+
+  /** Laisse filer les lectures et le rendu, sans avancer les minuteurs de la liste. */
+  async function attendreSansMinuteur(): Promise<void> {
+    for (let i = 0; i < 5; i++)
+      await act(async () => {
+        await new Promise((fin) => setImmediate(fin))
+      })
+  }
+
+  /**
+   * Joue les tranches : la liste n'avance que par minuteur, un à 0 ms par tranche. Sans ce pas, elle
+   * reste à sa première fenêtre.
+   */
+  async function jouerLesTranches(): Promise<void> {
+    for (let tour = 0; tour < 10; tour += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(0)
+      })
+      await attendreSansMinuteur()
+    }
+  }
+
+  /** Tape `texte` dans la recherche de la liste, comme le ferait l'utilisateur. */
+  async function chercher(texte: string): Promise<void> {
+    const champ = h!.container.querySelector('.conv-search input') as HTMLInputElement
+    const poserValeur = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    await act(async () => {
+      poserValeur?.call(champ, texte)
+      champ.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+
+  /** La ligne d'un fil dans la liste, ou null tant qu'elle n'est pas posée. */
+  const ligneDe = (id: string): HTMLElement | null =>
+    h!.container.querySelector<HTMLElement>(`.conv-list .conv-item[data-conversation-id="${id}"]`)
+
+  /**
+   * Hors recherche, un lot dont le chef existe a son onglet et n'a pas de ligne : c'est la recherche
+   * qui montre le rangement sous le chef, lots compris. Jumeau de la fenêtre : ici tout tient dans le
+   * premier passage, sans aucune tranche.
+   */
+  it('une recherche range le chef et ses lots sous lui, dans la première fenêtre', async () => {
+    await monter(
+      [
+        fil('X0', 'Projet ordinaire', 90),
+        fil('C1', 'Projet — le fil chef', 80),
+        fil('X1', 'Projet ordinaire suivant', 70),
+        fil('L1', 'Lot 1/2 — Projet premier', 60),
+        fil('L2', 'Lot 2/2 — Projet second', 50)
+      ],
+      [
+        {
+          id: 'plan-a',
+          chef: 'C1',
+          lots: [
+            { rang: 1, fil: 'L1' },
+            { rang: 2, fil: 'L2' }
+          ]
+        }
+      ]
+    )
+    expect(ids(lignesDuDossier())).toEqual(['X0', 'C1', 'X1'])
+
+    await chercher('Projet')
+    await laisserFiler()
+
+    expect(ids(lignesDuDossier())).toEqual(['X0', 'C1', 'L1', 'L2', 'X1'])
+    expect(ligneDe('L1')?.getAttribute('data-lot')).toBe('lot 1/2')
+    expect(ligneDe('L2')?.getAttribute('data-lot')).toBe('lot 2/2')
+    expect(parseFloat(ligneDe('L1')!.style.marginLeft)).toBeGreaterThan(
+      parseFloat(ligneDe('C1')!.style.marginLeft)
+    )
+  })
+
+  /**
+   * LE RANGEMENT TIENT AU-DELÀ DE LA PREMIÈRE FENÊTRE. Une recherche sur 64 fils : le chef et ses deux
+   * lots sont passés la 40e ligne, donc absents du premier passage ; la tranche suivante les pose,
+   * rangés sous leur chef. ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : un rangement qui ne met plus les
+   * lots sous leur chef, ou une liste qui ne dessine jamais un lot au-delà de la fenêtre.
+   */
+  it('une recherche sur 64 fils : chef et lots, passés la 40e ligne, se rangent sous lui après la tranche', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const convs = [
+        ...Array.from({ length: 60 }, (_, i) => fil(`P${i}`, `Projet ordinaire ${i}`, 1_000 - i)),
+        fil('C1', 'Projet — le fil chef', 100),
+        fil('X1', 'Projet ordinaire après le chef', 99),
+        fil('L1', 'Lot 1/2 — Projet premier', 98),
+        fil('L2', 'Lot 2/2 — Projet second', 97)
+      ]
+      const plansDeLots = apiDesPlans([
+        {
+          id: 'plan-a',
+          chef: 'C1',
+          lots: [
+            { rang: 1, fil: 'L1' },
+            { rang: 2, fil: 'L2' }
+          ]
+        }
+      ])
+      h = await mountChat(
+        chatApi({
+          conversations: vi.fn().mockResolvedValue(convs),
+          conversation: vi.fn(async (id: string) => convs.find((c) => c.id === id)),
+          plansDeLots
+        })
+      )
+      await attendreSansMinuteur()
+      await chercher('Projet')
+      await attendreSansMinuteur()
+
+      // Premier passage : la fenêtre ne pose que ses premières lignes, ni le chef ni ses lots.
+      expect(ligneDe('C1')).toBeNull()
+      expect(ligneDe('L1')).toBeNull()
+
+      await jouerLesTranches()
+      expect(ids(lignesDuDossier()).slice(-4)).toEqual(['C1', 'L1', 'L2', 'X1'])
+      expect(ligneDe('L1')?.getAttribute('data-lot')).toBe('lot 1/2')
+      expect(ligneDe('L2')?.getAttribute('data-lot')).toBe('lot 2/2')
+      expect(parseFloat(ligneDe('L1')!.style.marginLeft)).toBeGreaterThan(
+        parseFloat(ligneDe('C1')!.style.marginLeft)
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  }, 60_000)
 })
