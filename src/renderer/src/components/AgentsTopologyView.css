@@ -414,8 +414,6 @@
 
 .studio-modeles .router-default > .model-select-shell,
 .studio-modeles .router-default > .router-hint,
-.studio-modeles .router-default > .router-petites-taches-routage,
-.studio-modeles .router-default > .router-petites-taches-reset,
 .studio-modeles .router-default > .topology-lignes {
   order: 1;
   margin: 0;
@@ -452,16 +450,6 @@
   border: 1px dashed var(--line);
   border-radius: 999px;
   background: transparent;
-  color: var(--text-dim);
-  font-size: 12px;
-}
-
-/* La longue aide de la case reste dans Réglages ; ici la ligne ne garde que la case et son libellé. */
-.studio-modeles .router-petites-taches-routage small {
-  display: none;
-}
-
-.studio-modeles .router-petites-taches-routage {
   color: var(--text-dim);
   font-size: 12px;
 }

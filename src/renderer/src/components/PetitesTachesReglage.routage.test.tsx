@@ -18,10 +18,17 @@ let root: Root
 let setRoutage: ReturnType<typeof vi.fn>
 let etatRoutage = true
 
-const monter = async (): Promise<void> => {
+const monter = async (modeleSeul = false): Promise<void> => {
   await act(async () =>
     root.render(
-      <PetitesTachesReglage active idBase="studio" testId="studio" models={[]} catalogLoaded />
+      <PetitesTachesReglage
+        active
+        idBase="studio"
+        testId="studio"
+        models={[]}
+        catalogLoaded
+        modeleSeul={modeleSeul}
+      />
     )
   )
   await act(async () => {
@@ -79,6 +86,13 @@ describe('PetitesTachesReglage — interrupteur du routage des questions du chat
     })
     expect(setRoutage).toHaveBeenCalledWith(false)
     expect(caseRoutage()?.checked).toBe(false)
+  })
+
+  it('modèle seul (Agent Studio) : ni case du routage ni retour au défaut', async () => {
+    await monter(true)
+    expect(container.querySelector('.model-select-shell, [data-testid="studio"]')).not.toBeNull()
+    expect(caseRoutage()).toBeNull()
+    expect(container.querySelector('.router-petites-taches-reset')).toBeNull()
   })
 
   it('affiche décochée quand le réglage est coupé dans roles.json', async () => {

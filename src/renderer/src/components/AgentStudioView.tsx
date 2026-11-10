@@ -109,6 +109,7 @@ export function AgentStudioView({
                   idBase="studio-petites-taches-modele"
                   testId="studio-petites-taches"
                   couvertureRepliee
+                  modeleSeul
                 />
               }
             />

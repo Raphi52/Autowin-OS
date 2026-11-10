@@ -36,8 +36,12 @@ export function PetitesTachesReglage({
   catalogLoaded,
   idBase,
   testId,
-  couvertureRepliee = false
+  couvertureRepliee = false,
+  modeleSeul = false
 }: {
+  /** Agent Studio ne garde que le choix du modèle : la case du routage et le retour au défaut
+   *  se règlent dans Réglages → Routage. */
+  modeleSeul?: boolean
   /** Agent Studio pose le bloc en ligne : l'explication y part repliée, au bout de la ligne. */
   couvertureRepliee?: boolean
   active: boolean
@@ -189,7 +193,7 @@ export function PetitesTachesReglage({
           {t('routeur.petites.nonRegle')}
         </p>
       )}
-      {petitesTaches && (
+      {petitesTaches && !modeleSeul && (
         <label className="router-petites-taches-routage" data-testid={`${testId}-routage`}>
           <input
             type="checkbox"
@@ -201,7 +205,7 @@ export function PetitesTachesReglage({
           <small>{t('routeur.petites.routage.aide')}</small>
         </label>
       )}
-      {petitesTaches?.reglage && (
+      {petitesTaches?.reglage && !modeleSeul && (
         <button
           type="button"
           className="router-petites-taches-reset"
