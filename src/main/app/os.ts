@@ -25,7 +25,6 @@ import {
   claudeActiveAccountId,
   claudeCompteDuFil,
   claudeNomDuCompte,
-  claudeRotateAccount,
   claudeAccountEnv
 } from '../providers/claude-accounts'
 import { ClaudeCliAdapter, dossierModAutowin } from '../providers/claude'
@@ -578,13 +577,10 @@ export class AutowinOS {
       CONSTITUTION,
       this.executionSupervisor,
       (providerId) => (providerId === 'claude' ? claudeActiveAccountId() : undefined),
-      // 4e argument : la ROTATION. Un abonnement epuise ne doit pas arreter le travail s'il en reste
-      // un autre. Seul `claude` est multi-comptes ; les autres providers rendent `undefined` et
-      // gardent donc exactement le comportement d'avant (l'echec de quota remonte tel quel).
-      (providerId, walled) => (providerId === 'claude' ? claudeRotateAccount(walled) : undefined),
-      // 5e argument : le compte CHOISI pour le fil de l'appel, jamais remplacé tout seul.
+      // 4e argument : le compte CHOISI pour le fil de l'appel. Un refus de quota ne change jamais de
+      // compte : le tour s'arrête et nomme celui qui est vide. Les autres providers rendent `undefined`.
       (providerId, fil) => (providerId === 'claude' ? claudeCompteDuFil(fil) : undefined),
-      // 6e argument : le nom d'un compte, pour qu'un refus de quota dise QUEL compte est vide.
+      // 5e argument : le nom d'un compte, pour qu'un refus de quota dise QUEL compte est vide.
       (providerId, compte) => (providerId === 'claude' ? claudeNomDuCompte(compte) : undefined)
     )
       // Claude d'abord : il reste l'exécuteur par défaut (`executors[0]` du registre). ChatGPT se

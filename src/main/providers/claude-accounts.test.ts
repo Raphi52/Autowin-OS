@@ -330,60 +330,6 @@ describe('relocation du userData — le dossier d’un compte suit la racine cou
   })
 })
 
-describe('rotation d’abonnement — choisir le compte suivant', () => {
-  // Le store est le SEUL a connaitre la liste des comptes : la politique de choix vit donc ici, pas
-  // dans le registre d'appels (qui, lui, connait les murs de quota mais pas les comptes).
-  function storeAvecComptes(ids: string[]): ClaudeAccountsStore {
-    const accounts = [
-      { id: DEFAULT_ACCOUNT_ID, addedAt: '2026-08-06T00:00:00.000Z' },
-      ...ids.map((id) => ({ id, dir: `C:/racine/${id}`, addedAt: '2026-08-06T00:00:00.000Z' }))
-    ]
-    return new ClaudeAccountsStore('C:/state/accounts.json', 'C:/racine', {
-      readFile: () => JSON.stringify({ version: 1, activeId: DEFAULT_ACCOUNT_ID, accounts }),
-      writeFile: () => undefined,
-      makeDir: () => undefined,
-      removeDir: () => undefined,
-      now: () => '2026-08-06T00:00:00.000Z'
-    })
-  }
-
-  it('bascule sur un AUTRE compte et le rend actif', () => {
-    const store = storeAvecComptes(['compte-2'])
-    const suivant = store.rotateAwayFrom(DEFAULT_ACCOUNT_ID)
-    expect(suivant).toBe('compte-2')
-    expect(store.active().id).toBe('compte-2')
-  })
-
-  it('ne rend RIEN quand il n’y a pas d’autre compte — pas de rotation en rond', () => {
-    const store = storeAvecComptes([])
-    expect(store.rotateAwayFrom(DEFAULT_ACCOUNT_ID)).toBeUndefined()
-    expect(store.active().id).toBe(DEFAULT_ACCOUNT_ID)
-  })
-
-  it('ne rend JAMAIS le compte epuise lui-meme', () => {
-    const store = storeAvecComptes(['compte-2', 'compte-3'])
-    const suivant = store.rotateAwayFrom('compte-2')
-    expect(suivant).not.toBe('compte-2')
-    expect(['default', 'compte-3']).toContain(suivant)
-  })
-
-  it('avance dans le pool au lieu de reboucler entre les deux premiers comptes', () => {
-    const store = storeAvecComptes(['compte-2', 'compte-3'])
-
-    expect(store.rotateAwayFrom(DEFAULT_ACCOUNT_ID)).toBe('compte-2')
-    expect(store.rotateAwayFrom('compte-2')).toBe('compte-3')
-    expect(store.rotateAwayFrom('compte-3')).toBe(DEFAULT_ACCOUNT_ID)
-  })
-
-  it('un id inconnu ne casse rien et ne change pas le compte actif', () => {
-    const store = storeAvecComptes(['compte-2'])
-    const avant = store.active().id
-    expect(() => store.rotateAwayFrom('compte-inexistant')).not.toThrow()
-    expect(['default', 'compte-2']).toContain(store.active().id)
-    void avant
-  })
-})
-
 describe('ClaudeAccountsStore.onActiveChange', () => {
   it('previent a chaque changement du compte actif, et seulement alors', () => {
     const files = new Map<string, string>()
@@ -402,7 +348,7 @@ describe('ClaudeAccountsStore.onActiveChange', () => {
     store.onActiveChange((id) => vus.push(id))
     store.switchTo(second.id)
     store.switchTo(second.id)
-    store.rotateAwayFrom(second.id)
+    store.switchTo(DEFAULT_ACCOUNT_ID)
     store.add('C')
     expect(vus).toEqual([second.id, 'default'])
   })

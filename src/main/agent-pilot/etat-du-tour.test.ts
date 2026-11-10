@@ -49,7 +49,6 @@ const attendu = {
   compteRenduOrchestration: undefined,
   sessionEnCours: 'session-1',
   compteDeSession: 'compte-a',
-  comptesEpuisesCeTour: new Set<string>(),
   repliApresRefusTente: false,
   modeleApresRefus: undefined,
   segmentsDejaEnvoyes: 0,

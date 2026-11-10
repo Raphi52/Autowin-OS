@@ -32,7 +32,7 @@ const COMPTES = { 'conv-Q': { id: 'pro', nom: 'Compte pro', env: {} } }
 
 function monter(
   reponse: (rang: number) => SendResult | Error,
-  etat: { actif: string; rotations: number }
+  etat: { actif: string }
 ): { pilote: AgentPilot; appels: Appel[] } {
   const appels: Appel[] = []
   const claude: ProviderAdapter = {
@@ -55,11 +55,6 @@ function monter(
     undefined,
     undefined,
     () => etat.actif,
-    (_provider, mure) => {
-      etat.rotations += 1
-      etat.actif = mure === 'gmail' ? 'autre' : 'gmail'
-      return etat.actif
-    },
     (_provider, fil) => claudeCompteDuFil(fil)
   ).register(claude)
   const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }
@@ -81,11 +76,11 @@ const OK = (sessionId: string): SendResult =>
   ({ text: 'voila la reponse', provider: 'claude', systemInjected: false, sessionId }) as SendResult
 
 describe('chat() — fil au compte choisi', () => {
-  let etat: { actif: string; rotations: number }
+  let etat: { actif: string }
 
   beforeEach(() => {
     configureAutowinAppDataBase(mkdtempSync(join(tmpdir(), 'aos-compte-du-fil-')))
-    etat = { actif: 'gmail', rotations: 0 }
+    etat = { actif: 'gmail' }
     configureClaudeActiveAccountId(() => etat.actif)
     configureClaudeCompteDuFil((id) => COMPTES[id as keyof typeof COMPTES])
   })
@@ -145,7 +140,6 @@ describe('chat() — fil au compte choisi', () => {
       .catch((e: Error) => e)
 
     expect(appels).toHaveLength(1)
-    expect(etat.rotations).toBe(0)
     expect(evenements.some((e) => e.kind === 'retry')).toBe(false)
     expect(JSON.stringify([issue instanceof Error ? issue.message : issue, evenements])).toContain(
       '« Compte pro »'

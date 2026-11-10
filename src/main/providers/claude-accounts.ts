@@ -236,27 +236,6 @@ export function claudeActiveAccountId(): string | undefined {
 }
 
 /**
- * Rotation d'abonnement, injectee comme les deux accesseurs ci-dessus. Par defaut elle ne fait RIEN
- * et rend `undefined` : un module non configure se comporte exactement comme avant la
- * fonctionnalite, donc un echec de quota remonte tel quel au lieu d'une bascule surprise.
- */
-let rotateAccountProvider: (walledAccountId: string) => string | undefined = () => undefined
-
-export function configureClaudeAccountRotation(
-  provider: (walledAccountId: string) => string | undefined
-): void {
-  rotateAccountProvider = provider
-}
-
-export function claudeRotateAccount(walledAccountId: string): string | undefined {
-  try {
-    return rotateAccountProvider(walledAccountId)
-  } catch {
-    return undefined // une rotation impossible doit laisser l'echec d'origine parler
-  }
-}
-
-/**
  * LE COMPTE CHOISI POUR UN FIL (2026-11-01), injecte comme les accesseurs ci-dessus.
  *
  * Ce choix voyage avec l'appel au lieu de passer par le compte ACTIF, global a l'application. Avant,
@@ -407,7 +386,7 @@ export class ClaudeAccountsStore {
 
   /**
    * Prévenu à CHAQUE changement du compte actif, quel que soit le chemin : bascule demandée par
-   * l'interface, rotation sur quota épuisé, retrait du compte actif. Sans
+   * l'interface, retrait du compte actif. Sans
    * ce signal, seule la bascule faite depuis l'interface rafraîchissait la barre de quota : les
    * autres laissaient afficher le quota de l'ANCIEN compte.
    */
@@ -446,28 +425,6 @@ export class ClaudeAccountsStore {
 
   current(): ClaudeAccountsState {
     return { ...this.state, accounts: this.state.accounts.map((account) => ({ ...account })) }
-  }
-
-  /**
-   * ROTATION D'ABONNEMENT : rend actif un compte AUTRE que celui dont le quota vient d'etre epuise,
-   * et rend son id. `undefined` s'il n'y en a pas d'autre — l'appelant remonte alors l'echec plutot
-   * que de tourner en rond.
-   *
-   * La politique vit ICI parce que le store est le seul a connaitre la liste des comptes ; le
-   * registre d'appels, lui, connait les murs de quota mais pas les comptes. Chacun decide de ce
-   * qu'il sait.
-   *
-   * Le store ne voit pas les murs déjà posés. Il avance donc dans l'ordre stable du pool à partir du
-   * compte refusé ; le registre saute les comptes déjà murés et arrête au retour sur un compte visité.
-   * Choisir « le premier différent » rebouclerait A→B→A et rendrait C inaccessible.
-   */
-  rotateAwayFrom(walledAccountId: string): string | undefined {
-    const walledIndex = this.state.accounts.findIndex((account) => account.id === walledAccountId)
-    if (walledIndex < 0 || this.state.accounts.length < 2) return undefined
-    const suivant = this.state.accounts[(walledIndex + 1) % this.state.accounts.length]
-    if (!suivant) return undefined
-    this.switchTo(suivant.id)
-    return suivant.id
   }
 
   active(): ClaudeAccount {

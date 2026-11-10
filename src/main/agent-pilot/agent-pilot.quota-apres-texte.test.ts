@@ -14,23 +14,19 @@ import {
   type SendResult,
   type StreamChunk
 } from '../providers/types'
-import { loadChatSessions } from '../runs/chat-session-store'
 
 /**
- * UN TOUR DE CHAT COUPÉ PAR LE QUOTA APRÈS DU TEXTE REPART SUR LE COMPTE SUIVANT.
+ * UN TOUR DE CHAT COUPÉ PAR LE QUOTA APRÈS DU TEXTE S'ARRÊTE SUR SON COMPTE (2026-11-10).
  *
  * Cas réel : `run-stdout/c6ba0030-384c-4095-ac84-c96af2026180.stdout.jsonl`, un appel de 31 min et
  * 96 blocs de texte, fini sur « You've hit your session limit · resets 11:30am ». Le tour mourait en
- * pastille rouge alors qu'un second abonnement était libre ; il fallait relancer chaque fil à la main.
+ * pastille rouge alors qu'un second abonnement était libre, et repartait tout seul sur lui.
  *
- * Le registre bascule le pool et marque l'erreur (`basculeApresQuota`, registry.quota-wall.test.ts).
- * Ici, le tour de chat doit : effacer le texte déjà affiché, LÂCHER la session (elle vit dans le
- * dossier du compte épuisé) et renvoyer le fil ENTIER sur le compte suivant.
+ * Désormais le compte ne change jamais sans l'utilisateur : le tour s'arrête, le texte déjà affiché
+ * reste (il est réel), rien n'est rejoué, et l'erreur nomme le compte épuisé.
  *
  * Câblé sur le VRAI `ProviderRegistry` : c'est la jonction registre → tour qui est en cause.
  */
-const PHRASE_REPRISE = 'Suite de NOTRE conversation'
-
 type Appel = { compte: string; options: SendOptions; contenu: string }
 
 const SESSION_LIMIT = (): ProviderCallError =>
@@ -71,10 +67,6 @@ function monter(
     undefined,
     undefined,
     () => comptes.actif,
-    (_providerId, walled) => {
-      comptes.actif = walled === 'compte-A' ? 'compte-B' : 'compte-A'
-      return comptes.actif
-    },
     undefined,
     noms ? (_providerId, compte) => noms[compte] : undefined
   ).register(claude)
@@ -97,7 +89,7 @@ const fil = (...tours: string[]): Message[] =>
 const OK = (sessionId: string, text = 'voila la reponse'): SendResult =>
   ({ text, provider: 'claude', systemInjected: false, sessionId }) as SendResult
 
-describe('chat() — quota épuisé APRÈS du texte affiché : le tour repart sur le compte suivant', () => {
+describe('chat() — quota épuisé APRÈS du texte affiché : le tour s’arrête sur son compte', () => {
   beforeEach(() => {
     configureAutowinAppDataBase(mkdtempSync(join(tmpdir(), 'aos-quota-apres-texte-')))
   })
@@ -106,84 +98,36 @@ describe('chat() — quota épuisé APRÈS du texte affiché : le tour repart su
     configureAutowinAppDataBase(undefined)
   })
 
-  it('efface le texte coupé, lâche la session et renvoie le fil ENTIER sur le compte B', async () => {
-    // Tour 1 sur A : ouvre la session `sess-A` du compte A.
+  it('le tour s’arrête sur son compte : rien n’est rejoué, et l’erreur nomme ce compte', async () => {
     const comptes = { actif: 'compte-A' }
-    await monter(() => OK('sess-A'), comptes).pilote.chat(
-      fil('bonjour'),
-      () => {},
-      undefined,
-      1,
-      'conv-Q'
-    )
-    expect(loadChatSessions()['conv-Q']?.sessionId).toBe('sess-A')
-
-    // Tour 2 : reprend `sess-A`, affiche du texte, puis le quota de A tombe.
-    const { pilote, appels } = monter(
-      (rang) => (rang === 0 ? SESSION_LIMIT() : OK('sess-B')),
-      comptes
-    )
+    const { pilote, appels } = monter(() => SESSION_LIMIT(), comptes, {
+      'compte-A': 'perso@gmail.com'
+    })
     const evenements: PilotEvent[] = []
-    await pilote.chat(
-      fil('bonjour', 'ma reponse', 'et maintenant ?'),
-      (e) => evenements.push(e),
-      undefined,
-      1,
-      'conv-Q'
-    )
 
-    expect(appels.map((a) => a.compte)).toEqual(['compte-A', 'compte-B'])
-    // Le 1er appel reprenait la session de A, message amputé : c'est voulu.
-    expect(appels[0]!.options.resumeSessionId).toBe('sess-A')
-    expect(appels[0]!.contenu).toContain(PHRASE_REPRISE)
-    // Le rejeu sur B : session de A inouvrable depuis B → aucune reprise, fil entier.
-    expect(appels[1]!.options.resumeSessionId).toBeUndefined()
-    expect(appels[1]!.contenu).toContain('TOI: ma reponse')
-    expect(appels[1]!.contenu).toContain('et maintenant ?')
-    expect(appels[1]!.contenu).not.toContain(PHRASE_REPRISE)
+    const erreur = await pilote
+      .chat(
+        fil('bonjour', 'ma reponse', 'et maintenant ?'),
+        (e) => evenements.push(e),
+        undefined,
+        1,
+        'conv-Q'
+      )
+      .then(
+        () => undefined,
+        (e: unknown) => e
+      )
 
-    // Le texte coupé est EFFACÉ du fil (sinon il resterait affiché au-dessus de la réponse rejouée).
-    const premierFlux = evenements.find((e) => e.kind === 'delta')
-    expect(premierFlux).toBeDefined()
-    expect(evenements).toContainEqual(
-      expect.objectContaining({
-        kind: 'stream-reset',
-        streamId: (premierFlux as { streamId: string }).streamId
-      })
-    )
-    // Le tour finit VERT, sur la réponse rejouée — pas en pastille rouge.
-    expect(evenements.some((e) => e.kind === 'error')).toBe(false)
-    expect(evenements.at(-1)).toMatchObject({ kind: 'done' })
-    expect(JSON.stringify(evenements.at(-1))).toContain('voila la reponse')
-  })
-
-  it('le tour suivant REPREND la session ouverte sur B au lieu de repayer le fil', async () => {
-    const comptes = { actif: 'compte-A' }
-    await monter(() => OK('sess-A'), comptes).pilote.chat(
-      fil('bonjour'),
-      () => {},
-      undefined,
-      1,
-      'conv-S'
-    )
-    await monter((rang) => (rang === 0 ? SESSION_LIMIT() : OK('sess-B')), comptes).pilote.chat(
-      fil('bonjour', 'r', 'suite'),
-      () => {},
-      undefined,
-      1,
-      'conv-S'
-    )
-
-    const { pilote, appels } = monter(() => OK('sess-B2'), comptes)
-    await pilote.chat(
-      fil('bonjour', 'r', 'suite', 'r2', 'encore'),
-      () => {},
-      undefined,
-      1,
-      'conv-S'
-    )
-    expect(appels[0]!.compte).toBe('compte-B')
-    expect(appels[0]!.options.resumeSessionId).toBe('sess-B')
+    // Un seul appel : le texte coupé n'est jamais rejoué, et le compte actif n'a pas bougé.
+    expect(appels.map((a) => a.compte)).toEqual(['compte-A'])
+    expect(comptes.actif).toBe('compte-A')
+    expect(evenements.some((e) => e.kind === 'retry')).toBe(false)
+    // Le tour échoue en le disant : quel compte, et le geste à faire.
+    expect(erreur).toBeInstanceOf(ProviderCallError)
+    const echec = (erreur as Error).message
+    expect(echec).toContain('« perso@gmail.com »')
+    expect(echec).toContain('choisis un autre compte')
+    expect(echec).toContain('session limit')
   })
 
   it('compte changé ENTRE deux itérations du même tour : la session de A n’est pas réclamée sur B', async () => {
@@ -214,41 +158,49 @@ describe('chat() — quota épuisé APRÈS du texte affiché : le tour repart su
 
   /*
    * Cas réel (2026-11-09 19:27, run-stdout f3c665df puis cdca4224) : le compte gmail tombe sur sa
-   * limite hebdomadaire, le tour repart sur le compte pro, à sa limite lui aussi. Le fil n'affichait
-   * que « You've hit your weekly limit · resets 1am », lu comme une erreur de compte.
+   * limite hebdomadaire, puis le compte pro, à sa limite lui aussi. Chaque échec doit nommer SON
+   * compte : c'est ce qui a manqué au fil, lu comme une erreur de compte.
    */
-  it('les deux comptes épuisés : l’annonce et l’échec du tour nomment chaque compte par son adresse', async () => {
-    const comptes = { actif: 'compte-A' }
+  it('deux comptes épuisés à la suite : chaque échec nomme SON compte, et rien ne bascule seul', async () => {
     const noms = { 'compte-A': 'perso@gmail.com', 'compte-B': 'pro@entreprise.fr' }
-    const { pilote, appels } = monter(
-      (_rang, compte) =>
+    const comptes = { actif: 'compte-A' }
+    const premier = monter(
+      () =>
         new ProviderCallError(
-          compte === 'compte-A'
-            ? "Claude a interrompu l'appel : You've hit your weekly limit · resets Nov 12, 4am (Europe/Paris)"
-            : "Claude a interrompu l'appel : You've hit your weekly limit · resets 1am (Europe/Paris)",
+          "Claude a interrompu l'appel : You've hit your weekly limit · resets Nov 12, 4am (Europe/Paris)",
           { code: 'success', retryable: false }
         ),
       comptes,
       noms
     )
-    const evenements: PilotEvent[] = []
-    const erreur = await pilote
-      .chat(fil('travaille'), (e) => evenements.push(e), undefined, 1, 'conv-W')
+    const erreurA = await premier.pilote
+      .chat(fil('travaille'), () => {}, undefined, 1, 'conv-W')
       .then(
         () => undefined,
         (e: unknown) => e
       )
+    expect(premier.appels.map((a) => a.compte)).toEqual(['compte-A'])
+    expect((erreurA as Error).message).toContain('« perso@gmail.com »')
 
-    expect(appels.map((a) => a.compte)).toEqual(['compte-A', 'compte-B'])
-    const annonce = JSON.stringify(evenements.filter((e) => e.kind === 'retry'))
-    expect(annonce).toContain('« perso@gmail.com »')
-    expect(annonce).toContain('« pro@entreprise.fr »')
-    expect(annonce).not.toContain('« compte-A »')
-    // L'échec du tour, tel que le fil l'affiche.
-    expect(erreur).toBeInstanceOf(ProviderCallError)
-    const echec = (erreur as Error).message
-    expect(echec).toContain('« perso@gmail.com »')
-    expect(echec).toContain('« pro@entreprise.fr »')
-    expect(echec).toContain('resets 1am')
+    // L'utilisateur choisit l'autre compte à la main : son refus le nomme à son tour.
+    comptes.actif = 'compte-B'
+    const second = monter(
+      () =>
+        new ProviderCallError(
+          "Claude a interrompu l'appel : You've hit your weekly limit · resets 1am (Europe/Paris)",
+          { code: 'success', retryable: false }
+        ),
+      comptes,
+      noms
+    )
+    const erreurB = await second.pilote
+      .chat(fil('travaille'), () => {}, undefined, 1, 'conv-W')
+      .then(
+        () => undefined,
+        (e: unknown) => e
+      )
+    expect(second.appels.map((a) => a.compte)).toEqual(['compte-B'])
+    expect((erreurB as Error).message).toContain('« pro@entreprise.fr »')
+    expect((erreurB as Error).message).toContain('resets 1am')
   })
 })

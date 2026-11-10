@@ -67,7 +67,6 @@ import {
   configureClaudeCompteDuFil,
   configureClaudeNomDuCompte,
   configureClaudeActiveAccountId,
-  configureClaudeAccountRotation,
   withClaudeAccountEnv
 } from './providers/claude-accounts'
 import {
@@ -1257,13 +1256,10 @@ configureClaudeNomDuCompte((accountId) => claudeAccounts.compteDuFil(accountId)?
 // qui ne la rend que pour un fil qui y travaille. fix-ok: cause mesurée — rouge sur
 // agent-pilot.session-resume.test.ts (`expected undefined to be 'sess-1'`) avec le câblage précédent.
 configureCopieDuFilDuChat((conversationId) => copieNotee(os.conversations.get(conversationId)))
-// Rotation d'abonnement : quand le quota du compte actif est epuise, le registre demande une bascule
-// vers un compte encore vivant. Sans ce cablage, la rotation existerait sans jamais se declencher.
-configureClaudeAccountRotation((walled) => claudeAccounts.rotateAwayFrom(walled))
 // La sonde de quota fait renouveler par le CLI la session expiree du compte qu'elle lit : sans ce
 // cablage, la barre restait sur les chiffres d'avant la bascule jusqu'au prochain message.
 configureClaudeSessionRenewal((configDir) => renouvelerSessionClaude(configDir))
-// Tout changement du compte actif (interface, depart d'un tour, rotation) rend le quota memorise
+// Tout changement du compte actif (interface, depart d'un tour) rend le quota memorise
 // faux et la liste des comptes de l'interface perimee : on jette l'un et on previent l'autre.
 claudeAccounts.onActiveChange(() => {
   invalidateModelQuotaCache()

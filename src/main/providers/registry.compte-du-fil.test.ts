@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { estMurDeQuota } from '../../shared/reprise-quota'
-import { ProviderRegistry, basculeApresQuota } from './registry'
+import { ProviderRegistry } from './registry'
 import {
   ProviderCallError,
   type Message,
@@ -18,7 +18,8 @@ import {
  * sans un mot dans le fil, et la barre de quota montrait gmail à côté de la puce du compte pro.
  * Choix de l'utilisateur : « si le compte choisi est vide, le tour s'arrête avec un message ».
  *
- * Le changement automatique reste la règle des fils SANS compte choisi.
+ * Depuis le 2026-11-10, c'est la règle de TOUS les fils : aucun compte ne change tout seul. Un fil sans
+ * compte choisi s'arrête aussi sur son compte actif, et le dit.
  */
 const REFUS = "You've hit your weekly limit · resets Nov 3, 1am (Europe/Paris)"
 const refusDeQuota = (): ProviderCallError =>
@@ -36,8 +37,6 @@ class FauxClaude implements ProviderAdapter {
   erreur: Error | undefined
   /** Un fragment de texte part avant l'erreur : la coupure en plein tour. */
   texteAvantErreur = false
-  /** Refus décidé à chaque appel : il dépend du compte alors actif. */
-  refuser: (() => boolean) | undefined
 
   async auth(): Promise<boolean> {
     return true
@@ -48,7 +47,6 @@ class FauxClaude implements ProviderAdapter {
     _options: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
     this.appels += 1
-    if (this.refuser?.()) throw refusDeQuota()
     if (this.erreur) {
       if (this.texteAvantErreur) yield { delta: 'je commence' } as StreamChunk
       throw this.erreur
@@ -60,23 +58,19 @@ class FauxClaude implements ProviderAdapter {
 function monter(choisis: Record<string, string> = { 'conv-A': 'pro' }): {
   claude: FauxClaude
   registry: ProviderRegistry
-  etat: { actif: string; rotations: number }
+  etat: { actif: string }
 } {
   const claude = new FauxClaude()
-  const etat = { actif: 'gmail', rotations: 0 }
+  const etat = { actif: 'gmail' }
   const registry = new ProviderRegistry(
     undefined,
     undefined,
     () => etat.actif,
-    (_provider, mure) => {
-      etat.rotations += 1
-      etat.actif = mure === 'gmail' ? 'pro' : 'gmail'
-      return etat.actif
-    },
     (_provider, fil) => {
       const id = fil ? choisis[fil] : undefined
       return id ? { id, nom: 'Compte pro' } : undefined
-    }
+    },
+    (_provider, compte) => (compte === 'gmail' ? 'perso@gmail.com' : undefined)
   ).register(claude)
   return { claude, registry, etat }
 }
@@ -96,7 +90,7 @@ describe('registre — fil au compte choisi', () => {
     expect(etat.actif).toBe('gmail')
   })
 
-  it('refus de quota : le tour s’arrête, sans rotation, avec un message qui dit quoi faire', async () => {
+  it('refus de quota : le tour s’arrête, sans changer de compte, avec un message qui dit quoi faire', async () => {
     const { claude, registry, etat } = monter()
     claude.erreur = refusDeQuota()
 
@@ -113,11 +107,10 @@ describe('registre — fil au compte choisi', () => {
     expect(message).toContain(REFUS)
     expect(estMurDeQuota(message)).toBe(true)
     expect(claude.appels).toBe(1)
-    expect(etat.rotations).toBe(0)
     expect(etat.actif).toBe('gmail')
   })
 
-  it('compte déjà connu comme vide : rien n’est lancé, même message, aucune rotation', async () => {
+  it('compte déjà connu comme vide : rien n’est lancé, même message, aucun changement de compte', async () => {
     const { claude, registry, etat } = monter()
     claude.erreur = refusDeQuota()
     await registry.send('claude', UN_TOUR, { conversationId: 'conv-A' }).catch(() => undefined)
@@ -127,10 +120,10 @@ describe('registre — fil au compte choisi', () => {
       /« Compte pro ».*mardi 3 novembre/
     )
     expect(claude.appels).toBe(1)
-    expect(etat.rotations).toBe(0)
+    expect(etat.actif).toBe('gmail')
   })
 
-  it('coupure APRÈS du texte : aucune bascule marquée sur l’erreur, donc aucun rejeu', async () => {
+  it('coupure APRÈS du texte : le tour s’arrête sur le compte choisi, sans rejeu', async () => {
     const { claude, registry, etat } = monter()
     claude.erreur = refusDeQuota()
     claude.texteAvantErreur = true
@@ -140,8 +133,9 @@ describe('registre — fil au compte choisi', () => {
       .catch((e: Error) => e)
 
     expect((erreur as Error).message).toContain('« Compte pro »')
-    expect(basculeApresQuota(erreur)).toBeUndefined()
-    expect(etat.rotations).toBe(0)
+    // Le texte coupé n'est jamais rejoué : un seul appel au provider.
+    expect(claude.appels).toBe(1)
+    expect(etat.actif).toBe('gmail')
   })
 
   it('le fil d’un run compte aussi : un agent orchestré ne change pas de compte', async () => {
@@ -159,7 +153,7 @@ describe('registre — fil au compte choisi', () => {
       .catch(() => undefined)
 
     expect(claude.appels).toBe(1)
-    expect(etat.rotations).toBe(0)
+    expect(etat.actif).toBe('gmail')
   })
 
   it('le compte vide d’un fil ne ferme pas la porte du compte actif aux autres fils', async () => {
@@ -174,14 +168,19 @@ describe('registre — fil au compte choisi', () => {
     expect(claude.appels).toBe(2)
   })
 
-  it('témoin — fil SANS compte choisi : la rotation automatique continue', async () => {
+  it('fil SANS compte choisi : le compte actif épuisé arrête le tour, il ne change pas tout seul', async () => {
     const { claude, registry, etat } = monter()
-    claude.refuser = () => etat.actif === 'gmail'
+    claude.erreur = refusDeQuota()
 
-    await expect(registry.send('claude', UN_TOUR, { conversationId: 'conv-B' })).resolves.toEqual(
-      expect.objectContaining({ text: 'ok' })
-    )
-    expect(etat.rotations).toBe(1)
-    expect(etat.actif).toBe('pro')
+    const erreur = await registry
+      .send('claude', UN_TOUR, { conversationId: 'conv-B' })
+      .catch((e: Error) => e)
+
+    expect(erreur).toBeInstanceOf(ProviderCallError)
+    expect((erreur as Error).message).toContain('« perso@gmail.com »')
+    expect((erreur as Error).message).toContain('mardi 3 novembre')
+    expect((erreur as Error).message).toContain('choisis un autre compte')
+    expect(claude.appels).toBe(1)
+    expect(etat.actif).toBe('gmail')
   })
 })

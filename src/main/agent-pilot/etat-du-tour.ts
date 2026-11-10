@@ -71,12 +71,10 @@ export interface EtatDuTour {
   sessionEnCours: string | undefined
   /**
    * Compte Claude qui a ouvert `sessionEnCours`. Une session CLI vit dans le dossier
-   * de SON compte : dès que le compte actif diffère — bascule à la main pendant le tour, ou rotation
-   * après un quota épuisé —, la reprendre rend « No conversation found » et le tour meurt.
+   * de SON compte : dès que le compte actif diffère — bascule à la main pendant le tour —, la reprendre
+   * rend « No conversation found » et le tour meurt.
    */
   compteDeSession: string | undefined
-  /** Comptes dont le quota est tombé PENDANT ce tour : jamais de rejeu vers l'un d'eux. */
-  readonly comptesEpuisesCeTour: Set<string>
   /**
    * REPLI APRES UN REFUS DU FILTRE DE SECURITE (`deciderRepliApresRefus`) : joue UNE fois par tour.
    * Le modele voisin reste celui du tour une fois choisi : le message refuse est desormais dans la
@@ -340,7 +338,6 @@ export function etatInitialDuTour(entree: {
     compteRenduOrchestration: undefined,
     sessionEnCours: resumeSessionId,
     compteDeSession: compteAuDepart,
-    comptesEpuisesCeTour: new Set<string>(),
     repliApresRefusTente: false,
     modeleApresRefus: undefined,
     segmentsDejaEnvoyes: 0,

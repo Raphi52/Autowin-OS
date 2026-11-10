@@ -1,6 +1,6 @@
 // Ce que l'envoi d'une itération au modèle fait d'une erreur : annulation, session abandonnée
-// (prompt trop long, crash du CLI sans coût), bascule de compte sur quota épuisé, repli après un
-// refus du filtre de sécurité, rejeu d'une panne serveur temporaire. Sorti tel quel du `catch` de
+// (prompt trop long, crash du CLI sans coût), repli après un refus du filtre de sécurité, rejeu
+// d'une panne serveur temporaire. Sorti tel quel du `catch` de
 // l'envoi dans AgentPilot.chat() (lot 4) : rend la tentative suivante — là où le `catch`
 // faisait `continue` —, ou jette comme avant.
 import {
@@ -9,7 +9,6 @@ import {
   dormirAnnulable,
   estCrashDExecutionDuCli
 } from '../chat/chat-rejeu-surcharge'
-import { basculeApresQuota } from '../providers/registry'
 import { ProviderCallError, type PromptEnvelope, type SendOptions } from '../providers/types'
 import type { ContexteDuTour } from './contexte-du-tour'
 
@@ -91,33 +90,6 @@ export async function reprendreApresErreur(
       name: provider,
       text: `${message} — session du fournisseur abandonnee, nouvel essai sans reprise`,
       data: { attempt, maxAttempts: 2 }
-    })
-    return attempt
-  }
-  /*
-   * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (2026-10-22).
-   *
-   * Cas réel : `run-stdout/c6ba0030-…stdout.jsonl`, 31 min et 96 blocs de texte, fini sur
-   * « You've hit your session limit ». Le registre a basculé le pool sur un compte LIBRE et
-   * l'a marqué sur l'erreur (`basculeApresQuota`) ; le rejeu se fait ICI, seul endroit qui
-   * sait le faire proprement : texte coupé effacé, session lâchée (elle vit dans le dossier
-   * du compte épuisé), fil ENTIER renvoyé. Ce qui a été fait sur disque avant la coupure
-   * reste : le modèle le retrouve en relisant. Jamais vers un compte déjà tombé dans ce tour.
-   */
-  const bascule = basculeApresQuota(error)
-  if (bascule && !etat.comptesEpuisesCeTour.has(bascule.compteSuivant)) {
-    etat.comptesEpuisesCeTour.add(bascule.compteEpuise)
-    repartirSansSession()
-    if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
-    attempt += 1
-    emit({
-      kind: 'retry',
-      iteration: i,
-      name: provider,
-      text:
-        `Quota épuisé sur le compte Claude « ${bascule.nomEpuise ?? bascule.compteEpuise} » — le tour repart ` +
-        `sur « ${bascule.nomSuivant ?? bascule.compteSuivant} » avec tout le fil`,
-      data: { attempt, maxAttempts: attempt + 1, basculeDeCompte: bascule }
     })
     return attempt
   }

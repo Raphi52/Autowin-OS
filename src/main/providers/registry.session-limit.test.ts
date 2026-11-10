@@ -9,8 +9,8 @@ import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } f
  * pour repérer les fils rouges à reprendre) reconnaît « session limit », parce que c'est le texte
  * RÉELLEMENT écrit par Claude dans conversations.json quand l'abonnement est épuisé. La copie
  * privée du registre, elle, ne connaissait que « hit your usage » : sur le refus le plus fréquent,
- * la rotation d'abonnement ne partait donc PAS, et le travail s'arrêtait alors qu'un second
- * abonnement était disponible. Deux vocabulaires pour un même mur : une seule source désormais.
+ * le mur de quota ne se posait donc PAS. Deux vocabulaires pour un même mur :
+ * une seule source désormais.
  */
 
 class FauxProvider implements ProviderAdapter {
@@ -42,26 +42,15 @@ const MUR_SESSION = new Error("You've hit your session limit · resets 7:10pm")
 const UN_TOUR = [{ role: 'user' as const, content: 'travaille' }]
 
 describe('mur de quota — vocabulaire « session limit »', () => {
-  it('« session limit » DÉCLENCHE la rotation d’abonnement et le tour réussit', async () => {
+  it('« session limit » ARRÊTE le tour sur le compte en cours : aucun autre compte n’est essayé', async () => {
     const claude = new FauxProvider('claude')
-    let actif = 'compte-A'
-    const rotations: string[] = []
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => actif,
-      (_providerId, walled) => {
-        if (walled !== 'compte-A') return undefined
-        actif = 'compte-B'
-        rotations.push(actif)
-        claude.erreur = undefined // le quota de B n'est pas épuisé
-        return actif
-      }
-    ).register(claude)
+    const actif = 'compte-A'
+    const registry = new ProviderRegistry(undefined, undefined, () => actif).register(claude)
 
     claude.erreur = MUR_SESSION
-    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
-    expect(rotations).toEqual(['compte-B'])
+    await expect(registry.send('claude', UN_TOUR)).rejects.toThrow(/quota/i)
+    expect(claude.appels).toBe(1)
+    expect(actif).toBe('compte-A')
   })
 
   it('« session limit » POSE le mur : l’appel suivant ne repart pas vers le provider', async () => {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClaudeAccountsStore, DEFAULT_ACCOUNT_ID } from './claude-accounts'
-import { ProviderRegistry, basculeApresQuota } from './registry'
+import { ProviderRegistry } from './registry'
 import { estMurDeQuota, instantDeRetourAnnonce } from '../../shared/reprise-quota'
 import {
   ProviderCallError,
@@ -212,16 +212,12 @@ describe('mur de quota — isolation par compte', () => {
 })
 
 /**
- * ROTATION D'ABONNEMENT — un abonnement epuise ne doit pas ARRETER le travail s'il en reste un autre.
+ * QUOTA ÉPUISÉ : LE COMPTE NE CHANGE JAMAIS TOUT SEUL (2026-11-10).
  *
- * Suite directe de l'isolation par compte ci-dessus : separer les murs empeche la contamination, mais
- * ne fait pas encore SERVIR le second abonnement. Tant que la bascule est manuelle, l'utilisateur
- * decouvre le mur en pleine session et doit intervenir. La rotation ferme cette derniere marche.
- *
- * Contrat : le registre ne CHOISIT pas le compte (il ne connait pas le store) — il DEMANDE une
- * rotation au pool, qui bascule et rend le nouvel id. Le registre ne fait que constater le resultat.
+ * Le registre ne tourne plus vers un autre abonnement : un tour qui heurte le mur de son compte s'arrête
+ * et le dit. Le changement de compte reste le geste de l'utilisateur, avec la puce du compte.
  */
-describe('rotation d’abonnement sur quota epuise', () => {
+describe('quota épuisé — le compte ne change jamais tout seul', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-07T10:00:00Z'))
@@ -230,181 +226,46 @@ describe('rotation d’abonnement sur quota epuise', () => {
     vi.useRealTimers()
   })
 
-  /**
-   * Un pool de deux comptes. Le quota appartient au COMPTE : `compte-A` est epuise, `compte-B` a
-   * encore du sien — donc basculer sur B doit rendre les appels a nouveau possibles. C'est modelise
-   * en liberant l'erreur du faux provider au moment de la bascule.
-   */
-  function poolDeDeuxComptes(provider: FauxProvider): {
-    actif: () => string
-    rotate: (providerId: string, walled: string) => string | undefined
-    rotations: string[]
-  } {
-    let actif = 'compte-A'
-    const rotations: string[] = []
-    return {
-      actif: () => actif,
-      rotate: (_providerId, walled) => {
-        const suivant = walled === 'compte-A' ? 'compte-B' : undefined
-        if (suivant) {
-          actif = suivant
-          rotations.push(suivant)
-          provider.erreur = undefined // le quota de B n'est pas epuise
-        }
-        return suivant
-      },
-      rotations
-    }
-  }
-
-  it('un tour qui heurte le mur BASCULE et REUSSIT sur l’autre abonnement', async () => {
+  it('un tour qui heurte le mur S’ARRÊTE sur le compte en cours : aucun autre compte n’est essayé', async () => {
     const claude = new FauxProvider('claude')
-    const pool = poolDeDeuxComptes(claude)
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => pool.actif(),
-      pool.rotate
-    ).register(claude)
+    const registry = new ProviderRegistry(undefined, undefined, () => 'compte-A').register(claude)
 
-    // Le premier appel echoue sur quota. Il ne doit PAS remonter l'erreur : le pool a un compte libre.
-    claude.erreur = MUR_DE_QUOTA
-    const rendu = await registry.send('claude', UN_TOUR)
-    expect(rendu.text).toBe('ok')
-    expect(pool.rotations).toEqual(['compte-B'])
-    expect(claude.appels).toBe(2) // 1 refus + 1 reussite apres bascule
-  })
-
-  it('sans autre abonnement disponible, l’erreur remonte — pas de boucle', async () => {
-    const claude = new FauxProvider('claude')
-    const actif = 'compte-Z' // le pool ne sait pas ou aller depuis Z
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => actif,
-      () => undefined
-    ).register(claude)
     claude.erreur = MUR_DE_QUOTA
     await expect(registry.send('claude', UN_TOUR)).rejects.toThrow(/usage limit|quota/i)
-    expect(claude.appels).toBe(1) // un seul essai : aucune relance en aveugle
+    expect(claude.appels).toBe(1) // un seul essai : aucun autre compte n'est tenté
   })
 
-  it('le mur du compte epuise reste POSE apres la rotation', async () => {
+  it('un rate-limit PASSAGER ne pose AUCUN mur : l’appel suivant repart sans attendre', async () => {
     const claude = new FauxProvider('claude')
-    const pool = poolDeDeuxComptes(claude)
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => pool.actif(),
-      pool.rotate
-    ).register(claude)
-
-    claude.erreur = MUR_DE_QUOTA
-    await registry.send('claude', UN_TOUR)
-
-    // On revient a la main sur A : il doit toujours etre mure (son quota n'est pas revenu).
-    claude.erreur = undefined
-    const registryA = registry as unknown as { quotaWalls: Map<string, string> }
-    expect([...registryA.quotaWalls.keys()].some((k) => k.includes('compte-A'))).toBe(true)
-  })
-
-  it('un rate-limit PASSAGER ne declenche AUCUNE rotation (discriminant)', async () => {
-    const claude = new FauxProvider('claude')
-    const pool = poolDeDeuxComptes(claude)
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => pool.actif(),
-      pool.rotate
-    ).register(claude)
+    const registry = new ProviderRegistry(undefined, undefined, () => 'compte-A').register(claude)
 
     claude.erreur = RATE_LIMIT
     await expect(registry.send('claude', UN_TOUR)).rejects.toThrow(/429|rate limit/i)
-    expect(pool.rotations).toEqual([]) // brûler un abonnement sur une attente de 20s serait absurde
-  })
-
-  it('deux refus concurrents du meme compte ne font qu une rotation et reprennent sur le successeur', async () => {
-    let actif = 'compte-A'
-    let release!: () => void
-    const barrier = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const calls: string[] = []
-    const rotations: string[] = []
-    const claude: ProviderAdapter = {
-      id: 'claude',
-      async auth() {
-        return true
-      },
-      // eslint-disable-next-line require-yield
-      async *send() {
-        const account = actif
-        calls.push(account)
-        if (account === 'compte-A') {
-          await barrier
-          throw MUR_DE_QUOTA
-        }
-        return { text: 'ok', provider: 'claude', systemInjected: false }
-      }
-    }
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => actif,
-      (_providerId, walled) => {
-        actif = walled === 'compte-A' ? 'compte-B' : 'compte-A'
-        rotations.push(`${walled}->${actif}`)
-        return actif
-      }
-    ).register(claude)
-
-    const first = registry.send('claude', UN_TOUR)
-    const second = registry.send('claude', UN_TOUR)
-    await vi.waitFor(() => expect(calls).toEqual(['compte-A', 'compte-A']))
-    release()
-
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      expect.objectContaining({ text: 'ok' }),
-      expect.objectContaining({ text: 'ok' })
-    ])
-    expect(rotations).toEqual(['compte-A->compte-B'])
-    expect(actif).toBe('compte-B')
-    expect(calls).toEqual(['compte-A', 'compte-A', 'compte-B', 'compte-B'])
-  })
-
-  it('saute deux comptes epuises pour atteindre un troisieme compte valide', async () => {
-    let actif = 'compte-A'
-    const calls: string[] = []
-    const rotations: string[] = []
-    const claude: ProviderAdapter = {
-      id: 'claude',
-      async auth() {
-        return true
-      },
-      // eslint-disable-next-line require-yield
-      async *send() {
-        calls.push(actif)
-        if (actif !== 'compte-C') throw MUR_DE_QUOTA
-        return { text: 'ok', provider: 'claude', systemInjected: false }
-      }
-    }
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => actif,
-      (_providerId, walled) => {
-        actif = walled === 'compte-A' ? 'compte-B' : walled === 'compte-B' ? 'compte-C' : actif
-        rotations.push(`${walled}->${actif}`)
-        return actif
-      }
-    ).register(claude)
-
+    claude.erreur = undefined
     await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
-    expect(calls).toEqual(['compte-A', 'compte-B', 'compte-C'])
-    expect(rotations).toEqual(['compte-A->compte-B', 'compte-B->compte-C'])
+    expect(claude.appels).toBe(2)
   })
 
-  it('parcourt A puis B puis C avec le vrai store branche comme en production', async () => {
+  it('le mur d’un compte épuisé tient : y revenir à la main ne rappelle PAS le provider', async () => {
+    const claude = new FauxProvider('claude')
+    let actif = 'compte-A'
+    const registry = new ProviderRegistry(undefined, undefined, () => actif).register(claude)
+
+    claude.erreur = MUR_DE_QUOTA
+    await registry.send('claude', UN_TOUR).catch(() => undefined)
+
+    // L'utilisateur bascule à la main sur B : B répond, A reste mûr.
+    actif = 'compte-B'
+    claude.erreur = undefined
+    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
+
+    // Revenir sur A ne relance rien : son quota n'est pas revenu.
+    actif = 'compte-A'
+    await expect(registry.send('claude', UN_TOUR)).rejects.toThrow(/quota|usage limit/i)
+    expect(claude.appels).toBe(2) // 1 refus de A + 1 réponse de B, rien de plus
+  })
+
+  it('avec le vrai store de comptes, branché comme en production, le compte actif ne bouge jamais', async () => {
     const store = new ClaudeAccountsStore('C:/state/accounts.json', 'C:/state/accounts', {
       readFile: () =>
         JSON.stringify({
@@ -415,11 +276,6 @@ describe('rotation d’abonnement sur quota epuise', () => {
             {
               id: 'compte-2',
               dir: 'C:/state/accounts/compte-2',
-              addedAt: '2026-08-06T00:00:00.000Z'
-            },
-            {
-              id: 'compte-3',
-              dir: 'C:/state/accounts/compte-3',
               addedAt: '2026-08-06T00:00:00.000Z'
             }
           ]
@@ -437,40 +293,28 @@ describe('rotation d’abonnement sur quota epuise', () => {
       },
       // eslint-disable-next-line require-yield
       async *send() {
-        const account = store.active().id
-        calls.push(account)
-        if (account !== 'compte-3') throw MUR_DE_QUOTA
-        return { text: 'ok', provider: 'claude', systemInjected: false }
+        calls.push(store.active().id)
+        throw MUR_DE_QUOTA
       }
     }
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => store.active().id,
-      (_providerId, walled) => store.rotateAwayFrom(walled)
-    ).register(claude)
+    const registry = new ProviderRegistry(undefined, undefined, () => store.active().id).register(
+      claude
+    )
 
-    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
-    expect(calls).toEqual([DEFAULT_ACCOUNT_ID, 'compte-2', 'compte-3'])
-    expect(store.active().id).toBe('compte-3')
+    await expect(registry.send('claude', UN_TOUR)).rejects.toThrow(/usage limit|quota/i)
+    expect(calls).toEqual([DEFAULT_ACCOUNT_ID])
+    expect(store.active().id).toBe(DEFAULT_ACCOUNT_ID)
   })
 })
 
 /**
  * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (2026-10-22).
  *
- * La rotation ci-dessus ne joue que si le refus arrive AVANT le premier fragment. Or le cas réel est
- * l'inverse : `run-stdout/c6ba0030-384c-4095-ac84-c96af2026180.stdout.jsonl` est UN appel de 31 min,
- * 96 blocs de texte affichés, qui finit sur « You've hit your session limit · resets 11:30am ». Le
- * registre levait l'erreur sans rien basculer : le tour mourait en pastille rouge alors qu'un autre
- * abonnement était libre, et l'utilisateur devait relancer chaque fil à la main.
- *
- * Le registre ne PEUT pas rejouer lui-même : le texte déjà affiché serait doublé, et la session du
- * CLI vit dans le dossier du compte épuisé — seul l'appelant sait effacer l'affichage et renvoyer le
- * fil entier. Contrat : il bascule le pool sur un compte libre, puis rend l'erreur MARQUÉE de cette
- * bascule (`basculeApresQuota`), pour que l'appelant rejoue.
+ * Cas réel : `run-stdout/c6ba0030-384c-4095-ac84-c96af2026180.stdout.jsonl` est UN appel de 31 min,
+ * 96 blocs de texte affichés, qui finit sur « You've hit your session limit · resets 11:30am ». Le texte
+ * affiché est réel : il reste. Rien ne se rejoue (il serait doublé), et l'erreur nomme le compte épuisé.
  */
-describe('quota épuisé APRÈS du texte affiché : bascule rendue à l’appelant', () => {
+describe('quota épuisé APRÈS du texte affiché : le tour s’arrête, rien ne se rejoue', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-10-22T08:00:00Z'))
@@ -515,19 +359,15 @@ describe('quota épuisé APRÈS du texte affiché : bascule rendue à l’appela
     }
   }
 
-  it('bascule le pool sur le compte libre et MARQUE l’erreur — sans rejouer à l’aveugle', async () => {
-    let actif = 'compte-A'
-    const rotations: string[] = []
+  it('le tour s’arrête sur le compte coupé et le nomme : aucun autre compte n’est essayé', async () => {
+    const actif = 'compte-A'
     const claude = claudeQuiCoupeApresTexte(() => actif, new Set(['compte-A']))
     const registry = new ProviderRegistry(
       undefined,
       undefined,
       () => actif,
-      (_providerId, walled) => {
-        actif = walled === 'compte-A' ? 'compte-B' : 'compte-A'
-        rotations.push(`${walled}->${actif}`)
-        return actif
-      }
+      undefined,
+      (_providerId, compte) => (compte === 'compte-A' ? 'perso@gmail.com' : undefined)
     ).register(claude)
 
     const vus: string[] = []
@@ -535,68 +375,21 @@ describe('quota épuisé APRÈS du texte affiché : bascule rendue à l’appela
       .send('claude', UN_TOUR, {}, (c) => vus.push(c.delta))
       .catch((e: unknown) => e)
 
-    // L'erreur remonte : rejouer ici doublerait le texte déjà affiché.
-    expect(erreur).toBeInstanceOf(ProviderCallError)
-    expect(claude.appels).toEqual(['compte-A'])
+    // Le texte déjà affiché reste, et rien ne se rejoue : un seul appel, sur le compte coupé.
     expect(vus).toEqual(['Je commence le travail, je lis les fichiers…'])
-    // … mais le pool a BASCULÉ, et l'erreur dit vers où : c'est ce qui permet le rejeu.
-    expect(rotations).toEqual(['compte-A->compte-B'])
-    expect(basculeApresQuota(erreur)).toEqual({
-      compteEpuise: 'compte-A',
-      compteSuivant: 'compte-B'
-    })
-
-    // Le rejeu de l'appelant part directement sur B, sans retoucher le mur de A.
-    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
-    expect(claude.appels).toEqual(['compte-A', 'compte-B'])
-  })
-
-  it('saute un compte déjà muré pour annoncer le premier compte LIBRE', async () => {
-    let actif = 'compte-A'
-    const ordre = ['compte-A', 'compte-B', 'compte-C']
-    const claude = claudeQuiCoupeApresTexte(() => actif, new Set(['compte-A']))
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => actif,
-      (_providerId, walled) => {
-        actif = ordre[(ordre.indexOf(walled) + 1) % ordre.length]!
-        return actif
-      }
-    ).register(claude)
-    // B est déjà tombé plus tôt dans la journée : son mur tient toujours.
-    ;(registry as unknown as { quotaWalls: Map<string, { raison: string }> }).quotaWalls.set(
-      'claude\u0000compte-B',
-      { raison: "You've hit your session limit" }
-    )
-
-    const erreur = await registry.send('claude', UN_TOUR).catch((e: unknown) => e)
-    expect(basculeApresQuota(erreur)).toEqual({
-      compteEpuise: 'compte-A',
-      compteSuivant: 'compte-C'
-    })
-    expect(actif).toBe('compte-C')
-  })
-
-  it('aucun compte libre : AUCUNE bascule annoncée — le rejeu serait condamné', async () => {
-    const claude = claudeQuiCoupeApresTexte(() => 'compte-A', new Set(['compte-A']))
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => 'compte-A',
-      () => undefined
-    ).register(claude)
-
-    const erreur = await registry.send('claude', UN_TOUR).catch((e: unknown) => e)
+    expect(claude.appels).toEqual(['compte-A'])
+    expect(actif).toBe('compte-A')
     expect(erreur).toBeInstanceOf(ProviderCallError)
-    expect(basculeApresQuota(erreur)).toBeUndefined()
+    expect((erreur as Error).message).toContain('« perso@gmail.com »')
+    expect((erreur as Error).message).toContain('choisis un autre compte')
   })
 
-  it('respecte le compte choisi À LA MAIN pendant l’appel au lieu de le faire tourner', async () => {
-    // Le cas de l'utilisateur : il a basculé à la main pendant que le tour tournait sur l'ancien
-    // compte. Faire tourner le pool depuis A l'enverrait sur B, écrasant son choix (C).
+  it('une bascule faite à la main pendant l’appel n’est pas écrasée : le message nomme le compte appelé', async () => {
+    const NOMS: Record<string, string> = {
+      'compte-A': 'perso@gmail.com',
+      'compte-C': 'pro@entreprise.fr'
+    }
     let actif = 'compte-A'
-    const rotations: string[] = []
     const claude = claudeQuiCoupeApresTexte(
       () => actif,
       new Set(['compte-A']),
@@ -606,33 +399,28 @@ describe('quota épuisé APRÈS du texte affiché : bascule rendue à l’appela
       undefined,
       undefined,
       () => actif,
-      (_providerId, walled) => {
-        rotations.push(walled)
-        actif = 'compte-B'
-        return actif
-      }
+      undefined,
+      (_providerId, compte) => NOMS[compte]
     ).register(claude)
 
-    const erreur = await registry.send('claude', UN_TOUR).catch((e: unknown) => e)
-    expect(basculeApresQuota(erreur)).toEqual({
-      compteEpuise: 'compte-A',
-      compteSuivant: 'compte-C'
-    })
-    expect(rotations).toEqual([])
+    const erreur = (await registry.send('claude', UN_TOUR).catch((e: unknown) => e)) as Error
+    // Le compte APPELÉ est nommé, pas celui que l'utilisateur a choisi entre-temps.
+    expect(erreur.message).toContain('« perso@gmail.com »')
+    expect(erreur.message).not.toContain('pro@entreprise.fr')
     expect(actif).toBe('compte-C')
+    expect(claude.appels).toEqual(['compte-A'])
   })
 })
 
 /**
- * LES DEUX COMPTES TOMBENT DANS LE MÊME TOUR : LE MESSAGE NOMME CHACUN.
+ * DEUX COMPTES ÉPUISÉS : CHAQUE REFUS NOMME LE SIEN, À SON TOUR (2026-11-09).
  *
  * Cas réel (run-stdout f3c665df puis cdca4224, 2026-11-09 19:27) : le compte gmail atteint sa limite
- * hebdomadaire après 25 min de travail, le tour repart sur le compte pro, qui est lui aussi à 100 %
- * de la sienne. Le fil n'affichait que le dernier refus, « You've hit your weekly limit · resets 1am »,
- * sans nommer de compte, et l'annonce du changement parlait de « compte-3 » et « default ».
- * L'utilisateur y a lu une erreur de compte : « c'est le gmail dont j'ai épuisé les crédits ».
+ * hebdomadaire après 25 min de travail, puis le compte pro, à sa limite lui aussi. Le fil n'affichait que
+ * le dernier refus, « You've hit your weekly limit · resets 1am », sans nommer de compte : l'utilisateur
+ * y a lu une erreur de compte. Le compte ne change plus seul : chaque refus nomme le compte qui l'a donné.
  */
-describe('tous les comptes épuisés dans le même tour : chacun est nommé', () => {
+describe('deux comptes épuisés : chaque refus nomme le sien', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-11-09T18:27:00Z'))
@@ -674,53 +462,46 @@ describe('tous les comptes épuisés dans le même tour : chacun est nommé', ()
       undefined,
       undefined,
       () => actif,
-      (_providerId, walled) => {
-        actif = walled === 'compte-3' ? 'default' : 'compte-3'
-        return actif
-      },
       undefined,
       (_providerId, compte) => NOMS[compte]
     ).register(claude)
-    return { registry, appels }
+    return {
+      registry,
+      appels,
+      basculer: (vers: string): void => {
+        actif = vers
+      }
+    }
   }
 
-  it('l’annonce du changement de compte nomme les deux comptes par leur adresse', async () => {
-    const { registry } = banc()
-    const erreur = await registry.send('claude', UN_TOUR).catch((e: unknown) => e)
-    expect(basculeApresQuota(erreur)).toEqual({
-      compteEpuise: 'compte-3',
-      compteSuivant: 'default',
-      nomEpuise: 'perso@gmail.com',
-      nomSuivant: 'pro@entreprise.fr'
-    })
+  it('le refus du compte en cours le nomme, avec sa date de retour', async () => {
+    const { registry, appels } = banc()
+    const erreur = (await registry.send('claude', UN_TOUR).catch((e: unknown) => e)) as Error
+    expect(appels).toEqual(['compte-3'])
+    expect(erreur.message).toContain('« perso@gmail.com »')
+    expect(erreur.message).toContain('jeudi 12 novembre')
   })
 
-  it('le refus du second compte dit que les deux sont épuisés, chacun avec sa date de retour', async () => {
-    const { registry, appels } = banc()
+  it('après une bascule à la main sur l’autre compte, son refus le nomme à son tour, avec SA date de retour', async () => {
+    const { registry, appels, basculer } = banc()
     await registry.send('claude', UN_TOUR).catch(() => undefined)
-    const erreur = (await registry.send('claude', UN_TOUR).catch((e: unknown) => e)) as Error
+    basculer('default') // l'utilisateur choisit l'autre compte à la main
 
+    const erreur = (await registry.send('claude', UN_TOUR).catch((e: unknown) => e)) as Error
     expect(appels).toEqual(['compte-3', 'default'])
     expect(erreur).toBeInstanceOf(ProviderCallError)
-    expect(basculeApresQuota(erreur)).toBeUndefined()
-    const message = erreur.message
-    expect(message).toContain('« perso@gmail.com »')
-    expect(message).toContain('jeudi 12 novembre')
-    expect(message).toContain('« pro@entreprise.fr »')
-    expect(message).toContain('mardi 10 novembre')
-    expect(message.indexOf('perso@gmail.com')).toBeLessThan(
-      message.indexOf('pro@entreprise.fr')
-    )
+    expect(erreur.message).toContain('« pro@entreprise.fr »')
+    expect(erreur.message).toContain('mardi 10 novembre')
+    expect(erreur.message).not.toContain('perso@gmail.com')
     // Le refus d'origine reste cité en entier : la reprise automatique y relit l'heure de retour.
-    expect(message).toContain(REFUS_PRO)
-    expect(estMurDeQuota(message)).toBe(true)
-    expect(instantDeRetourAnnonce(message)).toBe(new Date('2026-11-10T00:00:00Z').valueOf())
+    expect(erreur.message).toContain(REFUS_PRO)
+    expect(estMurDeQuota(erreur.message)).toBe(true)
+    expect(instantDeRetourAnnonce(erreur.message)).toBe(new Date('2026-11-10T00:00:00Z').valueOf())
   })
 
-  it('sans nom connu (un seul compte, autre fournisseur), le refus reste celui d’avant', async () => {
-    let actif = 'compte-3'
-    const claude: ProviderAdapter = {
-      id: 'claude',
+  it('sans compte (autre fournisseur), le refus reste celui d’avant — inchangé', async () => {
+    const codex: ProviderAdapter = {
+      id: 'codex',
       async auth() {
         return true
       },
@@ -729,16 +510,8 @@ describe('tous les comptes épuisés dans le même tour : chacun est nommé', ()
         throw new ProviderCallError(REFUS_PRO, { code: 'success', retryable: false })
       }
     }
-    const registry = new ProviderRegistry(
-      undefined,
-      undefined,
-      () => actif,
-      () => {
-        actif = 'compte-3'
-        return undefined
-      }
-    ).register(claude)
-    const erreur = (await registry.send('claude', UN_TOUR).catch((e: unknown) => e)) as Error
+    const registry = new ProviderRegistry().register(codex)
+    const erreur = (await registry.send('codex', UN_TOUR).catch((e: unknown) => e)) as Error
     expect(erreur.message).toBe(REFUS_PRO)
   })
 })
