@@ -361,6 +361,14 @@ export function buildModelQuotaSnapshot(
  * corps est jeté. `max_tokens: 1` + prompt d'un caractère ⇒ coût négligeable.
  */
 const CLAUDE_PROBE_MODEL = 'claude-haiku-4-5-20251001'
+/**
+ * Le quota PAR MODÈLE (« Fable · 7 j ») n'est ni dans les en-têtes ni dans une clé de premier
+ * niveau : il est une entrée de `limits[]` de cet endpoint. Sondé le 2026-11-10 : 200 avec le jeton
+ * d'abonnement, avec ou sans user-agent de CLI.
+ */
+const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1'
+/** Familles de modèle que la barre sait nommer : la limite d'un autre modèle n'est pas affichée. */
+const FAMILLES_DE_MODELE = ['opus', 'sonnet', 'haiku', 'fable'] as const
 /** Au-delà, l'échantillon du client Desktop est considéré comme périmé (il écrit toutes les ~5 min). */
 const CLAUDE_PLAN_HISTORY_STALE_MS = 15 * 60_000
 
@@ -394,6 +402,65 @@ export function parseClaudeRateLimitHeaders(headers: {
   return [build('five-hour', '5 h', '5h'), build('seven-day', '7 j', '7d')].filter(
     (entry): entry is ModelQuotaWindow => entry !== undefined
   )
+}
+
+/**
+ * Fenêtres hebdomadaires PAR MODÈLE, lues dans `limits[]` d'un corps `/api/oauth/usage` : une entrée
+ * `group: "weekly"` dont `scope.model.display_name` nomme une famille connue (« Fable »). Une entrée
+ * au modèle inconnu ou au pourcentage illisible est ignorée : rien n'est deviné.
+ */
+export function parseClaudeModelLimits(body: unknown): ModelQuotaWindow[] {
+  const limits = (body as { limits?: unknown } | null | undefined)?.limits
+  if (!Array.isArray(limits)) return []
+  const fenetres = new Map<string, ModelQuotaWindow>()
+  for (const raw of limits) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const entry = raw as {
+      group?: unknown
+      percent?: unknown
+      resets_at?: unknown
+      scope?: unknown
+    }
+    if (entry.group !== 'weekly') continue
+    const scope = entry.scope as { model?: { display_name?: unknown } } | null | undefined
+    const nom = scope?.model?.display_name
+    if (typeof nom !== 'string') continue
+    const famille = FAMILLES_DE_MODELE.find((f) => nom.toLocaleLowerCase('en-US').includes(f))
+    const usedPercent = percent(entry.percent)
+    if (!famille || usedPercent === undefined || fenetres.has(famille)) continue
+    const resetsAt = resetIso(entry.resets_at)
+    fenetres.set(famille, {
+      id: `seven-day-${famille}`,
+      label: `${famille[0].toLocaleUpperCase('fr-FR')}${famille.slice(1)} · 7 j`,
+      usedPercent,
+      remainingPercent: 100 - usedPercent,
+      modelFamily: famille,
+      ...(resetsAt ? { resetsAt } : {})
+    })
+  }
+  return [...fenetres.values()]
+}
+
+/**
+ * Lit le quota par modèle après la sonde. Un échec ne retire JAMAIS les fenêtres des en-têtes :
+ * la liste vide est le repli, et la barre garde le 5 h et le 7 j global.
+ */
+async function fenetresParModele(
+  fetchFn: typeof fetch,
+  accessToken: string
+): Promise<ModelQuotaWindow[]> {
+  try {
+    const rep = await fetchFn(USAGE_URL, {
+      headers: { authorization: `Bearer ${accessToken}`, 'anthropic-beta': 'oauth-2025-04-20' },
+      signal: AbortSignal.timeout(10_000)
+    })
+    if (!rep.ok) return []
+    const texte = await rep.text()
+    if (texte.length > MAX_USAGE_RESPONSE_CHARS) return []
+    return parseClaudeModelLimits(JSON.parse(texte))
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -485,11 +552,9 @@ async function sonderEnTetesClaude(
       ? { accessToken, expiresAt }
       : { accessToken }
   }
-  // `/api/oauth/usage` est ABANDONNÉ ici : il répond 429 systématiquement pour un token
-  // d'abonnement (bug ouvert non résolu côté Claude Code — issues 31021 / 31637 / 30930 ; vérifié
-  // sur ce poste : /api/oauth/profile → 200 avec le MÊME token, /usage → 429 quels que soient les
-  // en-têtes). Le quota réel vit dans les en-têtes d'un appel d'inférence accepté : une requête
-  // invalide (400) ne les porte PAS (testé), d'où la sonde minimale ci-dessous.
+  // Le 5 h et le 7 j GLOBAL vivent dans les en-têtes d'un appel d'inférence accepté : une requête
+  // invalide (400) ne les porte PAS (testé), d'où la sonde minimale ci-dessous. Le 7 j PAR MODÈLE
+  // vient d'un autre endpoint, lu après cette sonde (`fenetresParModele`).
   const sonder = (accessToken: string): Promise<Response> =>
     fetchFn('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -531,7 +596,7 @@ async function sonderEnTetesClaude(
     if (!response.ok) throw new Error(`Claude /usage HTTP ${response.status}`)
     throw new Error('Claude ne publie aucune fenêtre')
   }
-  return windows
+  return [...windows, ...(await fenetresParModele(fetchFn, session.accessToken))]
 }
 
 async function claudeQuota(

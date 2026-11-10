@@ -7,6 +7,7 @@ import {
   getModelQuotaSnapshot,
   parseLatestCodexRateLimitSample,
   aggregateClaudeLocalUsage,
+  parseClaudeModelLimits,
   parseClaudeRateLimitHeaders,
   parseClaudePlanUsageHistory,
   quotaClaudeDuCompte,
@@ -57,6 +58,10 @@ const models = [
     defaultReasoningEffort: 'none' as const
   }
 ]
+
+/** Les SONDES (appels /v1/messages). L'appel /api/oauth/usage, lu après, est compté à part. */
+const sondes = (fetchFn: ReturnType<typeof vi.fn>): unknown[][] =>
+  fetchFn.mock.calls.filter(([url]) => String(url).includes('/v1/messages'))
 
 // La sonde de quota des services directs lirait la vraie clé du poste : on la coupe ici.
 beforeEach(() => {
@@ -252,7 +257,7 @@ describe('quotas modèles', () => {
       now: Date.parse('2026-07-24T01:00:00Z')
     })
 
-    expect(fetchFn).toHaveBeenCalledOnce()
+    expect(sondes(fetchFn)).toHaveLength(1)
     expect(snapshot.models.find((model) => model.provider === 'claude')?.status).toBe('available')
     expect(snapshot.models.find((model) => model.provider === 'codex')?.status).toBe('available')
     expect(JSON.stringify(snapshot)).not.toContain(token)
@@ -343,7 +348,7 @@ describe('quotas modèles', () => {
      * alors la reponse laissee en attente. Le scenario teste est inchange — la collecte ancienne est
      * bien encore EN VOL quand la recente demarre — mais l'attribution des reponses redevient sure.
      */
-    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(sondes(fetchFn)).toHaveLength(1))
     const freshCollection = getModelQuotaSnapshot(models, {
       home,
       fetchFn,
@@ -675,7 +680,7 @@ describe('sonde Claude apres une bascule de compte', () => {
     )
 
     expect(renouvelerSession).toHaveBeenCalledOnce()
-    expect(fetchFn).toHaveBeenCalledOnce() // aucun 401 gaspille : le jeton perime n'est pas envoye
+    expect(sondes(fetchFn)).toHaveLength(1) // aucun 401 gaspille : le jeton perime n'est pas envoye
     expect(claude).toMatchObject({ status: 'available', source: 'Quota Claude (en-têtes API)' })
     expect(claude?.windows).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'five-hour', remainingPercent: 99 })])
@@ -708,7 +713,7 @@ describe('sonde Claude apres une bascule de compte', () => {
     )
 
     expect(renouvelerSession).toHaveBeenCalledOnce()
-    expect(fetchFn).toHaveBeenCalledTimes(2)
+    expect(sondes(fetchFn)).toHaveLength(2)
     expect(claude).toMatchObject({ status: 'available' })
   })
 
@@ -744,7 +749,7 @@ describe('sonde Claude apres une bascule de compte', () => {
     await getModelQuotaSnapshot(models, { home, fetchFn, renouvelerSession, force: true, now: NOW })
 
     expect(renouvelerSession).not.toHaveBeenCalled()
-    expect(fetchFn).toHaveBeenCalledOnce()
+    expect(sondes(fetchFn)).toHaveLength(1)
   })
 })
 
@@ -875,9 +880,113 @@ describe('quota d’un compte nommé', () => {
       quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW })
     ])
     await quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW + 30_000 })
-    expect(fetchFn).toHaveBeenCalledTimes(1)
+    expect(sondes(fetchFn)).toHaveLength(1)
     await quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW + 61_000 })
-    expect(fetchFn).toHaveBeenCalledTimes(2)
+    expect(sondes(fetchFn)).toHaveLength(2)
   })
 })
 
+describe('quota par modèle (limits[] de /api/oauth/usage)', () => {
+  // Corps sondé le 2026-11-10 (valeurs arrondies). Le 7 j Fable n'est PAS une clé de premier niveau :
+  // c'est une entrée de `limits`, désignée par son `scope.model.display_name`.
+  const CORPS_USAGE = {
+    five_hour: { utilization: 9, resets_at: '2026-11-10T14:59:59.563488+00:00' },
+    seven_day: { utilization: 12, resets_at: '2026-11-16T23:59:59.563514+00:00' },
+    limits: [
+      {
+        kind: 'session',
+        group: 'session',
+        percent: 10,
+        resets_at: '2026-11-10T14:59:59.563488+00:00',
+        scope: null,
+        is_active: false
+      },
+      {
+        kind: 'weekly_all',
+        group: 'weekly',
+        percent: 12,
+        resets_at: '2026-11-16T23:59:59.563514+00:00',
+        scope: null,
+        is_active: false
+      },
+      {
+        kind: 'weekly_scoped',
+        group: 'weekly',
+        percent: 20,
+        resets_at: '2026-11-16T23:59:59.563785+00:00',
+        scope: { model: { id: null, display_name: 'Fable' }, surface: null },
+        is_active: true
+      }
+    ]
+  }
+  const modeleFable = {
+    id: 'claude/fable',
+    provider: 'claude',
+    model: 'fable',
+    label: 'Claude Fable',
+    reasoningEfforts: ['high' as const],
+    defaultReasoningEffort: 'high' as const
+  }
+
+  it('lit la fenêtre hebdomadaire Fable dans limits[], avec son pourcentage et son reset', () => {
+    expect(parseClaudeModelLimits(CORPS_USAGE)).toEqual([
+      {
+        id: 'seven-day-fable',
+        label: 'Fable · 7 j',
+        usedPercent: 20,
+        remainingPercent: 80,
+        modelFamily: 'fable',
+        resetsAt: '2026-11-16T23:59:59.563Z'
+      }
+    ])
+  })
+
+  it('n’invente rien : modèle inconnu, pourcentage illisible ou corps sans limits', () => {
+    expect(
+      parseClaudeModelLimits({
+        limits: [
+          { group: 'weekly', percent: 5, scope: { model: { display_name: 'Mythos 5' } } },
+          { group: 'weekly', percent: 'x', scope: { model: { display_name: 'Fable' } } }
+        ]
+      })
+    ).toEqual([])
+    expect(parseClaudeModelLimits({ five_hour: { utilization: 9 } })).toEqual([])
+    expect(parseClaudeModelLimits(null)).toEqual([])
+  })
+
+  it('affiche le 7 j Fable sur les modèles Fable seulement, sans toucher au 5 h', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'autowin-model-quotas-fable-'))
+    temporaryHomes.push(home)
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude', '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'jeton-du-compte-fable-assez-long' } })
+    )
+    const fetchFn = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes('/api/oauth/usage')
+        ? Response.json(CORPS_USAGE)
+        : new Response('{}', {
+            headers: {
+              'anthropic-ratelimit-unified-5h-utilization': '0.09',
+              'anthropic-ratelimit-unified-5h-reset': String(
+                Date.parse('2026-11-10T15:00:00Z') / 1000
+              )
+            }
+          })
+    )
+
+    const snapshot = await getModelQuotaSnapshot([...models, modeleFable], {
+      home,
+      fetchFn,
+      force: true,
+      now: Date.parse('2026-11-10T10:00:00Z')
+    })
+
+    expect(
+      snapshot.models.find((model) => model.model === 'fable')?.windows.map((w) => w.id)
+    ).toEqual(['five-hour', 'seven-day-fable'])
+    expect(
+      snapshot.models.find((model) => model.model === 'opus')?.windows.map((w) => w.id)
+    ).toEqual(['five-hour'])
+  })
+})

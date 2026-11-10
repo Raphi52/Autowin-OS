@@ -8,8 +8,9 @@
  *    `/^[a-z0-9_-]{1,40}$/`, `request_id` par `/^[A-Za-z0-9_-]{1,64}$/` (un `randomUUID`).
  *  - l'organisation vient de `GET /api/oauth/profile` → `organization.uuid` (sondé : 200).
  *
- * Sondé en lecture seule le 2026-09-23 : la lecture répond 200 avec le jeton d'abonnement (le 429
- * noté dans model-quotas.ts ne s'y applique plus quand on envoie un `user-agent` de CLI).
+ * Sondé en lecture seule le 2026-09-23 : la lecture répond 200 avec le jeton d'abonnement. Un 429
+ * relevé plus tôt sur ce même endpoint ne s'est pas reproduit (sondé le 2026-11-10, avec ou sans ce
+ * `user-agent`).
  *
  * RÉCLAMER CONSOMME LE RESET : cette fonction n'est appelée que sur un clic explicite, et les tests
  * ne la jouent que contre un faux réseau.
