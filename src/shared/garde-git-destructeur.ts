@@ -546,11 +546,23 @@ const orientationsDuJournal = () => {
     return livrerOrientationsEnAttente(io, { fil: conf.fil, journal, depuis: conf.depuis }, Date.now(), lignesDuJournal);
   } catch { return undefined; }
 };
-// RAPPELS AU BON MOMENT (conv-1457, shared/rappels-outils.ts) : le texte d'une règle d'AGENTS.md
-// que rien ne bloque part avec l'appel qui l'enfreint. Les règles déjà données pendant CET appel du
-// CLI sont notées à côté du script (son dossier de réglages, un par appel). État illisible ou
-// impossible à écrire : le rappel part quand même — mieux vaut une répétition qu'un silence.
+// RAPPELS AU BON MOMENT (shared/rappels-outils.ts) : le texte d'une règle d'AGENTS.md que rien ne
+// bloque part avec l'appel qui l'enfreint. Les règles déjà données sont notées PAR SESSION quand le
+// fil est connu : la transcription de la session les porte déjà et le reprise (resume) la relit, donc un
+// nouvel appel du CLI ne doit pas les redonner (mesure du 2026-11-10 : 4 sessions sur 49). Sans fil,
+// la note reste à côté du script, par appel. État illisible ou impossible à écrire : le rappel part
+// quand même — mieux vaut une répétition qu'un silence.
 // Toute panne = aucun rappel, jamais un refus ni une exception.
+const etatDesRappels = (j, fs, path) => {
+  const sid = String((j && j.session_id) || '').replace(/[^A-Za-z0-9_-]/g, '');
+  const conf = confReservation();
+  if (sid && conf) {
+    const dossier = path.join(path.dirname(conf.registre), 'rappels-donnes');
+    try { fs.mkdirSync(dossier, { recursive: true }); } catch {}
+    return path.join(dossier, sid + '.json');
+  }
+  return path.join(path.dirname(process.argv[1]), 'rappels-donnes.json');
+};
 const rappelsAuBonMoment = (j, shell) => {
   try {
     if (!fichierRappels) return undefined;
@@ -558,7 +570,7 @@ const rappelsAuBonMoment = (j, shell) => {
     const path = process.getBuiltinModule('node:path');
     let brut;
     try { brut = fs.readFileSync(fichierRappels, 'utf8'); } catch { return undefined; }
-    const etat = path.join(path.dirname(process.argv[1]), 'rappels-donnes.json');
+    const etat = etatDesRappels(j, fs, path);
     let deja = [];
     try { const v = JSON.parse(fs.readFileSync(etat, 'utf8')); if (Array.isArray(v)) deja = v.filter((x) => typeof x === 'string'); } catch {}
     const t = j && j.tool_input && typeof j.tool_input === 'object' ? j.tool_input : {};

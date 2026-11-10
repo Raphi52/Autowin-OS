@@ -11,7 +11,8 @@
  * Réponse : le script lancé AVANT chaque outil (`scriptHookGardes`) lit le fichier versionné
  * `mods/autowin/rappels-outils.json` et glisse, à côté de l'appel qui correspond, le texte de la
  * règle (`additionalContext`). Jamais un refus : c'est un rappel. Au plus une fois par règle et par
- * appel du CLI. Le fichier est relu à chaque appel d'outil : une règle ajoutée vaut dès l'appel
+ * session : une session reprise (`--resume`) relit déjà le rappel dans sa transcription. Sans fil
+ * connu, une fois par appel du CLI. Le fichier est relu à chaque appel d'outil : une règle ajoutée vaut dès l'appel
  * suivant, sans redémarrer l'app.
  *
  * CLAUDE SEULEMENT : ce point d'accroche est un hook du CLI Claude. Codex n'en a pas d'équivalent ;
@@ -47,7 +48,7 @@ export interface BornesRappels {
  * @param brut contenu du fichier de règles (liste JSON)
  * @param outil nom de l'outil appelé (`Bash`, `Read`…), comparé EN ENTIER à `outils`
  * @param champs valeurs lues de l'appel (commande, chemin, motif, adresse) ; seuls les textes comptent
- * @param dejaDonnes identifiants des règles déjà rappelées pendant cet appel du CLI
+ * @param dejaDonnes identifiants des règles déjà rappelées dans cette session (sans fil connu : pendant cet appel du CLI)
  */
 export function rappelsDeLAppel(
   brut: string,
