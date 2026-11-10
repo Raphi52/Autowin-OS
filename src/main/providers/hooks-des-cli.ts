@@ -15,6 +15,11 @@
  * La garde d'écriture hors copie (`scripts/garde-ecriture-hors-copie.mjs`) suit le même chemin : un
  * fil dans sa copie n'écrit pas dans le dossier partagé d'où tourne l'app. Elle juge aussi les outils
  * qui écrivent des fichiers, d'où un contrôle à part (`garde-ecriture.json`, groupe `Bash|apply_patch`).
+ *  - agy (Antigravity) lit `~/.gemini/config/hooks.json`, y compris lancé sans fenêtre (`-p`) : une
+ *    entrée NOMMÉE par contrôle (`~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md`).
+ *
+ * C'est aussi ce contrôle qui ouvre la copie d'un fil à sa première écriture
+ * (`src/shared/copie-a-la-demande.ts`) : `controleDeCopiePret` dit si un CLI le fera vraiment tourner.
  *
  * Aucun import hors `node:` : le module se lance aussi seul, `node src/main/providers/hooks-des-cli.ts
  * <chemin absolu de garde-npm-modules.mjs>`, pour installer les contrôles sur un poste (la garde
@@ -52,6 +57,16 @@ const OUTILS_ECRITURE_GROK = `${OUTILS_SHELL_GROK}|Edit|Write|MultiEdit|Notebook
 const OUTILS_ECRITURE_CODEX = `${OUTIL_SHELL_CODEX}|apply_patch`
 /** Un `node` qui démarre tient en une seconde ; Codex attendrait 600 s par défaut sur un blocage. */
 const DELAI_GARDE_S = 10
+/**
+ * agy : ses outils qui écrivent (`run_command`, `write_file`, `edit_file` relevés sur agy 1.5 ; les
+ * autres noms sont ceux que porte son programme).
+ */
+const OUTILS_ECRITURE_AGY =
+  'run_command|write_file|edit_file|write_to_file|create_file|delete_file|notebook_edit|apply_patch'
+/** agy laisse son contrôle attendre : de quoi couvrir l'ouverture entière d'une copie (150 s). */
+const DELAI_GARDE_AGY_S = 180
+/** Le nom de notre entrée dans le fichier d'agy : les autres entrées ne sont jamais touchées. */
+export const NOM_GARDE_ECRITURE_AGY = 'autowin-garde-ecriture'
 
 /** Le contrôle Grok : `command` + `args`, donc lancé sans shell (forme exigée sans dossier de confiance). */
 export function controleGrokGardeNpm(script: string): Record<string, unknown> {
@@ -141,6 +156,67 @@ function poserControleGrok(
   if (actuel === voulu) return 'inchange'
   ecrireEntier(fichier, voulu)
   return actuel === undefined ? 'cree' : 'mis-a-jour'
+}
+
+/** Le fichier qu'agy lit pour tout le poste : `~/.gemini/config/hooks.json`. */
+export function fichierHooksAgy(maison: string = homedir()): string {
+  return join(maison, '.gemini', 'config', 'hooks.json')
+}
+
+/**
+ * L'entrée d'agy, ou `undefined` si le chemin du script porte un espace. agy lance la commande par
+ * `cmd /c` et y laisse les guillemets tels quels (mesuré sur agy 1.5 : le chemin entre guillemets
+ * devient un module introuvable) ; or un contrôle qui échoue bloque TOUS ses outils. Mieux vaut pas
+ * de contrôle qu'un agy qui ne peut plus rien faire.
+ */
+export function controleAgyGardeEcriture(script: string): Record<string, unknown> | undefined {
+  if (/\s/.test(script)) return undefined
+  return {
+    PreToolUse: [
+      {
+        matcher: OUTILS_ECRITURE_AGY,
+        hooks: [{ type: 'command', command: `node ${script}`, timeout: DELAI_GARDE_AGY_S }]
+      }
+    ]
+  }
+}
+
+function lireHooksAgy(brut: string): Record<string, unknown> {
+  const racine = JSON.parse(brut.charCodeAt(0) === 0xfeff ? brut.slice(1) : brut) as unknown
+  if (!racine || typeof racine !== 'object' || Array.isArray(racine))
+    throw new Error('hooks.json : la racine n’est pas un objet')
+  return racine as Record<string, unknown>
+}
+
+/**
+ * Pose notre entrée dans le fichier d'agy. Idempotent ; les entrées des autres sont recopiées telles
+ * quelles, après une copie horodatée du fichier. Fichier illisible → exception, rien n'est écrit.
+ */
+export function installerGardeEcritureAgy(
+  fichierHooks: string,
+  script: string,
+  horodatage: string = new Date().toISOString().replace(/[:.]/g, '-')
+): { issue: 'cree' | 'inchange' | 'mis-a-jour' | 'chemin-avec-espace'; sauvegarde?: string } {
+  const controle = controleAgyGardeEcriture(script)
+  if (!controle) return { issue: 'chemin-avec-espace' }
+  const brut = lireSiPresent(fichierHooks)
+  if (brut === undefined) {
+    ecrireEntier(
+      fichierHooks,
+      `${JSON.stringify({ [NOM_GARDE_ECRITURE_AGY]: controle }, null, 2)}\n`
+    )
+    return { issue: 'cree' }
+  }
+  const racine = lireHooksAgy(brut)
+  if (JSON.stringify(racine[NOM_GARDE_ECRITURE_AGY]) === JSON.stringify(controle))
+    return { issue: 'inchange' }
+  const sauvegarde = `${fichierHooks}.${horodatage}.bak`
+  copyFileSync(fichierHooks, sauvegarde, constants.COPYFILE_EXCL)
+  ecrireEntier(
+    fichierHooks,
+    `${JSON.stringify({ ...racine, [NOM_GARDE_ECRITURE_AGY]: controle }, null, 2)}\n`
+  )
+  return { issue: 'mis-a-jour', sauvegarde }
 }
 
 interface ControleCodex {
@@ -393,6 +469,72 @@ function controlesDeProjet(
   return undefined
 }
 
+/**
+ * LE CONTRÔLE QUI OUVRE LA COPIE D'UN FIL TOURNERA-T-IL POUR CE CLI ? Un tour ne part sans copie
+ * (pour l'ouvrir à sa première écriture) que si c'est certain : sinon il écrirait dans le dossier
+ * partagé sans que personne ne demande la copie. Lit les réglages personnels du CLI, tels qu'ils
+ * sont sur le disque à cet instant ; toute lecture en panne = faux.
+ *  - Grok : son `garde-ecriture.json` est exactement le nôtre ;
+ *  - agy : notre entrée est exactement la nôtre dans son `hooks.json` ;
+ *  - Codex : la garde d'écriture est dans son `hooks.json`, sur `apply_patch` aussi, ET Codex fera
+ *    tourner ses contrôles (`verifierControlesCodex`).
+ */
+export function controleDeCopiePret(entree: {
+  provider: string
+  /** `scripts/garde-npm-modules.mjs` du dépôt de l'app ; la garde d'écriture vit à côté. */
+  scriptNpm: string | undefined
+  cwd?: string
+  controlesDeConfiance?: string
+  env?: NodeJS.ProcessEnv
+  maison?: string
+}): boolean {
+  const scriptNpm = entree.scriptNpm
+  if (!scriptNpm) return false
+  const ecriture = join(dirname(scriptNpm), SCRIPT_GARDE_ECRITURE)
+  try {
+    if (!existsSync(ecriture)) return false
+    if (entree.provider === 'grok') {
+      const fichier = join(dossierHooksGrok(entree.maison), FICHIER_GARDE_ECRITURE_GROK)
+      return (
+        lireSiPresent(fichier) ===
+        `${JSON.stringify(controleGrokGardeEcriture(ecriture), null, 2)}\n`
+      )
+    }
+    if (entree.provider === 'agy') {
+      const brut = lireSiPresent(fichierHooksAgy(entree.maison))
+      const voulu = controleAgyGardeEcriture(ecriture)
+      return (
+        brut !== undefined &&
+        voulu !== undefined &&
+        JSON.stringify(lireHooksAgy(brut)[NOM_GARDE_ECRITURE_AGY]) === JSON.stringify(voulu)
+      )
+    }
+    if (entree.provider === 'codex') {
+      const fichierHooks = fichierHooksCodex(entree.env, entree.maison)
+      const brut = lireSiPresent(fichierHooks)
+      if (brut === undefined) return false
+      const garde = groupesDe(lireHooksCodex(brut).hooks?.PreToolUse).some(
+        (g) =>
+          typeof g.matcher === 'string' &&
+          g.matcher.split('|').includes('apply_patch') &&
+          controlesDe(g).some((c) => estGardeEcriture(c, scriptNpm))
+      )
+      return (
+        garde &&
+        verifierControlesCodex({
+          fichierHooks,
+          script: scriptNpm,
+          cwd: entree.cwd,
+          controlesDeConfiance: entree.controlesDeConfiance
+        }).contourner
+      )
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
 /** Installation sur ce poste, lancée à la main : les deux contrôles, avec le chemin donné. */
 function principal(): void {
   const script = process.argv[2]
@@ -410,7 +552,8 @@ function principal(): void {
   const enPlus = existsSync(ecriture)
     ? {
         grokEcriture: installerGardeEcritureGrok(dossierHooksGrok(), ecriture),
-        codexEcriture: installerGardeEcritureCodex(fichierHooksCodex(), ecriture)
+        codexEcriture: installerGardeEcritureCodex(fichierHooksCodex(), ecriture),
+        agyEcriture: installerGardeEcritureAgy(fichierHooksAgy(), ecriture)
       }
     : {}
   process.stdout.write(`${JSON.stringify({ grok, codex, ...enPlus })}\n`)

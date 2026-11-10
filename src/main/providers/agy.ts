@@ -15,6 +15,7 @@ import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk, Usage } from './types'
 import { envDuCoffre } from './cles-du-coffre'
 import { promptDuFil } from './prompt-du-fil'
+import { armerCopieALaDemandeDuCli } from '../copies/copie-a-la-demande-app'
 
 export const AGY_PROVIDER_ID = 'agy'
 
@@ -125,10 +126,17 @@ export class AgyAdapter implements ProviderAdapter {
     const args = ['--input-format', 'stream-json', '--output-format', 'stream-json', '-p=']
     if (model) args.push('--model', model)
     if (opts.execution?.cwd) args.push('--dangerously-skip-permissions')
+    // LA COPIE DU FIL S'OUVRE À SA PREMIÈRE ÉCRITURE : le contrôle personnel d'agy (`hooks-des-cli.ts`)
+    // trouve la conf de ce lancement par son environnement. agy laisse son contrôle attendre l'ouverture.
+    const copieALaDemande = await armerCopieALaDemandeDuCli({
+      conversationId: opts.conversationId,
+      cwd: opts.execution?.cwd,
+      attenteLongue: true
+    })
     const enfant = (this.deps.spawnFn ?? spawn)(bin, args, {
       cwd: opts.execution?.cwd,
       // Clés du coffre, sans celles qui feraient quitter à agy la connexion par compte Google.
-      env: { ...process.env, ...envDuCoffre('agy') },
+      env: { ...process.env, ...envDuCoffre('agy'), ...copieALaDemande.env },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     })
@@ -221,6 +229,7 @@ export class AgyAdapter implements ProviderAdapter {
     } finally {
       opts.signal?.removeEventListener('abort', arreter)
       arreter()
+      copieALaDemande.arreter()
     }
   }
 }

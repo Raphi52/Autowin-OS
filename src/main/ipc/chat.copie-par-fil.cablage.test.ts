@@ -48,11 +48,12 @@ describe('une copie par fil — au début du tour', () => {
     expect(fin.slice(0, 120)).toContain('retirerCopieALaDemande()')
   })
 
-  it('le tour du CLI Claude n’ouvre plus de copie neuve au départ, sauf /git, /maj, /gc qui n’en ont jamais', () => {
+  it('le tour d’un modèle dont le contrôle demandera la copie n’en ouvre plus au départ, sauf /git, /maj, /gc qui n’en ont jamais', () => {
     const passage = source.slice(source.indexOf('const passerLeFilDansSaCopie = async ('))
     const bloc = passage.slice(0, passage.indexOf('const tourCompteDesReception'))
-    expect(bloc).toContain(
-      "aLaDemande: providerDuTour === 'claude' && !demandeSurLeDepotPartage(demande)"
+    // Claude, et Codex, Grok ou agy quand leurs réglages personnels portent le contrôle.
+    expect(bloc.replace(/\s+/g, ' ')).toContain(
+      'aLaDemande: copieALaDemandePossible(providerDuTour, depot) && !demandeSurLeDepotPartage(demande)'
     )
   })
 

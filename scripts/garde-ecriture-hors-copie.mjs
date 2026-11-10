@@ -34,7 +34,7 @@
  */
 import { readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const DONNEES_APP = '.autowin-data'
 
@@ -457,6 +457,7 @@ const OUTILS_SHELL = new Set([
   'powershell',
   'monitor',
   'run_terminal_command',
+  'run_command',
   'shell',
   'exec_command',
   'local_shell'
@@ -471,7 +472,12 @@ const OUTILS_ECRITURE = new Set([
   'hashline_edit',
   'strreplace',
   'editnotebook',
-  'delete'
+  'delete',
+  'edit_file',
+  'write_to_file',
+  'create_file',
+  'delete_file',
+  'notebook_edit'
 ])
 const CLES_CHEMIN = [
   'file_path',
@@ -479,12 +485,88 @@ const CLES_CHEMIN = [
   'path',
   'notebook_path',
   'target_notebook',
-  'target_file'
+  'target_file',
+  'Path',
+  'TargetFile'
 ]
 
 /**
+ * agy (Antigravity) envoie `toolCall: { name, args }`, avec `CommandLine` pour sa commande, `Path`
+ * pour ses fichiers et `Cwd` quand la commande change de dossier (relevé sur agy 1.5, `read_file`,
+ * `write_file`, `edit_file`, `run_command`). Ramené ici à la forme de Grok ; le reste est rendu tel quel.
+ */
+export function entreeCommune(entree) {
+  const appel = entree?.toolCall
+  if (!appel || typeof appel !== 'object') return entree
+  const args = appel.args && typeof appel.args === 'object' ? appel.args : {}
+  return {
+    ...entree,
+    toolName: appel.name,
+    toolInput: { ...args, command: args.CommandLine },
+    cwd: (typeof args.Cwd === 'string' && args.Cwd) || entree.cwd
+  }
+}
+
+/**
+ * Ce que l'appel écrirait, dans la forme que lit le contrôle de la copie à la demande
+ * (`src/shared/copie-a-la-demande.ts`) : une commande (`Bash`) ou un fichier par cible (`Edit`).
+ * Les corps de here-doc sont du texte : ils ne partent pas avec la commande.
+ */
+export function appelsVus(entree) {
+  const nom = String(entree?.tool_name ?? entree?.toolName ?? '').toLowerCase()
+  const outil = entree?.tool_input ?? entree?.toolInput
+  const cwd = entree?.cwd || undefined
+  if (!nom || !outil || typeof outil !== 'object' || !cwd) return []
+  // Une commande donnée en liste (`["bash", "-lc", "…"]`) : un mot qui porte des espaces reprend ses
+  // guillemets, pour rester UN mot quand le contrôle la redécoupe.
+  const commande = Array.isArray(outil.command)
+    ? outil.command
+        .map((m) => (/\s/.test(String(m)) ? JSON.stringify(String(m)) : String(m)))
+        .join(' ')
+    : outil.command
+  const fichier = (chemin) => ({ outil: 'Edit', chemin, shell: '', cwd })
+  if (
+    nom === 'apply_patch' ||
+    (typeof commande === 'string' && /^\s*\*\*\* Begin Patch/.test(commande))
+  ) {
+    return [
+      ...String(commande ?? '').matchAll(
+        /^\*\*\* (?:Add File|Update File|Delete File|Move to):\s*(.+?)\s*$/gm
+      )
+    ].map((m) => fichier(m[1]))
+  }
+  if (OUTILS_SHELL.has(nom)) {
+    if (typeof commande !== 'string') return []
+    return [{ outil: 'Bash', chemin: '', shell: segmentsDe(commande).code, cwd }]
+  }
+  if (OUTILS_ECRITURE.has(nom))
+    return CLES_CHEMIN.filter((k) => typeof outil[k] === 'string' && outil[k]).map((k) =>
+      fichier(outil[k])
+    )
+  return []
+}
+
+/**
+ * LA COPIE DU FIL S'OUVRE À SA PREMIÈRE ÉCRITURE, pour Codex, Grok et agy. Autowin désigne la conf
+ * du lancement par `AUTOWIN_COPIE_A_LA_DEMANDE` ; sans elle (un lancement hors d'Autowin, un fil déjà
+ * dans sa copie), rien ne se passe. Le module nommé par la conf porte le contrôle lui-même, le même
+ * que celui du CLI Claude. Rend le motif qui renvoie l'agent dans sa copie, ou `undefined`.
+ */
+export async function copieALaDemande(entree, env = process.env) {
+  const fichier = env.AUTOWIN_COPIE_A_LA_DEMANDE
+  if (!fichier) return undefined
+  const conf = JSON.parse(readFileSync(fichier, 'utf8'))
+  if (!conf || typeof conf.module !== 'string') return undefined
+  const appels = appelsVus(entree)
+  if (!appels.length) return undefined
+  const { motifDeCopie } = await import(pathToFileURL(conf.module).href)
+  return motifDeCopie(appels, conf)
+}
+
+/**
  * Motif de refus, ou `undefined` pour laisser passer. `entree` : le JSON PreToolUse de Claude, de
- * Codex (`tool_name`/`tool_input`/`cwd`) ou de Grok (`toolName`/`toolInput`/`cwd`/`workspaceRoot`).
+ * Codex (`tool_name`/`tool_input`/`cwd`) ou de Grok (`toolName`/`toolInput`/`cwd`/`workspaceRoot`) ;
+ * celui d'agy passe d'abord par `entreeCommune`.
  */
 export function refusEcritureHorsCopie(entree, sonde) {
   const nom = String(entree?.tool_name ?? entree?.toolName ?? '').toLowerCase()
@@ -547,32 +629,47 @@ export const sondeSysteme = {
   }
 }
 
-/** Entrée du hook : JSON PreToolUse sur stdin, refus structuré sur stdout. Ne bloque jamais sur une erreur. */
-function principal() {
-  let entree
-  try {
-    // Un BOM en tête (pipe PowerShell 5.1) faisait échouer JSON.parse de la garde npm : même parade.
-    entree = JSON.parse(readFileSync(0, 'utf8').replace(/^\uFEFF/, '') || '{}')
-  } catch {
-    return
-  }
-  let motif
-  try {
-    motif = refusEcritureHorsCopie(entree, sondeSysteme)
-  } catch {
-    return
-  }
-  if (motif) {
-    process.stdout.write(
-      JSON.stringify({
+/**
+ * Le refus, dans la forme que lit chaque CLI : `hookSpecificOutput` pour Claude, Codex et Grok,
+ * `decision`/`reason` pour agy (`~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md`).
+ */
+export function sortieDuRefus(motif, pourAgy) {
+  return pourAgy
+    ? { decision: 'deny', reason: motif }
+    : {
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'deny',
           permissionDecisionReason: motif
         }
-      })
-    )
-  }
+      }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) principal()
+/** Entrée du hook : JSON PreToolUse sur stdin, refus structuré sur stdout. Ne bloque jamais sur une erreur. */
+async function principal() {
+  let brut
+  try {
+    // Un BOM en tête (pipe PowerShell 5.1) faisait échouer JSON.parse de la garde npm : même parade.
+    brut = JSON.parse(readFileSync(0, 'utf8').replace(/^\uFEFF/, '') || '{}')
+  } catch {
+    return
+  }
+  const entree = entreeCommune(brut)
+  let motif
+  try {
+    motif = refusEcritureHorsCopie(entree, sondeSysteme)
+  } catch {
+    // Une garde en panne ne refuse rien.
+  }
+  if (!motif) {
+    try {
+      motif = await copieALaDemande(entree)
+    } catch {
+      // Conf ou module illisible : l'appel passe, comme avant les copies.
+    }
+  }
+  if (motif) process.stdout.write(JSON.stringify(sortieDuRefus(motif, entree !== brut)))
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  await principal()

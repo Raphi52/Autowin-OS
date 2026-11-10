@@ -107,6 +107,34 @@ describe('cibleDEcritureDansLeDepot — le terminal', () => {
     expect(cible(appel('Bash', { shell: 'git commit -am x', cwd: copie }))).toBeUndefined()
     expect(cible(appel('Bash', { shell: `cd "${copie}" && rm src/a.ts` }))).toBeUndefined()
   })
+
+  it('après un `cd` vers un dossier illisible, un chemin relatif ne compte plus dans le code', () => {
+    // Mesuré : `cd "$LOCALAPPDATA/Temp/essai" && mkdir -p .agents` ouvrait la copie pour rien.
+    expect(
+      cible(appel('Bash', { shell: 'cd "$LOCALAPPDATA/Temp/essai" && mkdir -p .agents' }))
+    ).toBeUndefined()
+    expect(cible(appel('Bash', { shell: 'cd "$AILLEURS" && git commit -am x' }))).toBeUndefined()
+    expect(cible(appel('Bash', { shell: 'cd "$AILLEURS" && npm install' }))).toBeUndefined()
+    // Un chemin complet reste lu, où que la commande tourne.
+    expect(
+      cible(appel('Bash', { shell: `cd "$AILLEURS" && rm ${path.join(depot, 'src/a.ts')}` }))
+    ).toBe(path.join(depot, 'src/a.ts'))
+  })
+
+  it('une commande enveloppée (`bash -lc`, `powershell -Command`, `cmd /c`) est lue de l’intérieur', () => {
+    expect(cible(appel('Bash', { shell: 'bash -lc "echo x > src/b.ts"' }))).toBe(
+      path.join(depot, 'src/b.ts')
+    )
+    expect(
+      cible(
+        appel('Bash', {
+          shell: 'powershell -NoProfile -Command "Set-Content -Path src/c.ts -Value x"'
+        })
+      )
+    ).toBe(path.join(depot, 'src/c.ts'))
+    expect(cible(appel('Bash', { shell: 'cmd /c del src\\a.ts' }))).toBeDefined()
+    expect(cible(appel('Bash', { shell: 'bash -lc "git status && cat src/a.ts"' }))).toBeUndefined()
+  })
 })
 
 describe('cibleDEcritureDansLeDepot — chemins à la Git Bash sous Windows', () => {

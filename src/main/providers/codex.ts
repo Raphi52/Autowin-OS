@@ -25,6 +25,7 @@ import {
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { dossierModAutowin, gardeNpmDuDepot, materializeClaudeAttachments } from './claude'
+import { armerCopieALaDemandeDuCli } from '../copies/copie-a-la-demande-app'
 import {
   FICHIER_CONTROLES_DE_CONFIANCE,
   fichierHooksCodex,
@@ -676,7 +677,12 @@ async function executerCodex(
       'Arguments exacts remis au CLI Codex ; ses instructions internes ne sont pas exposées.'
   })
   assertArgvWithinLimit('codex exec', spec.args) // le prompt part sur stdin ; garde anti-régression
-  return await new Promise((resolvePromise, reject) => {
+  // LA COPIE DU FIL S'OUVRE À SA PREMIÈRE ÉCRITURE (`copies/copie-a-la-demande-app.ts`). Seulement si
+  // Codex fait tourner ses contrôles personnels pour ce lancement : sans eux, personne ne la demande.
+  const copieALaDemande = controles.contourner
+    ? await armerCopieALaDemandeDuCli({ conversationId: opts.conversationId, cwd: spec.cwd })
+    : undefined
+  return await new Promise<SendResult>((resolvePromise, reject) => {
     const spawnToken = randomUUID()
     execution.onSpawnIntent?.(spawnToken, true)
     // Lancement par la couche COMMUNE : sortie vers un journal fichier, processus detache. Avant,
@@ -688,7 +694,11 @@ async function executerCodex(
       runId: spawnToken,
       stdin: prompt,
       // Le fil du run (AUTOWIN_CONVERSATION_ID) : hdesk-lancer.ps1 le lit pour la petite TV.
-      env: environnementCodex(process.env, { ...execution.agentEnv, ...mcp?.env }),
+      env: environnementCodex(process.env, {
+        ...execution.agentEnv,
+        ...mcp?.env,
+        ...copieALaDemande?.env
+      }),
       onJournalPrepared:
         (execution.onJournal ?? opts.onJournal)
           ? (journalPath) => (execution.onJournal ?? opts.onJournal)?.(spawnToken, journalPath)
@@ -883,7 +893,7 @@ async function executerCodex(
       })
     })
     // La couche commune remet le prompt par pipe, ou par fichier éphémère avec le relais Windows.
-  })
+  }).finally(() => copieALaDemande?.arreter())
 }
 
 function escapeAttribute(value: string): string {
@@ -1074,15 +1084,10 @@ export class CodexAdapter implements ProviderAdapter {
         resolveWait?.()
         resolveWait = undefined
       }
-      const running = runCodexExec(
-        messages,
-        optsExec,
-        optsExec.model ?? this.model,
-        (chunk) => {
-          queue.push(chunk)
-          reveiller()
-        }
-      )
+      const running = runCodexExec(messages, optsExec, optsExec.model ?? this.model, (chunk) => {
+        queue.push(chunk)
+        reveiller()
+      })
       // Rattaché TOUT DE SUITE : une promesse rejetée pendant que la pompe attend serait un rejet
       // non géré. L'erreur est relancée plus bas, à l'await.
       const settled = running.then(

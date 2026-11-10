@@ -20,6 +20,7 @@ import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk, Usage } from './types'
 import { envDuCoffre } from './cles-du-coffre'
 import { promptDuFil } from './prompt-du-fil'
+import { armerCopieALaDemandeDuCli } from '../copies/copie-a-la-demande-app'
 
 export const GROK_PROVIDER_ID = 'grok'
 
@@ -121,10 +122,16 @@ export class GrokAdapter implements ProviderAdapter {
     const args = ['--prompt-file', fichier, '--output-format', 'streaming-json', '--no-auto-update']
     if (model) args.push('--model', model)
     if (opts.execution?.cwd) args.push('--cwd', opts.execution.cwd, '--always-approve')
+    // LA COPIE DU FIL S'OUVRE À SA PREMIÈRE ÉCRITURE : le contrôle personnel de Grok
+    // (`hooks-des-cli.ts`) trouve la conf de ce lancement par son environnement.
+    const copieALaDemande = await armerCopieALaDemandeDuCli({
+      conversationId: opts.conversationId,
+      cwd: opts.execution?.cwd
+    })
     const enfant = (this.deps.spawnFn ?? spawn)(bin, args, {
       cwd: opts.execution?.cwd,
       // Clés du coffre sans XAI_API_KEY ; `envSansCleXai` reste appliqué EN DERNIER, sur le tout.
-      env: envSansCleXai({ ...process.env, ...envDuCoffre('grok') }),
+      env: envSansCleXai({ ...process.env, ...envDuCoffre('grok'), ...copieALaDemande.env }),
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
@@ -204,6 +211,7 @@ export class GrokAdapter implements ProviderAdapter {
     } finally {
       opts.signal?.removeEventListener('abort', arreter)
       arreter()
+      copieALaDemande.arreter()
       rmSync(dossier, { recursive: true, force: true })
     }
   }

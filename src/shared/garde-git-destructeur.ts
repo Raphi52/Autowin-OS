@@ -18,7 +18,8 @@ import {
   ATTENTE_COPIE_MS,
   NOM_CONF_COPIE_A_LA_DEMANDE,
   cibleDEcritureDansLeDepot,
-  copieAvantLEcriture
+  copieAvantLEcriture,
+  copieAvantLEcritureSurDisque
 } from './copie-a-la-demande'
 
 /**
@@ -563,6 +564,7 @@ const rappelsAuBonMoment = (j, shell) => {
 // dépôt partagé. Toute panne = rien, l'appel passe comme avant les copies.
 const cibleDEcritureDansLeDepot = ${cibleDEcritureDansLeDepot.toString()};
 const copieAvantLEcriture = ${copieAvantLEcriture.toString()};
+const copieAvantLEcritureSurDisque = ${copieAvantLEcritureSurDisque.toString()};
 const copieALaDemande = (j, chemin, shell) => {
   try {
     const fs = process.getBuiltinModule('node:fs');
@@ -570,31 +572,12 @@ const copieALaDemande = (j, chemin, shell) => {
     const cp = process.getBuiltinModule('node:child_process');
     let conf;
     try { conf = JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), ${JSON.stringify(NOM_CONF_COPIE_A_LA_DEMANDE)}), 'utf8')); } catch { return undefined; }
-    if (!conf || typeof conf.depot !== 'string' || typeof conf.demande !== 'string' || typeof conf.reponse !== 'string') return undefined;
-    const ioCible = {
-      path,
-      windows: process.platform === 'win32',
-      estIgnore: (c) => {
-        const r = cp.spawnSync('git', ['-C', conf.depot, 'check-ignore', '-q', '--', c], { timeout: 5000, windowsHide: true });
-        return r.status === 0 ? true : r.status === 1 ? false : undefined;
-      }
-    };
-    const sommeil = new Int32Array(new SharedArrayBuffer(4));
-    return copieAvantLEcriture(
-      { outil: String(j.tool_name || ''), chemin, shell, cwd: String(j.cwd || process.cwd()) },
+    return copieAvantLEcritureSurDisque(
+      [{ outil: String(j.tool_name || ''), chemin, shell, cwd: String(j.cwd || process.cwd()) }],
       { attenteMs: ${ATTENTE_COPIE_MS}, ...conf },
-      {
-        lireJson: (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return undefined; } },
-        ecrireJson: (p, v) => {
-          const tmp = p + '.' + process.pid + '.tmp';
-          fs.writeFileSync(tmp, JSON.stringify(v));
-          try { fs.renameSync(tmp, p); } catch (e) { try { fs.unlinkSync(tmp); } catch {} throw e; }
-        },
-        attendre: (ms) => { Atomics.wait(sommeil, 0, 0, ms); },
-        maintenant: () => Date.now(),
-        cible: (a, depot) => cibleDEcritureDansLeDepot(a, depot, ioCible),
-        path
-      }
+      { fs, path, cp },
+      cibleDEcritureDansLeDepot,
+      copieAvantLEcriture
     );
   } catch { return undefined; }
 };

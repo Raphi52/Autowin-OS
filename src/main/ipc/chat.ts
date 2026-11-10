@@ -265,6 +265,7 @@ import {
   demandeSurLeDepotPartage
 } from '../copies/demande-sans-copie'
 import { inscrireCopieALaDemande } from '../copies/copie-a-la-demande-app'
+import { copieALaDemandePossible } from '../copies/copie-a-la-demande-possible'
 import type { ReponseDeCopie } from '../../shared/copie-a-la-demande'
 import { messageLiaison } from '../store/dependances-copie-agent'
 import { materializeChatArtifact } from '../store/chat-artifact-store'
@@ -2310,8 +2311,9 @@ Le fil reprend ensuite normalement.`
    * celui du fil (sa copie d'abord, son dossier rangé ensuite) dès que c'est un dépôt git ; ailleurs,
    * rien ne change. Une copie qui ne s'ouvre pas, même par une panne de git, est DITE dans le fil, et le
    * tour part là où il était : le passage ne coûte jamais la réponse. Une question seule n'en ouvre pas de neuve.
-   * Un tour du CLI Claude n'en ouvre AUCUNE de neuve ici (`a-la-demande`) : son contrôle avant chaque
-   * outil la demande juste avant la première écriture dans le code (`ouvrirLaCopieEnPleinTour`).
+   * Un tour dont le modèle passe par un contrôle avant chaque outil (Claude ; Codex, Grok et agy quand
+   * leurs réglages personnels le portent) n'en ouvre AUCUNE de neuve ici (`a-la-demande`) : ce contrôle
+   * la demande juste avant la première écriture dans le code (`ouvrirLaCopieEnPleinTour`).
    */
   const passerLeFilDansSaCopie = async (
     conversationId: string,
@@ -2319,7 +2321,6 @@ Le fil reprend ensuite normalement.`
   ): Promise<IssueDuPassage> => {
     const fil = os.conversations.get(conversationId)
     const demande = [...messages].reverse().find((m) => m.role === 'user')?.content
-    // Le contrôle qui ouvre la copie à la première écriture est celui du CLI Claude (claude.ts).
     const providerDuTour =
       fil?.modeleChoisi?.provider ?? os.roles.getBinding('orchestrator').provider
     // fix-ok: le dépôt est celui du fil, quel qu'il soit ; limité au dépôt d'Autowin, un autre dépôt git n'aurait jamais de copie.
@@ -2336,7 +2337,8 @@ Le fil reprend ensuite normalement.`
       rienAEcrire: demandeSansEcritureDansLeDepot(
         [...messages].reverse().find((m) => m.role === 'user')?.content
       ),
-      aLaDemande: providerDuTour === 'claude' && !demandeSurLeDepotPartage(demande),
+      aLaDemande:
+        copieALaDemandePossible(providerDuTour, depot) && !demandeSurLeDepotPartage(demande),
       // la garde « copie d'avant déjà là » et les annonces de refus vivent dans bascule-dossier-conversation.ts, testées là.
       ouvrirCopie: async () => {
         const copie = await ouvrirLaCopieDuFilPourLeTour({
