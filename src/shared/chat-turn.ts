@@ -161,6 +161,12 @@ export interface ChatTurnState {
    */
   reasoning?: string
   /**
+   * Décodage d’image de la skill look, affiché À PART du raisonnement et JAMAIS renvoyé au modèle :
+   * il n’entre ni dans `parts` ni dans `flattenChatPartsForModel`. Borné comme `reasoning` :
+   * seule sa FIN est gardée (`REASONING_MAX`), pour ne pas gonfler `conversations.json`.
+   */
+  lookDecode?: string
+  /**
    * JOURNAL DES ACTIONS du tour — une ligne par signe de vie du fournisseur (`Read · src/a.ts`,
    * `Bash · npm test`…), dans l'ordre. Conservé avec le tour pour la MÊME raison que `reasoning` :
    * sans lui, le bloc « Actions » du fil se vidait dès qu'on rechargeait la conversation, alors que
@@ -341,6 +347,11 @@ export type ChatTurnEvent =
   | { kind: 'delta'; streamId: string; text: string; at?: number }
   /** Raisonnement du modèle : s'accumule dans le tour, n'entre JAMAIS dans la réponse (`parts`). */
   | { kind: 'reasoning'; text: string }
+  /**
+   * Décodage d’image de la skill look : le raisonnement émis APRÈS le chargement de `look`, dans le même
+   * tour. S’accumule dans `lookDecode`, jamais dans la réponse ni renvoyé au modèle. Statut INCHANGÉ.
+   */
+  | { kind: 'look-decode'; text: string }
   /** Journal des actions du tour, écrit EN UNE FOIS à la clôture (comme `reasoning`). */
   | { kind: 'actions-log'; lines: string[] }
   /** Durée du raisonnement (début du tour -> clôture), écrite EN UNE FOIS à la clôture. */
@@ -521,6 +532,15 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
     // Le statut est INCHANGÉ : penser n'est ni parler ni terminer. Un tour déjà clos qui reçoit son
     // raisonnement (émis à la clôture) doit rester clos.
     return { ...state, reasoning: `${state.reasoning ?? ''}${event.text}`.slice(-REASONING_MAX) }
+  }
+
+  if (event.kind === 'look-decode') {
+    // fix-ok: cause mesurée — sans ce cas, le réducteur tombait dans son retour final et passait le tour
+    // en « interrupted » (test rouge : statut 'interrupted' au lieu de 'streaming', lookDecode absent).
+    // Statut INCHANGÉ, comme `reasoning` : décoder une image est penser, pas répondre. Le texte n'est
+    // jamais écrit dans `parts` : c'est ce qui le tient hors de ce que l'app renvoie au modèle.
+    if (!event.text) return state
+    return { ...state, lookDecode: `${state.lookDecode ?? ''}${event.text}`.slice(-REASONING_MAX) }
   }
 
   if (event.kind === 'actions-log') {
