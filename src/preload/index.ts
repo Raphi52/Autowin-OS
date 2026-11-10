@@ -226,6 +226,9 @@ const terminal: ApiTerminal = {
   }
 }
 
+/** Les styles de la mascotte du bureau, tels que le pont les expose. */
+type StyleMascotteApi = 'magicien' | 'basique' | 'machine' | 'panda1' | 'panda2' | 'panda3'
+
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
@@ -485,10 +488,10 @@ const api = {
   /** L'interrupteur de Settings · Interface : rend le choix tel que le moteur l'a enregistré. */
   afficherMascotte: (affichee: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:mascotte:afficher', affichee),
-  /** Le style de la mascotte : le magicien ou la bille basique. */
-  styleMascotte: (): Promise<'magicien' | 'basique' | 'machine'> => ipcRenderer.invoke('os:mascotte:style'),
+  /** Le style de la mascotte : le magicien, la bille basique, la machine ou l'un des trois pandas. */
+  styleMascotte: (): Promise<StyleMascotteApi> => ipcRenderer.invoke('os:mascotte:style'),
   /** Le choix de Settings · Interface : rend le style tel que le moteur l'a enregistré. */
-  choisirStyleMascotte: (style: 'magicien' | 'basique' | 'machine'): Promise<'magicien' | 'basique' | 'machine'> =>
+  choisirStyleMascotte: (style: StyleMascotteApi): Promise<StyleMascotteApi> =>
     ipcRenderer.invoke('os:mascotte:choisir-style', style),
   /** Le thème appliqué, pour que la mascotte passe en machine sous le thème NieR. */
   themeMascotte: (theme: string): Promise<boolean> => ipcRenderer.invoke('os:mascotte:theme', theme),

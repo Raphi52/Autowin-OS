@@ -42,7 +42,15 @@ import {
   MACHINE_PROBLEME,
   MACHINE_TRAVAIL
 } from './mascotte-machine-images'
-import type { StyleMascotte } from './mascotte-reglage'
+import {
+  PANDA1_CALME,
+  PANDA1_TRAVAIL,
+  PANDA2_CALME,
+  PANDA2_TRAVAIL,
+  PANDA3_CALME,
+  PANDA3_TRAVAIL
+} from './mascotte-panda-images'
+import type { StyleMascotte, StylePanda } from './mascotte-reglage'
 import { LARGEUR_POPUP, MARGE_CARTE, type Rect, type ZoneDesCartes } from '../app/notification-popup'
 import {
   contenuDeNotificationDeFinDeTour,
@@ -89,6 +97,14 @@ export type GeometrieMascotte = {
   /** La croix de fermeture, dans la fenêtre. */
   croix: { x: number; y: number; taille: number }
 }
+/** Les trois pandas partagent la fenêtre de la machine : mêmes cartes, mêmes clics. */
+const GEOMETRIE_PANDA: GeometrieMascotte = {
+  largeur: 124,
+  hauteur: 136,
+  centre: { x: 62, y: 76 },
+  retraitCote: 8,
+  croix: { x: 94, y: 22, taille: 18 }
+}
 const GEOMETRIES: Record<StyleMascotte, GeometrieMascotte> = {
   magicien: {
     largeur: LARGEUR_MASCOTTE,
@@ -112,7 +128,11 @@ const GEOMETRIES: Record<StyleMascotte, GeometrieMascotte> = {
     centre: { x: 62, y: 76 },
     retraitCote: 8,
     croix: { x: 94, y: 22, taille: 18 }
-  }
+  },
+  // Les trois pandas : même cadre de 104x125 px et même fenêtre que la machine.
+  panda1: GEOMETRIE_PANDA,
+  panda2: GEOMETRIE_PANDA,
+  panda3: GEOMETRIE_PANDA
 }
 export function geometrieMascotte(style: StyleMascotte = 'magicien'): GeometrieMascotte {
   return GEOMETRIES[style]
@@ -364,6 +384,7 @@ const ANNEAU =
 export function htmlDeMascotte(style: StyleMascotte = 'magicien'): string {
   if (style === 'basique') return htmlDeLaBilleBasique()
   if (style === 'machine') return htmlDeLaMachine()
+  if (estUnStylePanda(style)) return htmlDuPanda(style)
   const cx = CENTRE_BILLE.x
   const cy = CENTRE_BILLE.y
   const halo = HALO_DANS_LA_FENETRE
@@ -547,6 +568,89 @@ function reglesDeLaMachine(etat: NomEtatMascotte, pastille: string | null): Arra
         ['.y', 'color:#ff6a50'],
         ['.h .ge', 'animation:rt 1.2s steps(6) infinite'],
         ['.n', 'color:#ff6a50;text-shadow:0 0 4px #ff3b26;box-shadow:inset 0 0 0 1px #ff6a50']
+      )
+      break
+  }
+  return regles
+}
+
+/** Les planches de chaque panda, au repos et au travail (`scripts/mascotte-panda-3d.py`). */
+const PLANCHES_PANDA: Record<StylePanda, { calme: string; travail: string }> = {
+  panda1: { calme: PANDA1_CALME, travail: PANDA1_TRAVAIL },
+  panda2: { calme: PANDA2_CALME, travail: PANDA2_TRAVAIL },
+  panda3: { calme: PANDA3_CALME, travail: PANDA3_TRAVAIL }
+}
+
+/** Vrai pour les trois pandas, dont les planches sont la table ci-dessus. */
+function estUnStylePanda(style: StyleMascotte): style is StylePanda {
+  return Object.prototype.hasOwnProperty.call(PLANCHES_PANDA, style)
+}
+
+/**
+ * LES TROIS PANDAS 3D (`scripts/mascotte-panda-3d.py`, Blender) : pour chacun, deux planches de 16 images
+ * de 104 x 125 px, au repos et au travail. La fenêtre n'admet aucun script : la planche tourne en CSS, par
+ * `steps(16)`, comme la machine. Mêmes accroches que la machine (`.ob`, `.n`, `.z`, `.bu`, `.f`).
+ */
+function htmlDuPanda(style: StylePanda): string {
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><title>Autowin — mascotte</title><style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+body{font-family:ui-monospace,Consolas,monospace;user-select:none}
+:root{--calme:url("${PLANCHES_PANDA[style].calme}");--travail:url("${PLANCHES_PANDA[style].travail}")}
+.m{position:relative;width:124px;height:136px}
+.m i,.m a{position:absolute;font-style:normal}
+.sh{left:24px;top:118px;width:76px;height:14px;border-radius:50%;background:radial-gradient(closest-side,#000a,#0000);animation:so 3.2s ease-in-out infinite}
+.ob{left:10px;top:4px;width:104px;height:125px;cursor:pointer;touch-action:none;transition:scale .2s;transform-origin:50% 100%}
+.ob:active{cursor:grabbing}
+.m:hover .ob{scale:1.06}
+.bw{inset:0;background:var(--calme) 0 0/1664px 125px no-repeat;animation:sp 3.2s steps(16) infinite}
+.n{display:none;place-items:center;left:2px;top:34px;min-width:26px;height:18px;padding:0 4px;box-sizing:border-box;font-weight:700;font-size:11px;letter-spacing:.08em;line-height:1;color:#ffcf7a;text-shadow:0 0 4px #ffcf7a;background:#14120ee6;box-shadow:inset 0 0 0 1px #ffcf7a99;clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px)}
+.n::after{position:static}
+.z{display:none;left:90px;top:26px;font-weight:700;font-size:19px;text-shadow:0 0 4px #e4dfc9;line-height:1;color:#bdb79c;animation:oz 2.4s infinite}
+.z::after{content:"z";position:absolute;left:9px;top:-9px;font-size:11px;animation:oz 2.4s 1.2s infinite;opacity:0}
+.bu{display:none;place-items:center;left:88px;top:2px;width:26px;height:26px;border-radius:50%;font-weight:700;font-size:16px;line-height:1;background:#e4dfc9;color:#14120e;box-shadow:0 0 0 1.5px #4e4b42,0 0 10px 2px currentColor;animation:bu 1.6s ease-in-out infinite}
+.f{z-index:2;display:grid;place-items:center;left:94px;top:22px;width:18px;height:18px;border-radius:50%;background:#14120ee6;box-shadow:0 0 0 1px #e4dfc95c;color:#e4dfc9;font-size:13px;line-height:1;text-decoration:none;cursor:pointer;opacity:0;transition:opacity .2s .4s}
+.m:hover .f{opacity:1;transition-delay:0s}
+.m:hover .z,.m:hover .bu{visibility:hidden}
+@keyframes sp{to{background-position:-1664px 0}}
+@keyframes so{50%{transform:scaleX(.92);opacity:.8}}
+@keyframes oz{0%{opacity:0;transform:none}50%{opacity:1}100%{opacity:0;transform:translate(4px,-8px)}}
+@keyframes bu{50%{transform:translateY(-3px)}}
+@keyframes tr{25%{translate:-1px 0}75%{translate:1px 0}}
+</style></head><body><div class="m"><i class="sh"></i><i class="ob" title="Ouvrir Autowin — glisser pour la déplacer"><i class="bw"></i></i><i class="n"></i><i class="z">z</i><i class="bu"></i><a class="f" href="#${FRAGMENT_FERMER}" title="Fermer la mascotte (pour la rouvrir : Réglages · Interface)">×</a></div></body></html>`
+}
+
+/**
+ * Les règles d'état du panda : sa planche (repos ou travail), sa vitesse, une lueur ou un tremblement,
+ * la bulle (✓ quand il attend, ! en cas d'échec) et la pastille du compte. Au repos et en attente, c'est
+ * la même planche : la différence se lit dans le mouvement, pas dans un autre dessin.
+ */
+function reglesDuPanda(etat: NomEtatMascotte, pastille: string | null): Array<[string, string]> {
+  const regles: Array<[string, string]> = []
+  if (pastille) regles.push(['.n', 'display:grid'], ['.n::after', `content:"${pastille}"`])
+  switch (etat) {
+    case 'calme':
+      regles.push(['.z', 'display:block'], ['.bw', 'filter:saturate(.7) brightness(.92)'])
+      break
+    case 'travail':
+      regles.push(
+        [
+          '.bw',
+          'background-image:var(--travail);animation:sp 1.2s steps(16) infinite;filter:drop-shadow(0 0 3px #ffb347) drop-shadow(0 0 8px #ffb34799)'
+        ],
+        ['.sh', 'animation-duration:1.2s']
+      )
+      break
+    case 'attente':
+      regles.push(['.bu', 'display:grid'], ['.bu::after', 'content:"✓"'])
+      break
+    case 'probleme':
+      regles.push(
+        [
+          '.bw',
+          'animation:sp 1.6s steps(16) infinite,tr .15s linear infinite;filter:drop-shadow(0 0 3px #ff3b26) drop-shadow(0 0 9px #ff3b2699)'
+        ],
+        ['.bu', 'display:grid;background:#b5503f;color:#fff'],
+        ['.bu::after', 'content:"!"']
       )
       break
   }
@@ -784,6 +888,7 @@ export function cssDeLEtat(etat: EtatMascotte, style: StyleMascotte = 'magicien'
   const pastille = etat.pastille && /^[0-9+!]{1,2}$/u.test(etat.pastille) ? etat.pastille : null
   if (style === 'basique') return enFeuille(reglesDeLaBilleBasique(etat.etat, pastille))
   if (style === 'machine') return enFeuille(reglesDeLaMachine(etat.etat, pastille))
+  if (estUnStylePanda(style)) return enFeuille(reglesDuPanda(etat.etat, pastille))
   const regles: Array<[string, string]> = reglesDuPersonnage(etat.etat, pastille)
   switch (etat.etat) {
     case 'calme':
@@ -846,6 +951,8 @@ export function cssDeLAccueil(
   style: StyleMascotte = 'magicien'
 ): string {
   if (agents > 0) return cssDeLEtat({ etat: 'travail', pastille: compte(agents), fil: null }, style)
+  // Ni la bille basique ni le panda n'ont le grimoire du magicien : leurs règles d'accueil sont celles de la bille.
+  const sansGrimoire = style === 'basique' || estUnStylePanda(style)
   switch (humeur) {
     case 'sommeil':
       return cssDeLEtat({ etat: 'calme', pastille: null, fil: null }, style)
@@ -853,11 +960,11 @@ export function cssDeLAccueil(
       return cssDeLEtat({ etat: 'attente', pastille: null, fil: null }, style)
     // La bille basique n'a ni bras ni grimoire : son halo qui tourne dit qu'elle est attentive.
     case 'lecture':
-      return style === 'basique'
+      return sansGrimoire
         ? cssDeLEtat({ etat: 'travail', pastille: null, fil: null }, style)
         : enFeuille(reglesDeLAccueil('lecture'))
     case 'eveil':
-      return style === 'basique' ? '' : enFeuille(reglesDeLAccueil('eveil'))
+      return sansGrimoire ? '' : enFeuille(reglesDeLAccueil('eveil'))
   }
 }
 
