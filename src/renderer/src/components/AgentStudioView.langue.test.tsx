@@ -123,8 +123,6 @@ describe('Agent Studio — langue', () => {
   it('section Modèles : la topologie parle anglais, puis revient au français', async () => {
     appliquerLangue('en')
     await monter('topology')
-    // Le surtitre du ModuleHeader n'est pas affiché : on lit sa description.
-    expect(texte()).toContain('Assign models to roles and check their availability.')
     expect(texte()).toContain('Orchestrator')
     expect(texte()).toContain('A single model drives and consolidates.')
     expect(texte()).toContain('+ Add a model')
@@ -135,7 +133,6 @@ describe('Agent Studio — langue', () => {
     ).toBe('Apply a profile')
 
     await act(async () => appliquerLangue('fr'))
-    expect(texte()).toContain('Assigne les modèles aux rôles et contrôle leur disponibilité.')
     expect(texte()).toContain('Un seul modèle pilote et consolide.')
     expect(texte()).toContain('+ Ajouter un modèle')
     expect(texte()).toContain('Aucun sous-agent : l’orchestrateur fait le travail lui-même.')

@@ -277,13 +277,15 @@ describe('AgentsTopologyView concurrent persistence', () => {
     await act(async () => root.render(createElement(AgentsTopologyView)))
     await flush()
 
-    const select = container.querySelector<HTMLSelectElement>('[aria-label="Appliquer un profil"]')!
-    await act(async () => {
-      select.value = 'p1'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Appliquer un profil"] [data-profile-id="p1"]'
+        )!
+        .click()
+    )
     await flush()
-    // Appliquer écrase la topologie : le choix ne part plus au `change`, il se confirme.
+    // Appliquer écrase la topologie : le clic sur la pastille ne suffit pas, il se confirme.
     await act(async () =>
       container.querySelector<HTMLButtonElement>('[data-testid="topology-apply-yes"]')!.click()
     )

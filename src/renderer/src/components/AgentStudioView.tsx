@@ -97,16 +97,21 @@ export function AgentStudioView({
         {section === 'workflows' ? (
           <WorkflowProfilesView active={active} />
         ) : (
-          // Une seule colonne qui défile : petites tâches, orchestrateur et sous-agents se règlent
-          // par le même bloc, l'un sous l'autre.
+          // Les profils en pastilles, puis une ligne par rôle : petites tâches, orchestrateur et
+          // sous-agents se règlent par le même menu, sans cadre (AgentsTopologyView.css).
           <div className="studio-modeles" data-testid="studio-modeles">
-            {/* Le modèle des petites tâches, aussi ici : même bloc que Routage. */}
-            <PetitesTachesReglage
+            <AgentsTopologyView
               active={active}
-              idBase="studio-petites-taches-modele"
-              testId="studio-petites-taches"
+              premiereLigne={
+                // Le modèle des petites tâches, aussi ici : même bloc que Routage.
+                <PetitesTachesReglage
+                  active={active}
+                  idBase="studio-petites-taches-modele"
+                  testId="studio-petites-taches"
+                  couvertureRepliee
+                />
+              }
             />
-            <AgentsTopologyView active={active} />
           </div>
         )}
       </div>

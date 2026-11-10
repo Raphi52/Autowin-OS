@@ -169,9 +169,10 @@ describe('Autowin UI contract', () => {
 
     // La regle simple ne doit PAS retomber sur box-shadow : c'est exactement ce qui etait ecrase.
     const regleSimple = /\.conv-item\.surlignee\s*\{([^}]*)\}/.exec(chatCss)?.[1] ?? ''
-    expect(regleSimple, '`box-shadow` sur .conv-item.surlignee est ecrase par les themes').not.toMatch(
-      /box-shadow/
-    )
+    expect(
+      regleSimple,
+      '`box-shadow` sur .conv-item.surlignee est ecrase par les themes'
+    ).not.toMatch(/box-shadow/)
 
     // Sans ancre positionnee sur la ligne, le lisere se calerait sur un autre parent.
     const ligne = /\.conv-item\s*\{([^}]*)\}/.exec(chatCss)?.[1] ?? ''
@@ -254,10 +255,12 @@ describe('Autowin UI contract', () => {
     // ligne pour rien). Garder ModuleHeader la-bas exigerait un titre cache juste pour ce test ; le
     // contrat devient : aucun titre fait main dans ChatView — s'il revient, il passe par ModuleHeader.
     expect(component('ChatView.tsx')).not.toMatch(/<h1[\s>]/)
+    // AgentsTopologyView n'a plus de titre non plus : l'en-tête d'Agent Studio (ViewTopBar) le porte,
+    // et sa première rangée est celle des profils.
+    expect(component('AgentsTopologyView.tsx')).not.toMatch(/<h[12][\s>]/)
     for (const file of [
       'GraphView.tsx',
       'ObservatoryView.tsx',
-      'AgentsTopologyView.tsx',
       'CapabilitiesView.tsx',
       'BehaviourView.tsx'
     ]) {

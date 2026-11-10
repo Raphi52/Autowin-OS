@@ -35,8 +35,11 @@ export function PetitesTachesReglage({
   statuses,
   catalogLoaded,
   idBase,
-  testId
+  testId,
+  couvertureRepliee = false
 }: {
+  /** Agent Studio pose le bloc en ligne : l'explication y part repliée, au bout de la ligne. */
+  couvertureRepliee?: boolean
   active: boolean
   /** Le catalogue de l'écran hôte ; absent = le bloc le lit lui-même (Agent Studio). */
   models?: RuntimeModel[]
@@ -141,6 +144,7 @@ export function PetitesTachesReglage({
           les appels de `bindingDesPetitesTaches` dans le processus principal. */}
       <CeQueCaCouvre
         id="petites-taches"
+        repliParDefaut={couvertureRepliee}
         testId={`${testId}-couvre`}
         titre={t('routeur.petites.couvre.titre')}
         lignes={[

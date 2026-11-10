@@ -1,7 +1,7 @@
 /*
- * MODÈLES & TOPOLOGIE — trois blocs empilés, pareils : « Modèle des petites tâches »
+ * MODÈLES & TOPOLOGIE — les profils en pastilles, puis trois lignes : « Modèle des petites tâches »
  * (PetitesTachesReglage), « Orchestrateur » et « Sous-agents ». Chaque rôle se règle par le même
- * menu de modèle (OrchestratorModelSelector) et le même cadre (`.router-default`, RouterView.css).
+ * menu de modèle (OrchestratorModelSelector) ; la pose en lignes est en fin de fichier.
  */
 
 /* La section défile EN ENTIER : `.domain-content` coupe tout débordement, et les trois blocs
@@ -69,14 +69,6 @@
   margin: 0;
   padding: 5px 7px;
   border-style: solid;
-}
-.topology-profiles select {
-  max-width: 170px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 10px;
 }
 
 .topology-state {
@@ -307,4 +299,206 @@
 }
 :root[data-base='clair'] .theme-serious .topology-toolbar p {
   color: var(--text-dim);
+}
+
+/*
+ * PASTILLES PUIS LIGNES — choix de l'utilisateur : les profils en pastilles au premier plan, puis
+ * une ligne à filet fin par rôle, sans cadre. Le balisage reste celui des blocs (`.router-default`,
+ * partagé avec Réglages) : seule sa pose change ici, sous `.studio-modeles`.
+ */
+.studio-modeles,
+.studio-modeles .agents-topology,
+.studio-modeles .topology-workspace {
+  gap: 0;
+}
+
+.studio-modeles .topology-toolbar {
+  justify-content: space-between;
+  padding-top: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.studio-modeles .topology-profiles {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  white-space: normal;
+}
+
+.topology-profil {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.topology-profil:hover:not(:disabled),
+.topology-profil.is-en-attente {
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+}
+
+.topology-profil.is-applique {
+  border-color: var(--gold);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.topology-profil:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.topology-profil:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* L'état d'enregistrement devient un simple texte au bout de la rangée : plus de pastille pleine. */
+/* Quatre classes : les couches de thème repeignent le contour de cet état avec trois. */
+.studio-modeles .agents-topology .topology-toolbar .topology-state {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Une ligne par rôle. L'en-tête et le bloc « ce que ça couvre » se dissolvent dans la ligne
+   (`display: contents`) : le nom à gauche, les modèles au milieu, l'explication au bout. */
+.studio-modeles .router-default {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 0;
+  padding: 10px var(--view-head-retrait);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.studio-modeles .router-default > header {
+  display: contents;
+}
+
+.studio-modeles .router-default > header h3 {
+  flex: 0 0 190px;
+  order: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Seul l'orchestrateur garde sa phrase, après son modèle ; les autres lignes parlent d'elles-mêmes. */
+.studio-modeles .router-default > header small {
+  display: none;
+}
+
+.studio-modeles .router-default[data-target='orchestrator'] > header small {
+  display: inline;
+  order: 2;
+  color: var(--text-dim);
+  font-size: 12px;
+  opacity: 1;
+}
+
+.studio-modeles .router-default > .model-select-shell,
+.studio-modeles .router-default > .router-hint,
+.studio-modeles .router-default > .router-petites-taches-routage,
+.studio-modeles .router-default > .router-petites-taches-reset,
+.studio-modeles .router-default > .topology-lignes {
+  order: 1;
+  margin: 0;
+}
+
+.studio-modeles .topology-lignes {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.studio-modeles .topology-ligne {
+  gap: 6px;
+}
+
+/* Le menu de modèle prend la forme d'une pastille : même geste, contour fin. */
+.studio-modeles .router-default .model-select {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.studio-modeles .topology-ligne-retirer {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  font-size: 14px;
+}
+
+.studio-modeles .router-default > .topology-ajouter {
+  order: 1;
+  margin: 0;
+  padding: 3px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* La longue aide de la case reste dans Réglages ; ici la ligne ne garde que la case et son libellé. */
+.studio-modeles .router-petites-taches-routage small {
+  display: none;
+}
+
+.studio-modeles .router-petites-taches-routage {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.studio-modeles .router-default > .ce-que-ca-couvre {
+  display: contents;
+}
+
+.studio-modeles .router-default > .ce-que-ca-couvre > .ce-que-ca-couvre-titre {
+  order: 3;
+  margin-left: auto;
+}
+
+.studio-modeles .router-default > .ce-que-ca-couvre > dl {
+  flex: 0 0 100%;
+  order: 4;
+  margin: 2px 0 0;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+}
+
+/* Le rappel du fonctionnement devient une note discrète sous les lignes, plus un encart.
+   Classe doublée exprès : les couches de thème repeignent cet encart avec quatre sélecteurs. */
+.studio-modeles.studio-modeles .agents-topology .topology-workspace .topology-runtime-limit {
+  padding: 10px var(--view-head-retrait);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.studio-modeles.studio-modeles .agents-topology .topology-workspace .topology-runtime-limit b {
+  color: var(--gold);
+}
+
+/* Seul l’intitulé reste en capitales : dans la phrase, le gras suffit. */
+.studio-modeles.studio-modeles .agents-topology .topology-workspace .topology-runtime-limit span b {
+  text-transform: none;
 }

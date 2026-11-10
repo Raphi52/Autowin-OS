@@ -147,10 +147,9 @@ describe('slot pointant un modèle absent du catalogue', () => {
     expect(
       container.querySelector<HTMLButtonElement>('[data-testid="topology-profile-new"]')!.disabled
     ).toBe(true)
-    expect(
-      container.querySelector<HTMLSelectElement>('[data-testid="topology-profile-select"]')!
-        .disabled
-    ).toBe(true)
+    expect(container.querySelector<HTMLButtonElement>('[data-profile-id="p1"]')!.disabled).toBe(
+      true
+    )
   })
 
   it('une topologie entièrement résolue ne déclenche aucune alerte', async () => {
@@ -238,13 +237,9 @@ describe('profils de topologie', () => {
     })
     await monter()
 
-    const select = container.querySelector<HTMLSelectElement>(
-      '[data-testid="topology-profile-select"]'
-    )!
-    await act(async () => {
-      select.value = 'p1'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    const pastille = (): HTMLButtonElement =>
+      container.querySelector<HTMLButtonElement>('[data-profile-id="p1"]')!
+    await act(async () => pastille().click())
     await flush()
 
     expect(applyProfile).not.toHaveBeenCalled()
@@ -256,9 +251,9 @@ describe('profils de topologie', () => {
     await flush()
 
     expect(applyProfile).toHaveBeenCalledWith('p1')
-    // Le select est CONTRÔLÉ et un badge dit ce qui est réellement en place : en `defaultValue`, il
-    // retombait sur « Profils sauvegardés » et plus rien n'indiquait le profil appliqué.
-    expect(select.value).toBe('p1')
+    // La pastille du profil en place le DIT (enfoncée, en or) : sans cela, plus rien n'indiquait
+    // quel profil venait d'être appliqué.
+    expect(pastille().getAttribute('aria-pressed')).toBe('true')
     expect(container.querySelector('[data-testid="topology-profile-applied"]')?.textContent).toBe(
       'Profil A'
     )
@@ -345,8 +340,7 @@ describe('échecs qui doivent être VUS', () => {
     expect(tentative).toBe(2)
     expect(container.querySelector('[data-testid="topology-profiles-error"]')).toBeNull()
     expect(
-      container.querySelector<HTMLSelectElement>('[data-testid="topology-profile-select"]')!
-        .textContent
+      container.querySelector<HTMLElement>('[data-testid="topology-profile-select"]')!.textContent
     ).toContain('Profil A')
   })
 

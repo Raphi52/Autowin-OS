@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './AgentsTopologyView.css'
-import { ModuleHeader } from './ModuleHeader'
 import { langueCourante } from '../langue'
 import { riche } from '../textes'
 import { traduireAgentStudio, useTextesAgentStudio } from '../textes-ecrans/agent-studio'
@@ -143,9 +142,12 @@ function nextSubagentSlotId(topology: AgentTopology): string {
 }
 
 export function AgentsTopologyView({
-  active = true
+  active = true,
+  premiereLigne
 }: {
   active?: boolean
+  /** Ligne posée avant celles des rôles (le modèle des petites tâches, dans Agent Studio). */
+  premiereLigne?: React.ReactNode
 } = {}): React.JSX.Element {
   const { t } = useTextesAgentStudio()
   const [models, setModels] = useState<ImportedModel[]>([])
@@ -450,6 +452,7 @@ export function AgentsTopologyView({
           id={`topologie-${target}`}
           testId={`topology-couvre-${target}`}
           titre={t('topo.couvre.titre')}
+          repliParDefaut
           lignes={COUVERTURE[target].map(([intitule, explication]) => ({
             intitule: t(intitule),
             explication: t(explication)
@@ -569,54 +572,69 @@ export function AgentsTopologyView({
 
   if (!topology) {
     return (
-      <div className="agents-topology-loading">
-        {state === 'error' ? (
-          `⛔ ${error}`
-        ) : (
-          <>
-            <Spinner /> {t('topo.chargement')}
-          </>
-        )}
-        {state === 'error' && (
-          // Sans ce bouton, une lecture en échec laissait la vue définitivement morte : le seul
-          // recours était de redémarrer l'application.
-          <button
-            type="button"
-            className="topology-assign-button"
-            data-testid="topology-retry"
-            onClick={() => {
-              setState('loading')
-              setError('')
-              setReloadKey((key) => key + 1)
-            }}
-          >
-            {t('topo.reessayer')}
-          </button>
-        )}
-      </div>
+      <>
+        {premiereLigne}
+        <div className="agents-topology-loading">
+          {state === 'error' ? (
+            `⛔ ${error}`
+          ) : (
+            <>
+              <Spinner /> {t('topo.chargement')}
+            </>
+          )}
+          {state === 'error' && (
+            // Sans ce bouton, une lecture en échec laissait la vue définitivement morte : le seul
+            // recours était de redémarrer l'application.
+            <button
+              type="button"
+              className="topology-assign-button"
+              data-testid="topology-retry"
+              onClick={() => {
+                setState('loading')
+                setError('')
+                setReloadKey((key) => key + 1)
+              }}
+            >
+              {t('topo.reessayer')}
+            </button>
+          )}
+        </div>
+      </>
     )
   }
 
   return (
     <div className="agents-topology">
+      {/* Les profils sont au premier plan : une pastille par profil enregistré, celle en place en or.
+          Pas de titre ici, l'en-tête d'Agent Studio le porte déjà. */}
       <header className="topology-toolbar">
-        {/* « Models » : déjà en anglais dans l'écran français. */}
-        <ModuleHeader
-          eyebrow={t('topo.eyebrow')}
-          title="Models"
-          description={t('topo.description')}
-        />
-        <strong
-          className={`topology-state is-${state}`}
-          role={state === 'error' ? 'alert' : undefined}
+        <div
+          className="topology-profiles"
+          role="group"
+          aria-label={t('topo.profil.appliquerAria')}
+          data-testid="topology-profile-select"
         >
-          {state === 'saving'
-            ? t('topo.etat.enregistrement')
-            : state === 'error'
-              ? t('topo.etat.erreur', { erreur: error })
-              : t('topo.etat.enregistre')}
-        </strong>
-        <div className="topology-profiles">
+          {profiles.map((profile) => {
+            const enPlace = profile.id === appliedProfileId
+            return (
+              <button
+                key={profile.id}
+                type="button"
+                className={`topology-profil${enPlace ? ' is-applique' : ''}${
+                  profile.id === pendingProfileId ? ' is-en-attente' : ''
+                }`}
+                data-profile-id={profile.id}
+                data-testid={enPlace ? 'topology-profile-applied' : undefined}
+                aria-pressed={enPlace}
+                disabled={unresolvedSlots.length > 0}
+                title={unresolvedSlots.length > 0 ? t('topo.profil.gelTitre') : undefined}
+                onClick={() => setPendingProfileId(enPlace ? '' : profile.id)}
+              >
+                {profile.name}
+                {enPlace && topologyDirty ? t('topo.profil.modifie') : ''}
+              </button>
+            )
+          })}
           {namingProfile ? (
             <span className="topology-profile-naming">
               <input
@@ -650,7 +668,7 @@ export function AgentsTopologyView({
           ) : (
             <button
               type="button"
-              className="topology-assign-button"
+              className="topology-profil is-nouveau"
               data-testid="topology-profile-new"
               disabled={unresolvedSlots.length > 0}
               title={unresolvedSlots.length > 0 ? t('topo.profil.gelTitre') : undefined}
@@ -658,29 +676,6 @@ export function AgentsTopologyView({
             >
               {t('topo.profil.nouveau')}
             </button>
-          )}
-          {/* Select CONTRÔLÉ : en `defaultValue`, il retombait sur « Profils sauvegardés » après une
-              application — rien ne disait plus quel profil était en place. */}
-          <select
-            aria-label={t('topo.profil.appliquerAria')}
-            data-testid="topology-profile-select"
-            value={pendingProfileId || appliedProfileId}
-            disabled={unresolvedSlots.length > 0}
-            onChange={(event) => setPendingProfileId(event.target.value)}
-          >
-            <option value="">{t('topo.profil.sauvegardes')}</option>
-            {profiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.name}
-              </option>
-            ))}
-          </select>
-          {appliedProfileId && (
-            <span className="topology-profile-badge" data-testid="topology-profile-applied">
-              {profiles.find((profile) => profile.id === appliedProfileId)?.name ??
-                appliedProfileId}
-              {topologyDirty ? t('topo.profil.modifie') : ''}
-            </span>
           )}
           {/* Appliquer ÉCRASE la topologie courante : le geste se confirme, et il le dit d'autant
               plus fort que la topologie a été modifiée depuis la dernière application. */}
@@ -717,6 +712,16 @@ export function AgentsTopologyView({
             </span>
           )}
         </div>
+        <strong
+          className={`topology-state is-${state}`}
+          role={state === 'error' ? 'alert' : undefined}
+        >
+          {state === 'saving'
+            ? t('topo.etat.enregistrement')
+            : state === 'error'
+              ? t('topo.etat.erreur', { erreur: error })
+              : t('topo.etat.enregistre')}
+        </strong>
       </header>
 
       {profilesError && (
@@ -762,6 +767,7 @@ export function AgentsTopologyView({
       {/* Chaque rôle se règle par son menu de modèle, le même que « Modèle des petites tâches » :
           un seul geste à connaître dans tout Agent Studio. */}
       <main className="topology-workspace">
+        {premiereLigne}
         {renderTargetPanel({
           target: 'orchestrator',
           title: t('topo.orchestrateur.titre'),

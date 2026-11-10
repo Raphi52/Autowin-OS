@@ -3,13 +3,14 @@
 
 /* components/AgentsTopologyView.css — tailles */
 :root[data-theme^='malvoyant-'] .topology-toolbar p,
-:root[data-theme^='malvoyant-'] .topology-profiles select,
 :root[data-theme^='malvoyant-'] .topology-state,
 :root[data-theme^='malvoyant-'] .topology-ligne-role,
 :root[data-theme^='malvoyant-'] .slot-unresolved,
 :root[data-theme^='malvoyant-'] .topology-profile-badge,
 :root[data-theme^='malvoyant-'] .topology-assign-button,
-:root[data-theme^='malvoyant-'] .topology-runtime-limit {
+:root[data-theme^='malvoyant-'] .topology-runtime-limit,
+:root[data-theme^='malvoyant-'] .studio-modeles .agents-topology .topology-toolbar .topology-state,
+:root[data-theme^='malvoyant-'] .studio-modeles.studio-modeles .agents-topology .topology-workspace .topology-runtime-limit {
   font-size: 13px;
 }
 
@@ -991,6 +992,7 @@
 :root[data-theme^='malvoyant-'] .sc-fn,
 :root[data-theme^='malvoyant-'] .sc-autoclose-last,
 :root[data-theme^='malvoyant-'] .sc-autoclose-last strong,
+:root[data-theme^='malvoyant-'] .sc-autoclose-refus,
 :root[data-theme^='malvoyant-'] .sc-brain-call > header,
 :root[data-theme^='malvoyant-'] .sc-brain-call > footer,
 :root[data-theme^='malvoyant-'] .sc-brain-call > p,

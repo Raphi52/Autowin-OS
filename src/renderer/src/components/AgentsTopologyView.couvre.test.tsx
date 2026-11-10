@@ -29,6 +29,8 @@ const models = [
 
 let container: HTMLDivElement
 let root: Root
+/** Nombre d'explications visibles juste après le montage, avant que le test n'en ouvre une. */
+let depliesAuMontage = 0
 
 beforeEach(async () => {
   window.localStorage.clear()
@@ -57,6 +59,11 @@ beforeEach(async () => {
     await Promise.resolve()
     await Promise.resolve()
   })
+  // Chaque explication est au bout de sa ligne et part repliée : les tests qui lisent son texte
+  // l'ouvrent donc d'abord, comme le ferait l'utilisateur.
+  depliesAuMontage = container.querySelectorAll('.ce-que-ca-couvre dl').length
+  for (const titre of container.querySelectorAll<HTMLButtonElement>('.ce-que-ca-couvre-titre'))
+    await act(async () => titre.click())
 })
 
 afterEach(async () => {
@@ -124,14 +131,20 @@ describe('Agents Studio — ce que couvre chaque rôle', () => {
     }
   })
 
-  it('chaque bloc se replie seul, et l’état est retenu sous le nom de son rôle', async () => {
+  it('chaque bloc part replié, s’ouvre seul, et l’état est retenu sous le nom de son rôle', async () => {
+    const retenus = (): unknown =>
+      JSON.parse(window.localStorage.getItem('autowin.ceQueCaCouvre.replies') ?? '{}')
+    expect(depliesAuMontage).toBe(0)
+    // Le montage du test a ouvert les deux : ce sont les blocs OUVERTS qui sont retenus.
+    expect(retenus()).toEqual({
+      'topologie-orchestrator:ouvert': true,
+      'topologie-subagents:ouvert': true
+    })
     const titre = bloc('subagents').querySelector('button')
     expect(titre?.getAttribute('aria-expanded')).toBe('true')
     await act(async () => titre?.click())
     expect(bloc('subagents').querySelector('dl')).toBeNull()
     expect(bloc('orchestrator').querySelector('dl')).not.toBeNull()
-    expect(
-      JSON.parse(window.localStorage.getItem('autowin.ceQueCaCouvre.replies') ?? '{}')
-    ).toEqual({ 'topologie-subagents': true })
+    expect(retenus()).toEqual({ 'topologie-orchestrator:ouvert': true })
   })
 })

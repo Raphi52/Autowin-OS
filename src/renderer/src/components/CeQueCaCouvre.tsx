@@ -26,26 +26,37 @@ export function CeQueCaCouvre({
   id,
   titre,
   lignes,
-  testId
+  testId,
+  repliParDefaut = false
 }: {
   /** Clé de mémoire : deux écrans qui montrent le même bloc partagent le même `id`. */
   id: string
   titre: string
   lignes: readonly LigneDeCouverture[]
   testId?: string
+  /**
+   * Bloc posé au bout d'une ligne (Agent Studio) : il part replié, sinon chaque ligne s'ouvrirait
+   * sur un paragraphe. La mémoire ne retient qu'un état « vrai » par clé : on y range alors les
+   * blocs OUVERTS, sous une clé à part, pour ne pas inverser le sens de celle des blocs repliés.
+   */
+  repliParDefaut?: boolean
 }): React.JSX.Element {
-  const [replie, setReplie] = useState(() => lireBlocsReplies(stockageLocal())[id] === true)
+  const cle = repliParDefaut ? `${id}:ouvert` : id
+  const [replie, setReplie] = useState(
+    () => (lireBlocsReplies(stockageLocal())[cle] === true) !== repliParDefaut
+  )
 
   useEffect(() => {
-    const suivre = (): void => setReplie(lireBlocsReplies(stockageLocal())[id] === true)
+    const suivre = (): void =>
+      setReplie((lireBlocsReplies(stockageLocal())[cle] === true) !== repliParDefaut)
     window.addEventListener(EVENEMENT_BLOCS_REPLIES, suivre)
     return () => window.removeEventListener(EVENEMENT_BLOCS_REPLIES, suivre)
-  }, [id])
+  }, [cle, repliParDefaut])
 
   const basculer = (): void => {
     const suivant = !replie
     setReplie(suivant)
-    noterBlocReplie(stockageLocal(), id, suivant)
+    noterBlocReplie(stockageLocal(), cle, suivant !== repliParDefaut)
     window.dispatchEvent(new Event(EVENEMENT_BLOCS_REPLIES))
   }
 
