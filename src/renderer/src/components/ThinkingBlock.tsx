@@ -701,6 +701,17 @@ function useSecondesDesEtapes(
     chronos: chronosDesEtapesMemorises(turnId),
     maintenant: Date.now()
   }))
+  // La bulle peut recevoir le tour d'un AUTRE fil sans être remontée, et les étapes de deux tours
+  // portent les mêmes numéros (#1, #2…) : sans remise à zéro, l'étape #1 du tour suivant gardait le
+  // chrono de celle du tour précédent, puis le mémorisait sous le numéro du nouveau tour. Comme pour
+  // le Raisonnement, le chrono repart de la mémoire de CE tour, ou de zéro.
+  const [tourCompte, setTourCompte] = useState(turnId)
+  if (tourCompte !== turnId) {
+    setTourCompte(turnId)
+    if (tourCompte !== undefined) {
+      setVue({ chronos: chronosDesEtapesMemorises(turnId), maintenant: vue.maintenant })
+    }
+  }
   const enCours = !done && etapes.some((e) => e.statut === 'in_progress')
   // La signature relance le battement à CHAQUE changement d'état d'une étape : son passage en
   // cours ou sa fin est daté tout de suite, pas au battement suivant.
@@ -719,7 +730,8 @@ function useSecondesDesEtapes(
       window.clearTimeout(premier)
       if (id !== undefined) window.clearInterval(id)
     }
-  }, [signature, enCours])
+    // `tourCompte` : un autre tour bat tout de suite, sans attendre la seconde suivante.
+  }, [signature, enCours, tourCompte])
   useEffect(() => {
     if (turnId && vue.chronos.size > 0) memoriserChronosDesEtapes(turnId, vue.chronos)
   }, [turnId, vue.chronos])

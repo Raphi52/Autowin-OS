@@ -27,7 +27,8 @@ async function monter(done: boolean, statusLog = JOURNAL, turnId?: string) {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
-  const rendre = async (fini: boolean, journal: string[]) => {
+  // `tour` : la même bulle reçoit parfois le tour d'un autre fil (sans remontage).
+  const rendre = async (fini: boolean, journal: string[], tour = turnId) => {
     await act(async () => {
       root.render(
         createElement(ThinkingBlock, {
@@ -35,7 +36,7 @@ async function monter(done: boolean, statusLog = JOURNAL, turnId?: string) {
           done: fini,
           status: journal.at(-1)!,
           statusLog: journal,
-          ...(turnId ? { turnId } : {})
+          ...(tour ? { turnId: tour } : {})
         })
       )
     })
@@ -327,6 +328,71 @@ describe('bloc Étapes', () => {
           vi.advanceTimersByTime(60_000)
         })
         expect(valeurs(second.host)).toEqual(['en cours · 23 s'])
+        await second.demonter()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    // Les numéros d’étape recommencent à chaque tour : « Étape #1 » existe dans les deux.
+    it('une bulle réutilisée pour un AUTRE tour : l’étape #1 du tour suivant ne garde pas le chrono du précédent', async () => {
+      vi.useFakeTimers()
+      try {
+        const { host, rendre, demonter } = await monter(
+          false,
+          ['Étape #1 à faire · Lire le code', 'Étape #1 en cours · Lire le code'],
+          'tour-A-chrono'
+        )
+        await act(async () => {
+          vi.advanceTimersByTime(90_000)
+        })
+        expect(valeurs(host)).toEqual(['en cours · 1 min 30 s'])
+        // Même bulle, autre tour : son étape #1 vient de commencer, son chrono part de maintenant.
+        await rendre(
+          false,
+          ['Étape #1 à faire · Penser', 'Étape #1 en cours · Penser'],
+          'tour-B-chrono'
+        )
+        await act(async () => {
+          vi.advanceTimersByTime(4_000)
+        })
+        expect(valeurs(host)).toEqual(['en cours · 4 s'])
+        await demonter()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('un remontage de la bulle réutilisée ne reprend pas le chrono du tour précédent', async () => {
+      vi.useFakeTimers()
+      try {
+        const premier = await monter(
+          false,
+          ['Étape #1 à faire · Lire le code', 'Étape #1 en cours · Lire le code'],
+          'tour-A-chrono'
+        )
+        await act(async () => {
+          vi.advanceTimersByTime(90_000)
+        })
+        await premier.rendre(
+          false,
+          ['Étape #1 à faire · Penser', 'Étape #1 en cours · Penser'],
+          'tour-B-chrono'
+        )
+        await act(async () => {
+          vi.advanceTimersByTime(0)
+        })
+        await premier.demonter()
+        // Le tour B est revu après un remontage : son chrono vient de B, pas de A.
+        const second = await monter(
+          false,
+          ['Étape #1 à faire · Penser', 'Étape #1 en cours · Penser'],
+          'tour-B-chrono'
+        )
+        await act(async () => {
+          vi.advanceTimersByTime(3_000)
+        })
+        expect(valeurs(second.host)).toEqual(['en cours · 3 s'])
         await second.demonter()
       } finally {
         vi.useRealTimers()
