@@ -71,7 +71,7 @@ collègues. Chaque commande ci-dessous se lance donc avec le dépôt comme dossi
    |---|---|
    | Satellites orphelins (`activity/`, `causal-trace/`, `chat-artifacts/`, `turn-journals/`, `prompt-observability/`) | l'id de conversation dans le nom n'est PAS dans la liste vivante (ci-dessous) |
    | Sorties de runs (`runs/`, `run-state/`) | non modifié depuis > 30 j ET aucun run bloqué dedans selon le scan COMPLET ci-dessous ET absent des travaux non publiés ; pour `run-state/`, sa `conversationId` ne porte aucun run bloqué |
-   | États de cause des runs (`autowin-os/cause-en-cours/run-*.json`) | `run-state/<run>.json` absent (le run est réglé : plus d'état reprenable) ET non modifié depuis > 24 h. Passe en lecture seule (`node --no-warnings scripts/gc-causes-en-cours.mjs`) : les candidats vont dans « À purger » du bilan, avec leur motif. Suppression directe, sans corbeille, par `node --no-warnings scripts/gc-causes-en-cours.mjs --supprimer`, seulement sur accord de l'utilisateur |
+   | États de cause des runs (`autowin-os/cause-en-cours/run-*.json`) | `run-state/<run>.json` absent (le run est réglé : plus d'état reprenable) ET non modifié depuis > 24 h. Suppression directe, sans corbeille, par le /gc quotidien : `node --no-warnings scripts/gc-causes-en-cours.mjs --supprimer`, sans attendre l'accord de l'utilisateur (décision du 2026-11-10). Ce qui part est écrit dans « Collecté » du bilan, avec son motif : le contenu du fichier ne se récupère pas |
    | `prompt-observability/` et `run-stdout/` (fichiers directs, pas `systems/`) | non modifié depuis > 14 j ET, pour `run-stdout/`, son uuid (36 premiers caractères) n'est cité par aucun `run-state/*.json` (`agentToken`) |
    | Racine `.autowin-data/` : `*.log` > 5 Mo, `tmp/`, `tmp-*.png`, `vitest-*.txt` | non modifié depuis > 7 j (`DevToolsActivePort` exclu) |
    | Sauvegardes ponctuelles de `autowin-os/` : `*.bak`, `*.bak.N`, `*.avant-*`, `*.pre-*`, `g.tmp.jsonl` | non modifié depuis > 14 j — JAMAIS `conversations.json.pre-remake` |
@@ -172,9 +172,7 @@ Place libre : C: X Go · D: Y Go — mis en corbeille aujourd'hui : Z Go (rendus
 ```
 
 ## Garde-fous
-- Aucune suppression définitive sans accord explicite : `scripts/gc-disque.mjs` ne fait que déplacer ;
-  `scripts/gc-causes-en-cours.mjs` ne supprime que sur `--supprimer`, lancé sur accord ;
-  `scripts/gc-purger-corbeilles.mjs` seul purge les corbeilles, sur accord ; aucune édition de `conversations.json`.
+- Aucune suppression définitive sans accord explicite, sauf la passe des causes : `scripts/gc-causes-en-cours.mjs --supprimer`, lancée par le /gc quotidien sans attendre l'accord (décision de l'utilisateur, 2026-11-10). `scripts/gc-disque.mjs` ne fait que déplacer ; `scripts/gc-purger-corbeilles.mjs` seul purge les corbeilles, sur accord ; aucune édition de `conversations.json`.
 - Jamais de collecte sur un fichier modifié dans les dernières 24 h (conversation peut-être en cours).
 - Pas d'`orchestrate`, pas de commit, pas de kill de processus.
 - Une sonde qui échoue (fichier illisible, `get_state` muet, git illisible) → la zone ou la catégorie

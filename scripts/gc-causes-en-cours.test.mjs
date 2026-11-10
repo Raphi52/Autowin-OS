@@ -176,18 +176,18 @@ describe('ligne de commande — lecture seule par défaut, suppression directe s
   })
 })
 
-describe('skills/gc/SKILL.md — le ménage quotidien lit cette passe, il ne la lance pas en suppression', () => {
-  it('la ligne des causes dit lecture seule, et la suppression directe y attend l’accord', () => {
+describe('skills/gc/SKILL.md — le ménage quotidien appelle cette passe', () => {
+  it('la procédure du /gc nomme la commande, sinon le ménage ne la lance jamais', () => {
     const skill = readFileSync(new URL('../skills/gc/SKILL.md', import.meta.url), 'utf8')
-    const lignes = skill.split('\n').filter((ligne) => ligne.includes('gc-causes-en-cours.mjs'))
-    expect(
-      lignes.some(
-        (ligne) =>
-          ligne.includes('lecture seule') &&
-          ligne.includes('--supprimer') &&
-          ligne.includes('accord')
-      )
-    ).toBe(true)
+    expect(skill).toContain('node --no-warnings scripts/gc-causes-en-cours.mjs --supprimer')
     expect(skill).not.toContain('gc-causes-en-cours.mjs --balayer')
+  })
+
+  it("la ligne des causes dit que la suppression part sans attendre l'accord", () => {
+    const skill = readFileSync(new URL('../skills/gc/SKILL.md', import.meta.url), 'utf8')
+    const lignes = skill
+      .split('\n')
+      .filter((ligne) => ligne.includes('gc-causes-en-cours.mjs --supprimer'))
+    expect(lignes.some((ligne) => ligne.includes("sans attendre l'accord"))).toBe(true)
   })
 })
