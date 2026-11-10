@@ -5,6 +5,7 @@ import { classifyMutationConfidence } from '../orchestration/task-mutation-class
 import { cadrageRefuse } from '../orchestration/frame-cas-limites'
 import { grilleCleanEnDefaut, libelleGrilleEnDefaut } from '../orchestration/grille-clean'
 import { ENTETE_CONTEXTE_COMMUN } from '../../shared/plan-de-lots'
+import { sansPrecisionDeTache } from '../../shared/lecture-retenue'
 
 export const ROOT_DOD = {
   analysis: 'Analyse demandee presente dans le livrable',
@@ -87,7 +88,12 @@ export function rootExecutionRequirements(
   task: string,
   phasesProgrammees?: readonly string[]
 ): RootExecutionRequirements {
-  const normalized = task.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  // Les obligations se lisent dans les mots de l'utilisateur, pas dans la compréhension ajoutée à
+  // la tâche : elle semait des cases (tests, analyse) que personne n'avait demandées — 10 runs sur
+  // 47 mesurés du 03 au 10/11/2026, dont 3 refusés.
+  const normalized = sansPrecisionDeTache(task)
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
   const confiance = classifyMutationConfidence(task)
   const demandee = confiance !== 'read-only'
   // Le TEXTE dit ce que l'utilisateur envisage ; le PROGRAMME dit ce que le run va jouer. Un run

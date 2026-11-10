@@ -35,7 +35,11 @@
  * inutile coûte un tour à l'utilisateur ; un contrôle en panne ne doit jamais bloquer un run.
  */
 import type { ReponseAsk } from './ask-options'
-import { DEBUT_LECTURE_RETENUE, DEBUT_PRECISION_DE_TACHE } from '../../shared/lecture-retenue'
+import {
+  DEBUT_LECTURE_RETENUE,
+  DEBUT_PRECISION_DE_TACHE,
+  sansPrecisionDeTache
+} from '../../shared/lecture-retenue'
 import { VOCABULAIRE_AUTOWIN } from '../consignes/vocabulaire-autowin'
 
 /**
@@ -381,10 +385,7 @@ const DEBUT_PRECISION = DEBUT_PRECISION_DE_TACHE
  * `/draft` de cette lecture écartée pour une commande citée, et audité à la place.
  */
 export function sansPrecisionDeLecture(tache: string): string {
-  const debut = tache.indexOf(`\n\n${DEBUT_PRECISION}`)
-  if (debut < 0) return tache
-  const fin = tache.indexOf('\n\n', debut + 2)
-  return `${tache.slice(0, debut)}${fin < 0 ? '' : tache.slice(fin)}`
+  return sansPrecisionDeTache(tache)
 }
 
 /**

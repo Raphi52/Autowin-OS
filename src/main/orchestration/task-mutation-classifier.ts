@@ -1,3 +1,5 @@
+import { sansPrecisionDeTache } from '../../shared/lecture-retenue'
+
 const MUTATION_STEM =
   'ajout|add|modifi|chang|corrig|fix|cre|create|implement|refactor|supprim|remove|renomm|rename|update|build|ger|ecri|write|edit|patch|apply|delete|move|remplac|configur|repar|nettoi|deplac|mets|met|fai'
 const MUTATION_TASK = new RegExp(`\\b(?:${MUTATION_STEM})\\w*`, 'i')
@@ -55,7 +57,12 @@ const NEGATED_OBJECT_REMAINDER = /^(?:de|du|des|le|la|les|un|une|aucun|aucune|ri
 export type MutationConfidence = 'mutation' | 'read-only' | 'uncertain'
 
 /** Source canonique utilisée par le sandbox, le gate et le contrat racine. */
-export function classifyMutationConfidence(task: string): MutationConfidence {
+export function classifyMutationConfidence(tacheRecue: string): MutationConfidence {
+  // Seuls les mots de l'utilisateur disent s'il demande une modification. La compréhension que
+  // l'app ajoute à la tâche est une paraphrase, lecture écartée comprise : « judge le panda »,
+  // suivi de « …corrections jusqu'au seuil », devenait une modification à prouver, donc un `/judge`
+  // refusé avant d'avoir jugé (run judge-panda-as-fait-lancer-commande-mwasivzu, 9 s, zéro agent).
+  const task = sansPrecisionDeTache(tacheRecue)
   if (/^\/kaizen(?=\s|$)/i.test(task.trim())) return 'read-only'
   if (/^\/(?:scout|frame|judge)(?=\s|$)/i.test(task.trim())) return 'read-only'
   const sansSentinelle = task.trim().replace(SENTINEL_PREFIX, '')

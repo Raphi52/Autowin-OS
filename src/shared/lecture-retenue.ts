@@ -17,6 +17,19 @@ export const DEBUT_LECTURE_RETENUE = 'Compréhension : '
  *  `src/main/runs/conv-runs.ts`) l'ignore : ces mots ne disent rien du sujet. */
 export const DEBUT_PRECISION_DE_TACHE = "Compréhension de la demande, annoncée à l'utilisateur : "
 
+/**
+ * La tâche SANS cette précision : ce que l'utilisateur a tapé. Tout ce qui lit la demande pour
+ * décider de ce qu'elle EXIGE (une cible, une modification à prouver, des tests) passe par ici : la
+ * précision est une paraphrase du modèle, et elle porte aussi la lecture ÉCARTÉE. Lue comme des mots
+ * de l'utilisateur, elle crée des obligations qu'il n'a pas demandées, donc un refus garanti.
+ */
+export function sansPrecisionDeTache(tache: string): string {
+  const debut = tache.indexOf(`\n\n${DEBUT_PRECISION_DE_TACHE}`)
+  if (debut < 0) return tache
+  const fin = tache.indexOf('\n\n', debut + 2)
+  return `${tache.slice(0, debut)}${fin < 0 ? '' : tache.slice(fin)}`
+}
+
 /** Le début écrit : les fils de cette époque le portent encore dans leur texte. */
 const ANCIENS_DEBUTS = ['Lecture retenue : ']
 

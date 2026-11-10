@@ -12,6 +12,7 @@ import type {
 import { RoleModelConfig } from '../profil/roles'
 import { TrustLedger } from '../trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
+import { tacheAvecLectureRetenue } from '../chat/deux-lectures'
 
 /**
  * UNE DEMANDE `judge` EXPLICITE NE DOIT PAS ÊTRE CONDAMNÉE AU ROUGE PAR CONSTRUCTION.
@@ -241,5 +242,48 @@ describe('relecture seule : le verdict est livré, les défauts du travail relu 
     const r = await relire(VERDICT_AVEC_DEFAUTS).resultat
     expect(r.defautsDuTravailRelu).toHaveLength(2)
     expect(r.defautsDuTravailRelu?.[0]).toMatch(/^MAJEUR: .*surveillance-references-git\.ts:128/)
+  })
+})
+
+/**
+ * UN `judge` NOMMÉ NE MEURT PAS AVANT D'AVOIR JUGÉ.
+ *
+ * Mesuré le 2026-11-10 : « judge le panda que t'as fait » est une lecture seule. La précision que
+ * l'app ajoute à la tâche (la compréhension annoncée, lecture écartée comprise) parle de
+ * « corrections » : relue comme des mots de l'utilisateur, elle classait la demande en modification.
+ * Le contrôle d'avant-juge exigeait alors une preuve d'écriture qu'un run sans phase ne peut pas
+ * produire, et la réparation est interdite sur un juge nommé : arrêt en 9 s, zéro agent lancé.
+ *
+ * Entrée qui fait rougir ces tests si le correctif saute : la tâche d'origine, mot pour mot.
+ * Contrôle négatif : une modification demandée par l'utilisateur garde l'exigence de preuve.
+ */
+const DEMANDE_PANDA = tacheAvecLectureRetenue(
+  "judge le panda que t'as fait",
+  "Lancer la commande judge sur le panda que t'as fait : panel de juges externes, notes par dimension, défauts avec preuve, corrections jusqu'au seuil.",
+  "Juger le panda que t'as fait par un simple avis écrit, sans lancer la commande judge (ni panel de juges, ni corrections)."
+)
+
+describe('judge nommé dont la compréhension ajoutée parle de corrections', () => {
+  it('le juge est lancé et son verdict est livré, sans exiger de preuve d’écriture', async () => {
+    const r = await relire(VERDICT_AVEC_DEFAUTS, DEMANDE_PANDA).resultat
+    expect(r.gateReasons.join(' ')).not.toContain('Mutation demandee')
+    expect(r.gateBlocked).toBe(false)
+    expect(r.result).toMatch(/^Relecture livrée — le travail relu a des défauts/)
+  })
+
+  it('le juge vote réellement : il n’est pas court-circuité par le contrôle d’avant-juge', async () => {
+    const { votes, resultat } = relire('VALIDE\n- OK: rien à redire.\nSCORE: 90', DEMANDE_PANDA)
+    const r = await resultat
+    expect(votes).toEqual(['green'])
+    expect(r.gateBlocked).toBe(false)
+  })
+
+  it('contrôle négatif : une modification demandée sans preuve reste refusée', async () => {
+    const tache = tacheAvecLectureRetenue(
+      'corrige le panda dans src/main/mascotte/mascotte.ts',
+      'Corriger le panda dans le fichier nommé.'
+    )
+    const r = await relire('VALIDE\nSCORE: 90', tache).resultat
+    expect(r.gateBlocked).toBe(true)
   })
 })
