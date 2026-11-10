@@ -442,25 +442,104 @@ export function parseClaudeModelLimits(body: unknown): ModelQuotaWindow[] {
 }
 
 /**
- * Lit le quota par modèle après la sonde. Un échec ne retire JAMAIS les fenêtres des en-têtes :
- * la liste vide est le repli, et la barre garde le 5 h et le 7 j global.
+ * Le quota par modèle vient d'un endpoint LIMITÉ EN DÉBIT : relu à chaque actualisation forcée (focus,
+ * ouverture de la popup), il répondait HTTP 429 `rate_limit_error` (constaté le 2026-11-10). Une mesure
+ * réussie vaut donc MODELES_CACHE_MS pour le compte, forcée ou non. Après un refus, pas de nouvelle
+ * lecture avant MODELES_BACKOFF_MS, et la dernière mesure réussie n'est servie que pendant
+ * MODELES_OBSOLESCENCE_MAX_MS au plus. Le refus n'est jamais silencieux : la barre le reçoit par
+ * `avertissementModelesDuCompte`.
  */
-async function fenetresParModele(
+const MODELES_CACHE_MS = 10 * 60_000
+const MODELES_BACKOFF_MS = 5 * 60_000
+const MODELES_OBSOLESCENCE_MAX_MS = 30 * 60_000
+
+interface MemoModelesDuCompte {
+  /** Avant cet instant, l'endpoint n'est pas relu pour ce compte. */
+  prochaineLectureLe: number
+  /** Instant de la dernière mesure réussie ; absent tant qu'aucune n'a réussi. */
+  mesureLe?: number
+  fenetres: ModelQuotaWindow[]
+  /** Dernier refus ; effacé dès qu'une lecture réussit. */
+  refus?: { le: number; motif: string }
+}
+
+const modelesDuCompte = new Map<string, MemoModelesDuCompte>()
+const lecturesModelesEnVol = new Map<string, Promise<ModelQuotaWindow[]>>()
+
+/** Les fenêtres à servir : la dernière mesure réussie, tant qu'elle n'est pas trop vieille. */
+function fenetresModelesServies(memo: MemoModelesDuCompte, now: number): ModelQuotaWindow[] {
+  if (memo.mesureLe === undefined || now - memo.mesureLe > MODELES_OBSOLESCENCE_MAX_MS) return []
+  return memo.fenetres
+}
+
+type LectureModeles = { ok: true; fenetres: ModelQuotaWindow[] } | { ok: false; motif: string }
+
+async function lireFenetresModeles(
   fetchFn: typeof fetch,
   accessToken: string
-): Promise<ModelQuotaWindow[]> {
+): Promise<LectureModeles> {
   try {
     const rep = await fetchFn(USAGE_URL, {
       headers: { authorization: `Bearer ${accessToken}`, 'anthropic-beta': 'oauth-2025-04-20' },
       signal: AbortSignal.timeout(10_000)
     })
-    if (!rep.ok) return []
+    if (!rep.ok) return { ok: false, motif: `HTTP ${rep.status}` }
     const texte = await rep.text()
-    if (texte.length > MAX_USAGE_RESPONSE_CHARS) return []
-    return parseClaudeModelLimits(JSON.parse(texte))
+    if (texte.length > MAX_USAGE_RESPONSE_CHARS) {
+      return { ok: false, motif: 'réponse trop volumineuse' }
+    }
+    return { ok: true, fenetres: parseClaudeModelLimits(JSON.parse(texte)) }
   } catch {
-    return []
+    return { ok: false, motif: 'réponse illisible ou délai dépassé' }
   }
+}
+
+/**
+ * Lit le quota par modèle après la sonde, au plus une fois par intervalle et par compte. Un échec ne
+ * retire JAMAIS les fenêtres des en-têtes : la barre garde le 5 h et le 7 j global.
+ */
+async function fenetresParModele(
+  fetchFn: typeof fetch,
+  accessToken: string,
+  cle: string,
+  now: number
+): Promise<ModelQuotaWindow[]> {
+  const memo = modelesDuCompte.get(cle)
+  if (memo && memo.prochaineLectureLe > now) return fenetresModelesServies(memo, now)
+  const enVol = lecturesModelesEnVol.get(cle)
+  if (enVol) return enVol
+  const lecture = lireFenetresModeles(fetchFn, accessToken)
+    .then((resultat) => {
+      const precedent = modelesDuCompte.get(cle) ?? { prochaineLectureLe: 0, fenetres: [] }
+      const apres: MemoModelesDuCompte = resultat.ok
+        ? { prochaineLectureLe: now + MODELES_CACHE_MS, mesureLe: now, fenetres: resultat.fenetres }
+        : {
+            ...precedent,
+            prochaineLectureLe: now + MODELES_BACKOFF_MS,
+            refus: { le: now, motif: resultat.motif }
+          }
+      modelesDuCompte.set(cle, apres)
+      return fenetresModelesServies(apres, now)
+    })
+    .finally(() => lecturesModelesEnVol.delete(cle))
+  lecturesModelesEnVol.set(cle, lecture)
+  return lecture
+}
+
+/** Avertissement à afficher quand la dernière lecture par modèle a été refusée ; sinon `undefined`. */
+function avertissementModelesDuCompte(
+  configDir: string | undefined,
+  now: number
+): string | undefined {
+  const memo = modelesDuCompte.get(cleDeCompte(configDir))
+  if (!memo?.refus) return undefined
+  const heure = (ms: number): string =>
+    new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  const mesure =
+    memo.mesureLe !== undefined && now - memo.mesureLe <= MODELES_OBSOLESCENCE_MAX_MS
+      ? `Dernière mesure à ${heure(memo.mesureLe)}.`
+      : 'Aucune mesure récente.'
+  return `Quota par modèle non relu (${memo.refus.motif}). ${mesure}`
 }
 
 /**
@@ -596,7 +675,8 @@ async function sonderEnTetesClaude(
     if (!response.ok) throw new Error(`Claude /usage HTTP ${response.status}`)
     throw new Error('Claude ne publie aucune fenêtre')
   }
-  return [...windows, ...(await fenetresParModele(fetchFn, session.accessToken))]
+  const modeles = await fenetresParModele(fetchFn, session.accessToken, cleDeCompte(configDir), now)
+  return [...windows, ...modeles]
 }
 
 async function claudeQuota(
@@ -612,11 +692,13 @@ async function claudeQuota(
     const configDir = claudeAccountEnv().CLAUDE_CONFIG_DIR
     const windows = await sonderEnTetesClaude(fetchFn, configDir, home, now, renouveler)
     memoriserQuotaDuCompte(configDir, windows, now)
+    const avertissement = avertissementModelesDuCompte(configDir, now)
     return {
       status: 'available',
       source: 'Quota Claude (en-têtes API)',
       observedAt: new Date(now).toISOString(),
-      windows
+      windows,
+      ...(avertissement ? { error: avertissement } : {})
     }
   } catch (error) {
     const message =
@@ -927,6 +1009,8 @@ export async function quotaClaudeDuCompte(
 export function resetQuotasParCompteForTests(): void {
   quotasParCompte.clear()
   sondesParCompteEnVol.clear()
+  modelesDuCompte.clear()
+  lecturesModelesEnVol.clear()
 }
 
 /**
@@ -950,8 +1034,15 @@ async function releveDuCompteChoisi(
 ): Promise<ModelQuotaSnapshot> {
   const observedAt = new Date(options.now).toISOString()
   const fenetres = await quotaClaudeDuCompte(configDir, options)
+  const avertissement = fenetres ? avertissementModelesDuCompte(configDir, options.now) : undefined
   const claude: ProviderQuota = fenetres
-    ? { status: 'available', source: 'Quota Claude (en-têtes API)', observedAt, windows: fenetres }
+    ? {
+        status: 'available',
+        source: 'Quota Claude (en-têtes API)',
+        observedAt,
+        windows: fenetres,
+        ...(avertissement ? { error: avertissement } : {})
+      }
     : {
         status: 'unavailable',
         source: 'Quota Claude',

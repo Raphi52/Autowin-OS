@@ -989,4 +989,92 @@ describe('quota par modèle (limits[] de /api/oauth/usage)', () => {
       snapshot.models.find((model) => model.model === 'opus')?.windows.map((w) => w.id)
     ).toEqual(['five-hour'])
   })
+
+  // L'endpoint répond 429 (rate_limit_error) quand on le relit trop souvent : ces tests tiennent la
+  // cadence (une lecture par intervalle, recul après refus, mesure gardée au plus 30 min).
+  const compteAvecFable = (
+    reponseUsage: () => Response
+  ): { home: string; fetchFn: ReturnType<typeof vi.fn> } => {
+    const home = mkdtempSync(join(tmpdir(), 'autowin-model-quotas-limite-'))
+    temporaryHomes.push(home)
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude', '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'jeton-du-compte-limite-assez-long' } })
+    )
+    const fetchFn = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes('/api/oauth/usage')
+        ? reponseUsage()
+        : new Response('{}', {
+            headers: {
+              'anthropic-ratelimit-unified-5h-utilization': '0.09',
+              'anthropic-ratelimit-unified-5h-reset': String(
+                Date.parse('2026-11-10T15:00:00Z') / 1000
+              )
+            }
+          })
+    )
+    return { home, fetchFn }
+  }
+  const lectionsUsage = (fetchFn: ReturnType<typeof vi.fn>): unknown[][] =>
+    fetchFn.mock.calls.filter(([url]) => String(url).includes('/api/oauth/usage'))
+  const modeleFableDuRelevé = async (
+    home: string,
+    fetchFn: ReturnType<typeof vi.fn>,
+    now: number
+  ) => {
+    const snapshot = await getModelQuotaSnapshot([...models, modeleFable], {
+      home,
+      fetchFn,
+      force: true,
+      now
+    })
+    return snapshot.models.find((model) => model.model === 'fable')
+  }
+
+  it('relit l’endpoint au plus une fois toutes les 10 min par compte, même en actualisation forcée', async () => {
+    const { home, fetchFn } = compteAvecFable(() => Response.json(CORPS_USAGE))
+    const t0 = Date.parse('2026-11-10T10:00:00Z')
+    await modeleFableDuRelevé(home, fetchFn, t0)
+    await modeleFableDuRelevé(home, fetchFn, t0 + 60_000)
+    await modeleFableDuRelevé(home, fetchFn, t0 + 2 * 60_000)
+    expect(lectionsUsage(fetchFn)).toHaveLength(1)
+    await modeleFableDuRelevé(home, fetchFn, t0 + 11 * 60_000)
+    expect(lectionsUsage(fetchFn)).toHaveLength(2)
+  })
+
+  it('après un refus 429 : garde la dernière mesure, n’insiste pas avant 5 min, et le dit', async () => {
+    let reponse = (): Response => Response.json(CORPS_USAGE)
+    const { home, fetchFn } = compteAvecFable(() => reponse())
+    const t0 = Date.parse('2026-11-10T10:00:00Z')
+    const avant = await modeleFableDuRelevé(home, fetchFn, t0)
+    expect(avant?.windows.map((w) => w.id)).toEqual(['five-hour', 'seven-day-fable'])
+
+    reponse = () => new Response('{"error":{"type":"rate_limit_error"}}', { status: 429 })
+    const refus = await modeleFableDuRelevé(home, fetchFn, t0 + 11 * 60_000)
+    expect(lectionsUsage(fetchFn)).toHaveLength(2)
+    expect(refus?.windows.map((w) => w.id)).toEqual(['five-hour', 'seven-day-fable'])
+    expect(refus?.error).toMatch(/HTTP 429\). Dernière mesure à \d{2}:\d{2}\./)
+
+    await modeleFableDuRelevé(home, fetchFn, t0 + 13 * 60_000)
+    expect(lectionsUsage(fetchFn)).toHaveLength(2)
+
+    reponse = () => Response.json(CORPS_USAGE)
+    const retour = await modeleFableDuRelevé(home, fetchFn, t0 + 17 * 60_000)
+    expect(lectionsUsage(fetchFn)).toHaveLength(3)
+    expect(retour?.error).toBeUndefined()
+  })
+
+  it('ne sert plus le 7 j Fable quand aucune mesure n’a réussi depuis 30 min', async () => {
+    let reponse = (): Response => Response.json(CORPS_USAGE)
+    const { home, fetchFn } = compteAvecFable(() => reponse())
+    const t0 = Date.parse('2026-11-10T10:00:00Z')
+    await modeleFableDuRelevé(home, fetchFn, t0)
+
+    reponse = () => new Response('{}', { status: 429 })
+    const tardif = await modeleFableDuRelevé(home, fetchFn, t0 + 45 * 60_000)
+    expect(lectionsUsage(fetchFn)).toHaveLength(2)
+    expect(tardif?.windows.map((w) => w.id)).toEqual(['five-hour'])
+    expect(tardif?.error).toContain('Aucune mesure récente')
+  })
 })

@@ -615,6 +615,7 @@ export function ModelQuotaIndicator({
                         </small>
                       </span>
                     </div>
+                    {model.windows.length > 0 && model.error && <small>{model.error}</small>}
                     {model.windows.length === 0 ? (
                       <div className="model-quota-unavailable">
                         {t('quota.nonExpose')}

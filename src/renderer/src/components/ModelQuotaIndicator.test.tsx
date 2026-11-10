@@ -269,6 +269,48 @@ describe('indicateur de quotas modèles', () => {
     await act(async () => root.unmount())
   })
 
+  it('affiche l’avertissement d’un quota par modèle refusé, à côté des fenêtres déjà lues', async () => {
+    const modelQuotas = vi.fn(async () => ({
+      observedAt: '2026-11-10T17:45:00.000Z',
+      summary: { remainingPercent: 34, status: 'warning' as const },
+      models: [
+        {
+          modelId: 'claude/fable',
+          model: 'fable',
+          label: 'Claude Fable',
+          provider: 'claude',
+          shared: true,
+          status: 'available' as const,
+          source: 'Quota Claude (en-têtes API)',
+          windows: [{ id: 'five-hour', label: '5 h', usedPercent: 66, remainingPercent: 34 }],
+          error: 'Quota par modèle non relu (HTTP 429). Dernière mesure à 17:31.'
+        }
+      ]
+    }))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { modelQuotas }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ModelQuotaIndicator))
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      ;(
+        document.body.querySelector('[data-testid="model-quota-trigger"]') as HTMLButtonElement
+      ).click()
+    })
+
+    const popover = document.body.querySelector('[data-testid="model-quota-popover"]')
+    expect(popover?.querySelectorAll('.model-quota-window')).toHaveLength(1)
+    expect(popover?.textContent).toContain('Quota par modèle non relu (HTTP 429)')
+    await act(async () => root.unmount())
+  })
+
   it('actualise automatiquement le rond chaque minute', async () => {
     vi.useFakeTimers()
     const modelQuotas = vi.fn(async () => ({
