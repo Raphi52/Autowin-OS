@@ -3,6 +3,7 @@ import {
   createChatTurn,
   flattenChatParts,
   flattenChatPartsForModel,
+  REASONING_MAX,
   reduceChatTurn,
   sanitizePersistedValue
 } from './chat-turn'
@@ -183,5 +184,83 @@ describe('model-facing history keeps bounded action evidence', () => {
         { kind: 'action', actionId: 'a5', name: 'verify', ok: true, data: { exitCode: 0 } }
       ])
     ).toBe('[a exécuté verify]')
+  })
+})
+
+/**
+ * DÉCODAGE DE L’IMAGE (skill look) : un bloc à part dans le tour, jamais renvoyé au modèle. Le réducteur
+ * le range dans `lookDecode` sans toucher au statut du tour ni à ses `parts`, donc rien ne le fait
+ * entrer dans l’historique que l’app renvoie au modèle.
+ */
+describe('décodage de l’image (skill look) : bloc à part, jamais renvoyé au modèle', () => {
+  it('concatène les portions du décodage, puis garde la fin comme le raisonnement', () => {
+    let turn = createChatTurn('turn-look-borne')
+    turn = reduceChatTurn(turn, { kind: 'look-decode', text: 'Le modèle ' })
+    turn = reduceChatTurn(turn, { kind: 'look-decode', text: 'indique Paris.' })
+    expect(turn.lookDecode).toBe('Le modèle indique Paris.')
+
+    const suite = 'D'.repeat(REASONING_MAX - 3) + 'FIN'
+    turn = reduceChatTurn(turn, { kind: 'look-decode', text: suite })
+    expect(turn.lookDecode).toBe(`${'D'.repeat(REASONING_MAX - 3)}FIN`)
+    expect(turn.lookDecode).toHaveLength(REASONING_MAX)
+  })
+
+  it('ne change jamais le statut du tour, en cours, clos, en échec, arrêté ou interrompu', () => {
+    const tours = [
+      createChatTurn('turn-look-en-cours'),
+      reduceChatTurn(
+        reduceChatTurn(createChatTurn('turn-look-clos'), {
+          kind: 'delta',
+          streamId: '0:0',
+          text: 'Réponse.'
+        }),
+        { kind: 'done' }
+      ),
+      reduceChatTurn(createChatTurn('turn-look-echec'), { kind: 'failed', error: 'quota' }),
+      reduceChatTurn(createChatTurn('turn-look-arrete'), { kind: 'cancelled' }),
+      reduceChatTurn(createChatTurn('turn-look-interrompu'), { kind: 'interrupted' })
+    ]
+    expect(tours.map((tour) => tour.status)).toEqual([
+      'streaming',
+      'completed',
+      'failed',
+      'cancelled',
+      'interrupted'
+    ])
+    for (const tour of tours) {
+      const avecDecodage = reduceChatTurn(tour, { kind: 'look-decode', text: 'décodage' })
+      expect(avecDecodage.status).toBe(tour.status)
+    }
+  })
+
+  it('ne fait entrer le décodage ni dans les parties du fil ni dans le texte renvoyé au modèle', () => {
+    const tour = reduceChatTurn(
+      reduceChatTurn(createChatTurn('turn-look-fil'), {
+        kind: 'delta',
+        streamId: '0:0',
+        text: 'Voici le modèle.'
+      }),
+      { kind: 'done' }
+    )
+    const avecDecodage = reduceChatTurn(tour, {
+      kind: 'look-decode',
+      text: 'Registration number 123, company name ACME.'
+    })
+    expect(avecDecodage.lookDecode).toBe('Registration number 123, company name ACME.')
+    expect(avecDecodage.parts).toEqual(tour.parts)
+    expect(flattenChatPartsForModel(avecDecodage.parts)).toBe(flattenChatPartsForModel(tour.parts))
+    expect(flattenChatParts(avecDecodage.parts)).toBe(flattenChatParts(tour.parts))
+    expect(flattenChatPartsForModel(avecDecodage.parts)).not.toContain('Registration')
+  })
+
+  it('ignore un décodage vide : ni champ créé, ni statut changé', () => {
+    // fix-ok: sans sa branche, look-decode tombe dans le retour par défaut du réducteur, qui passe le tour
+    // en « interrupted » (mesuré : 'interrupted' au lieu de 'streaming' avant le cas look-decode).
+    const tour = reduceChatTurn(createChatTurn('turn-look-vide'), {
+      kind: 'look-decode',
+      text: ''
+    })
+    expect(tour.lookDecode).toBeUndefined()
+    expect(tour.status).toBe('streaming')
   })
 })
