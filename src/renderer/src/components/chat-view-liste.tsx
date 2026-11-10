@@ -833,7 +833,10 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
       ),
     [groupes, convQuery, groupesReplies]
   )
-  const lignesDessinees = useLignesDessinees(lignesAffichables)
+  // La zone visible (`.conv-list`, dans ChatView) fixe le premier passage : sa ref est posée sur ce
+  // conteneur, et c'est elle qui mesure la zone.
+  // fix-ok: mesuré — sans ce conteneur, le premier passage reste au plancher (zone 1 800 px : 40 ≠ 60).
+  const { dessinees: lignesDessinees, refZone: listeRef } = useLignesDessinees(lignesAffichables)
   // Combien de fils chaque groupe dessine : les premiers de la liste, dans l'ordre d'affichage
   // (« Récent » d'abord). Le reste attend la tranche suivante ; l'en-tête du groupe reste affiché.
   const quotasDeGroupe = useMemo(() => {
@@ -984,6 +987,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     messagesUtilisateurAvantDebut,
     filRendu,
     lignesListe,
+    listeRef,
     avisApp
   }
 }

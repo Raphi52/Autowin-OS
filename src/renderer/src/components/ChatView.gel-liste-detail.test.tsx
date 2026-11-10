@@ -39,6 +39,7 @@ describe('ChatView — le gel de la liste nomme les lignes redessinées et leur 
   let harness: ChatHarness | undefined
   beforeAll(installRafShim)
   afterEach(async () => {
+    vi.useRealTimers()
     await harness?.unmount()
     harness = undefined
     oublierRendusRecents()
@@ -120,7 +121,7 @@ describe('ChatView — le gel de la liste nomme les lignes redessinées et leur 
     expect(lignes).toBeLessThanOrEqual(4)
   })
 
-  /** 1 349 fils : la liste du 10/11 au démarrage, « 1 349 lignes » dans un seul passage. */
+  /** 1 349 fils : la base entière chargée d'un bloc, comme au démarrage de l'app. */
   const fils1349 = (): Array<Record<string, unknown>> =>
     Array.from({ length: 1349 }, (_, i) => ({
       ...conversation(`c${i}`),
@@ -140,31 +141,113 @@ describe('ChatView — le gel de la liste nomme les lignes redessinées et leur 
   }
 
   /**
-   * AU DÉMARRAGE, la liste reçoit 1 349 fils d'un coup : le gel du 10/11 a compté « 1 349 lignes »
-   * dans UN seul passage (1 261 ms). ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION SAUTE :
-   * cette même liste chargée d'un bloc. Le premier passage qui dessine des lignes n'en dessine qu'une
-   * fenêtre, en tête : le fil le plus récent (`c1348`) y est, le plus ancien (`c0`, tout en bas) pas
-   * encore. Borne : 40 lignes au plus au premier passage.
+   * Les lignes `.conv-item` posées au premier passage. Les minuteurs sont gelés par le test : la
+   * liste n'avance pas d'une tranche pendant le comptage, le DOM est donc celui du premier passage.
    */
-  it('au démarrage, 1 349 fils ⇒ le premier passage ne dessine qu’une fenêtre, en tête', async () => {
+  async function lignesAuPremierPassage(container: HTMLElement): Promise<number> {
+    for (let tour = 0; tour < 100; tour += 1) {
+      const posees = container.querySelectorAll('.conv-item').length
+      if (posees > 0) return posees
+      await act(async () => {
+        await new Promise((fin) => setImmediate(fin))
+      })
+    }
+    return 0
+  }
+
+  /**
+   * Simule une mise en page : la zone `.conv-list` mesure `zone` px, chaque `.conv-item` `ligne` px.
+   * Rend la fonction qui remet les propriétés d'origine.
+   */
+  function mesurerLaZone(zone: number, ligne: number): () => void {
+    // happy-dom définit `clientHeight` et `offsetHeight` sur HTMLElement : c'est là qu'il faut les remplacer.
+    const avantZone = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
+    const avantLigne = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains('conv-list') ? zone : 0
+      }
+    })
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains('conv-item') ? ligne : 0
+      }
+    })
+    return () => {
+      remettre(HTMLElement.prototype, 'clientHeight', avantZone)
+      remettre(HTMLElement.prototype, 'offsetHeight', avantLigne)
+    }
+  }
+
+  function remettre(cible: object, nom: string, descripteur: PropertyDescriptor | undefined): void {
+    if (descripteur) Object.defineProperty(cible, nom, descripteur)
+    else Reflect.deleteProperty(cible, nom)
+  }
+
+  /** Minuteurs gelés : la première tranche ne part qu'une fois le premier passage compté. */
+  const geler = (): void => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  }
+
+  /**
+   * AU DÉMARRAGE, la liste reçoit 1 349 fils d'un coup et les monte tous dans UN seul passage de
+   * rendu. ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION SAUTE : cette même liste chargée
+   * d'un bloc. Sans mise en page mesurable (banc de test), le premier passage pose le plancher de 40
+   * lignes, en tête : le fil le plus récent (`c1348`) y est, le plus ancien (`c0`) pas encore.
+   * Compté dans le DOM : le compteur du gel (`lignes`) compte des fils distincts, et « Récent » en
+   * double certains, donc 40 lignes à l'écran font 20 fils distincts.
+   */
+  it('au démarrage, 1 349 fils ⇒ le premier passage pose 40 lignes à l’écran, en tête', async () => {
+    geler()
     const signaux: Signal[] = []
     harness = await mountChat(montageDemarrage(fils1349(), signaux))
-    await laisserPasser()
+    const posees = await lignesAuPremierPassage(harness!.container)
 
     // Le signal porte la durée mesurée par le Profiler de la liste : c'est le chiffre du gel.
     const premier = signauxListe(signaux).find(([, , d]) => (d?.liste?.lignes ?? 0) > 0)
     expect(premier, 'la liste a dessiné des lignes').toBeDefined()
     const [ms, , detail] = premier!
-    const lignes = detail!.liste!.lignes
+    // fix-ok: mesuré — 40 lignes .conv-item pour 20 fils distincts (compteur lignes = 20) : la borne se compte sur le DOM.
     expect(
-      lignes,
-      `premier passage : ${lignes} lignes en ${Math.round(ms)} ms`
-    ).toBeLessThanOrEqual(40)
-    expect(lignes).toBeGreaterThanOrEqual(1)
+      posees,
+      `premier passage : ${posees} lignes à l’écran, ${detail!.liste!.lignes} fils distincts, ${Math.round(ms)} ms`
+    ).toBe(40)
     expect(
       harness!.container.querySelector('.conv-item[data-conversation-id="c1348"]')
     ).not.toBeNull()
     expect(harness!.container.querySelector('.conv-item[data-conversation-id="c0"]')).toBeNull()
+  }, 60_000)
+
+  /**
+   * LA ZONE VISIBLE COMPTE : une zone de 1 800 px, des lignes de 36 px, tiennent 50 lignes ; avec la
+   * marge de 10, le premier passage en pose 60. ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : une mesure
+   * retirée, et le premier passage retombe au plancher de 40.
+   */
+  it('au démarrage, une zone de 1 800 px ⇒ le premier passage pose ce qui y tient, plus la marge', async () => {
+    geler()
+    const remettreLaZone = mesurerLaZone(1800, 36)
+    try {
+      harness = await mountChat(montageDemarrage(fils1349(), []))
+      expect(await lignesAuPremierPassage(harness!.container)).toBe(60)
+    } finally {
+      remettreLaZone()
+    }
+  }, 60_000)
+
+  /**
+   * JUMEAU de la mesure : une zone de 300 px (8 lignes) ne descend pas sous le plancher de 40.
+   */
+  it('au démarrage, une zone de 300 px ⇒ le plancher de 40 lignes tient', async () => {
+    geler()
+    const remettreLaZone = mesurerLaZone(300, 36)
+    try {
+      harness = await mountChat(montageDemarrage(fils1349(), []))
+      expect(await lignesAuPremierPassage(harness!.container)).toBe(40)
+    } finally {
+      remettreLaZone()
+    }
   }, 60_000)
 
   /**

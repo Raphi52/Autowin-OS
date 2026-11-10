@@ -3953,7 +3953,7 @@ export function ChatView({
     estDossierPersonnel, dossiersConversations, categoriesConnues, saisieCategorie,
     setSaisieCategorie, liensDeLots, relirePlansRef, planDuFilOuvert, ongletDuFilOuvert,
     filsDesBureaux, questionsDesLots, openRunsCount, visibleLiveRuns,
-    messagesUtilisateurAvantDebut, filRendu, lignesListe, avisApp
+    messagesUtilisateurAvantDebut, filRendu, lignesListe, listeRef, avisApp
   } = useListeDesConversations({
     active, activeDirectiveReceiptsByMessage, activeId, annulerEnvoi, answerAsk, appNotice,
     basculerDansMosaique, basculerGroupe, busy, busyConversations, conversationDateOrder,
@@ -4194,7 +4194,7 @@ export function ChatView({
                 ) : null}
               </div>
             )}
-          <div className="conv-list scroll-y">
+          <div className="conv-list scroll-y" ref={listeRef}>
             {convs.length === 0 && (
               <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
                 {texteFil('liste.vide')}
