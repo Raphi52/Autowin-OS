@@ -75,3 +75,34 @@
   font-size: 11px;
   color: var(--text-dim);
 }
+
+/* « Masquer sur ce poste » : une colonne de cases à droite de la recopie, légendée par l'en-tête.
+   Même largeur de colonne dans l'en-tête et dans chaque ligne, pour que les cases s'alignent. */
+.besoins-projets-entete {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-dim);
+}
+.besoins-projets-entete-recopier {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.besoins-projets-entete-masquer,
+.besoins-projets-masquer {
+  flex: 0 0 auto;
+  width: 64px;
+  text-align: center;
+}
+.besoins-projets-masquer {
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+}
+/* La place de la croix, réservée sans croix : l'en-tête et chaque ligne gardent la même colonne. */
+.besoins-projets-retirer-place {
+  flex: 0 0 auto;
+  width: 20px;
+}

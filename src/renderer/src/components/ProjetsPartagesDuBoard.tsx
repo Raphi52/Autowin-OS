@@ -16,6 +16,7 @@ import {
   projetPartage,
   resumeDesProjetsPartages
 } from '../../../shared/board-projets-partages'
+import { basculerProjetMasque, projetMasque } from '../../../shared/board-projets-masques'
 import { useTextesBoardProjets } from '../textes-ecrans/board-projets'
 import './ProjetsPartagesDuBoard.css'
 
@@ -31,7 +32,9 @@ export function ProjetsPartagesDuBoard({
   projets,
   choisis,
   onChoisir,
-  onRetirer
+  onRetirer,
+  masques = [],
+  onMasquer
 }: {
   /** Les projets de la carte affichée, dans son ordre (le plus récemment actif d'abord). */
   projets: readonly ProjetAffiche[]
@@ -43,12 +46,18 @@ export function ProjetsPartagesDuBoard({
    * du Chat, la même que la croix du menu « Ranger dans… » — il quitte le Chat ET le Board.
    */
   onRetirer?: (chemin: string) => void
+  /** Les projets masqués sur CE poste : retirés de l'écran, jamais de la copie partagée. */
+  masques?: readonly string[]
+  /** Cocher ou décocher « Masquer sur ce poste » : absent = pas de case de masquage. */
+  onMasquer?: (masques: string[]) => void
 }): React.JSX.Element {
   const { t, langue } = useTextesBoardProjets()
   // Singulier jusqu'à 1 en français (« 0 demande »), seulement à 1 en anglais (« 0 requests »).
   const singulier = (n: number): boolean => (langue === 'en' ? n === 1 : n <= 1)
   const cles = projets.map((p) => p.cle)
   const resume = resumeDesProjetsPartages(choisis, cles)
+  // Un projet masqué reste dans la liste : la note le dit, pour qu'on sache le revoir.
+  const masquesAffiches = projets.filter((p) => projetMasque(masques, p.cle)).length
 
   return (
     <div
@@ -77,6 +86,15 @@ export function ProjetsPartagesDuBoard({
         />
         <span>{t('projets.tousEtFuturs')}</span>
       </label>
+      {/* Les deux colonnes de cases, légendées : « recopier » part sur le partage, « masquer » ne
+          touche qu'à l'écran de ce poste. */}
+      {onMasquer && projets.length > 0 && (
+        <div className="besoins-projets-entete">
+          <span className="besoins-projets-entete-recopier">{t('projets.recopier')}</span>
+          <span className="besoins-projets-entete-masquer">{t('projets.masquer')}</span>
+          <span className="besoins-projets-retirer-place" aria-hidden="true" />
+        </div>
+      )}
       <div className="besoins-projets-liste">
         {projets.map((p) => (
           // La croix est SŒUR de la case, pas dedans : un clic sur elle ne doit pas cocher.
@@ -95,6 +113,17 @@ export function ProjetsPartagesDuBoard({
                 })}
               </span>
             </label>
+            {onMasquer && (
+              <label className="besoins-projets-masquer" title={t('projets.masquerAide')}>
+                <input
+                  type="checkbox"
+                  checked={projetMasque(masques, p.cle)}
+                  data-testid={`besoins-projet-masque-${p.cle}`}
+                  aria-label={`${t('projets.masquer')} : ${p.libelle}`}
+                  onChange={() => onMasquer(basculerProjetMasque(masques, p.cle))}
+                />
+              </label>
+            )}
             {p.retirable && onRetirer && (
               <button
                 type="button"
@@ -107,10 +136,19 @@ export function ProjetsPartagesDuBoard({
                 ×
               </button>
             )}
+            {/* Sans croix, la place reste : les cases « masquer » s'alignent sur l'en-tête. */}
+            {onMasquer && !(p.retirable && onRetirer) && (
+              <span className="besoins-projets-retirer-place" aria-hidden="true" />
+            )}
           </div>
         ))}
       </div>
       {choisis !== null && <p className="besoins-projets-note">{t('projets.note')}</p>}
+      {masquesAffiches > 0 && (
+        <p className="besoins-projets-note" data-testid="besoins-projets-masques-note">
+          {t('projets.masquesNote')}
+        </p>
+      )}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { CarteDesBesoinsView } from './CarteDesBesoinsView'
 import { reclamerOuvertureConversation } from './pending-conversation-open'
+import { CLE_PROJETS_MASQUES_DU_POSTE } from '../../../shared/board-projets-masques'
 import type {
   CarteDesBesoins,
   DemandeDeLaCarte,
@@ -242,5 +243,42 @@ describe('CarteDesBesoinsView', () => {
     )
     expect(el.querySelector('[data-testid="besoins-stats"]')).toBeNull()
     expect(el.querySelector('[data-testid="riviere"]')).toBeNull()
+  })
+
+  // « Masquer sur ce poste » : l'écran seulement. Le projet quitte la rivière, reste dans le menu
+  // (pour être revu), et ne passe jamais par le processus principal : la copie partagée ne bouge pas.
+  it('masquer sur ce poste retire le projet de la rivière, le garde dans le menu, sans toucher à la copie partagée', async () => {
+    window.localStorage.clear()
+    const dossier = { dossier: 'D:\\Board', cible: 'D:\\Board\\poste', enCours: false }
+    const boardDossierProjets = vi.fn(async () => dossier)
+    ;(window as unknown as { api: unknown }).api = {
+      carteDesBesoins: vi.fn(async () =>
+        carte([
+          projet('P1', [demande('masque-a', 0, 'prouve')]),
+          projet('P2', [demande('visible-b', 0, 'prouve')])
+        ])
+      ),
+      boardDossier: vi.fn(async () => dossier),
+      boardDossierProjets,
+      fichesDesDemandes: vi.fn(async () => ({}))
+    }
+    const el = document.createElement('div')
+    document.body.append(el)
+    const root = createRoot(el)
+    montes.push({ root, el })
+    await act(async () =>
+      root.render(createElement(CarteDesBesoinsView, { active: true, onOpenConversation: vi.fn() }))
+    )
+    // La rivière montre le fil de chaque demande (« Fil masque-a ») : c'est ce texte qui quitte l'écran.
+    expect(el.textContent).toContain('Fil masque-a')
+    // La ligne du menu garde la clé de la carte (« P1 ») : c'est elle que la case porte.
+    const caseDuMasque = (): HTMLInputElement =>
+      el.querySelector('[data-testid="besoins-projet-masque-P1"]') as HTMLInputElement
+    await act(async () => caseDuMasque().click())
+    expect(el.textContent).not.toContain('Fil masque-a')
+    expect(el.textContent).toContain('Fil visible-b')
+    expect(caseDuMasque().checked).toBe(true)
+    expect(boardDossierProjets).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem(CLE_PROJETS_MASQUES_DU_POSTE)).toContain('P1')
   })
 })

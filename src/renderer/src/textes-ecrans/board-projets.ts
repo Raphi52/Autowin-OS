@@ -14,8 +14,14 @@ export const TEXTES_FR = {
   'projets.tous': 'Projets : tous',
   'projets.partie': 'Projets : {n}/{total}',
   'projets.aide':
-    'Choisir les projets (dossiers de travail) recopiés dans le dossier du Board ; les autres restent sur ce poste',
+    'Recopier : le projet part dans le dossier partagé du Board. Masquer sur ce poste : il disparaît de votre Board ici, sans toucher au dossier partagé.',
   'projets.titre': 'Projets recopiés dans le dossier',
+  'projets.recopier': 'Recopier dans le dossier',
+  'projets.masquer': 'Masquer sur ce poste',
+  'projets.masquerAide':
+    'Masqué sur ce poste : le projet disparaît de votre Board ici seulement ; le dossier partagé ne change pas.',
+  'projets.masquesNote':
+    'Un projet masqué reste dans cette liste : décochez « Masquer sur ce poste » pour le revoir.',
   'projets.tousEtFuturs': 'Tous, y compris les prochains',
   'projets.note': 'Un nouveau projet n’est pas recopié tant qu’il n’est pas coché.',
   'projets.demande': '{n} demande',
@@ -31,8 +37,14 @@ export const TEXTES_EN: Record<CleBoardProjets, string> = {
   'projets.tous': 'Projects: all',
   'projets.partie': 'Projects: {n}/{total}',
   'projets.aide':
-    'Choose the projects (working folders) copied to the Board folder; the others stay on this computer',
+    'Copy: the project goes to the shared Board folder. Hide on this computer: it disappears from your Board here, without touching the shared folder.',
   'projets.titre': 'Projects copied to the folder',
+  'projets.recopier': 'Copy to the folder',
+  'projets.masquer': 'Hide on this computer',
+  'projets.masquerAide':
+    'Hidden on this computer: the project disappears from your Board here only; the shared folder does not change.',
+  'projets.masquesNote':
+    'A hidden project stays in this list: uncheck "Hide on this computer" to show it again.',
   'projets.tousEtFuturs': 'All, including future ones',
   'projets.note': 'A new project is not copied until it is checked.',
   'projets.demande': '{n} request',

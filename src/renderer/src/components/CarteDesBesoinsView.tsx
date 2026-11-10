@@ -25,6 +25,11 @@ import {
 } from '../../../shared/carte-des-besoins'
 import type { EtatDuDossierDuBoard } from '../../../shared/board-dossier'
 import type { BoardsDesCollegues } from '../../../shared/board-collegues'
+import {
+  carteSansProjetsMasques,
+  ecrireProjetsMasques,
+  lireProjetsMasques
+} from '../../../shared/board-projets-masques'
 import { carteAvecCollegues } from './board-collegues'
 import { ProjetsPartagesDuBoard } from './ProjetsPartagesDuBoard'
 import { RouageDuBoard } from './RouageDuBoard'
@@ -101,6 +106,9 @@ export function CarteDesBesoinsView({
   const [dossiersDuChat, setDossiersDuChat] = useState<string[]>(() => lireDossiersDuChat())
   // « This computer » : jamais retirable, donc sans croix et gardé malgré un retrait.
   const [dossierPersonnel, setDossierPersonnel] = useState<string | null>(null)
+  // « Masquer sur ce poste » : un réglage de l'écran seulement, relu du stockage du poste. Il ne passe
+  // jamais par le processus principal : la copie du dossier partagé ne le voit pas.
+  const [masques, setMasques] = useState<string[]>(() => lireProjetsMasques(window.localStorage))
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -271,6 +279,13 @@ export function CarteDesBesoinsView({
     [charger]
   )
 
+  // « Masquer sur ce poste » : l'écran seulement. Aucun appel au processus principal et aucun nouveau
+  // calcul du dossier partagé : la carte affichée se refait ici, la copie reste celle d'avant.
+  const choisirMasques = useCallback((nouveaux: string[]) => {
+    ecrireProjetsMasques(nouveaux, window.localStorage)
+    setMasques(nouveaux)
+  }, [])
+
   // LES POST-IT DES COLLÈGUES : les Boards que les autres postes recopient dans le même
   // dossier, relus APRÈS la carte et à part, pour qu'un partage lent ne retarde jamais le nôtre ; le
   // processus principal espace lui-même les relectures. Mêlés à la carte AFFICHÉE seulement.
@@ -291,10 +306,16 @@ export function CarteDesBesoinsView({
       annule = true
     }
   }, [active, carte, dossierChoisi])
-  // Sans dossier choisi, aucun collègue : leurs post-it partent avec lui.
+  // Sans dossier choisi, aucun collègue : leurs post-it partent avec lui. Les projets masqués sur ce
+  // poste sortent AVANT la fusion : les post-it des collègues, eux, restent (ils viennent d'autres postes).
   const carteAffichee = useMemo(
-    () => carte && carteAvecCollegues(carte, dossierChoisi ? (collegues?.collegues ?? []) : []),
-    [carte, collegues, dossierChoisi]
+    () =>
+      carte &&
+      carteAvecCollegues(
+        carteSansProjetsMasques(carte, masques),
+        dossierChoisi ? (collegues?.collegues ?? []) : []
+      ),
+    [carte, collegues, dossierChoisi, masques]
   )
   const aideDesCollegues = [
     dossierChoisi && collegues?.collegues.length
@@ -443,6 +464,8 @@ export function CarteDesBesoinsView({
                         choisis={dossier.projets ?? null}
                         onChoisir={(p) => void choisirProjets(p)}
                         onRetirer={(chemin) => void retirerDuChat(chemin)}
+                        masques={masques}
+                        onMasquer={choisirMasques}
                       />
                     )}
                   </RouageDuBoard>
