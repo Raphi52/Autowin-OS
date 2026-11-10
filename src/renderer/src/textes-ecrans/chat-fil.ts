@@ -149,6 +149,9 @@ export const TEXTES_FR = {
   'saisie.dictee.rienReconnu': 'Rien n’a été reconnu.',
   'saisie.dictee.indisponible': 'Reconnaissance vocale indisponible.',
   'saisie.dictee.microIndisponible': 'Micro indisponible.',
+  'saisie.ultrathink': 'réflexion poussée pour ce message',
+  'saisie.ultrathink.titre':
+    'Ce message seul part au niveau de réflexion xhigh si le modèle le propose, sinon à son niveau le plus haut en dessous. Le réglage du fil ne change pas.',
 
   // ChatMessageRow.tsx
   'message.copier.titre': 'Copier ce message dans le presse-papier',
@@ -716,6 +719,9 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'saisie.dictee.rienReconnu': 'Nothing was recognised.',
   'saisie.dictee.indisponible': 'Speech recognition unavailable.',
   'saisie.dictee.microIndisponible': 'Microphone unavailable.',
+  'saisie.ultrathink': 'deeper thinking for this message',
+  'saisie.ultrathink.titre':
+    'Only this message runs at the xhigh thinking level if the model offers it, otherwise at its highest level below. The thread setting does not change.',
 
   // ChatMessageRow.tsx
   'message.copier.titre': 'Copy this message to the clipboard',

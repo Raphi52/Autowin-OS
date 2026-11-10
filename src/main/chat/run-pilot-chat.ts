@@ -102,6 +102,8 @@ import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
 import { contenusDesToursArretes } from '../app/reprise-apres-arret'
 import { contenusDesAvisDeLApp, demandeSansAction } from './deux-lectures'
+import { bindingAvecUltrathink } from './ultrathink-du-tour'
+import { demandeUltrathink } from '../../shared/ultrathink'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
 import { solderOrientationsDuFil } from '../conversations/orientations-en-cours-app'
 import { estUnFluxDeBloc } from '../commands/montrer-bloc-command'
@@ -275,13 +277,23 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     // fix-ok: cause mesurée — chaque tour partait sur `orchestrator` (Opus) sans tri : 374 tours en
     // lecture seule sur 7 jours, 362 $ au tarif Opus (turn-journals + cost.jsonl).
     const derniereDemande = [...messages].reverse().find((m) => m.role === 'user')?.content
-    const turnRuntimeBinding = bindingDuTourChat({
-      chat: bindingDuChat,
-      petitesTaches: os.roles.bindingDesPetitesTaches(),
-      routageActif: os.roles.routageChatLectureSeuleActif(),
-      sansAction:
-        !bindingOverride && !recovery && !continuation && demandeSansAction(derniereDemande)
-    })
+    // « ultrathink » dans le message demande PLUS de réflexion : une question qui le porte garde le
+    // modèle du chat au lieu de partir sur les petites tâches, et le tour monte en réflexion.
+    const turnRuntimeBinding = bindingAvecUltrathink(
+      bindingDuTourChat({
+        chat: bindingDuChat,
+        petitesTaches: os.roles.bindingDesPetitesTaches(),
+        routageActif: os.roles.routageChatLectureSeuleActif(),
+        sansAction:
+          !bindingOverride &&
+          !recovery &&
+          !continuation &&
+          !demandeUltrathink(derniereDemande) &&
+          demandeSansAction(derniereDemande)
+      }),
+      derniereDemande,
+      () => os.roles.getCatalog()
+    )
     // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
     // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
     const turnStartedAtMs = performance.now()

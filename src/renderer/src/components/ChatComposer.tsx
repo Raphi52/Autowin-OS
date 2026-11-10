@@ -40,6 +40,7 @@ import {
 } from './composer-dictee'
 import { Spinner } from './Spinner'
 import type { PropositionSuite } from '../../../shared/prompt-suivant'
+import { demandeUltrathink } from '../../../shared/ultrathink'
 
 /** Où le volume de capture est mémorisé : un micro trop faible doit se régler UNE fois, pas à chaque dictée. */
 const CLE_GAIN_DICTEE = 'autowin.dictee.gain'
@@ -694,6 +695,18 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 )
               })}
             </div>
+          ) : null}
+          {/* Le mot-clé est reconnu AVANT l'envoi, par la règle même qui décidera du tour : on
+              sait qu'il a pris sans attendre la réponse. */}
+          {demandeUltrathink(input) ? (
+            <span
+              className="composer-ultrathink"
+              data-testid="composer-ultrathink"
+              title={tFil('saisie.ultrathink.titre')}
+            >
+              <span className="composer-ultrathink-mot">ultrathink</span>{' '}
+              {tFil('saisie.ultrathink')}
+            </span>
           ) : null}
           <div className="composer-input-row">
             {/*
