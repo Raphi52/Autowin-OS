@@ -1980,6 +1980,32 @@
   mask: none;
   clip-path: var(--nv-chanfrein-anneau);
 }
+/* Le panneau « Bureaux caches » est un volet du Chat comme les autres : memes coins coupes, meme
+   satin, meme anneau. Il n'a pas de bord (HdeskGestionView.css, `border: 0`) : sa boite exterieure
+   est deja celle du trait. Son `::before` est le lisere du haut (`.lisere-dessus`, ViewPage.css),
+   etire ici en cadre entier. */
+:root[data-theme='holographique-clair'] .cosmic-outline .hdesk-gestion-view {
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: var(--nv-chanfrein-forme);
+  background:
+    var(--nv-holo-lisere) left top / 100% 3px no-repeat,
+    radial-gradient(
+      circle var(--nv-lumiere-rayon) at calc(var(--nv-lumiere-x) * 100%) calc(var(--nv-lumiere-y) * 100%),
+      var(--nv-lumiere-couleur),
+      rgba(255, 255, 255, 0)
+    )
+    fixed,
+    var(--nv-satin) fixed;
+  transition: var(--nv-lumiere-transition);
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .hdesk-gestion-view::before {
+  inset: 0;
+  height: auto;
+  border-radius: 0;
+  background: var(--nv-chanfrein-trait);
+  clip-path: var(--nv-chanfrein-anneau);
+}
 /* Le bas du fil remonte de la hauteur de la coupe : la fleche basse de l'ascenseur restait sinon
    dans le coin coupe du panneau (meme cause que, `.cosmic-outline .chat > .chat-scroll`). */
 :root[data-theme='holographique-clair'] .cosmic-outline .chat > .chat-scroll {

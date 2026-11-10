@@ -25,6 +25,7 @@ export const SELECTEUR_PANNEAUX = [
   '.theme-serious .rail',
   '.cosmic-outline .conv-pane',
   '.cosmic-outline .runs-pane',
+  '.cosmic-outline .hdesk-gestion-view',
   '.cosmic-outline .chat',
   '.view-page',
   '.home-tile__panel',
