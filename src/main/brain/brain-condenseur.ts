@@ -16,6 +16,16 @@ import type { RoleModelConfig } from '../profil/roles'
  * Règles : une note courte passe telle quelle (le condensé coûterait plus qu'il n'économise) ;
  * `entier: true` garde la note brute (il faut la lire en entier pour la remplacer via `remember`) ;
  * une panne du petit modèle rend la note entière, en le disant — jamais une note perdue.
+ *
+ * PÉRIMÈTRE (2026-11-10) — qui reçoit le condensé, et qui lit la note brute.
+ * Dedans : le CHAT et les NŒUDS DE SKILL. Leurs `brain_read` et `brain_query` passent par le bus de
+ * l'app, seul bus à porter un condensé (`bus.condenseurBrain`, câblé dans `ipc/chat.ts`). Sans condensé,
+ * un bus rend la note entière (ou la liste complète, pour `brain_query`).
+ * Dehors : les PHASES DU PIPELINE (frame, build, clean, judge…). Elles n'ont aucun outil Brain (leur
+ * serveur d'outils n'est jamais ouvert, `isPipelinePhase` dans `orchestrator-parcours-sequentiel.ts`) et
+ * lisent la note brute avec `Read`, sous la racine que donne `consigneCandidatesBrain`. Choix : une phase
+ * ne se coupe pas sur le seul volume (même règle que sa sortie, passée entière à la suivante :
+ * `porterVersPhaseSuivante`, `orchestrator-contrats.ts`). Ne leur donne pas `brain_read` sans revoir ce choix.
  */
 
 /** En dessous, la note passe telle quelle. */

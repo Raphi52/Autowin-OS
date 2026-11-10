@@ -37,6 +37,22 @@ describe('condenserLecture (conv-1469)', () => {
 })
 
 /**
+ * Périmètre (2026-11-10) : le condensé se câble explicitement (chat, `ipc/chat.ts`). Sans lui, la note
+ * passe entière, sans note de condensé : c'est la règle qui tient le périmètre hors des phases.
+ */
+describe('périmètre du condensé : chat et nœuds de skill seulement', () => {
+  it('sans condensé câblé, la note passe entière, sans note de condensé', async () => {
+    const r = await condenserLecture(longue, { besoin: 'le port' }, undefined)
+    expect(r.knowledge).toBe(longue.knowledge)
+    expect(r.note).toBeUndefined()
+  })
+  it('un bus neuf ne porte aucun condensé : il se câble explicitement', () => {
+    const bus = new AppCommandBus({} as never, () => undefined)
+    expect(bus.condenseurBrain).toBeUndefined()
+  })
+})
+
+/**
  * Filtre de la liste de `brain_query`. Format des listes copié du serveur
  * (`describe_candidates`, `brain_context.py`) et de leur rendu (`renderStructuredBrainContext`) :
  * deux lignes par candidate, séparées par `---`.
