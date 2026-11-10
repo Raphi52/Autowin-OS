@@ -54,6 +54,7 @@ import {
   type MarcheQuartier,
   type Tanuki
 } from './quartier-marche'
+import { repeintsApres } from './quartier-profondeur'
 import {
   brancherQuartier,
   debrancherQuartier,
@@ -349,18 +350,6 @@ async function charger(animalInitial: AnimalAgent): Promise<Monde> {
   })
   return { D, F, B, S, animaux, OB, FE, m: creerMarche(D), vie, contact, sols }
 }
-
-const pied = (o: ObjetCoupe, px: number): number => {
-  const b = o.b ?? []
-  const n = b.length
-  const t = Math.max(0, Math.min(n - 1, (px - o.x) / 8))
-  const a = Math.floor(t)
-  const e = Math.min(n - 1, a + 1)
-  return b[a] + (b[e] - b[a]) * (t - a)
-}
-
-const couvre = (o: ObjetCoupe, w: Tanuki): boolean =>
-  w.x + w.u * 0.4 > o.x && w.x - w.u * 0.4 < o.x + o.w && w.y + 4 > o.y && w.y - w.u < o.y + o.h
 
 /** D19 : les premiers mots du fil ; pour un lot, ce qui suit « Lot 8/8 — ». */
 export function etiquetteDuFil(titre: string): string {
@@ -721,6 +710,40 @@ export function creerSceneQuartier(): DecorScene | null {
     x.restore()
   }
 
+  /** La boîte où `sprite()` dessine ce tanuki, transparence comprise : un repeint s'en écarte pour le laisser entier. */
+  const boiteDuTanuki = (M: Monde, w: Tanuki): { x: number; y: number; w: number; h: number } => {
+    const { an } = M.D
+    const k = w.u / an.pu
+    const cl = cellule(M, w)
+    const ox = -an.ax + (cl.dx ?? 0)
+    return {
+      x: cl.m ? w.x - (ox + an.cw) * k : w.x + ox * k,
+      y: w.y - w.lev - an.ay * k,
+      w: an.cw * k,
+      h: an.ch * k
+    }
+  }
+
+  /** Repeint l'objet entier, sauf sur les tanukis `sauf` posés devant lui : un repeint ne passe pas devant eux. */
+  function peintSauf(M: Monde, o: ObjetCoupe, sauf: Tanuki[]): void {
+    if (sauf.length === 0) {
+      peint(o)
+      return
+    }
+    x.save()
+    // Une découpe par tanuki : avec « pair-impair » sur une seule forme, deux boîtes qui se chevauchent
+    // se compenseraient, et l'objet reparaîtrait dans leur recouvrement.
+    for (const c of sauf) {
+      const b = boiteDuTanuki(M, c)
+      x.beginPath()
+      x.rect(-1e5, -1e5, 2e5, 2e5)
+      x.rect(b.x, b.y, b.w, b.h)
+      x.clip('evenodd')
+    }
+    peint(o)
+    x.restore()
+  }
+
   /** La pose d'atelier d'un tanuki assis au poste des runs, ou rien s'il n'y est pas. */
   const poseAtelier = (M: Monde, w: Tanuki): PoseAtelier | null => {
     if (w.etat !== 'poste' || w.poste === null || !w.face?.g) return null
@@ -743,6 +766,8 @@ export function creerSceneQuartier(): DecorScene | null {
 
   function tanukis(M: Monde): void {
     forgent = []
+    // Les tanukis déjà posés dans ce passage : un repeint d'objet ne doit pas recouvrir ceux qui sont devant lui.
+    const posees: Tanuki[] = []
     for (const w of [...M.m.T].sort((a, b) => a.y - b.y)) {
       dessinerOmbre(M, w)
       // Au poste des runs, il forge au lieu de taper dans le vide.
@@ -755,9 +780,9 @@ export function creerSceneQuartier(): DecorScene | null {
       sprite(M, w, false)
       x.globalAlpha = 1
       if (atelier) dessinerOutil(x, atelier)
-      // Tout objet dont le pied est plus près que le sien passe devant lui, entier.
-      for (const o of M.OB)
-        if (o.fixe !== 'ciel' && o.b && couvre(o, w) && w.y < pied(o, w.x) - 1) peint(o)
+      // Tout objet dont le pied est plus près que le sien passe devant lui, entier, sauf sur les tanukis posés devant lui.
+      for (const { o, sauf } of repeintsApres(w, posees, M.OB)) peintSauf(M, o, sauf)
+      posees.push(w)
     }
   }
 
