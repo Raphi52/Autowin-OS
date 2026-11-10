@@ -204,6 +204,7 @@ import {
 import { useRepriseDesTours } from './chat-view-reprise'
 import { useToursEtEnvoi } from './chat-view-envoi'
 import { useListeDesConversations } from './chat-view-liste'
+import { ConvListeProgressive } from './ConvListeProgressive'
 import { useRenduMosaique } from './chat-view-mosaique'
 import { useRepriseDeLecture } from './chat-view-defilement'
 import { useFluxDuPilote } from './chat-view-flux-pilote'
@@ -3953,7 +3954,7 @@ export function ChatView({
     estDossierPersonnel, dossiersConversations, categoriesConnues, saisieCategorie,
     setSaisieCategorie, liensDeLots, relirePlansRef, planDuFilOuvert, ongletDuFilOuvert,
     filsDesBureaux, questionsDesLots, openRunsCount, visibleLiveRuns,
-    messagesUtilisateurAvantDebut, filRendu, lignesListe, listeRef, avisApp
+    messagesUtilisateurAvantDebut, filRendu, rendreLignesListe, lignesAffichables, avisApp
   } = useListeDesConversations({
     active, activeDirectiveReceiptsByMessage, activeId, annulerEnvoi, answerAsk, appNotice,
     basculerDansMosaique, basculerGroupe, busy, busyConversations, conversationDateOrder,
@@ -4183,7 +4184,10 @@ export function ChatView({
                 ) : null}
               </div>
             )}
-          <div className="conv-list scroll-y" ref={listeRef}>
+          {/* fix-ok: cause mesurée — chaque tranche relançait tout ChatView, un rendu du chat par tranche pendant le
+              déroulé (ChatView.gel-liste-detail.test.tsx). L'état du déroulé vit dans ConvListeProgressive,
+              qui porte aussi la zone `.conv-list`. */}
+          <ConvListeProgressive total={lignesAffichables} rendre={rendreLignesListe}>
             {convs.length === 0 && (
               <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
                 {texteFil('liste.vide')}
@@ -4192,8 +4196,7 @@ export function ChatView({
             {convs.length > 0 && conversationHits.length === 0 && (
               <div className="conv-search-empty">{texteFil('liste.aucunResultat')}</div>
             )}
-            {lignesListe}
-          </div>
+          </ConvListeProgressive>
           {/* PIED DE LISTE (demande du 2026-09-23) : filtre de statut, densite et mosaique
             vivent ici, plus dans l'en-tete. */}
           <div className="conv-foot" data-testid="conv-foot">

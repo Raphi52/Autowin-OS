@@ -38,7 +38,6 @@ import {
 import { presenceDepuisRunsVivants } from './run-presence'
 import { visibleScopedRuns } from './workflows-panel-sections'
 import { useDebutProgressif } from './fil-progressif'
-import { useLignesDessinees } from './liste-progressive'
 import {
   messageKey,
   askReponseDuFil,
@@ -833,28 +832,23 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
       ),
     [groupes, convQuery, groupesReplies]
   )
-  // La zone visible (`.conv-list`, dans ChatView) fixe le premier passage : sa ref est posée sur ce
-  // conteneur, et c'est elle qui mesure la zone.
-  // fix-ok: cause mesurée — sans cette ref, la zone n'est jamais lue : le premier passage reste au plancher.
-  const { dessinees: lignesDessinees, refZone: listeRef } = useLignesDessinees(lignesAffichables)
-  // Combien de fils chaque groupe dessine : les premiers de la liste, dans l'ordre d'affichage
-  // (« Récent » d'abord). Le reste attend la tranche suivante ; l'en-tête du groupe reste affiché.
-  const quotasDeGroupe = useMemo(() => {
-    let restant = lignesDessinees
-    return groupes.map((groupe) => {
-      if (groupeReplie(groupe.key, convQuery, groupesReplies)) return 0
-      const quota = Math.min(groupe.items.length, restant)
-      restant -= quota
-      return quota
-    })
-  }, [groupes, convQuery, groupesReplies, lignesDessinees])
-  const lignesListe = useMemo(
-    () =>
-      groupes.map((groupe, indexGroupe) => {
+  // Le rangement de chaque groupe ne se refait qu'avec les données, pas à chaque tranche.
+  const rangeesParGroupe = useMemo(
+    () => groupes.map((groupe) => rangerSousLeurChef(groupe.items, liensDeLots, langue)),
+    [groupes, liensDeLots, langue]
+  )
+  // Les premiers fils de la liste, dans l'ordre d'affichage (« Récent » d'abord), pour un nombre de
+  // lignes donné : le reste attend la tranche suivante. L'en-tête de chaque groupe reste affiché.
+  // Le nombre vit dans ConvListeProgressive : une tranche ne relance que cette zone, pas ChatView.
+  const rendreLignesListe = useCallback(
+    (dessinees: number) => {
+      let restant = dessinees
+      return groupes.map((groupe, indexGroupe) => {
         // Une RECHERCHE en cours deplie tout : un resultat cache dans un dossier replie
         // faisait croire que la conversation n'existait plus (« je tape 170, ca me montre rien »).
         const replie = groupeReplie(groupe.key, convQuery, groupesReplies)
-        const quota = quotasDeGroupe[indexGroupe] ?? 0
+        const quota = replie ? 0 : Math.min(groupe.items.length, restant)
+        restant -= quota
         return (
           <Fragment key={groupe.key}>
             {/*
@@ -898,9 +892,9 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
               </button>
             </div>
             {!replie &&
-              rangerSousLeurChef(groupe.items, liensDeLots, langue).map(
-                ({ entree, niveau, lot }, rang) => {
-                  if (rang >= quota) return null
+              (rangeesParGroupe[indexGroupe] ?? [])
+                .slice(0, quota)
+                .map(({ entree, niveau, lot }) => {
                   const { conversation: c, snippet } = entree.hit
                   return (
                     <LigneConversation
@@ -923,15 +917,14 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
                       setConvMenu={setConvMenu}
                     />
                   )
-                }
-              )}
+                })}
           </Fragment>
         )
-      }),
+      })
+    },
     [
       groupes,
-      liensDeLots,
-      langue,
+      rangeesParGroupe,
       convQuery,
       groupesReplies,
       surviole,
@@ -946,8 +939,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
       convViewMode,
       selectedConvIds,
       mosaicIds,
-      basculerGroupe,
-      quotasDeGroupe
+      basculerGroupe
     ]
   )
 
@@ -986,8 +978,8 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     visibleLiveRuns,
     messagesUtilisateurAvantDebut,
     filRendu,
-    lignesListe,
-    listeRef,
+    rendreLignesListe,
+    lignesAffichables,
     avisApp
   }
 }

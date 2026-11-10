@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { noterDeclencheursListe } from './rendu-long'
 
 /**
  * DESSINER LA LISTE DES CONVERSATIONS PAR TRANCHES. Un démarrage qui charge toute la base monte
@@ -46,7 +47,13 @@ export function useLignesDessinees(total: number): {
   const mesuree = useRef(false)
   useEffect(() => {
     if (dessinees >= total) return
-    const tranche = setTimeout(() => setDessinees((n) => n + TRANCHE_DE_LIGNES), 0)
+    const tranche = setTimeout(() => {
+      // Une tranche ne change aucune donnée de la liste : son passage se note « hors-liste ». Sans cette
+      // ligne, le journal de gel le laisserait sans déclencheur, car l'état vit ici et non dans ChatView.
+      // fix-ok: cause mesurée — test « chaque tranche … se note hors-liste » : déclencheurs [] sans cette note.
+      noterDeclencheursListe(['hors-liste'])
+      setDessinees((n) => n + TRANCHE_DE_LIGNES)
+    }, 0)
     return () => clearTimeout(tranche)
   }, [dessinees, total])
   // React rappelle cette ref quand la liste change de total, une fois ses lignes posées : la zone a

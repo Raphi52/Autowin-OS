@@ -26,6 +26,20 @@ vi.mock('../../../shared/gel-detector', async (original) => ({
   SEUIL_GEL_MS: 0
 }))
 
+/**
+ * Compte les rendus de ChatView : chaque rendu appelle ce hook une fois. Sert à prouver qu'une tranche
+ * de la liste ne relance pas tout le chat.
+ */
+const rendusDuChat = vi.hoisted(() => ({ nombre: 0 }))
+vi.mock('./chat-view-liste', async (original) => {
+  const reel = await original<typeof import('./chat-view-liste')>()
+  const useListeDesConversations = (ctx: Parameters<typeof reel.useListeDesConversations>[0]) => {
+    rendusDuChat.nombre += 1
+    return reel.useListeDesConversations(ctx)
+  }
+  return { ...reel, useListeDesConversations }
+})
+
 type Liste = { lignes: number; rendus: number; passages: number; declencheurs: string[] }
 type Signal = [number, string | undefined, { liste?: Liste } | undefined]
 
@@ -266,5 +280,57 @@ describe('ChatView — le gel de la liste nomme les lignes redessinées et leur 
       )
     )
     expect(dessines.size).toBe(1349)
+  }, 60_000)
+
+  /**
+   * LE DÉROULÉ NE RELANCE PAS LE CHAT. Compté du premier passage (les premières lignes sont là) jusqu'à
+   * la liste entière. Avec l'état du déroulé dans ChatView, chaque tranche relançait tout le chat : un
+   * rendu par tranche. Deux rendus de fond restent tolérés (un chargement de fil qui tombe pendant le
+   * déroulé). ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : l'état du déroulé remis dans ChatView.
+   */
+  it('après le premier passage, les tranches ne relancent pas ChatView à chaque fois', async () => {
+    let rendusAuPremierPasse: number | undefined
+    const observateur = new MutationObserver(() => {
+      if (
+        rendusAuPremierPasse === undefined &&
+        document.querySelectorAll('.conv-item').length > 0
+      ) {
+        rendusAuPremierPasse = rendusDuChat.nombre
+      }
+    })
+    observateur.observe(document.body, { childList: true, subtree: true })
+    const remettreLaZone = mesurerLaZone(400, 44)
+    try {
+      rendusDuChat.nombre = 0
+      harness = await mountChat(montageDemarrage(fils1349(), []))
+      expect(rendusAuPremierPasse, 'rendus du chat au premier passage').toBeDefined()
+      await attendreLaListe(harness!.container, 'c0')
+      expect(
+        rendusDuChat.nombre - rendusAuPremierPasse!,
+        'rendus du chat pendant le déroulé de la liste'
+      ).toBeLessThanOrEqual(2)
+    } finally {
+      observateur.disconnect()
+      remettreLaZone()
+    }
+  }, 60_000)
+
+  /**
+   * CHAQUE TRANCHE SE NOTE « hors-liste » : elle ne change aucune donnée de la liste, seulement le
+   * nombre de lignes posées. Le gel d'une tranche doit donc nommer son déclencheur. ENTRÉE QUI DOIT
+   * FAIRE ÉCHOUER CE TEST : une tranche qui ne note rien au journal de gel.
+   */
+  it('chaque tranche de la liste se note « hors-liste » dans le journal de gel', async () => {
+    const signaux: Signal[] = []
+    harness = await mountChat(montageDemarrage(fils1349(), signaux))
+    await attendreLaListe(harness!.container, 'c0')
+    await laisserPasser()
+
+    const passages = signauxListe(signaux).filter(([, , d]) => (d?.liste?.lignes ?? 0) > 0)
+    expect(passages.length, 'passages qui ont posé des lignes').toBeGreaterThan(2)
+    // Le premier passage pose le début de la liste, à partir des données ; chaque tranche d'après, rien.
+    for (const [, , detail] of passages.slice(1)) {
+      expect(detail!.liste!.declencheurs).toEqual(['hors-liste'])
+    }
   }, 60_000)
 })
