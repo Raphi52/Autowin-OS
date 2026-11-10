@@ -16,7 +16,12 @@ import { existsSync, mkdirSync, readdirSync, rmdirSync, statSync } from 'node:fs
 import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { buildBrainLaunchCommand, CMD_UNSAFE, resolveBrainRuntime } from './brain-server-launch'
+import {
+  buildBrainLaunchCommand,
+  CMD_UNSAFE,
+  resolveBrainRuntime,
+  resolveWindowlessInterpreter
+} from './brain-server-launch'
 import { recopierNomsHistoriques } from '../profil/identite-entreprise'
 
 /** Identité de revue : DOIT différer de la famille d'agent auteur (`autowin-os`), sinon
@@ -141,9 +146,12 @@ export function startBrainCuration(
   }
   const pending = pendingCandidateCount(brainRoot)
   if (pending === 0) return { status: 'nothing-to-do', detail: 'aucun candidat en attente' }
+  // Même interpréteur sans console que le serveur : le python.exe d'un venv uv est un relais console,
+  // qui ouvre une fenêtre neuve pour le Python de base. Le pythonw de base n'en alloue jamais.
+  const interpreter = resolveWindowlessInterpreter(python)
   // `attendre` : sans `/wait`, `cmd` se termine en ~50 ms, AVANT la moindre promotion — la
   // réindexation branchée sur sa fin partirait trop tôt et ne verrait rien de périmé.
-  const command = buildBrainLaunchCommand(tooling, python, script, process.platform, true)
+  const command = buildBrainLaunchCommand(tooling, interpreter.bin, script, process.platform, true)
   if (!command) return { status: 'unavailable', detail: 'chemin du tooling refusé (fail-closed)' }
   // La racine passe elle aussi par cmd.exe : même garde fail-closed que le tooling.
   if (process.platform === 'win32' && CMD_UNSAFE.test(brainRoot)) {
@@ -175,6 +183,8 @@ export function startBrainCuration(
   }
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
+  // Le Python de base ignore le venv : ses paquets se retrouvent par PYTHONPATH.
+  if (interpreter.venvSitePackages) childEnv.PYTHONPATH = interpreter.venvSitePackages
   // Nom lu par les scripts Python du Brain ; l'ancien nom aussi, pour une copie deja installee.
   childEnv.AUTOWIN_BRAIN_ROOT = brainRoot
   recopierNomsHistoriques(childEnv, env)

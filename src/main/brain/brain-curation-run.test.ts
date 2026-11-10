@@ -76,6 +76,39 @@ describe('déclencheur de curation Brain', () => {
     expect(args).toContain('--apply')
   })
 
+  it('lance le Python de BASE sans console quand le venv est un venv uv, jamais son relais python.exe', () => {
+    // Le python.exe d'un venv uv est un relais CONSOLE : il lance le Python de base dans une fenêtre
+    // neuve, celle qui s'affichait à l'écran. Le serveur passait déjà par le pythonw de base ; la
+    // curation, elle, lançait le relais.
+    const { root, tooling } = fauxBrain(['a.md'])
+    const venv = mkdtempSync(join(tmpdir(), 'curation-uv-venv-'))
+    const base = mkdtempSync(join(tmpdir(), 'curation-uv-base-'))
+    mkdirSync(join(venv, 'Scripts'), { recursive: true })
+    writeFileSync(join(venv, 'Scripts', 'python.exe'), '')
+    writeFileSync(join(venv, 'Scripts', 'pythonw.exe'), '')
+    writeFileSync(join(base, 'pythonw.exe'), '')
+    writeFileSync(join(venv, 'pyvenv.cfg'), `home = ${base}\nuv = 0.12.7\n`)
+    const lances: { ligne: string; env: NodeJS.ProcessEnv | undefined }[] = []
+    const spawnFn = (
+      bin: string,
+      args: readonly string[],
+      options: { env?: NodeJS.ProcessEnv }
+    ) => {
+      lances.push({ ligne: [bin, ...args].join(' '), env: options.env })
+      return { unref: vi.fn() }
+    }
+    const env = {
+      AUTOWIN_BRAIN_ROOT: root,
+      AUTOWIN_BRAIN_TOOLING: tooling,
+      AUTOWIN_BRAIN_PYTHON: join(venv, 'Scripts', 'python.exe')
+    }
+    expect(startBrainCuration(env, spawnFn as never).status).toBe('launched')
+    expect(lances[0].ligne).toContain(join(base, 'pythonw.exe'))
+    expect(lances[0].ligne).not.toContain(join(venv, 'Scripts', 'python.exe'))
+    // Le Python de base ignore le venv : ses paquets se retrouvent par PYTHONPATH.
+    expect(lances[0].env?.PYTHONPATH).toBe(join(venv, 'Lib', 'site-packages'))
+  })
+
   it('refuse une racine qui contient un caractère interprété par cmd.exe', () => {
     const { root, tooling, python } = fauxBrain(['a.md'])
     const piegee = join(root, 'a&b')

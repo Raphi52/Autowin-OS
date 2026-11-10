@@ -27,7 +27,7 @@ import { spawn } from 'node:child_process'
 import { sharedBrainOrigin } from './brain-paths'
 import { verifySignedBrainPayload, type SignedBrainPayload } from './brain-protocol'
 import { brainServiceToken } from './brain-retrieval'
-import { resolveBrainRuntime } from './brain-server-launch'
+import { resolveBrainRuntime, resolveWindowlessInterpreter } from './brain-server-launch'
 import { recopierNomsHistoriques } from '../profil/identite-entreprise'
 
 export interface BrainHealth {
@@ -199,8 +199,12 @@ export function startBrainIndexRebuild(
   // le serveur ne lit JAMAIS — mesuré le 2026-09-04 : ce dossier local n'existe même pas, alors que
   // la génération servie vit sur le partage. Le Brain resterait dégradé indéfiniment.
   const outDir = join(brainRoot, 'tooling', 'index')
+  // Même interpréteur sans console que le serveur : le python.exe d'un venv uv ouvrirait une fenêtre.
+  const interpreter = resolveWindowlessInterpreter(python)
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
+  // Le Python de base ignore le venv : ses paquets se retrouvent par PYTHONPATH.
+  if (interpreter.venvSitePackages) childEnv.PYTHONPATH = interpreter.venvSitePackages
   // Nom lu par les scripts Python du Brain ; l'ancien nom aussi, pour une copie deja installee.
   childEnv.AUTOWIN_BRAIN_ROOT = brainRoot
   recopierNomsHistoriques(childEnv, env)
@@ -209,7 +213,7 @@ export function startBrainIndexRebuild(
   const options = { cwd: tooling, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
 
   const lancer = (essaiFinal: boolean): void => {
-    const child = spawnFn(python, args, options)
+    const child = spawnFn(interpreter.bin, args, options)
     // Node peut émettre `error` PUIS `exit` pour le même processus : sans ce verrou, un échec
     // compterait deux fois et lancerait deux « seconds essais ».
     let regle = false

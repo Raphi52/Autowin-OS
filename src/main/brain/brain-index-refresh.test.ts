@@ -8,7 +8,8 @@ import {
   needsIndexRebuild,
   readBrainHealth,
   reindexerApresMutation,
-  resetBrainIndexRefreshAttempt
+  resetBrainIndexRefreshAttempt,
+  startBrainIndexRebuild
 } from './brain-index-refresh'
 
 /** Doublure de `spawn` dont on déclenche la FIN à la main : `fins[n](code)` clôt le n-ième lancement. */
@@ -450,5 +451,39 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
     expect(needsIndexRebuild({ state: 'unavailable', reasons: ['index freshness mismatch'] })).toBe(
       false
     )
+  })
+})
+
+describe('lancement de la réindexation depuis un venv uv', () => {
+  afterEach(() => resetBrainIndexRefreshAttempt())
+
+  it('réindexe avec le Python de BASE sans console, jamais avec le relais python.exe du venv', () => {
+    // Même cause que la curation : le python.exe d'un venv uv est un relais console, qui ouvre une
+    // fenêtre neuve pour le Python de base. Le serveur visait déjà le pythonw de base.
+    const { env } = fauxBrain()
+    const venv = mkdtempSync(join(tmpdir(), 'index-refresh-uv-venv-'))
+    const base = mkdtempSync(join(tmpdir(), 'index-refresh-uv-base-'))
+    mkdirSync(join(venv, 'Scripts'), { recursive: true })
+    writeFileSync(join(venv, 'Scripts', 'python.exe'), '')
+    writeFileSync(join(venv, 'Scripts', 'pythonw.exe'), '')
+    writeFileSync(join(base, 'pythonw.exe'), '')
+    writeFileSync(join(venv, 'pyvenv.cfg'), `home = ${base}\nuv = 0.12.7\n`)
+    const lances: { ligne: string; env: NodeJS.ProcessEnv | undefined }[] = []
+    const spawnFn = (
+      bin: string,
+      args: readonly string[],
+      options: { env?: NodeJS.ProcessEnv }
+    ) => {
+      lances.push({ ligne: [bin, ...args].join(' '), env: options.env })
+      return { unref: vi.fn(), once: vi.fn() }
+    }
+    const resultat = startBrainIndexRebuild(
+      { ...env, AUTOWIN_BRAIN_PYTHON: join(venv, 'Scripts', 'python.exe') },
+      spawnFn as never
+    )
+    expect(resultat.status).toBe('launched')
+    expect(lances[0].ligne.startsWith(join(base, 'pythonw.exe'))).toBe(true)
+    expect(lances[0].ligne).not.toContain(join(venv, 'Scripts', 'python.exe'))
+    expect(lances[0].env?.PYTHONPATH).toBe(join(venv, 'Lib', 'site-packages'))
   })
 })
