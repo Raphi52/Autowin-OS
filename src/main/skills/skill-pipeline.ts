@@ -67,6 +67,25 @@ export function skillNommeeSansBarre(message: string, roots = skillRoots()): str
 }
 
 /**
+ * `draft` nu EN PLEINE PHRASE, quand le mot DEMANDE la skill (« draft moi plusieurs pandas », « j'ai
+ * demandé un draft »). Sinon undefined.
+ *
+ * `skillNommeeEnTete` ne lit que la tête du message, et c'est voulu : la simple mention d'une skill ne
+ * doit pas en faire payer le corps. Mais une demande en pleine phrase ne chargeait alors aucune
+ * procédure : le modèle lisait « draft » comme « ébauche » et livrait un format de son invention, sans
+ * galerie de choix. Seules deux formes sont retenues, celles où le mot EST une demande : l'impératif
+ * « draft moi » (ou « draft-moi ») et l'objet indéfini « un draft » / « une draft ». Un mot collé à
+ * d'autres lettres, cité en code, ou précédé d'un article défini ne compte pas. Seul `draft` est traité
+ * ainsi : les autres noms de skill sont des mots courants (build, look, think) qu'une telle règle
+ * chargerait à tort.
+ */
+const DRAFT_DEMANDE_EN_PLEINE_PHRASE = /(?:^|[\s,;:(])(?:draft[- ]moi|(?:un|une)\s+draft)(?![\w-])/i
+
+export function draftDemandeEnPleinePhrase(message: string): string | undefined {
+  return DRAFT_DEMANDE_EN_PLEINE_PHRASE.test(message ?? '') ? 'draft' : undefined
+}
+
+/**
  * Corps injectable d'une skill DÉSIGNÉE PAR SON NOM, phase du pipeline ou non.
  *
  * L'ancien chargeur d'étape ne savait servir que les 7 `PipelinePhase` : c'est ce qui rendait `/remake`

@@ -17,6 +17,7 @@ import type { Message } from '../providers/types'
 import { rappelSansDejaEnvoye } from '../consignes/rappel-conversations'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from '../brain/session-memory-echo'
 import {
+  draftDemandeEnPleinePhrase,
   invokedSkillId,
   noteSkillInconnue,
   skillInstruction,
@@ -96,9 +97,11 @@ export function messageDuTour(entree: {
    */
   // Le nom NU en tete (« draft … ») charge le meme corps que `/draft` : c'est ce qui
   // rend vraie la bulle de skill que le fil affiche desormais pour cette forme.
+  // « draft » demandé en pleine phrase (« draft moi… ») charge la même procédure, sans barre ni tête.
   const invoked =
     invokedSkillId(lastUserMessage?.content ?? '') ??
-    skillNommeeSansBarre(lastUserMessage?.content ?? '')
+    skillNommeeSansBarre(lastUserMessage?.content ?? '') ??
+    draftDemandeEnPleinePhrase(lastUserMessage?.content ?? '')
   // /draft : le choix entre propositions passe par les boutons du bloc, jamais par `ask`
   // (draft-choix-par-boutons.ts — conv-310/311/312, 2026-10-17).
   const draftChoixParBoutons = boucleDraftEnCours(history, invoked)
