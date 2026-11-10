@@ -4,6 +4,7 @@ import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 import { ligneDErreurDAction } from '../../shared/erreur-d-action'
 import { redactTrace } from '../../shared/trace-redact'
 import { enregistrerTarifsCli } from '../activity/cli-usage-recovery'
+import { armerCopieALaDemande } from '../copies/copie-a-la-demande-app'
 import {
   assertArgvWithinLimit,
   createStreamWatchdog,
@@ -2033,6 +2034,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * JAMAIS le settings.json de l'utilisateur, qui reste son kit.
      */
     let settingsDir: string | undefined
+    /** Arrêt du guet de la copie à la demande de ce lancement (`armerCopieALaDemande`). */
+    let arreterCopieALaDemande: () => void = () => undefined
     try {
       /*
        * ECRITURES ASYNCHRONES. Ce dossier est cree a CHAQUE appel Claude. En synchrone, la moindre
@@ -2090,6 +2093,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // Sans ce fichier, le hook ne réserve rien pour ce lancement : comportement d'avant.
         }
       }
+      // LA COPIE DU FIL S'OUVRE À SA PREMIÈRE ÉCRITURE (`copies/copie-a-la-demande-app.ts`) : pour un
+      // tour parti sans copie dans le dépôt partagé, la conf du contrôle et le guet de l'app.
+      arreterCopieALaDemande = await armerCopieALaDemande({
+        dossier: settingsDir,
+        conversationId: opts.conversationId,
+        cwd: execution?.cwd ?? readOnlyCwd
+      })
     } catch {
       // Impossible d'ecrire : on garde le comportement d'origine (sans ces reglages), mais le
       // dossier deja cree ne reste pas derriere (`claude.prompt-systeme.test.ts`).
@@ -2281,6 +2291,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        */
       if (opts.signal?.aborted) throw abortFailure('claude CLI', opts.signal)
     } catch (error) {
+      arreterCopieALaDemande()
       if (journal && fdJournalOuvert) {
         fdJournalOuvert = false
         try {
@@ -3411,6 +3422,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const nettoyerFinDAppel = async (): Promise<void> => {
       if (nettoyageFait) return
       nettoyageFait = true
+      arreterCopieALaDemande()
       // La copie de session que garde le CLI : il l'écrit lui-même, hors de la pompe qui masque sa
       // sortie, donc une valeur du coffre affichée par une commande y restait en clair. Attendu
       // avant la fin du tour : le tour suivant qui reprend la session la relit déjà masquée.

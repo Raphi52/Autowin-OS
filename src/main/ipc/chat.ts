@@ -183,6 +183,7 @@ import { restartApplication } from '../app/app-restart'
 import { annoncerFermeture } from '../app/journal-arrets'
 import { consommerReprise } from '../app/redemarrage-reprise'
 import {
+  annonceDeCopieOuverteALaPremiereEcriture,
   avertissementDossierConversation,
   copieOuTravailleLeFil,
   dossierDeLectureDuFil,
@@ -193,7 +194,8 @@ import {
   preparerLeDossierDuTour,
   refuserTourSiDossierDisparu,
   revenirSiSaCopieADisparu,
-  diagnostiqueDossierConversation
+  diagnostiqueDossierConversation,
+  type IssueDuPassage
 } from '../conversations/bascule-dossier-conversation'
 import {
   CALME_AVANT_MENAGE_MS,
@@ -258,7 +260,12 @@ import {
 import { photographierLeCode } from '../git/photo-du-code'
 import { ligneDeMiseAJour, mettreLaCopieDuFilAJour } from '../git/copie-du-fil-a-jour'
 import { DOSSIER_DES_COPIES_DE_FIL } from '../../shared/copie-du-fil'
-import { demandeSansEcritureDansLeDepot } from '../copies/demande-sans-copie'
+import {
+  demandeSansEcritureDansLeDepot,
+  demandeSurLeDepotPartage
+} from '../copies/demande-sans-copie'
+import { inscrireCopieALaDemande } from '../copies/copie-a-la-demande-app'
+import type { ReponseDeCopie } from '../../shared/copie-a-la-demande'
 import { messageLiaison } from '../store/dependances-copie-agent'
 import { materializeChatArtifact } from '../store/chat-artifact-store'
 import { filterNativePreflight, readNativePreflight } from '../activity/native-preflight'
@@ -2277,7 +2284,9 @@ Le fil reprend ensuite normalement.`
       // Le dépôt de sa copie : le fil y travaille déjà, par elle. Le ranger dans le dépôt lui-même
       // le sortirait de sa copie pour l'y faire revenir au tour suivant.
       ranger: (chemin) => {
-        if (saCopie && memeCheminSurDisque(chemin, saCopie.depot)) return undefined
+        // Relue au moment de ranger : la copie a pu s'ouvrir pendant le tour, à sa première écriture.
+        const copie = copieOuTravailleLeFil(os.conversations.get(conversationId)) ?? saCopie
+        if (copie && memeCheminSurDisque(chemin, copie.depot)) return undefined
         return os.conversations.rangerDansDossier(conversationId, chemin)
       },
       // Le tour est deja parti : l'annonce passe AU-DESSUS de sa reponse, vierge, en cours OU finie.
@@ -2301,12 +2310,18 @@ Le fil reprend ensuite normalement.`
    * celui du fil (sa copie d'abord, son dossier rangé ensuite) dès que c'est un dépôt git ; ailleurs,
    * rien ne change. Une copie qui ne s'ouvre pas, même par une panne de git, est DITE dans le fil, et le
    * tour part là où il était : le passage ne coûte jamais la réponse. Une question seule n'en ouvre pas de neuve.
+   * Un tour du CLI Claude n'en ouvre AUCUNE de neuve ici (`a-la-demande`) : son contrôle avant chaque
+   * outil la demande juste avant la première écriture dans le code (`ouvrirLaCopieEnPleinTour`).
    */
   const passerLeFilDansSaCopie = async (
     conversationId: string,
     messages: Message[]
-  ): Promise<void> => {
+  ): Promise<IssueDuPassage> => {
     const fil = os.conversations.get(conversationId)
+    const demande = [...messages].reverse().find((m) => m.role === 'user')?.content
+    // Le contrôle qui ouvre la copie à la première écriture est celui du CLI Claude (claude.ts).
+    const providerDuTour =
+      fil?.modeleChoisi?.provider ?? os.roles.getBinding('orchestrator').provider
     // fix-ok: le dépôt est celui du fil, quel qu'il soit ; limité au dépôt d'Autowin, un autre dépôt git n'aurait jamais de copie.
     const depot =
       fil?.copieDuFil?.depot ?? dossierDeLectureDuFil(fil?.projectPath, os.executionWorkspace)
@@ -2321,6 +2336,7 @@ Le fil reprend ensuite normalement.`
       rienAEcrire: demandeSansEcritureDansLeDepot(
         [...messages].reverse().find((m) => m.role === 'user')?.content
       ),
+      aLaDemande: providerDuTour === 'claude' && !demandeSurLeDepotPartage(demande),
       // la garde « copie d'avant déjà là » et les annonces de refus vivent dans bascule-dossier-conversation.ts, testées là.
       ouvrirCopie: async () => {
         const copie = await ouvrirLaCopieDuFilPourLeTour({
@@ -2347,11 +2363,49 @@ Le fil reprend ensuite normalement.`
      * Une copie qui vient de s'ouvrir part déjà de main. Ne dit rien quand main n'a pas bougé.
      */
     const copie = copieOuTravailleLeFil(os.conversations.get(conversationId))
-    if (!copie || issue === 'ouverte') return
+    if (!copie || issue === 'ouverte') return issue
     const ligne = ligneDeMiseAJour(
       await mettreLaCopieDuFilAJour({ copie: copie.chemin, conversationId, depot: copie.depot })
     )
     if (ligne) annoncer(ligne)
+    return issue
+  }
+
+  /**
+   * LA COPIE S'OUVRE EN PLEIN TOUR, juste avant la première écriture dans le code : le contrôle du CLI
+   * l'a demandée (`copies/copie-a-la-demande-app.ts`). Même ouverture que celle du début de tour ; les
+   * annonces passent AU-DESSUS de la réponse en cours. Un refus est dit, et le tour écrit alors dans le
+   * dossier partagé, comme quand l'ouverture du début de tour échoue.
+   */
+  const ouvrirLaCopieEnPleinTour = async (
+    conversationId: string,
+    depot: string
+  ): Promise<ReponseDeCopie> => {
+    const annoncer = (ligne: string): void => {
+      os.conversations.append(conversationId, {
+        role: 'assistant',
+        content: ligne,
+        avantLaReponseEnCours: true,
+        auDessusDeLaReponseDuTour: true
+      })
+      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+    }
+    const copie = await ouvrirLaCopieDuFilPourLeTour({
+      dossierDeDonnees: ensureAutowinAppData(appDataRoot),
+      depot,
+      conversationId
+    })
+    if (!copie.ok) {
+      annoncer(
+        `⚠️ La copie de travail de ce fil n'a pas pu s'ouvrir avant sa première modification : ${copie.raison} Ce tour écrit dans le dossier partagé ${depot}.`
+      )
+      return { ok: false, raison: copie.raison }
+    }
+    if (copie.dependances.fait === 'echec') annoncer(`⚠️ ${messageLiaison(copie.dependances)}`)
+    os.conversations.passerDansLaCopie(conversationId, { chemin: copie.chemin, depot })
+    annoncer(annonceDeCopieOuverteALaPremiereEcriture(depot, copie.chemin))
+    broadcast({ type: 'refresh', scope: 'conversations' })
+    return { ok: true, chemin: copie.chemin }
   }
 
   /*
@@ -2493,7 +2547,8 @@ Le fil reprend ensuite normalement.`
        * `preparerLeDossierDuTour` (bascule-dossier-conversation.test.ts) et le passage sans reprise de
        * session (agent-pilot.session-resume.test.ts) étaient rouges sur le code d'avant.
        */
-      if (args[4] === undefined) await passerLeFilDansSaCopie(conversationId, args[1])
+      const passage: IssueDuPassage =
+        args[4] === undefined ? await passerLeFilDansSaCopie(conversationId, args[1]) : 'rien'
       /*
        * LE MODÈLE DU FIL (2026-10-11) : une conversation peut porter son propre modèle.
        * Un modèle imposé par l'appelant (reprise d'un tour coupé, qui rejoue SON modèle d'origine)
@@ -2535,7 +2590,7 @@ Le fil reprend ensuite normalement.`
       const amontAuDebut = defaultGitRunner()
         .then((git) => lireAmont(git, dossierDuTour(conversationId)))
         .catch(() => undefined)
-      const debutPublication = os.autoCloseEnabled()
+      let debutPublication = os.autoCloseEnabled()
         ? await photographierDebutDeTour(dossierDuTour(conversationId))
         : undefined
       /*
@@ -2546,6 +2601,24 @@ Le fil reprend ensuite normalement.`
        */
       if (args[4] === undefined)
         await photographierLeCode({ dossier: dossierDuTour(conversationId), conversationId })
+      /*
+       * LA COPIE À LA PREMIÈRE ÉCRITURE : le tour part dans le dossier partagé, et sa copie s'ouvre
+       * quand le contrôle du CLI voit la première écriture dans le code. La photo de publication
+       * passe alors sur la copie, neuve : c'est elle que la porte publiera à la fin du tour.
+       */
+      const depotDuPassage = dossierDuTour(conversationId)
+      const retirerCopieALaDemande =
+        passage === 'a-la-demande'
+          ? inscrireCopieALaDemande(conversationId, {
+              depot: depotDuPassage,
+              ouvrir: async () => {
+                const ouverte = await ouvrirLaCopieEnPleinTour(conversationId, depotDuPassage)
+                if (ouverte.ok && debutPublication)
+                  debutPublication = await photographierDebutDeTour(ouverte.chemin)
+                return ouverte
+              }
+            })
+          : () => undefined
       try {
         const resultat = await lancerTour(...args)
         // Carte des besoins : jamais attendu, un échec n'atteint jamais la réponse.
@@ -2676,6 +2749,7 @@ Le fil reprend ensuite normalement.`
           .finally(planifierLeMenageDesCopies)
         return resultat
       } finally {
+        retirerCopieALaDemande()
         finirTour()
       }
     })

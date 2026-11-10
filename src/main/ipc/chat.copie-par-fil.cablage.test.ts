@@ -31,7 +31,28 @@ describe('une copie par fil — au début du tour', () => {
 
   it('jamais pour un tour repris après un redémarrage : il a commencé avant', () => {
     expect(corps).toContain(
-      'if (args[4] === undefined) await passerLeFilDansSaCopie(conversationId, args[1])'
+      "args[4] === undefined ? await passerLeFilDansSaCopie(conversationId, args[1]) : 'rien'"
+    )
+  })
+
+  it('la copie à la première écriture : inscrite avant le lancement du tour, retirée à sa fin', () => {
+    const inscription = corps.indexOf("passage === 'a-la-demande'")
+    expect(inscription).toBeGreaterThan(corps.indexOf('photographierDebutDeTour(dossierDuTour('))
+    expect(inscription).toBeLessThan(corps.indexOf('await lancerTour(...args)'))
+    expect(corps).toContain('inscrireCopieALaDemande(conversationId, {')
+    // La porte publie la copie : la photo de publication passe sur elle quand elle s'ouvre.
+    expect(corps).toContain('debutPublication = await photographierDebutDeTour(ouverte.chemin)')
+    const fin = corps.slice(
+      corps.indexOf('} finally {', corps.indexOf('await lancerTour(...args)'))
+    )
+    expect(fin.slice(0, 120)).toContain('retirerCopieALaDemande()')
+  })
+
+  it('le tour du CLI Claude n’ouvre plus de copie neuve au départ, sauf /git, /maj, /gc qui n’en ont jamais', () => {
+    const passage = source.slice(source.indexOf('const passerLeFilDansSaCopie = async ('))
+    const bloc = passage.slice(0, passage.indexOf('const tourCompteDesReception'))
+    expect(bloc).toContain(
+      "aLaDemande: providerDuTour === 'claude' && !demandeSurLeDepotPartage(demande)"
     )
   })
 

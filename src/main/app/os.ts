@@ -24,6 +24,7 @@ import {
 import {
   claudeActiveAccountId,
   claudeCompteDuFil,
+  claudeNomDuCompte,
   claudeRotateAccount,
   claudeAccountEnv
 } from '../providers/claude-accounts'
@@ -582,7 +583,9 @@ export class AutowinOS {
       // gardent donc exactement le comportement d'avant (l'echec de quota remonte tel quel).
       (providerId, walled) => (providerId === 'claude' ? claudeRotateAccount(walled) : undefined),
       // 5e argument : le compte CHOISI pour le fil de l'appel, jamais remplacé tout seul.
-      (providerId, fil) => (providerId === 'claude' ? claudeCompteDuFil(fil) : undefined)
+      (providerId, fil) => (providerId === 'claude' ? claudeCompteDuFil(fil) : undefined),
+      // 6e argument : le nom d'un compte, pour qu'un refus de quota dise QUEL compte est vide.
+      (providerId, compte) => (providerId === 'claude' ? claudeNomDuCompte(compte) : undefined)
     )
       // Claude d'abord : il reste l'exécuteur par défaut (`executors[0]` du registre). ChatGPT se
       // choisit, il n'est jamais élu seul. Kimi et Gemini sont retirés : leurs adaptateurs n'existent

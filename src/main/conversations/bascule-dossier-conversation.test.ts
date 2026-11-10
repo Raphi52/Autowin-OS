@@ -179,6 +179,7 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
       depot?: string | null
       ouvrir?: () => Promise<Ouverture>
       rienAEcrire?: boolean
+      aLaDemande?: boolean
     } = {}
   ): {
     issue: ReturnType<typeof preparerLeDossierDuTour>
@@ -192,6 +193,7 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
       depotPartage: options.depot === undefined ? DEPOT : options.depot,
       actif: options.actif ?? true,
       rienAEcrire: options.rienAEcrire ?? false,
+      aLaDemande: options.aLaDemande ?? false,
       ouvrirCopie: async () => {
         ouvertures += 1
         return options.ouvrir ? options.ouvrir() : OUVERTE
@@ -254,6 +256,32 @@ describe('preparerLeDossierDuTour — une copie par fil d’AutoWinOS', () => {
     store.revenirDeLaCopie(id)
 
     const essai = preparer(store, id, { rienAEcrire: true })
+
+    expect(await essai.issue).toBe('reprise')
+    expect(essai.ouvertures()).toBe(0)
+    expect(store.get(id)?.projectPath).toBe(COPIE)
+  })
+
+  // Rapport de défaut : « resume cette video » ouvrait une copie et l'annonçait, sans rien écrire.
+  it('copie à la demande : aucune copie neuve au début du tour, même pour une demande d’action', async () => {
+    const store = new ConversationStore(() => 1000)
+    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
+
+    const essai = preparer(store, id, { aLaDemande: true })
+
+    expect(await essai.issue).toBe('a-la-demande')
+    expect(essai.ouvertures()).toBe(0)
+    expect(essai.annonces).toEqual([])
+    expect(store.get(id)?.projectPath).toBe(DEPOT)
+  })
+
+  it('copie à la demande : une copie déjà notée est reprise au début du tour, comme avant', async () => {
+    const store = new ConversationStore(() => 1000)
+    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
+    store.passerDansLaCopie(id, { chemin: COPIE, depot: DEPOT })
+    store.revenirDeLaCopie(id)
+
+    const essai = preparer(store, id, { aLaDemande: true })
 
     expect(await essai.issue).toBe('reprise')
     expect(essai.ouvertures()).toBe(0)

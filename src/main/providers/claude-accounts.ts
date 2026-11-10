@@ -291,6 +291,26 @@ export function claudeCompteDuFil(conversationId: string | undefined): CompteDuF
 }
 
 /**
+ * LE NOM D'UN COMPTE (celui de sa puce), pour que les messages de quota disent QUEL compte est vide
+ * au lieu de son identifiant (« compte-3 », « default »). Meme injection : non configure, rien.
+ */
+let nomDuCompteProvider: (accountId: string) => string | undefined = () => undefined
+
+export function configureClaudeNomDuCompte(
+  provider: (accountId: string) => string | undefined
+): void {
+  nomDuCompteProvider = provider
+}
+
+export function claudeNomDuCompte(accountId: string): string | undefined {
+  try {
+    return nomDuCompteProvider(accountId)
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Env d'un processus fils Claude, EXPLICITE : `CLAUDE_CONFIG_DIR` y est POSE (compte dedie) ou
  * RETIRE (compte par defaut), jamais laisse a ce que le processus parent trainait.
  *

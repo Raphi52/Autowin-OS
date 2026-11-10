@@ -115,8 +115,8 @@ export async function reprendreApresErreur(
       iteration: i,
       name: provider,
       text:
-        `Quota épuisé sur le compte Claude « ${bascule.compteEpuise} » — le tour repart ` +
-        `sur « ${bascule.compteSuivant} » avec tout le fil`,
+        `Quota épuisé sur le compte Claude « ${bascule.nomEpuise ?? bascule.compteEpuise} » — le tour repart ` +
+        `sur « ${bascule.nomSuivant ?? bascule.compteSuivant} » avec tout le fil`,
       data: { attempt, maxAttempts: attempt + 1, basculeDeCompte: bascule }
     })
     return attempt

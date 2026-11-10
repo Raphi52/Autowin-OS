@@ -65,6 +65,7 @@ import {
   ClaudeAccountsStore,
   configureClaudeAccountEnv,
   configureClaudeCompteDuFil,
+  configureClaudeNomDuCompte,
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation,
   withClaudeAccountEnv
@@ -1240,6 +1241,8 @@ configureClaudeCompteDuFil((conversationId) => {
   const choisi = os.conversations.get(conversationId)?.claudeAccountId
   return choisi ? claudeAccounts.compteDuFil(choisi) : undefined
 })
+// Le nom de la puce d'un compte : un refus de quota le cite au lieu de « compte-3 » ou « default ».
+configureClaudeNomDuCompte((accountId) => claudeAccounts.compteDuFil(accountId)?.nom)
 // La copie du fil voyage avec le tour : quand le fil vient de passer dans sa copie, sa session est
 // recopiée sous elle (sans ce cablage, le passage ne se reconnaît jamais et la session est oubliée).
 // fix-ok: cause mesurée — le défaut `() => null` de session-du-tour.ts ne reconnaît aucun passage ;

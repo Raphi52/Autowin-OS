@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClaudeAccountsStore, DEFAULT_ACCOUNT_ID } from './claude-accounts'
 import { ProviderRegistry, basculeApresQuota } from './registry'
+import { estMurDeQuota, instantDeRetourAnnonce } from '../../shared/reprise-quota'
 import {
   ProviderCallError,
   type Message,
@@ -619,5 +620,125 @@ describe('quota épuisé APRÈS du texte affiché : bascule rendue à l’appela
     })
     expect(rotations).toEqual([])
     expect(actif).toBe('compte-C')
+  })
+})
+
+/**
+ * LES DEUX COMPTES TOMBENT DANS LE MÊME TOUR : LE MESSAGE NOMME CHACUN.
+ *
+ * Cas réel (run-stdout f3c665df puis cdca4224, 2026-11-09 19:27) : le compte gmail atteint sa limite
+ * hebdomadaire après 25 min de travail, le tour repart sur le compte pro, qui est lui aussi à 100 %
+ * de la sienne. Le fil n'affichait que le dernier refus, « You've hit your weekly limit · resets 1am »,
+ * sans nommer de compte, et l'annonce du changement parlait de « compte-3 » et « default ».
+ * L'utilisateur y a lu une erreur de compte : « c'est le gmail dont j'ai épuisé les crédits ».
+ */
+describe('tous les comptes épuisés dans le même tour : chacun est nommé', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-09T18:27:00Z'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const REFUS_GMAIL =
+    "Claude a interrompu l'appel : You've hit your weekly limit · resets Nov 12, 4am (Europe/Paris)"
+  const REFUS_PRO =
+    "Claude a interrompu l'appel : You've hit your weekly limit · resets 1am (Europe/Paris)"
+  const NOMS: Record<string, string> = {
+    'compte-3': 'perso@gmail.com',
+    default: 'pro@entreprise.fr'
+  }
+
+  function banc() {
+    let actif = 'compte-3'
+    const appels: string[] = []
+    const claude: ProviderAdapter = {
+      id: 'claude',
+      async auth() {
+        return true
+      },
+      async *send() {
+        const compte = actif
+        appels.push(compte)
+        yield {
+          delta: compte === 'compte-3' ? 'Je lis les fichiers…' : "You've hit your weekly limit"
+        }
+        throw new ProviderCallError(compte === 'compte-3' ? REFUS_GMAIL : REFUS_PRO, {
+          code: 'success',
+          retryable: false
+        })
+      }
+    }
+    const registry = new ProviderRegistry(
+      undefined,
+      undefined,
+      () => actif,
+      (_providerId, walled) => {
+        actif = walled === 'compte-3' ? 'default' : 'compte-3'
+        return actif
+      },
+      undefined,
+      (_providerId, compte) => NOMS[compte]
+    ).register(claude)
+    return { registry, appels }
+  }
+
+  it('l’annonce du changement de compte nomme les deux comptes par leur adresse', async () => {
+    const { registry } = banc()
+    const erreur = await registry.send('claude', UN_TOUR).catch((e: unknown) => e)
+    expect(basculeApresQuota(erreur)).toEqual({
+      compteEpuise: 'compte-3',
+      compteSuivant: 'default',
+      nomEpuise: 'perso@gmail.com',
+      nomSuivant: 'pro@entreprise.fr'
+    })
+  })
+
+  it('le refus du second compte dit que les deux sont épuisés, chacun avec sa date de retour', async () => {
+    const { registry, appels } = banc()
+    await registry.send('claude', UN_TOUR).catch(() => undefined)
+    const erreur = (await registry.send('claude', UN_TOUR).catch((e: unknown) => e)) as Error
+
+    expect(appels).toEqual(['compte-3', 'default'])
+    expect(erreur).toBeInstanceOf(ProviderCallError)
+    expect(basculeApresQuota(erreur)).toBeUndefined()
+    const message = erreur.message
+    expect(message).toContain('« perso@gmail.com »')
+    expect(message).toContain('jeudi 12 novembre')
+    expect(message).toContain('« pro@entreprise.fr »')
+    expect(message).toContain('mardi 10 novembre')
+    expect(message.indexOf('perso@gmail.com')).toBeLessThan(
+      message.indexOf('pro@entreprise.fr')
+    )
+    // Le refus d'origine reste cité en entier : la reprise automatique y relit l'heure de retour.
+    expect(message).toContain(REFUS_PRO)
+    expect(estMurDeQuota(message)).toBe(true)
+    expect(instantDeRetourAnnonce(message)).toBe(new Date('2026-11-10T00:00:00Z').valueOf())
+  })
+
+  it('sans nom connu (un seul compte, autre fournisseur), le refus reste celui d’avant', async () => {
+    let actif = 'compte-3'
+    const claude: ProviderAdapter = {
+      id: 'claude',
+      async auth() {
+        return true
+      },
+      // eslint-disable-next-line require-yield
+      async *send() {
+        throw new ProviderCallError(REFUS_PRO, { code: 'success', retryable: false })
+      }
+    }
+    const registry = new ProviderRegistry(
+      undefined,
+      undefined,
+      () => actif,
+      () => {
+        actif = 'compte-3'
+        return undefined
+      }
+    ).register(claude)
+    const erreur = (await registry.send('claude', UN_TOUR).catch((e: unknown) => e)) as Error
+    expect(erreur.message).toBe(REFUS_PRO)
   })
 })

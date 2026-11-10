@@ -83,18 +83,20 @@ function murDepuisRefus(raison: string, maintenant: Date = new Date()): MurDeQuo
  * Il cite le refus d'origine en entier : c'est lui que relisent la reprise automatique
  * (`instantDeRetourAnnonce`) et le tri des fils coupés par le quota (`estMurDeQuota`).
  */
+function jusquAuRetour(retourA: number | undefined): string {
+  return retourA === undefined
+    ? ''
+    : ` jusqu'au ${new Date(retourA).toLocaleString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit'
+      })}`
+}
+
 function messageCompteChoisiVide(nomDuCompte: string, refus: string): string {
-  const retourA = instantDeRetourAnnonce(refus)
-  const retour =
-    retourA === undefined
-      ? ''
-      : ` jusqu'au ${new Date(retourA).toLocaleString('fr-FR', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-          hour: '2-digit',
-          minute: '2-digit'
-        })}`
+  const retour = jusquAuRetour(instantDeRetourAnnonce(refus))
   return (
     `Le compte « ${nomDuCompte} » choisi pour ce fil a son quota épuisé${retour}. ` +
     `Le tour s'arrête sans changer de compte : pour continuer, choisis un autre compte dans ce fil. ` +
@@ -117,6 +119,9 @@ export interface BasculeApresQuota {
   readonly compteEpuise: string
   /** Compte désormais actif, au quota encore ouvert : l'appel peut y être rejoué. */
   readonly compteSuivant: string
+  /** Les noms que l'utilisateur voit (adresse du compte), quand le registre sait les lire. */
+  readonly nomEpuise?: string
+  readonly nomSuivant?: string
 }
 
 const basculesApresQuota = new WeakMap<object, BasculeApresQuota>()
@@ -219,8 +224,53 @@ export class ProviderRegistry {
     private readonly compteChoisiDuFil?: (
       providerId: string,
       fil: string | undefined
-    ) => { id: string; nom: string } | undefined
+    ) => { id: string; nom: string } | undefined,
+    /**
+     * LE NOM D'UN COMPTE tel que l'utilisateur le voit (son adresse). Sans lui, un refus de quota
+     * après un changement de compte ne disait pas QUEL compte était vide : le compte gmail tombait,
+     * le tour repartait sur le compte pro, vide lui aussi, et seul le dernier refus s'affichait, lu
+     * comme une erreur de compte. Absent : messages d'avant.
+     */
+    private readonly nomDuCompte?: (providerId: string, compte: string) => string | undefined
   ) {}
+
+  private nomDe(providerId: string, compte: string): string | undefined {
+    try {
+      return this.nomDuCompte?.(providerId, compte) || undefined
+    } catch {
+      return undefined // un store de comptes en panne ne doit jamais casser le message d'erreur
+    }
+  }
+
+  /**
+   * Le refus d'un tour qui n'a plus AUCUN compte libre : chaque compte encore muré, par son nom et
+   * sa date de retour, dans l'ordre où ils sont tombés. Le refus d'origine reste cité à la fin : la
+   * reprise automatique y relit l'heure de retour (`instantDeRetourAnnonce`) et le tri des fils
+   * coupés y reconnaît le quota (`estMurDeQuota`). `undefined` quand aucun compte n'a de nom.
+   */
+  private messageComptesEpuises(providerId: string, refus: string): string | undefined {
+    const prefixe = `${providerId}\u0000`
+    const comptes: string[] = []
+    for (const cle of [...this.quotaWalls.keys()]) {
+      if (!cle.startsWith(prefixe) || !this.murEncoreDebout(cle)) continue
+      const nom = this.nomDe(providerId, cle.slice(prefixe.length))
+      if (!nom) continue
+      comptes.push(`« ${nom} » est à sa limite${jusquAuRetour(this.quotaWalls.get(cle)?.retourA)}`)
+    }
+    if (!comptes.length) return undefined
+    const fournisseur = providerId.charAt(0).toUpperCase() + providerId.slice(1)
+    return (
+      `Aucun compte ${fournisseur} n'a de quota libre : ${comptes.join(' ; ')}. ` +
+      `Refus du fournisseur : ${refus.slice(0, 300)}`
+    )
+  }
+
+  /** Renomme l'erreur d'un tour sans compte libre, quand les comptes ont un nom. Rend l'erreur. */
+  private nommerLesComptesEpuises(error: unknown, providerId: string, refus: string): unknown {
+    const message = this.messageComptesEpuises(providerId, refus)
+    if (message && error instanceof Error) error.message = message
+    return error
+  }
 
   /**
    * Clé du mur de quota. Le quota est une propriété de l'ABONNEMENT, pas du binaire : murer
@@ -435,6 +485,10 @@ export class ProviderRegistry {
           return this.sendPossiblyRotating(id, messages, opts, onChunk, true, visitedWalls)
         }
       }
+      // La rotation a été tentée et n'a trouvé aucun compte libre : chaque compte est nommé.
+      const nommes =
+        mayRotate && accountAtStart ? this.messageComptesEpuises(route.id, mur) : undefined
+      if (nommes) throw new Error(nommes)
       // Le message ne promet plus le redémarrage comme SEULE levée : depuis le 2026-09-16, un refus
       // qui annonce son heure de retour rouvre la porte tout seul à cette heure-là.
       const retour = this.quotaWalls.get(wallKeyAtStart)?.retourA
@@ -623,24 +677,26 @@ export class ProviderRegistry {
       // le dit (`basculeApresQuota`) — l'appelant qui sait effacer et renvoyer le fil rejoue.
       if (mayRotate && raison && compteMure && chunksLivres > 0) {
         const suivant = await this.compteLibreApresQuota(route.id, compteMure)
-        if (suivant && typeof error === 'object' && error !== null) {
-          basculesApresQuota.set(error, { compteEpuise: compteMure, compteSuivant: suivant })
+        if (!suivant) throw this.nommerLesComptesEpuises(error, route.id, raison)
+        if (typeof error === 'object' && error !== null) {
+          const nomEpuise = this.nomDe(route.id, compteMure)
+          const nomSuivant = this.nomDe(route.id, suivant)
+          basculesApresQuota.set(error, {
+            compteEpuise: compteMure,
+            compteSuivant: suivant,
+            ...(nomEpuise ? { nomEpuise } : {}),
+            ...(nomSuivant ? { nomSuivant } : {})
+          })
         }
         throw error
       }
-      if (
-        !mayRotate ||
-        !raison ||
-        chunksLivres > 0 ||
-        !compteMure ||
-        visitedWalls.has(wallKeyAtStart) ||
-        visitedWalls.size >= 8
-      )
-        throw error
+      if (!mayRotate || !raison || chunksLivres > 0 || !compteMure) throw error
+      if (visitedWalls.has(wallKeyAtStart) || visitedWalls.size >= 8)
+        throw this.nommerLesComptesEpuises(error, route.id, raison)
       visitedWalls.add(wallKeyAtStart)
       // Le mur du compte épuisé a déjà été posé par le handler ci-dessus : la bascule ne l'efface pas.
       const suivant = await this.rotateAfterQuota(route.id, compteMure)
-      if (!suivant) throw error
+      if (!suivant) throw this.nommerLesComptesEpuises(error, route.id, raison)
       return this.sendPossiblyRotating(id, messages, opts, onChunk, true, visitedWalls)
     }
     const coordinationCeilingMs = resolveProviderTimeoutMs(

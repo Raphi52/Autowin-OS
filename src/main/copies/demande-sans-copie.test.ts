@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { estUneQuestionSansAction } from '../chat/grow-au-debut'
-import { demandeSansEcritureDansLeDepot } from './demande-sans-copie'
+import { demandeSansEcritureDansLeDepot, demandeSurLeDepotPartage } from './demande-sans-copie'
 
 /**
  * Le critère d'ouverture d'une copie neuve. Le rapport de défaut : un fil neuf ouvert par `/git` seul
@@ -57,5 +57,22 @@ describe('demandeSansEcritureDansLeDepot', () => {
 
   it('une question seule reste sans copie, comme avant', () => {
     expect(demandeSansEcritureDansLeDepot('pourquoi le Board est lent')).toBe(true)
+  })
+})
+
+/** Même ouverte à la première écriture, une copie fausserait le travail de ces skills. */
+describe('demandeSurLeDepotPartage', () => {
+  it.each([['/git pousse tout'], ['/maj'], ['/GC']])('skill du dépôt partagé : %s', (m) => {
+    expect(demandeSurLeDepotPartage(m)).toBe(true)
+  })
+
+  it.each([
+    ['resume cette video'],
+    ['/scout le module veille'],
+    ['git push refusé'],
+    [''],
+    [undefined]
+  ])('tout le reste attend la première écriture : %s', (m) => {
+    expect(demandeSurLeDepotPartage(m)).toBe(false)
   })
 })

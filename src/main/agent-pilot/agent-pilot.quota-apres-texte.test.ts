@@ -45,7 +45,8 @@ const SESSION_LIMIT = (): ProviderCallError =>
  */
 function monter(
   reponse: (rang: number, compte: string, contenu: string) => SendResult | Error,
-  comptes = { actif: 'compte-A' }
+  comptes = { actif: 'compte-A' },
+  noms?: Record<string, string>
 ): { pilote: AgentPilot; appels: Appel[]; comptes: { actif: string } } {
   const appels: Appel[] = []
   const claude: ProviderAdapter = {
@@ -73,7 +74,9 @@ function monter(
     (_providerId, walled) => {
       comptes.actif = walled === 'compte-A' ? 'compte-B' : 'compte-A'
       return comptes.actif
-    }
+    },
+    undefined,
+    noms ? (_providerId, compte) => noms[compte] : undefined
   ).register(claude)
   configureClaudeActiveAccountId(() => comptes.actif)
   const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }
@@ -207,5 +210,45 @@ describe('chat() — quota épuisé APRÈS du texte affiché : le tour repart su
     expect(appels[1]!.options.resumeSessionId).toBeUndefined()
     expect(appels[1]!.contenu).toContain('TOI: ma reponse')
     expect(appels[1]!.contenu).toContain('RÉSULTATS')
+  })
+
+  /*
+   * Cas réel (2026-11-09 19:27, run-stdout f3c665df puis cdca4224) : le compte gmail tombe sur sa
+   * limite hebdomadaire, le tour repart sur le compte pro, à sa limite lui aussi. Le fil n'affichait
+   * que « You've hit your weekly limit · resets 1am », lu comme une erreur de compte.
+   */
+  it('les deux comptes épuisés : l’annonce et l’échec du tour nomment chaque compte par son adresse', async () => {
+    const comptes = { actif: 'compte-A' }
+    const noms = { 'compte-A': 'perso@gmail.com', 'compte-B': 'pro@entreprise.fr' }
+    const { pilote, appels } = monter(
+      (_rang, compte) =>
+        new ProviderCallError(
+          compte === 'compte-A'
+            ? "Claude a interrompu l'appel : You've hit your weekly limit · resets Nov 12, 4am (Europe/Paris)"
+            : "Claude a interrompu l'appel : You've hit your weekly limit · resets 1am (Europe/Paris)",
+          { code: 'success', retryable: false }
+        ),
+      comptes,
+      noms
+    )
+    const evenements: PilotEvent[] = []
+    const erreur = await pilote
+      .chat(fil('travaille'), (e) => evenements.push(e), undefined, 1, 'conv-W')
+      .then(
+        () => undefined,
+        (e: unknown) => e
+      )
+
+    expect(appels.map((a) => a.compte)).toEqual(['compte-A', 'compte-B'])
+    const annonce = JSON.stringify(evenements.filter((e) => e.kind === 'retry'))
+    expect(annonce).toContain('« perso@gmail.com »')
+    expect(annonce).toContain('« pro@entreprise.fr »')
+    expect(annonce).not.toContain('« compte-A »')
+    // L'échec du tour, tel que le fil l'affiche.
+    expect(erreur).toBeInstanceOf(ProviderCallError)
+    const echec = (erreur as Error).message
+    expect(echec).toContain('« perso@gmail.com »')
+    expect(echec).toContain('« pro@entreprise.fr »')
+    expect(echec).toContain('resets 1am')
   })
 })

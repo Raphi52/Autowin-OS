@@ -306,13 +306,22 @@ function annonceDuRefusDOuverture(
   return refus.raison
 }
 
-export type IssueDuPassage = 'rien' | 'ouverte' | 'reprise' | 'revenu' | 'refusee'
+export type IssueDuPassage = 'rien' | 'ouverte' | 'reprise' | 'revenu' | 'refusee' | 'a-la-demande'
+
+/** L'annonce d'une copie ouverte en plein tour, juste avant la première écriture dans le code. */
+export function annonceDeCopieOuverteALaPremiereEcriture(depot: string, chemin: string): string {
+  return `📂 Ce fil vient d'ouvrir sa propre copie de ${basename(depot)} (${chemin}), juste avant sa première modification du code : ses changements entrent dans ${basename(depot)} à la fin de chaque tour.`
+}
 
 /**
  * LE DOSSIER DU FIL, DÉCIDÉ AU DÉBUT DE SON TOUR, avant que le dossier du tour soit lu.
  *  - réglage allumé, fil du dépôt partagé : il reprend sa copie si elle existe encore, sinon il en
  *    reçoit une (`ouvrirCopie`) ; une ouverture refusée le laisse où il était, raison dite ;
- *  - une demande qui n'écrit rien dans le code (`rienAEcrire` : une question, `/git`, `/scout`…)
+ *  - `aLaDemande` (le modèle du tour passe par le contrôle avant chaque outil) : AUCUNE copie neuve
+ *    au début du tour, issue `a-la-demande`. Elle s'ouvre en plein tour, juste avant la première
+ *    écriture dans le code (`copies/copie-a-la-demande-app.ts`) : un tour qui n'écrit rien n'en a
+ *    jamais. Une copie déjà ouverte est reprise comme d'habitude ;
+ *  - sinon, une demande qui n'écrit rien dans le code (`rienAEcrire` : une question, `/git`, `/scout`…)
  *    n'ouvre pas de copie NEUVE : la copie coûtait une annonce, un dossier sur le disque et la session
  *    du modèle pour ne rien isoler. Le fil la reçoit à sa première demande qui écrit ; une copie déjà
  *    ouverte est reprise comme d'habitude ;
@@ -327,6 +336,8 @@ export async function preparerLeDossierDuTour(entree: {
   actif: boolean
   /** La demande du tour n'écrira pas dans le code du dépôt (`demandeSansEcritureDansLeDepot`). */
   rienAEcrire?: boolean
+  /** La copie neuve attend la première écriture du tour au lieu de s'ouvrir maintenant. */
+  aLaDemande?: boolean
   /** L'ouverture de la primitive (`ouvrirLaCopieDeTache`), câblée par `chat.ts` : son résultat exact, motif compris. */
   ouvrirCopie: () => Promise<OuvertureDeCopie>
   passer: (copie: { chemin: string; depot: string }) => void
@@ -357,6 +368,7 @@ export async function preparerLeDossierDuTour(entree: {
     )
     return 'reprise'
   }
+  if (entree.aLaDemande) return 'a-la-demande'
   if (entree.rienAEcrire) return 'rien'
   const ouverte = await entree.ouvrirCopie()
   if (!ouverte.ok) {

@@ -47,6 +47,17 @@ function skillEnTete(demande: string): string | undefined {
   return invokedSkillId(demande) ?? skillNommeeSansBarre(demande)
 }
 
+/**
+ * Vrai quand la demande appelle une skill dont le sujet est le dépôt partagé lui-même (`/git`, `/maj`,
+ * `/gc`) : même ouverte à la première écriture, une copie fausserait son travail.
+ */
+export function demandeSurLeDepotPartage(demande: string | undefined): boolean {
+  const nom = skillEnTete(demande ?? '')
+    ?.trim()
+    .toLowerCase()
+  return Boolean(nom && SKILLS_DU_DEPOT_PARTAGE.has(nom))
+}
+
 /** Vrai quand la demande n'écrira pas dans le code du dépôt : le fil n'a pas besoin de copie neuve. */
 export function demandeSansEcritureDansLeDepot(
   demande: string | undefined,
