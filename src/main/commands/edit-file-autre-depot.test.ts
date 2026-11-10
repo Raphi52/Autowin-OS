@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AppCommandBus } from './commands'
@@ -58,6 +58,37 @@ describe('edit_file — cible dans un AUTRE depot', () => {
       expect(os.worktrees.begin).not.toHaveBeenCalled()
     } finally {
       rmSync(autowin, { recursive: true, force: true })
+      rmSync(autreDepot, { recursive: true, force: true })
+    }
+  })
+
+  it('un fil rangé sur un autre dépôt écrit SON fichier, jamais le fichier homonyme du principal', async () => {
+    const principal = mkdtempSync(join(tmpdir(), 'aos-principal-'))
+    const autreDepot = mkdtempSync(join(tmpdir(), 'aos-fil-depot-'))
+    try {
+      for (const racine of [principal, autreDepot]) {
+        mkdirSync(join(racine, '.git'))
+        mkdirSync(join(racine, 'src'))
+        writeFileSync(join(racine, 'src', 'cle.cs'), 'var cle = "VALEUR";\n', 'utf8')
+      }
+      const os = osMinimal(principal)
+      // Le fil est rangé sur l'autre dépôt : c'est sa conversation qui le porte, comme dans l'app.
+      os.conversations.get = (id: string) =>
+        id === 'conv-12' ? { id, projectPath: autreDepot } : undefined
+      const bus = new AppCommandBus(os, () => {})
+
+      const result = await bus.exec(
+        'edit_file',
+        { path: 'src/cle.cs', oldText: '"VALEUR"', newText: '"NOUVELLE"' },
+        'conv-12'
+      )
+
+      expect(result).toMatchObject({ ok: true, data: { allowed: true } })
+      expect(readFileSync(join(autreDepot, 'src', 'cle.cs'), 'utf8')).toContain('"NOUVELLE"')
+      expect(readFileSync(join(principal, 'src', 'cle.cs'), 'utf8')).toContain('"VALEUR"')
+      expect(os.worktrees.begin).not.toHaveBeenCalled()
+    } finally {
+      rmSync(principal, { recursive: true, force: true })
       rmSync(autreDepot, { recursive: true, force: true })
     }
   })

@@ -108,6 +108,30 @@ describe('renderer chat IPC contract', () => {
     expect(directRun).toContain("broadcast({ type: 'orchestrate-usage', convId: conversationId })")
   })
 
+  it('la lignee directe passe le dossier du fil au run : sa copie vit dans le dépôt de ce dossier', () => {
+    const { main } = readChatContractSources()
+    const directRun = main.slice(
+      main.indexOf("ipcMain.handle('os:orchestrate'"),
+      main.indexOf("ipcMain.handle('os:behaviourComposition'")
+    )
+    // `runTask` reçoit ce dossier en 18ᵉ position, après deux emplacements réservés à la suite de `runtimeSnapshot`.
+    expect(directRun).toMatch(
+      /runtimeSnapshot,\s*undefined,\s*undefined,\s*(\/\/[^\n]*\n\s*)*\{ workspace: dossierDuTour\(conversationId\) \}/
+    )
+  })
+
+  it('la lignée directe refuse un fil dont le dossier rangé a disparu, avant de lancer le run', () => {
+    const { main } = readChatContractSources()
+    const directRun = main.slice(
+      main.indexOf("ipcMain.handle('os:orchestrate'"),
+      main.indexOf("ipcMain.handle('os:behaviourComposition'")
+    )
+    expect(directRun.indexOf('refuserTourSiDossierDisparu(')).toBeGreaterThanOrEqual(0)
+    expect(directRun.indexOf('refuserTourSiDossierDisparu(')).toBeLessThan(
+      directRun.indexOf('os.runTask(')
+    )
+  })
+
   /**
    * Le handler direct est un monolithe qu'aucun harnais ne pilote : le COMPORTEMENT de la projection
    * est teste sur `executionCostCoverageFields` (`shared/orchestration-outcome.test.ts`), et cette

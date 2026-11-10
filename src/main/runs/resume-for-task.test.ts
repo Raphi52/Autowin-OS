@@ -262,7 +262,11 @@ describe('câblage — le chemin DIRECT reprend lui aussi', () => {
     )
     expect(call).toContain('resumedAcquis?.phaseOutputs')
     expect(call).toContain('conversationId')
-    expect(call).toMatch(/,\s*runtimeSnapshot\s*$/)
+    // Le snapshot du démarrage reste le 15ᵉ argument ; le dossier du fil s'ajoute en 18ᵉ, après deux
+    // emplacements vides. Ce qui compte : le snapshot est transmis tel quel, jamais recapturé.
+    expect(call).toMatch(
+      /,\s*runtimeSnapshot,\s*undefined,\s*undefined,\s*(\/\/[^\n]*\n\s*)*\{ workspace: dossierDuTour\(conversationId\) \}\s*$/
+    )
     expect(call).not.toContain('captureOrchestrationRuntime')
   })
 

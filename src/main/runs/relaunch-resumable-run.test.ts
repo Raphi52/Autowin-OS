@@ -243,6 +243,24 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
     )
   })
 
+  it('passe a runTask le dossier du fil, pour que la copie du run soit cherchee dans SON depot', async () => {
+    const sans = banc()
+    await sans.relance()
+    expect(sans.observe.runTaskArgs[17]).toEqual({ workspace: undefined })
+
+    const avec = banc({
+      sabotage: (d) => ({ ...d, dossierDuFil: (fil) => `D:/projets/${fil}` })
+    })
+    await avec.relance()
+    expect(avec.observe.runTaskArgs[17]).toEqual({ workspace: 'D:/projets/conv-1' })
+  })
+
+  it('ne relance pas un fil dont le dossier rangé a disparu : le run ne part pas du dépôt principal', async () => {
+    const b = banc({ sabotage: (d) => ({ ...d, refusDuFil: () => 'dossier rangé disparu' }) })
+    await b.relance()
+    expect(b.observe.runTaskArgs).toEqual([])
+  })
+
   /**
    * REMPLACE : `toContain('durableResumeTurn.begin(')` et l isolation de la migration des anciens
    * tours. Le texte ne voyait pas QUEL tour etait ouvert ; ici les deux branches sont exercees.

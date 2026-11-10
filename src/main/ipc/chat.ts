@@ -839,6 +839,10 @@ Le fil reprend ensuite normalement.`
     // #6 — un conversationId explicite (ex. traitement ticket) lance la VRAIE pipeline scout→frame→
     // build→judge SUR cette conversation ; sinon on retombe sur la conversation active (comportement historique).
     const conversationId = targetConversationId ?? bus.activeConversationId ?? '__autonomous__'
+    // Un fil dont le dossier rangé a disparu ne lance rien : le run partirait sinon du dépôt principal.
+    refuserTourSiDossierDisparu(os.conversations.get(conversationId)?.projectPath, (raison) =>
+      console.warn('[orchestrate] lancement refusé :', raison)
+    )
     // #2 — run STOPPABLE : on enregistre un AbortController dans le registre du bus pour que
     // `os:orchestrate:cancel` → `abortOrchestration(conversationId, motif)` le coupe réellement
     // (sinon no-op), et le MOTIF traverse jusqu'au message que l'utilisateur lit.
@@ -1012,7 +1016,12 @@ Le fil reprend ensuite normalement.`
           broadcast({ type: 'refresh', scope: 'workflows' })
           broadcast({ type: 'refresh', scope: 'orchestration' })
         },
-        runtimeSnapshot
+        runtimeSnapshot,
+        undefined,
+        undefined,
+        // LE DOSSIER DU FIL, comme `orchestrate` et la relance : la copie du run vit dans le dépôt de ce
+        // dossier. Sans lui, un fil rangé sur un autre dépôt recevait une copie du dossier principal.
+        { workspace: dossierDuTour(conversationId) }
       )
       if (!result.gateBlocked) {
         appendExecutionEvidenceFileTrace(pendingExecutionEvidence, {

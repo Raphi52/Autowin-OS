@@ -321,7 +321,11 @@ import {
 } from './providers/relance-auto-moteur'
 import { creerSuiviDesPublications } from './git/publications-en-vol'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './app/journal-arrets'
-import { copieNotee, dossierDeLectureDuFil } from './conversations/bascule-dossier-conversation'
+import {
+  copieNotee,
+  dossierDeLectureDuFil,
+  refusDossierDuTour
+} from './conversations/bascule-dossier-conversation'
 import { configureCopieDuFilDuChat } from './agent-pilot/session-du-tour'
 import { lecteurDeDeuxLectures } from './chat/deux-lectures-appel'
 import { creerMascotteDuBureau } from './mascotte/mascotte-fenetre'
@@ -2457,6 +2461,9 @@ app.whenReady().then(async () => {
     fenetresVivantes: () => BrowserWindow.getAllWindows(),
     defaultProcessIdentity,
     appelChatReprisPourTour,
+    dossierDuFil: dossierDuTour,
+    refusDuFil: (conversationId) =>
+      refusDossierDuTour(os.conversations.get(conversationId)?.projectPath) ?? undefined,
     gardePlantage: creerGardeRepriseCrash(cheminGardeRepriseCrash(app.getPath('userData'))),
     plansDeLots: suiviDuPlan
   })

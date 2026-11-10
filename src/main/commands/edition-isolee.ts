@@ -9,6 +9,7 @@ import { encodeFile, readFileText, unrepresentableCharacters } from '../fichiers
 import { decisionDeSynchronisation } from '../bureau/synchronisation-cible-bureau'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
+import { depotPrincipalSurDisque } from '../git/depot-git'
 import {
   VERIFY_RELATED_ANGLE_MORT,
   VERIFY_STYLE_ANGLE_MORT,
@@ -42,6 +43,29 @@ import {
   circonstanceDePublication
 } from './publication'
 import type { MesureVerifiee } from './publication'
+
+/*
+ * UN FIL RANGÉ HORS DU DÉPÔT PRINCIPAL. `decideEdit` tient son dossier pour « le dossier » : un chemin
+ * relatif s'y résout, sans être externe. Or le bureau isolé se prend dans le dépôt PRINCIPAL. Sans ce
+ * test, le même chemin relatif viserait le fichier homonyme du principal, qui serait modifié puis
+ * fusionné dans le principal.
+ */
+function estDansLeDepotPrincipal(dossierDuFil: string, principal: string): boolean {
+  if (memeChemin(dossierDuFil, principal)) return true
+  const racineDuFil = depotPrincipalSurDisque(dossierDuFil)
+  const racinePrincipal = depotPrincipalSurDisque(principal)
+  return (
+    racineDuFil !== undefined &&
+    racinePrincipal !== undefined &&
+    memeChemin(racineDuFil, racinePrincipal)
+  )
+}
+
+function memeChemin(a: string, b: string): boolean {
+  const norme = (chemin: string): string =>
+    resolve(chemin).replace(/\\/gu, '/').replace(/\/+$/u, '').toLowerCase()
+  return norme(a) === norme(b)
+}
 
 /**
  * Petite edition ciblee — le « chemin du milieu » entre parler et orchestrer.
@@ -640,7 +664,15 @@ export async function runTracedEditFile(
      * (« je m'occupe de compiler, du commit et des PR »). Les gardes qui comptent restent celles de
      * `decideEdit`, deja evaluees ci-dessus.
      */
-    if (baseDecision.allowed && baseDecision.externe) {
+    /*
+     * UN FIL RANGÉ SUR UN AUTRE DÉPÔT (ou hors de tout dépôt) écrit directement, comme une cible externe :
+     * son bureau isolé se prendrait dans le dépôt principal (voir `estDansLeDepotPrincipal`).
+     */
+    const filHorsDepotPrincipal = !estDansLeDepotPrincipal(
+      bus.workspaceDuTour,
+      bus.os.executionWorkspace
+    )
+    if (baseDecision.allowed && (baseDecision.externe || filHorsDepotPrincipal)) {
       return bus.runEditFile(input, bus.workspaceDuTour)
     }
     /*

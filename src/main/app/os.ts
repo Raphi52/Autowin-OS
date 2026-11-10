@@ -12,6 +12,7 @@ import { traduireCoeur } from '../consignes/textes-coeur'
 import { fermerBureauCacheSiOuvert, racineScriptsHorsArchive } from '../bureau/hdesk-tv'
 import { resolveAutomationInstanceMode } from './headless-instance'
 import { interfaceVisible } from './startup-gate'
+import { CoordinateursParDepot } from '../store/coordinateurs-par-depot'
 import { cheminDuLivrableEntier, ecrireLivrableEntier } from '../runs/livrable-entier'
 import { ProviderRegistry } from '../providers/registry'
 import {
@@ -385,9 +386,21 @@ export class AutowinOS {
     // `orchestratorDeps.executionWorkspace` est fige a la construction de l'OS : il ne peut pas
     // savoir qu'une conversation est rangee sur un autre depot. L'appelant le resout par tour et
     // le passe ici ; un rangement absent ou inutilisable retombe sur le global, comme avant.
+    // Le dépôt du run suit son dossier pour la copie et le décomposeur. La clôture d'un run vert, elle,
+    // publie à la RACINE de ce dépôt, jamais dans une copie de travail. Sans ces éléments, un fil rangé
+    // sur un autre dépôt lisait le sien, puis copiait et publiait dans le dossier principal.
+    // fix-ok: cause localisée — `worktrees`, `decompose` et `closeGreenRun` étaient figés sur le dossier principal.
+    const depot = workspace ?? this.executionWorkspace
+    const racine = this.copiesParDepot
+      ? this.copiesParDepot.depotPour(workspace)
+      : this.executionWorkspace
     const deps = {
       ...this.orchestratorDeps,
-      executionWorkspace: workspace ?? this.executionWorkspace
+      executionWorkspace: depot,
+      worktrees: this.copiesParDepot ? this.copiesParDepot.pour(workspace) : this.worktrees,
+      decompose: this.decomposeurPour(depot),
+      // Hors de tout dépôt, rien ne se publie : le run n'a pas de racine où publier.
+      closeGreenRun: racine ? this.fermetureDeRunPour(racine) : undefined
     }
     /*
      * FIXTURE D'ORCHESTRATION — on remplace le FOURNISSEUR, jamais le pipeline.
@@ -414,6 +427,74 @@ export class AutowinOS {
       })
     }
     return new Orchestrator({ ...deps, currentWorkflow: () => workflow })
+  }
+
+  /**
+   * Le décompositeur d'un run lit le dépôt de CE run : un fil rangé sur un autre dépôt décompose
+   * dans le sien, pas dans le dossier principal.
+   */
+  private decomposeurPour(depot: string): NonNullable<OrchestratorDeps['decompose']> {
+    return buildOrchestratorDecomposer({
+      registry: this.registry,
+      roles: this.roles,
+      cwd: depot,
+      // Sans ce sink, un échec de décomposition (JSON foiré, réseau) et une tâche jugée atomique
+      // retombaient tous deux en séquentiel dans le MÊME silence — aucun moyen de distinguer
+      // « le modèle a tranché » de « le modèle a planté ». `rejected` est désormais un incident
+      // NOMMÉ et visible dans les logs main, distinct de `atomic`.
+      onOutcome: (outcome, task) => {
+        if (outcome.kind === 'rejected') {
+          console.warn(
+            `[decompose] rejected (${outcome.reason}) — fallback séquentiel — task="${task.slice(0, 120)}"`
+          )
+        } else if (outcome.kind === 'atomic') {
+          console.log(`[decompose] atomic (jugée non décomposable) — task="${task.slice(0, 120)}"`)
+        } else {
+          console.log(
+            `[decompose] plan (${outcome.nodes.length} sous-tâches) — task="${task.slice(0, 120)}"`
+          )
+        }
+      }
+    })
+  }
+
+  /**
+   * La clôture d'un run vert publie dans le dépôt où ce run a sa copie : un commit né dans la copie
+   * d'un autre dépôt n'existe pas dans le dossier principal, le viser publierait au mauvais endroit.
+   */
+  private fermetureDeRunPour(depot: string): NonNullable<OrchestratorDeps['closeGreenRun']> {
+    return {
+      // Photo de l'arbre au démarrage : tout ce qui était déjà modifié n'appartient pas au run.
+      begin: (runId) => {
+        if (!this.autoClose) return
+        this.closeBaselines.set(
+          runId,
+          captureCloseBaseline(depot, brainEstUnDepot() ? sharedBrainRoot() : undefined)
+        )
+      },
+      close: async ({ runId, task, projectPublication }) => {
+        const baselinePromise = this.closeBaselines.get(runId)
+        this.closeBaselines.delete(runId)
+        if (!this.autoClose || !baselinePromise) return
+        this.lastAutoClose = await closeGreenRunOnDisk({
+          runId,
+          direct: true,
+          task,
+          projectRepo: depot,
+          brainRepo: brainEstUnDepot() ? sharedBrainRoot() : undefined,
+          baseline: await baselinePromise,
+          projectPublication
+        })
+        // fix-ok: une erreur de texte seul ne laisse pas l'orchestrateur lire la raison du refus ;
+        // l'erreur typée porte le compte rendu.
+        if (projectPublication && projectPublicationNeedsRetry(this.lastAutoClose)) {
+          throw new PublicationARejouer(this.lastAutoClose.project)
+        }
+        // Rendu à l'orchestrateur : l'annonce du commit dit ce qui a VRAIMENT été poussé, au lieu
+        // de « non poussé » écrit en dur (2026-10-25).
+        return this.lastAutoClose.project
+      }
+    }
   }
 
   private async poseConversationWorkflow(
@@ -539,6 +620,11 @@ export class AutowinOS {
    * → comportement historique, workspace partagé). Exposé pour l'IPC d'observabilité (volet A).
    */
   readonly worktrees?: RunWorktreeCoordinator
+  /**
+   * Le coordinateur du dépôt d'un run : `worktrees` pour le dossier principal, un autre pour un fil
+   * rangé sur un autre dépôt. `worktrees` seul donnait à ce fil une copie du dossier principal.
+   */
+  private readonly copiesParDepot: CoordinateursParDepot<RunWorktreeCoordinator>
   /** Le gestionnaire de copies, pour les lectures qui n'orchestrent rien (retention). */
   readonly worktreeManager?: WorktreeManager
   private worktreeRuntimeStatus!: WorktreeRuntimeStatus
@@ -604,151 +690,156 @@ export class AutowinOS {
     // processus suivant : sans ce marqueur, notre propre republication y passerait pour une consigne
     // de lanceur externe et gagnerait contre le dossier choisi dans les Reglages.
     process.env[AUTOWIN_WORKSPACE_ORIGIN_ENV] = 'resolved'
+    // UN GESTIONNAIRE DE COPIES PAR DÉPÔT (`coordinateurs-par-depot.ts`) : celui du dossier principal est
+    // ouvert ici ; celui d'un autre dépôt l'est au premier run d'un fil rangé dessus, par la même fabrique.
+    const ouvrirLesCopiesDe = (
+      depot: string
+    ): { manager: WorktreeManager; coordinateur: RunWorktreeCoordinator; repoId: string } => {
+      const identity = repositoryWorktreeIdentity(join(ensureAutowinAppData(), 'worktrees'), depot)
+      // La racine unique des copies d'agent : les NOUVELLES copies y naissent ; celles d'avant restent
+      // sous `worktrees` jusqu'à leur retrait, et se reprennent là où elles sont.
+      const racineCopiesDeTaches = racineDesCopiesDeTaches(ensureAutowinAppData())
+      const manager = new WorktreeManager({
+        baseRepo: depot,
+        worktreeRoot: identity.root,
+        racineCopiesDeTaches, // fix-ok: le gestionnaire crée les copies sous la racine unique, la même que celle du store de l'état des runs.
+        requireCanonicalRemote: true
+      })
+      const coordinateur = new RunWorktreeCoordinator({
+        // Promesse d'attente FOURNIE ici, et seulement ici : en production ce constructeur tourne
+        // au premier niveau du module principal, et énumérer les copies git bloquait ~25 s avant
+        // qu'aucune fenêtre n'existe. La récupération n'a aucune urgence, l'affichage si. Les
+        // tests, eux, gardent la réconciliation synchrone.
+        //
+        // MAIS elle n'est PAS toujours honorée, et le dire importe : quand les opérations sont
+        // isolées, le coordinateur lance l'inventaire IMMÉDIATEMENT dans son worker et ignore
+        // cette promesse (`run-worktree-coordinator.ts:190-194`) — le thread principal n'est pas
+        // bloqué pour autant, c'est l'autre moitié de la même correction. L'attente ci-dessous ne
+        // sert donc que la branche NON isolée (`:211`). Le commentaire précédent disait « la
+        // réconciliation est REPORTÉE ici » sans cette réserve, et un agent de cadrage l'a cru :
+        // il a bâti un besoin sur un ordonnancement inexistant, que le juge a réfuté en citant
+        // exactement ces lignes (2026-08-19). Un commentaire trop affirmatif se paie en diagnostic.
+        deferRecoveryUntil: interfaceVisible,
+        // `app?.` : hors d'Electron (bancs de test), `app` n'existe pas ; le `try` autour avalerait
+        // l'erreur et l'app partirait sans aucune copie isolée (e2e-chaine).
+        sansRecuperation: resolveAutomationInstanceMode(
+          process.argv,
+          process.env,
+          app?.isPackaged === true
+        ).isolated,
+        manager,
+        // La liste des travaux non publiés suit le dépôt, même touché en ligne de commande
+        // Sans lire git, seulement les fichiers de références sous `.git`.
+        surveillerReferences: (siChange) => surveillerReferencesGit(depot, siChange),
+        // fix-ok: le store et le gestionnaire reçoivent la même racine, pour qu'une copie neuve naisse et soit relue au même endroit.
+        stateStore: new WorktreeRunStateStore(identity.root, identity.repoId, {
+          racineCopiesDeTaches
+        }),
+        /**
+         * PREVENIR quand un travail est abandonne. Verifie le 2026-08-23 : l'application ne
+         * comportait AUCUNE notification -- un travail fini pouvait mourir en silence, et trois
+         * l'ont fait le meme jour. On sonne sur l'ABANDON seulement, jamais sur un refus
+         * ordinaire : 1649 refus sont traces, en notifier une fraction noierait le signal.
+         */
+        /*
+         * SCRIPTS DE COPIE (2026-09-28) : fichiers locaux et préparation déclarés dans
+         * `.autowin/scripts.json` du dépôt, joués à la création de chaque copie d'agent. Voir
+         * `scripts-copie-main.ts` ; rien de déclaré = rien de joué, aucune ligne de trace.
+         */
+        preparerCopie: async (copie, signaler) =>
+          (
+            await preparerCopie(
+              { depot: copie.depot, chemin: copie.chemin, nom: copie.runId },
+              { auDebut: signaler }
+            )
+          )?.resume,
+        onAbandon: ({ tache, runId }) => {
+          // Regroupés sur 2 s : une réconciliation abandonne ses runs dans la même boucle.
+          abandonsEnAttente.push({ tache, runId })
+          if (abandonsEnAttente.length > 1) return
+          setTimeout(() => {
+            const lot = abandonsEnAttente.splice(0)
+            try {
+              if (!Notification.isSupported()) return
+              new Notification(contenuDeNotificationDAbandons(lot)).show()
+            } catch {
+              // Une notification qui echoue ne doit jamais faire tomber la reconciliation.
+            }
+          }, 2000)
+        },
+        onRecoveredPublication: async (publication) => {
+          // Un passage de porte fait entrer le travail d'un fil dans main LOCAL, sans plus : l'envoi
+          // vers le distant reste celui de la publication après le fil, jamais un effet de la porte.
+          // fix-ok: cause mesurée — `endAsync({ merge: true })` sans `onPublished` appelle ce rappel
+          // (`runId: porte-conv-1-x`, coordinateur et WorktreeManager réels), qui poussait main.
+          if (this.autoClose && !estUnPassageDePorte(publication.runId)) {
+            const rapport = await closeGreenRunOnDisk({
+              runId: publication.runId,
+              direct: true,
+              task: publication.task ?? 'Run récupéré',
+              projectRepo: depot,
+              brainRepo: brainEstUnDepot() ? sharedBrainRoot() : undefined,
+              projectPublication: {
+                baseSha: publication.baseSha,
+                publishedSha: publication.agentSha
+              },
+              recoveredWithoutBrainBaseline: true
+            })
+            this.lastAutoClose = rapport
+            // La réponse du run est déjà partie : le refus, s'il y en a un, va dans le fil lui-même.
+            if (publication.conversationId)
+              annonceRefusDuProjet(this.conversations, publication.conversationId, rapport.project)
+            if (projectPublicationNeedsRetry(rapport)) {
+              throw new PublicationARejouer(rapport.project)
+            }
+          }
+          const evidence = preparedCommitMutationEvidence(
+            depot,
+            publication.baseSha,
+            publication.agentSha,
+            publication.causalWatchPaths
+          )
+          const publicationEventId = `worktree-publication:${publication.runId}:${publication.agentSha}`
+          if (publication.conversationId && publication.turnId && evidence.length > 0) {
+            appendExecutionEvidenceFileTrace(evidence, {
+              conversationId: publication.conversationId,
+              turnId: publication.turnId,
+              workspaceRoot: depot,
+              published: true,
+              eventId: publicationEventId
+            })
+          }
+          const claims = {
+            ...watchdogClaimsFromEvidence(evidence, depot),
+            eventId: publicationEventId
+          }
+          if (Object.keys(claims.mutatedLineFingerprints ?? {}).length === 0) return
+          if (this.recoveredCausalClaimsListener) this.recoveredCausalClaimsListener(claims)
+          else this.pendingRecoveredCausalClaims.push(claims)
+        },
+        onActivity: (a) => {
+          // Plusieurs dépôts ouverts : l'écran reçoit l'activité de tous, pas celle du seul émetteur.
+          this.worktreeActivityListener?.(
+            this.copiesParDepot?.plusieurs() ? this.getWorktreeActivity() : a
+          )
+        },
+        onRefusIntegration: (refus) => {
+          this.refusIntegrationListener?.(refus)
+        }
+      })
+      return { manager, coordinateur, repoId: identity.repoId }
+    }
     // Garde : `git worktree` exige un vrai repo. Absent (.git manquant) → pas d'isolation (undefined).
     if (existsSync(join(executionWorkspace, '.git'))) {
       try {
-        const identity = repositoryWorktreeIdentity(
-          join(ensureAutowinAppData(), 'worktrees'),
-          executionWorkspace
-        )
-        // La racine unique des copies d'agent : les NOUVELLES copies y naissent ; celles d'avant restent
-        // sous `worktrees` jusqu'à leur retrait, et se reprennent là où elles sont.
-        const racineCopiesDeTaches = racineDesCopiesDeTaches(ensureAutowinAppData())
-        const manager = new WorktreeManager({
-          baseRepo: executionWorkspace,
-          worktreeRoot: identity.root,
-          racineCopiesDeTaches, // fix-ok: le gestionnaire crée les copies sous la racine unique, la même que celle du store de l'état des runs.
-          requireCanonicalRemote: true
-        })
+        const ouvert = ouvrirLesCopiesDe(executionWorkspace)
         // Le manager est EXPOSE a part : la retention LIT, le coordinateur ORCHESTRE.
-        ;(this as { worktreeManager?: WorktreeManager }).worktreeManager = manager
-        this.worktrees = new RunWorktreeCoordinator({
-          // Promesse d'attente FOURNIE ici, et seulement ici : en production ce constructeur tourne
-          // au premier niveau du module principal, et énumérer les copies git bloquait ~25 s avant
-          // qu'aucune fenêtre n'existe. La récupération n'a aucune urgence, l'affichage si. Les
-          // tests, eux, gardent la réconciliation synchrone.
-          //
-          // MAIS elle n'est PAS toujours honorée, et le dire importe : quand les opérations sont
-          // isolées, le coordinateur lance l'inventaire IMMÉDIATEMENT dans son worker et ignore
-          // cette promesse (`run-worktree-coordinator.ts:190-194`) — le thread principal n'est pas
-          // bloqué pour autant, c'est l'autre moitié de la même correction. L'attente ci-dessous ne
-          // sert donc que la branche NON isolée (`:211`). Le commentaire précédent disait « la
-          // réconciliation est REPORTÉE ici » sans cette réserve, et un agent de cadrage l'a cru :
-          // il a bâti un besoin sur un ordonnancement inexistant, que le juge a réfuté en citant
-          // exactement ces lignes (2026-08-19). Un commentaire trop affirmatif se paie en diagnostic.
-          deferRecoveryUntil: interfaceVisible,
-          // `app?.` : hors d'Electron (bancs de test), `app` n'existe pas ; le `try` autour avalerait
-          // l'erreur et l'app partirait sans aucune copie isolée (e2e-chaine).
-          sansRecuperation: resolveAutomationInstanceMode(
-            process.argv,
-            process.env,
-            app?.isPackaged === true
-          ).isolated,
-          manager,
-          // La liste des travaux non publiés suit le dépôt, même touché en ligne de commande
-          // Sans lire git, seulement les fichiers de références sous `.git`.
-          surveillerReferences: (siChange) => surveillerReferencesGit(executionWorkspace, siChange),
-          // fix-ok: le store et le gestionnaire reçoivent la même racine, pour qu'une copie neuve naisse et soit relue au même endroit.
-          stateStore: new WorktreeRunStateStore(identity.root, identity.repoId, {
-            racineCopiesDeTaches
-          }),
-          /**
-           * PREVENIR quand un travail est abandonne. Verifie le 2026-08-23 : l'application ne
-           * comportait AUCUNE notification -- un travail fini pouvait mourir en silence, et trois
-           * l'ont fait le meme jour. On sonne sur l'ABANDON seulement, jamais sur un refus
-           * ordinaire : 1649 refus sont traces, en notifier une fraction noierait le signal.
-           */
-          /*
-           * SCRIPTS DE COPIE (2026-09-28) : fichiers locaux et préparation déclarés dans
-           * `.autowin/scripts.json` du dépôt, joués à la création de chaque copie d'agent. Voir
-           * `scripts-copie-main.ts` ; rien de déclaré = rien de joué, aucune ligne de trace.
-           */
-          preparerCopie: async (copie, signaler) =>
-            (
-              await preparerCopie(
-                { depot: copie.depot, chemin: copie.chemin, nom: copie.runId },
-                { auDebut: signaler }
-              )
-            )?.resume,
-          onAbandon: ({ tache, runId }) => {
-            // Regroupés sur 2 s : une réconciliation abandonne ses runs dans la même boucle.
-            abandonsEnAttente.push({ tache, runId })
-            if (abandonsEnAttente.length > 1) return
-            setTimeout(() => {
-              const lot = abandonsEnAttente.splice(0)
-              try {
-                if (!Notification.isSupported()) return
-                new Notification(contenuDeNotificationDAbandons(lot)).show()
-              } catch {
-                // Une notification qui echoue ne doit jamais faire tomber la reconciliation.
-              }
-            }, 2000)
-          },
-          onRecoveredPublication: async (publication) => {
-            // Un passage de porte fait entrer le travail d'un fil dans main LOCAL, sans plus : l'envoi
-            // vers le distant reste celui de la publication après le fil, jamais un effet de la porte.
-            // fix-ok: cause mesurée — `endAsync({ merge: true })` sans `onPublished` appelle ce rappel
-            // (`runId: porte-conv-1-x`, coordinateur et WorktreeManager réels), qui poussait main.
-            if (this.autoClose && !estUnPassageDePorte(publication.runId)) {
-              const rapport = await closeGreenRunOnDisk({
-                runId: publication.runId,
-                direct: true,
-                task: publication.task ?? 'Run récupéré',
-                projectRepo: executionWorkspace,
-                brainRepo: brainEstUnDepot() ? sharedBrainRoot() : undefined,
-                projectPublication: {
-                  baseSha: publication.baseSha,
-                  publishedSha: publication.agentSha
-                },
-                recoveredWithoutBrainBaseline: true
-              })
-              this.lastAutoClose = rapport
-              // La réponse du run est déjà partie : le refus, s'il y en a un, va dans le fil lui-même.
-              if (publication.conversationId)
-                annonceRefusDuProjet(
-                  this.conversations,
-                  publication.conversationId,
-                  rapport.project
-                )
-              if (projectPublicationNeedsRetry(rapport)) {
-                throw new PublicationARejouer(rapport.project)
-              }
-            }
-            const evidence = preparedCommitMutationEvidence(
-              executionWorkspace,
-              publication.baseSha,
-              publication.agentSha,
-              publication.causalWatchPaths
-            )
-            const publicationEventId = `worktree-publication:${publication.runId}:${publication.agentSha}`
-            if (publication.conversationId && publication.turnId && evidence.length > 0) {
-              appendExecutionEvidenceFileTrace(evidence, {
-                conversationId: publication.conversationId,
-                turnId: publication.turnId,
-                workspaceRoot: executionWorkspace,
-                published: true,
-                eventId: publicationEventId
-              })
-            }
-            const claims = {
-              ...watchdogClaimsFromEvidence(evidence, executionWorkspace),
-              eventId: publicationEventId
-            }
-            if (Object.keys(claims.mutatedLineFingerprints ?? {}).length === 0) return
-            if (this.recoveredCausalClaimsListener) this.recoveredCausalClaimsListener(claims)
-            else this.pendingRecoveredCausalClaims.push(claims)
-          },
-          onActivity: (a) => {
-            this.worktreeActivityListener?.(a)
-          },
-          onRefusIntegration: (refus) => {
-            this.refusIntegrationListener?.(refus)
-          }
-        })
+        ;(this as { worktreeManager?: WorktreeManager }).worktreeManager = ouvert.manager
+        this.worktrees = ouvert.coordinateur
         this.worktreeRuntimeStatus = {
           available: true,
           workspacePath: executionWorkspace,
-          repoId: identity.repoId
+          repoId: ouvert.repoId
         }
       } catch {
         this.worktreeRuntimeStatus = {
@@ -764,6 +855,17 @@ export class AutowinOS {
         reason: 'not-git'
       }
     }
+    this.copiesParDepot = new CoordinateursParDepot<RunWorktreeCoordinator>(
+      { depot: executionWorkspace, coordinateur: () => this.worktrees },
+      (depot) => {
+        try {
+          return ouvrirLesCopiesDe(depot).coordinateur
+        } catch {
+          // Dépôt dont l'identité ne se lit pas : aucun gestionnaire, le run le dira (« Isolation bloquée »).
+          return undefined
+        }
+      }
+    )
     // Les dépendances sont FIGÉES ici, mais l'orchestrateur est construit PAR RUN (`runTask`) :
     // c'est ce qui donne à chaque tour sa propre closure `currentWorkflow` et supprime l'état
     // partagé entre conversations. `this.orchestrator` n'était utilisé qu'à deux endroits — sa
@@ -918,67 +1020,10 @@ export class AutowinOS {
       judgeFanOut: () => this.fanOut.judge,
       // Fonctionnement NORMAL : on décompose systématiquement via le modèle orchestrateur (best-effort
       // → [] pour une tâche atomique = fallback séquentiel naturel). Pas de « mode » à activer.
-      decompose: buildOrchestratorDecomposer({
-        registry: this.registry,
-        roles: this.roles,
-        cwd: executionWorkspace,
-        // Sans ce sink, un échec de décomposition (JSON foiré, réseau) et une tâche jugée atomique
-        // retombaient tous deux en séquentiel dans le MÊME silence — aucun moyen de distinguer
-        // « le modèle a tranché » de « le modèle a planté ». `rejected` est désormais un incident
-        // NOMMÉ et visible dans les logs main, distinct de `atomic`.
-        onOutcome: (outcome, task) => {
-          if (outcome.kind === 'rejected') {
-            console.warn(
-              `[decompose] rejected (${outcome.reason}) — fallback séquentiel — task="${task.slice(0, 120)}"`
-            )
-          } else if (outcome.kind === 'atomic') {
-            console.log(
-              `[decompose] atomic (jugée non décomposable) — task="${task.slice(0, 120)}"`
-            )
-          } else {
-            console.log(
-              `[decompose] plan (${outcome.nodes.length} sous-tâches) — task="${task.slice(0, 120)}"`
-            )
-          }
-        }
-      }),
+      decompose: this.decomposeurPour(executionWorkspace),
       // Clôture d'un run VERT : publication sur une branche dédiée (jamais main), côté projet puis
       // Brain. OFF par défaut — tant que l'utilisateur ne l'a pas activée, rien n'est publié tout seul.
-      closeGreenRun: {
-        // Photo de l'arbre au démarrage : tout ce qui était déjà modifié n'appartient pas au run.
-        begin: (runId) => {
-          if (!this.autoClose) return
-          this.closeBaselines.set(
-            runId,
-            captureCloseBaseline(
-              executionWorkspace,
-              brainEstUnDepot() ? sharedBrainRoot() : undefined
-            )
-          )
-        },
-        close: async ({ runId, task, projectPublication }) => {
-          const baselinePromise = this.closeBaselines.get(runId)
-          this.closeBaselines.delete(runId)
-          if (!this.autoClose || !baselinePromise) return
-          this.lastAutoClose = await closeGreenRunOnDisk({
-            runId,
-            direct: true,
-            task,
-            projectRepo: executionWorkspace,
-            brainRepo: brainEstUnDepot() ? sharedBrainRoot() : undefined,
-            baseline: await baselinePromise,
-            projectPublication
-          })
-          // fix-ok: une erreur de texte seul ne laisse pas l'orchestrateur lire la raison du refus ;
-          // l'erreur typée porte le compte rendu.
-          if (projectPublication && projectPublicationNeedsRetry(this.lastAutoClose)) {
-            throw new PublicationARejouer(this.lastAutoClose.project)
-          }
-          // Rendu à l'orchestrateur : l'annonce du commit dit ce qui a VRAIMENT été poussé, au lieu
-          // de « non poussé » écrit en dur (2026-10-25).
-          return this.lastAutoClose.project
-        }
-      }
+      closeGreenRun: this.fermetureDeRunPour(executionWorkspace)
     }
     // Instance par DÉFAUT, conservée pour les appelants qui ne passent pas par `runTask`. Le run,
     // lui, s'en construit une avec SA closure de workflow — c'est ce qui isole les conversations.
@@ -1250,7 +1295,21 @@ export class AutowinOS {
   }
 
   getWorktreeActivity(): WorktreeAgentActivity[] {
-    return this.worktrees ? this.worktrees.activity() : []
+    return this.tousLesCoordinateurs().flatMap((coordinateur) => coordinateur.activity())
+  }
+
+  /** Les coordinateurs ouverts, tous dépôts confondus (un objet monté sans constructeur n'a que le principal). */
+  private tousLesCoordinateurs(): RunWorktreeCoordinator[] {
+    return this.copiesParDepot?.tous() ?? (this.worktrees ? [this.worktrees] : [])
+  }
+
+  /** Le coordinateur qui suit cet agent : celui de son dépôt, sinon celui du dossier principal. */
+  private coordinateurDe(agentId: string): RunWorktreeCoordinator | undefined {
+    return (
+      this.tousLesCoordinateurs().find((coordinateur) =>
+        coordinateur.activity().some((activite) => activite.agentId === agentId)
+      ) ?? this.worktrees
+    )
   }
 
   getWorktreeRuntimeStatus(): WorktreeRuntimeStatus {
@@ -1264,8 +1323,9 @@ export class AutowinOS {
   }
 
   async getWorktreeConflictDiff(agentId: string): Promise<WorktreeConflictDiffResult> {
-    return this.worktrees
-      ? this.worktrees.conflictDiffAsync(agentId)
+    const coordinateur = this.coordinateurDe(agentId)
+    return coordinateur
+      ? coordinateur.conflictDiffAsync(agentId)
       : { available: false, reason: 'not-conflict' }
   }
 
@@ -1274,7 +1334,7 @@ export class AutowinOS {
     choice: WorktreeConflictResolutionChoice
   ): Promise<WorktreeConflictResolutionResult> {
     return (
-      (await this.worktrees?.resolveConflictAsync(agentId, choice)) ?? {
+      (await this.coordinateurDe(agentId)?.resolveConflictAsync(agentId, choice)) ?? {
         resolved: false,
         reason: 'unsupported'
       }
@@ -1282,7 +1342,7 @@ export class AutowinOS {
   }
 
   async retryWorktreeRecovery(agentId: string): Promise<WorktreeAgentActivity | undefined> {
-    return this.worktrees?.retryRunAsync(agentId)
+    return this.coordinateurDe(agentId)?.retryRunAsync(agentId)
   }
 
   /** Libere une copie en PRESERVANT son travail (branche de recuperation), contrairement a `discard`. */
@@ -1292,7 +1352,7 @@ export class AutowinOS {
     detail?: string
   } {
     return (
-      this.worktrees?.preserverEtLiberer(agentId) ?? {
+      this.coordinateurDe(agentId)?.preserverEtLiberer(agentId) ?? {
         outcome: 'refuse',
         detail: 'coordinateur indisponible'
       }
@@ -1300,7 +1360,7 @@ export class AutowinOS {
   }
 
   async discardHeldWorktree(agentId: string): Promise<boolean> {
-    return (await this.worktrees?.discardHeldAsync(agentId)) ?? false
+    return (await this.coordinateurDe(agentId)?.discardHeldAsync(agentId)) ?? false
   }
 
   /**
@@ -1973,6 +2033,9 @@ export class AutowinOS {
    */
   async listRuns(): Promise<RunEntry[]> {
     const avecConversation = attachConversationIds(await scanRuns(), this.conversations.list())
-    return attachPublicationStates(avecConversation, this.worktrees?.runRecords() ?? [])
+    return attachPublicationStates(
+      avecConversation,
+      this.tousLesCoordinateurs().flatMap((coordinateur) => coordinateur.runRecords())
+    )
   }
 }

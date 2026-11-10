@@ -139,6 +139,16 @@ export type DependancesDeRelance = {
   gardePlantage?: import('./garde-reprise-plantage').GardeRepriseCrash
   /** Absent : aucun plan de lots à prévenir. */
   plansDeLots?: SuiviDuPlan
+  /**
+   * Le dossier où le fil du run est rangé. La reprise le passe au run : sa copie vit dans le dépôt de
+   * ce dossier, et la chercher dans le dossier principal la déclarait absente. Absent : dossier principal.
+   */
+  dossierDuFil?: (conversationId: string) => string | undefined
+  /**
+   * La raison pour laquelle la reprise ne doit pas partir, ou `undefined`. Un fil dont le dossier rangé a
+   * disparu ne se reprend pas : sans ce refus, le run repartirait du dépôt principal. Absent : aucun refus.
+   */
+  refusDuFil?: (conversationId: string) => string | undefined
 }
 
 /** Le candidat de relance : son fil et son tour servent quand le point de reprise a disparu. */
@@ -237,6 +247,14 @@ export function creerRelanceDeRunReprenable(
       fin.issue = issueDuRunPerdu(
         `run ${resumableRun.runId} abandonné : sa reprise au démarrage précédent a fait planter l’app.`
       )
+      return
+    }
+    const refusDuFil = resumableRun.conversationId
+      ? deps.refusDuFil?.(resumableRun.conversationId)
+      : undefined
+    if (refusDuFil) {
+      console.warn('[resume-orchestration] reprise refusée, checkpoint conserve :', refusDuFil)
+      fin.issue = issueDuRunPerdu(`run ${resumableRun.runId} non repris : ${refusDuFil}`)
       return
     }
     gardePlantage?.poser(resumableRun.runId)
@@ -480,7 +498,10 @@ export function creerRelanceDeRunReprenable(
             broadcast({ type: 'refresh', scope: 'workflows' })
             broadcast({ type: 'refresh', scope: 'orchestration' })
           },
-          runtimeSnapshot
+          runtimeSnapshot,
+          undefined,
+          undefined,
+          { workspace: deps.dossierDuFil?.(conversationId) }
         )
       )
       .then(async (result) => {
