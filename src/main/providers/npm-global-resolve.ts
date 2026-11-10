@@ -11,7 +11,7 @@
  * `.cmd` n'est donc jamais exécutable ici — il faut le VRAI fichier (exe, .js, .mjs).
  *
  * Ce module cherche donc un fichier RELATIF À UN PRÉFIXE npm, dans l'ordre : le préfixe par défaut
- * (`%APPDATA%\npm`, comportement historique préservé), puis chaque dossier du PATH.
+ * (`%APPDATA%\npm`, comportement historique préservé, puis celui du profil si APPDATA est redirigé), puis chaque dossier du PATH.
  *
  * MAIS le PATH est HÉRITÉ, donc hostile : le fichier élu ici est spawné avec le prompt système et la
  * conversation. Élire n'importe quel `claude.exe` posé dans n'importe quelle entrée de PATH, c'est
@@ -94,6 +94,11 @@ export function npmPrefixCandidates(env: NodeJS.ProcessEnv = process.env): strin
   }
   // Le prefixe par defaut d'abord : ordre stable, aucune surprise sur un poste deja fonctionnel.
   if (env.APPDATA) push(join(env.APPDATA, 'npm'))
+  // APPDATA peut être REDIRIGÉ (instance de test, profil dédié) : le préfixe où npm a installé le CLI
+  // reste celui du profil de l'utilisateur. Sans lui, la recherche tombait sur le PATH, où une autre
+  // installation peut être refusée (chemin trop long pour ses outils). Sur un poste ordinaire, c'est
+  // le même dossier que le précédent : la déduplication le retire.
+  if (env.USERPROFILE) push(join(env.USERPROFILE, 'AppData', 'Roaming', 'npm'))
   for (const entry of (env.PATH ?? env.Path ?? '').split(';')) push(entry)
   return candidates
 }

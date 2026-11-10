@@ -274,3 +274,64 @@ describe('un CLI dans un dossier trop long pour Windows', () => {
     )
   })
 })
+
+describe('un APPDATA redirigé (instance cachée) ne cache pas le CLI du profil', () => {
+  // Longueurs MESURÉES sur un poste réel : le CLI du PATH (Node de winget) a un compagnon à 264 caractères,
+  // celui installé sous le profil en fait 157. L'instance cachée ne redirige que APPDATA.
+  // Nom de session neutre, de la même longueur (14 caractères) que celui du poste mesuré : le calcul en dépend.
+  const profil = 'C:\\Users\\utilisateur.un'
+  const prefixeWinget = join(
+    profil,
+    'AppData',
+    'Local',
+    'Microsoft',
+    'WinGet',
+    'Packages',
+    'OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe',
+    'node-v24.19.0-win-x64'
+  )
+  const prefixeProfil = join(profil, 'AppData', 'Roaming', 'npm')
+  const entree = (prefixe: string): string =>
+    join(prefixe, 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
+  const natif = (prefixe: string): string =>
+    join(
+      prefixe,
+      'node_modules',
+      '@openai',
+      'codex',
+      'node_modules',
+      '@openai',
+      'codex-win32-x64',
+      'vendor',
+      'x86_64-pc-windows-msvc',
+      'bin',
+      'codex.exe'
+    )
+
+  it('prend le CLI du profil avant celui du PATH, dont le compagnon est trop long', () => {
+    delete process.env.CODEX_BIN
+    const presents = new Set([
+      entree(prefixeWinget),
+      natif(prefixeWinget),
+      entree(prefixeProfil),
+      natif(prefixeProfil)
+    ])
+    const precedents = { PATH: process.env.PATH, USERPROFILE: process.env.USERPROFILE }
+    process.env.PATH = prefixeWinget
+    process.env.USERPROFILE = profil
+    try {
+      const lanceur = codexLauncher(
+        join(profil, 'AppData', 'Local', 'autowin-hdesk', 'instance', 'appdata'),
+        (chemin) => presents.has(chemin),
+        'win32',
+        'x64'
+      )
+      expect(lanceur.executable).toBe(natif(prefixeProfil))
+    } finally {
+      if (precedents.PATH === undefined) delete process.env.PATH
+      else process.env.PATH = precedents.PATH
+      if (precedents.USERPROFILE === undefined) delete process.env.USERPROFILE
+      else process.env.USERPROFILE = precedents.USERPROFILE
+    }
+  })
+})

@@ -35,6 +35,26 @@ describe('npmPrefixCandidates — ordre stable, sans doublon', () => {
     expect(npmPrefixCandidates({})).toEqual([])
   })
 
+  it('un APPDATA redirigé ne cache pas le préfixe npm du profil : il passe avant le PATH', () => {
+    const candidates = npmPrefixCandidates({
+      APPDATA: 'C:\\Users\\x\\AppData\\Local\\autowin-hdesk\\instance\\appdata',
+      USERPROFILE: 'C:\\Users\\x',
+      PATH: 'D:\\tools'
+    })
+    const profil = join('C:\\Users\\x', 'AppData', 'Roaming', 'npm')
+    expect(candidates).toContain(profil)
+    expect(candidates.indexOf(profil)).toBeLessThan(candidates.indexOf('D:\\tools'))
+  })
+
+  it('sur un poste ordinaire, le préfixe du profil est déjà l’APPDATA : aucun doublon', () => {
+    const candidates = npmPrefixCandidates({
+      APPDATA: 'C:\\Users\\x\\AppData\\Roaming',
+      USERPROFILE: 'C:\\Users\\x',
+      PATH: ''
+    })
+    expect(candidates).toEqual([join('C:\\Users\\x\\AppData\\Roaming', 'npm')])
+  })
+
   /**
    * SÉCURITÉ — le PATH est HÉRITÉ (un CLI enfant, un script, ont pu le modifier) et le fichier élu
    * sous ces préfixes est spawné AVEC le prompt système et la conversation. Toute entrée dont le
