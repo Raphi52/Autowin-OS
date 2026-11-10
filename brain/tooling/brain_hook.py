@@ -135,10 +135,54 @@ def _server_python():
     return sys.executable
 
 
+def _pyvenv_cfg(venv):
+    try:
+        with open(os.path.join(venv, "pyvenv.cfg"), encoding="utf-8", errors="replace") as cfg:
+            lines = cfg.read().splitlines()
+    except OSError:
+        return {}
+    keys = {}
+    for line in lines:
+        key, separator, value = line.partition("=")
+        if separator:
+            keys[key.strip()] = value.strip()
+    return keys
+
+
+def _windowless_server(python):
+    """Return the interpreter that starts the server without a console window, and its PYTHONPATH.
+
+    python.exe is a console application: started detached, Windows gives it a window of its own.
+    pythonw.exe is the same interpreter without a console, so it is preferred when it sits beside it.
+    A venv created by uv is the exception: its Scripts/pythonw.exe only launches the base python.exe
+    as a console child, so the window comes back. The real pythonw.exe of that base interpreter
+    (`home` in pyvenv.cfg) is used instead. It does not activate the venv, so the venv's site-packages
+    go in PYTHONPATH.
+    """
+    gui = python
+    if python.lower().endswith("python.exe"):
+        beside = python[: -len("python.exe")] + "pythonw.exe"
+        if os.path.isfile(beside):
+            gui = beside
+    venv = os.path.dirname(os.path.dirname(python))
+    cfg = _pyvenv_cfg(venv) if venv else {}
+    if "uv" not in cfg or not cfg.get("home"):
+        return gui, None
+    base_gui = os.path.join(cfg["home"], "pythonw.exe")
+    if not os.path.isfile(base_gui):
+        return gui, None
+    return base_gui, os.path.join(venv, "Lib", "site-packages")
+
+
 def _spawn_server():
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
-    command = [_server_python(), str(Path(__file__).with_name("brain_server.py"))]
+    python = _server_python()
+    if os.name == "nt":
+        python, site_packages = _windowless_server(python)
+        if site_packages:
+            env["PYTHONPATH"] = site_packages
+    command = [python, str(Path(__file__).with_name("brain_server.py"))]
     kwargs = {
         "cwd": str(Path(__file__).resolve().parent),
         "env": env,

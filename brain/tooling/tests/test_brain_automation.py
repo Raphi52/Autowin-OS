@@ -588,6 +588,70 @@ class BrainHookTests(unittest.TestCase):
             _validate_response(forged, token)
 
 
+@unittest.skipUnless(os.name == "nt", "a console window only exists on Windows")
+class BrainHookSpawnTests(unittest.TestCase):
+    # The hook starts the server detached. A console python.exe then gets a window of its own, and
+    # so does the python.exe of a uv venv, which relays to the base interpreter. pythonw.exe does not.
+
+    def setUp(self):
+        workdir = tempfile.TemporaryDirectory()
+        self.addCleanup(workdir.cleanup)
+        self.root = Path(workdir.name)
+
+    def _venv(self, home=None):
+        venv = self.root / "venv"
+        (venv / "Scripts").mkdir(parents=True)
+        for name in ("python.exe", "pythonw.exe"):
+            (venv / "Scripts" / name).write_bytes(b"")
+        if home is None:
+            cfg = "include-system-site-packages = false\n"
+        else:
+            cfg = f"home = {home}\nuv = 0.12.7\n"
+        (venv / "pyvenv.cfg").write_text(cfg, encoding="utf-8")
+        return venv
+
+    def _spawn(self, python, environ=None):
+        with (
+            patch.dict(os.environ, environ or {}),
+            patch.object(brain_hook, "_server_python", return_value=str(python)),
+            patch.object(brain_hook.subprocess, "Popen") as popen,
+        ):
+            brain_hook._spawn_server()
+        command = popen.call_args.args[0]
+        return command[0], popen.call_args.kwargs["env"]
+
+    def test_uv_venv_launches_base_pythonw_with_venv_packages(self):
+        base = self.root / "base"
+        base.mkdir()
+        (base / "pythonw.exe").write_bytes(b"")
+        venv = self._venv(home=base)
+        executable, env = self._spawn(venv / "Scripts" / "python.exe", {"PYTHONPATH": "/leaked/path"})
+        self.assertEqual(executable, str(base / "pythonw.exe"))
+        self.assertEqual(env["PYTHONPATH"], str(venv / "Lib" / "site-packages"))
+
+    def test_standard_venv_launches_its_own_pythonw(self):
+        venv = self._venv(home=None)
+        executable, env = self._spawn(venv / "Scripts" / "python.exe")
+        self.assertEqual(executable, str(venv / "Scripts" / "pythonw.exe"))
+        self.assertNotIn("PYTHONPATH", env)
+
+    def test_uv_venv_without_base_pythonw_falls_back_to_the_venv_pythonw(self):
+        base = self.root / "base-without-pythonw"
+        base.mkdir()
+        venv = self._venv(home=base)
+        executable, env = self._spawn(venv / "Scripts" / "python.exe")
+        self.assertEqual(executable, str(venv / "Scripts" / "pythonw.exe"))
+        self.assertNotIn("PYTHONPATH", env)
+
+    def test_python_outside_a_venv_launches_the_sibling_pythonw(self):
+        install = self.root / "Python312"
+        install.mkdir()
+        (install / "python.exe").write_bytes(b"")
+        (install / "pythonw.exe").write_bytes(b"")
+        executable, _env = self._spawn(install / "python.exe")
+        self.assertEqual(executable, str(install / "pythonw.exe"))
+
+
 class HermesPluginTests(unittest.TestCase):
     @staticmethod
     def _load_plugin():
