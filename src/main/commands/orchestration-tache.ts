@@ -22,6 +22,10 @@ import { convRunsRoot } from '../runs/conv-runs'
 import { collectOrchestrationContext } from '../orchestration/orchestration-context'
 import { CONTEXT_MESSAGE_LIMIT } from '../conversations/conversation-window'
 
+/** Sépare le message de l'utilisateur de ce que le chat lui fait relire, dans la tâche d'un juge. */
+export const MARQUEUR_OBJET_DE_LA_RELECTURE =
+  'OBJET DE LA RELECTURE, désigné par le chat pour répondre à cette demande :'
+
 type ConversationDuRun = ReturnType<AppCommandBus['os']['conversations']['get']>
 
 /** Ce que la suite du cas `orchestrate` relit de la composition : le reste est local à elle. */
@@ -79,7 +83,19 @@ export function composerTacheDOrchestration(
     ORCHESTRATE_PHASES.has(requestedPhase) &&
     classifyRegime(authoritativeTask) !== 'critical'
   const phasePrefix = modelPhaseAllowed ? `/${requestedPhase} ` : ''
-  const requestedTask = `${phasePrefix}${authoritativeTask}`
+  // Une relecture lancée par le chat porte SON objet dans `task` : le message de l'utilisateur
+  // (« je vois pas le verdict ») ne dit souvent pas quoi relire, et le juge refuse alors de noter
+  // un objet qu'on ne lui désigne pas. Réservé à `judge`, qui n'écrit rien : pour une phase qui
+  // modifie, la consigne du modèle ne s'ajoute jamais au contrat de l'utilisateur.
+  const objetDeLaRelecture =
+    modelPhaseAllowed &&
+    suppliedRootTask !== undefined &&
+    !rootNeedsContext &&
+    delegatedTask.trim() &&
+    delegatedTask.trim() !== suppliedRootTask
+      ? `\n\n${MARQUEUR_OBJET_DE_LA_RELECTURE} ${delegatedTask.trim()}`
+      : ''
+  const requestedTask = `${phasePrefix}${authoritativeTask}${objetDeLaRelecture}`
   const conversation = bus.os.conversations.get(convId)
   // fix-ok: tour 93905e01-f715-4aab-aff8-40c7216dfc0c — le dossier etait construit depuis la conversation courante, jamais depuis conv-N nomme dans la commande.
   // `/kaizen conv-61 …` vise, pas la conversation ou la commande est tapee.

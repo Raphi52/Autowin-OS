@@ -76,6 +76,25 @@ describe('phase demandée depuis un fil (rootTask présent)', () => {
     })
   }
 
+  // Cas réel : le message ne nommait pas ce qu'il fallait relire, la consigne du chat le nommait.
+  // Le juge n'a reçu que le message, et a refusé de noter un objet qu'on ne lui désignait pas.
+  it('judge reçoit l’objet à relire que le chat désigne, après le message de l’utilisateur', async () => {
+    const message = "j'ai redémaré je vois pas le verfict"
+    const tache = await lancerDepuisUnFil('judge', message)
+
+    expect(tache).toMatch(/^\/judge /)
+    expect(tache.indexOf(message)).toBeGreaterThan(-1)
+    expect(tache.indexOf('audite le mode auto livré par conv-1341')).toBeGreaterThan(
+      tache.indexOf(message)
+    )
+  })
+
+  it('une phase qui écrit ne reçoit pas la consigne du chat : seul le message fait foi', async () => {
+    const tache = await lancerDepuisUnFil('build')
+
+    expect(tache).not.toContain('audite le mode auto livré par conv-1341')
+  })
+
   it('judge ne réduit pas une tâche à risque à une simple relecture', async () => {
     const critique = "Refactorer toute l'architecture de securite du coffre a cles."
     const tache = await lancerDepuisUnFil('judge', critique)
