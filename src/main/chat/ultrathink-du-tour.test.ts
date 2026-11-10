@@ -5,6 +5,7 @@ import {
   bindingAvecUltrathink,
   consommerUltrathinkTape,
   declarerUltrathinkTape,
+  rendreUltrathinkTape,
   suivreLeTour,
   ultrathinkEnPleinTour
 } from './ultrathink-du-tour'
@@ -161,5 +162,54 @@ describe('ultrathinkEnPleinTour — un message envoyé pendant que le tour trava
     expect(ultrathinkEnPleinTour('conv-e', 'ultrathink regarde aussi k.ts')).toBe(true)
     expect(nouveau.reasoningEffort).toBe('xhigh')
     finNouveau()
+  })
+})
+
+describe('rendreUltrathinkTape — le tour finit sans avoir lu le message', () => {
+  const tour = (): RoleBinding => ({
+    provider: 'claude',
+    model: 'opus-test',
+    reasoningEffort: 'medium'
+  })
+  const recevoir = (fil: string, texte: string): void => {
+    declarerUltrathinkTape(texte)
+    ultrathinkEnPleinTour(fil, texte)
+  }
+
+  it('le message non lu retrouve sa déclaration, une seule fois', () => {
+    const fin = suivreLeTour('conv-f', tour(), catalogue)
+    recevoir('conv-f', 'ultrathink regarde aussi l.ts')
+    fin()
+    expect(consommerUltrathinkTape('ultrathink regarde aussi l.ts')).toBe(false)
+    rendreUltrathinkTape('conv-f', ['ultrathink regarde aussi l.ts\n\n[pièce jointe]'])
+    expect(consommerUltrathinkTape('ultrathink regarde aussi l.ts')).toBe(true)
+    expect(consommerUltrathinkTape('ultrathink regarde aussi l.ts')).toBe(false)
+  })
+
+  it('jumeau : un message lu par le tour ne retrouve rien', () => {
+    const fin = suivreLeTour('conv-g', tour(), catalogue)
+    recevoir('conv-g', 'ultrathink regarde aussi m.ts')
+    fin()
+    rendreUltrathinkTape('conv-g', [])
+    expect(consommerUltrathinkTape('ultrathink regarde aussi m.ts')).toBe(false)
+  })
+
+  it('un message non lu que personne n’a tapé ne gagne pas de déclaration', () => {
+    rendreUltrathinkTape('conv-h', ['ultrathink regarde aussi n.ts'])
+    expect(consommerUltrathinkTape('ultrathink regarde aussi n.ts')).toBe(false)
+  })
+
+  it('le mot tapé d’un tour ne sert pas au message non lu d’un tour suivant', () => {
+    recevoir('conv-i', 'ultrathink regarde aussi o.ts')
+    rendreUltrathinkTape('conv-i', [])
+    rendreUltrathinkTape('conv-i', ['ultrathink regarde aussi o.ts'])
+    expect(consommerUltrathinkTape('ultrathink regarde aussi o.ts')).toBe(false)
+  })
+
+  it('le mot tapé d’un fil ne sert pas au message non lu d’un autre fil', () => {
+    recevoir('conv-j', 'ultrathink regarde aussi p.ts')
+    rendreUltrathinkTape('conv-k', ['ultrathink regarde aussi p.ts'])
+    expect(consommerUltrathinkTape('ultrathink regarde aussi p.ts')).toBe(false)
+    rendreUltrathinkTape('conv-j', [])
   })
 })

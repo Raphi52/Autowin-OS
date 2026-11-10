@@ -325,6 +325,19 @@ describe('orientation qui demande la coupe de l’appel en cours', () => {
       expect(readFileSync(messages, 'utf8')).toBe(avant)
     })
 
+    // Pendant un run, c'est l'agent du CHAT qui doit repartir plus haut : couper l'agent d'une
+    // étape ferait échouer l'étape sans rien monter.
+    it('l’agent d’une étape de run n’est jamais arrêté par cette orientation', () => {
+      ecrireConf(0)
+      deposer(true)
+      const r = appeler(
+        { tool_name: 'Read', tool_input: { file_path: 'x' } },
+        { AUTOWIN_CONVERSATION_ID: 'conv-1240' }
+      )
+      expect(r.status).toBe(0)
+      expect(r.stdout).toBe('')
+    })
+
     it('un outil refusé reste refusé : la coupe attend l’outil suivant', () => {
       ecrireConf(0)
       deposer(true)

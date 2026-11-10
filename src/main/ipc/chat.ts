@@ -356,7 +356,11 @@ import { lancerScoutVeille } from '../veille/scout-claude'
 import { candidatsInternesDuDepot } from '../veille/audit-depot'
 import { dispatcherAvecVeille } from '../veille/dispatch-veille'
 import { deposerOrientationDuFil } from '../conversations/orientations-en-cours-app'
-import { declarerUltrathinkTape, ultrathinkEnPleinTour } from '../chat/ultrathink-du-tour'
+import {
+  declarerUltrathinkTape,
+  rendreUltrathinkTape,
+  ultrathinkEnPleinTour
+} from '../chat/ultrathink-du-tour'
 import type { ContexteIpcChat } from '../index'
 import { lanceurDuLot } from '../orchestration/outils-du-lot'
 
@@ -2935,6 +2939,7 @@ Le fil reprend ensuite normalement.`
            * on le fait ici, avec le même signal. Après un rejeu, la file est déjà vide.
            */
           const orphelines = drainPendingDirectives(call.conversationId)
+          rendreUltrathinkTape(call.conversationId, orphelines)
           if (orphelines.length) {
             broadcast({
               type: 'directives-orphelines',

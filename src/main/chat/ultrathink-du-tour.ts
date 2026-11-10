@@ -11,7 +11,9 @@ import type { ReasoningEffort, RoleBinding } from '../profil/roles'
  *  - seul un mot TAPÉ par la personne dans le champ de saisie compte. L'écran le déclare
  *    (`declarerUltrathinkTape`) juste avant l'envoi ; un message arrivé autrement (suite proposée,
  *    mode auto, autre fil, tâche planifiée) n'a pas de déclaration et ne monte rien ;
- *  - envoyé pendant un tour, il monte le RESTE de ce tour (`ultrathinkEnPleinTour`).
+ *  - envoyé pendant un tour, il monte le RESTE de ce tour (`ultrathinkEnPleinTour`) ; si ce tour
+ *    finit sans l'avoir lu, le message repart comme un tour neuf et garde sa montée
+ *    (`rendreUltrathinkTape`).
  */
 
 /**
@@ -84,14 +86,17 @@ export function consommerUltrathinkTape(
   message: string | undefined,
   maintenant = Date.now()
 ): boolean {
+  return retirerLaDeclaration(message, maintenant) !== undefined
+}
+
+/** Retire la déclaration que porte ce message et rend son texte ; `undefined` s'il n'en porte pas. */
+function retirerLaDeclaration(message: string | undefined, maintenant: number): string | undefined {
   for (let i = declarations.length - 1; i >= 0; i--)
     if (maintenant - declarations[i].at > DUREE_DECLARATION_MS) declarations.splice(i, 1)
-  if (!message) return false
+  if (!message) return undefined
   const recu = sansEspacesVariables(message)
   const rang = declarations.findIndex((declaration) => recu.includes(declaration.texte))
-  if (rang < 0) return false
-  declarations.splice(rang, 1)
-  return true
+  return rang < 0 ? undefined : declarations.splice(rang, 1)[0].texte
 }
 
 // --- Le tour en cours : un message « ultrathink » envoyé pendant qu'il travaille ----------------
@@ -100,6 +105,13 @@ const toursEnCours = new Map<
   string,
   { binding: RoleBinding; catalogue: () => ImportedModel[] | undefined }
 >()
+
+/**
+ * Les mots tapés reçus pendant le tour de chaque fil. Un tour qui rédige déjà sa réponse finale ne
+ * relit plus ses messages : l'app les renvoie alors comme un tour neuf, qui doit encore savoir que
+ * le mot a été tapé — sinon il partirait au niveau habituel.
+ */
+const tapesEnPleinTour = new Map<string, string[]>()
 
 /**
  * Suit le réglage d'un tour le temps qu'il tourne. `binding` doit être la COPIE du tour, celle que
@@ -122,12 +134,41 @@ export function suivreLeTour(
  * du tour peut monter, le RESTE du tour monte : les appels suivants au modèle partent plus haut.
  * Vrai = l'appel en cours doit être coupé après son outil pour repartir à ce niveau.
  */
-export function ultrathinkEnPleinTour(conversationId: string, message: string): boolean {
-  if (!consommerUltrathinkTape(message)) return false
+export function ultrathinkEnPleinTour(
+  conversationId: string,
+  message: string,
+  maintenant = Date.now()
+): boolean {
+  const tape = retirerLaDeclaration(message, maintenant)
+  if (tape === undefined) return false
+  tapesEnPleinTour.set(conversationId, [...(tapesEnPleinTour.get(conversationId) ?? []), tape])
   const suivi = toursEnCours.get(conversationId)
   if (!suivi) return false
   const effort = effortMonte(suivi.binding, suivi.catalogue)
   if (effort === undefined) return false
   suivi.binding.reasoningEffort = effort
   return true
+}
+
+/**
+ * Fin du tour de ce fil. `nonLus` : les messages reçus pendant le tour qu'il n'a jamais lus, et que
+ * l'app renvoie comme un tour neuf. Ceux dont le mot avait été tapé retrouvent leur déclaration ; les
+ * autres mots tapés du tour ont servi et sont oubliés.
+ */
+export function rendreUltrathinkTape(
+  conversationId: string,
+  nonLus: readonly string[],
+  maintenant = Date.now()
+): void {
+  const tapes = tapesEnPleinTour.get(conversationId)
+  if (!tapes) return
+  tapesEnPleinTour.delete(conversationId)
+  const restants = nonLus.map(sansEspacesVariables)
+  for (const texte of tapes) {
+    const rang = restants.findIndex((nonLu) => nonLu.includes(texte))
+    if (rang < 0) continue
+    // Un message non lu ne rend qu'une déclaration : deux messages identiques en rendent deux.
+    restants.splice(rang, 1)
+    declarations.push({ texte, at: maintenant })
+  }
 }

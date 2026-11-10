@@ -112,6 +112,13 @@ describe('zone de saisie du chat — ultrathink tapé à la main', () => {
     expect(declarer.mock.invocationCallOrder[0]).toBeLessThan(onQueue.mock.invocationCallOrder[0])
   })
 
+  it('avec /btw : c’est le texte sans la commande qui est déclaré, celui qui part', async () => {
+    const { saisir, entree } = await monter({ busy: true })
+    await saisir('/btw ultrathink regarde aussi b.ts')
+    await entree()
+    expect(declarer).toHaveBeenCalledExactlyOnceWith('ultrathink regarde aussi b.ts')
+  })
+
   it('mot effacé : plus de signal, rien de déclaré', async () => {
     const { saisir, entree, signal } = await monter()
     await saisir('ultrathink pourquoi ce test échoue')

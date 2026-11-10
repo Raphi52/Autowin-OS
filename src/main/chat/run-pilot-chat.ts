@@ -102,7 +102,12 @@ import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
 import { contenusDesToursArretes } from '../app/reprise-apres-arret'
 import { contenusDesAvisDeLApp, demandeSansAction } from './deux-lectures'
-import { bindingAvecUltrathink, consommerUltrathinkTape, suivreLeTour } from './ultrathink-du-tour'
+import {
+  bindingAvecUltrathink,
+  consommerUltrathinkTape,
+  rendreUltrathinkTape,
+  suivreLeTour
+} from './ultrathink-du-tour'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
 import { solderOrientationsDuFil } from '../conversations/orientations-en-cours-app'
 import { estUnFluxDeBloc } from '../commands/montrer-bloc-command'
@@ -1923,6 +1928,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         if (pendingDirectives.delete(conversationId)) {
           broadcast({ type: 'refresh', scope: 'directives' })
         }
+        // Un « ultrathink » tapé que ce tour n'a pas lu repart avec son message : le tour neuf monte.
+        rendreUltrathinkTape(conversationId, orphelines)
         if (orphelines.length) {
           broadcast({ type: 'directives-orphelines', convId: conversationId, textes: orphelines })
         }

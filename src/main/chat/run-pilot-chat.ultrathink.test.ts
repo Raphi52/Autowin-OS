@@ -17,7 +17,8 @@ import { declarerUltrathinkTape, ultrathinkEnPleinTour } from './ultrathink-du-t
  * Entrée qui doit faire échouer ce test : un tour qui ignore le mot tapé, qui monte sur un mot que
  * personne n'a tapé (suite proposée, autre fil, tâche planifiée), qui garde la réflexion montée au
  * message suivant, qui envoie une question « ultrathink » au modèle des petites tâches, ou qui
- * ignore le mot envoyé pendant que le tour travaille.
+ * ignore le mot envoyé pendant que le tour travaille, ou qui renvoie au niveau habituel un message
+ * tapé que le tour n'a pas eu le temps de lire.
  */
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
@@ -61,7 +62,7 @@ const CATALOGUE = [
 /** Position du réglage du tour dans l'appel au pilote (`turnPilot.chat`, run-pilot-chat.ts). */
 const RANG_DU_REGLAGE = 9
 
-function banc(pendantLAppel?: (filId: string) => void): {
+function banc(pendantLAppel?: (filId: string, enAttente: Map<string, string[]>) => void): {
   store: ConversationStore
   filId: string
   lancer: ReturnType<typeof createRunPilotChat>
@@ -69,13 +70,17 @@ function banc(pendantLAppel?: (filId: string) => void): {
   reglagesRecus: () => RoleBinding[]
   /** Le réglage que la boucle du tour relit à chaque appel au modèle (le même objet, vivant). */
   reglageDuTour: () => RoleBinding
+  /** Ce que l'app annonce à l'écran (dont les messages non lus, rendus en fin de tour). */
+  annonces: () => unknown[]
 } {
   const store = new ConversationStore(() => Date.parse('2026-11-10T10:00:00+01:00'))
   const fil = store.create({ title: 'U', provider: 'claude' })
   const aLEntree: RoleBinding[] = []
+  const enAttente = new Map<string, string[]>()
+  const broadcast = vi.fn()
   const chat = vi.fn(async (...args: unknown[]) => {
     aLEntree.push({ ...(args[RANG_DU_REGLAGE] as RoleBinding) })
-    pendantLAppel?.(fil.id)
+    pendantLAppel?.(fil.id, enAttente)
     return { text: 'fait' }
   })
   const os = avecRepli({
@@ -94,10 +99,10 @@ function banc(pendantLAppel?: (filId: string) => void): {
   const deps = avecRepli({
     os,
     pilot: { chat },
-    pendingDirectives: new Map<string, string[]>(),
+    pendingDirectives: enAttente,
     turnJournalRoot: mkdtempSync(join(tmpdir(), 'autowin-ultrathink-')),
     isolatedTestInstance: false,
-    broadcast: vi.fn(),
+    broadcast,
     drainPendingDirectives: () => [],
     notifyWatchdogWorkflowIncident: vi.fn(),
     watchdogEngine: () => undefined
@@ -107,7 +112,8 @@ function banc(pendantLAppel?: (filId: string) => void): {
     filId: fil.id,
     lancer: createRunPilotChat(deps),
     reglagesRecus: () => aLEntree,
-    reglageDuTour: () => chat.mock.calls.at(-1)?.[RANG_DU_REGLAGE] as RoleBinding
+    reglageDuTour: () => chat.mock.calls.at(-1)?.[RANG_DU_REGLAGE] as RoleBinding,
+    annonces: () => broadcast.mock.calls.map((appel) => appel[0])
   }
 }
 
@@ -210,5 +216,41 @@ describe('ultrathink tapé dans un message envoyé pendant que le tour travaille
     expect(ultrathinkEnPleinTour(filId, ENVOI)).toBe(false)
     await lancer(FENETRE, message('corrige c.ts'), filId)
     expect(reglagesRecus()).toEqual([CHAT, CHAT])
+  })
+
+  /**
+   * Le tour rédige déjà sa réponse finale : il ne relit plus ses messages. L'app rend le message à
+   * l'écran, qui le renvoie comme un tour neuf — sans repasser par le champ de saisie.
+   */
+  it('message tapé que le tour n’a pas lu : rendu à l’écran, puis son tour neuf part à xhigh', async () => {
+    let premierAppel = true
+    const { filId, lancer, reglagesRecus, annonces } = banc((fil, enAttente) => {
+      if (!premierAppel) return
+      premierAppel = false
+      enAttente.set(fil, [ENVOI])
+      declarerUltrathinkTape(ENVOI)
+      ultrathinkEnPleinTour(fil, ENVOI)
+    })
+    await lancer(FENETRE, message('corrige a.ts'), filId)
+    expect(annonces()).toContainEqual({
+      type: 'directives-orphelines',
+      convId: filId,
+      textes: [ENVOI]
+    })
+    await lancer(FENETRE, message(ENVOI), filId)
+    expect(reglagesRecus().map((reglage) => reglage.reasoningEffort)).toEqual(['medium', 'xhigh'])
+  })
+
+  it('jumeau : message tapé que le tour a lu : le même texte renvoyé ensuite ne monte plus', async () => {
+    let premierAppel = true
+    const { filId, lancer, reglagesRecus } = banc((fil) => {
+      if (!premierAppel) return
+      premierAppel = false
+      declarerUltrathinkTape(ENVOI)
+      ultrathinkEnPleinTour(fil, ENVOI)
+    })
+    await lancer(FENETRE, message('corrige a.ts'), filId)
+    await lancer(FENETRE, message(ENVOI), filId)
+    expect(reglagesRecus().map((reglage) => reglage.reasoningEffort)).toEqual(['medium', 'medium'])
   })
 })

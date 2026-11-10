@@ -21,7 +21,7 @@ import {
   useState,
   type ReactNode
 } from 'react'
-import { matchSlashCommands, type SlashCommand } from './chat-view-model'
+import { matchSlashCommands, parseBtw, type SlashCommand } from './chat-view-model'
 import { useTextes } from '../textes'
 import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import {
@@ -331,7 +331,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
 
     /** Envoi ou mise en file du brouillon : l'app apprend d'abord si son « ultrathink » est tapé. */
     function envoyer(): void {
-      if (ultrathinkTape) declarerUltrathinkTape(input)
+      // `/btw` est retiré avant l'envoi : l'app doit reconnaître le texte qui part, pas le brouillon.
+      const btw = parseBtw(input)
+      if (ultrathinkTape) declarerUltrathinkTape(btw.isBtw ? btw.body : input)
       if (props.busy && props.hasActiveConversation) props.onQueue()
       else props.onSend()
     }
