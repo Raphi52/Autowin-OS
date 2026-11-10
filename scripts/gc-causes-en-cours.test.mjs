@@ -4,7 +4,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   utimesSync,
   writeFileSync
@@ -13,7 +12,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { causesDesRunsTermines, runDuFichier } from './gc-causes-en-cours.mjs'
+import {
+  causesDesRunsTermines,
+  runDuFichier,
+  supprimerLesCandidats
+} from './gc-causes-en-cours.mjs'
 
 /*
  * Un poste jetable : `.autowin-data/autowin-os/` avec ses deux dossiers. Les noms reprennent ceux de
@@ -106,11 +109,40 @@ describe('causesDesRunsTermines — ce qui part au ménage', () => {
   })
 })
 
-describe('ligne de commande — lecture seule par défaut, déplacement sur --balayer', () => {
+describe('supprimerLesCandidats — la suppression revérifie chaque candidat', () => {
+  it('un run repris entre la lecture et la suppression garde son fichier', () => {
+    const chemin = causeDuRun(FICHIER_DE_RUN)
+    const candidats = causesDesRunsTermines(ctx()).candidats
+    expect(candidats).toHaveLength(1)
+    etatDuRun(RUN)
+    const bilan = supprimerLesCandidats(candidats, ctx())
+    expect(bilan.supprimes).toEqual([])
+    expect(bilan.retenus.map((r) => r.chemin)).toEqual([chemin])
+    expect(existsSync(chemin)).toBe(true)
+  })
+
+  it('une suppression qui échoue est dite au bilan, et le fichier reste', () => {
+    const dossier = join(appData(), 'cause-en-cours')
+    mkdirSync(dossier, { recursive: true })
+    // Un dossier porte le nom d’un fichier de cause : la suppression le refuse, et le bilan le dit.
+    const bloque = join(dossier, FICHIER_DE_RUN)
+    mkdirSync(bloque)
+    const date = (MAINTENANT - 3 * JOUR_MS) / 1000
+    utimesSync(bloque, date, date)
+    const candidats = causesDesRunsTermines(ctx()).candidats
+    expect(candidats).toHaveLength(1)
+    const bilan = supprimerLesCandidats(candidats, ctx())
+    expect(bilan.supprimes).toEqual([])
+    expect(bilan.echecs.map((e) => e.chemin)).toEqual([bloque])
+    expect(existsSync(bloque)).toBe(true)
+  })
+})
+
+describe('ligne de commande — lecture seule par défaut, suppression directe sur --supprimer', () => {
   const lancer = (...args) =>
     spawnSync(process.execPath, [SCRIPT, '--donnees', donnees, ...args], { encoding: 'utf8' })
 
-  it('sans --balayer : le fichier reste à sa place', () => {
+  it('sans --supprimer : le fichier reste à sa place', () => {
     const chemin = causeDuRun(FICHIER_DE_RUN)
     const sortie = lancer()
     expect(sortie.status).toBe(0)
@@ -118,21 +150,22 @@ describe('ligne de commande — lecture seule par défaut, déplacement sur --ba
     expect(existsSync(chemin)).toBe(true)
   })
 
-  it('--balayer : déplacé dans la corbeille datée avec sa ligne de MANIFEST, rien supprimé', () => {
+  it('--supprimer : le fichier disparaît, sans corbeille, et le bilan le nomme', () => {
     const chemin = causeDuRun(FICHIER_DE_RUN)
-    const contenu = readFileSync(chemin, 'utf8')
-    const sortie = lancer('--balayer')
+    const sortie = lancer('--supprimer')
     expect(sortie.status).toBe(0)
     expect(existsSync(chemin)).toBe(false)
+    expect(existsSync(join(donnees, 'gc-corbeille'))).toBe(false)
+    const bilan = JSON.parse(sortie.stdout)
+    expect(bilan.suppression.supprimes.map((s) => s.chemin)).toEqual([chemin])
+  })
 
-    const corbeille = join(donnees, 'gc-corbeille')
-    const restes = readdirSync(corbeille, { recursive: true }).map(String)
-    const deplace = restes.find((n) => n.endsWith(FICHIER_DE_RUN))
-    expect(deplace).toBeDefined()
-    expect(readFileSync(join(corbeille, deplace), 'utf8')).toBe(contenu)
-
-    const manifeste = restes.find((n) => n.endsWith('MANIFEST.txt'))
-    expect(readFileSync(join(corbeille, manifeste), 'utf8')).toContain(FICHIER_DE_RUN)
+  it('--supprimer avec un run-state illisible : rien ne part, code 1', () => {
+    const chemin = causeDuRun(FICHIER_DE_RUN)
+    writeFileSync(join(appData(), 'run-state'), 'pas un dossier', 'utf8')
+    const sortie = lancer('--supprimer')
+    expect(sortie.status).toBe(1)
+    expect(existsSync(chemin)).toBe(true)
   })
 
   it('un dossier de données introuvable : commande refusée, code 2', () => {
@@ -143,9 +176,18 @@ describe('ligne de commande — lecture seule par défaut, déplacement sur --ba
   })
 })
 
-describe('skills/gc/SKILL.md — le ménage quotidien appelle cette passe', () => {
-  it('la procédure du /gc nomme la commande, sinon le ménage ne la lance jamais', () => {
+describe('skills/gc/SKILL.md — le ménage quotidien lit cette passe, il ne la lance pas en suppression', () => {
+  it('la ligne des causes dit lecture seule, et la suppression directe y attend l’accord', () => {
     const skill = readFileSync(new URL('../skills/gc/SKILL.md', import.meta.url), 'utf8')
-    expect(skill).toContain('node --no-warnings scripts/gc-causes-en-cours.mjs --balayer')
+    const lignes = skill.split('\n').filter((ligne) => ligne.includes('gc-causes-en-cours.mjs'))
+    expect(
+      lignes.some(
+        (ligne) =>
+          ligne.includes('lecture seule') &&
+          ligne.includes('--supprimer') &&
+          ligne.includes('accord')
+      )
+    ).toBe(true)
+    expect(skill).not.toContain('gc-causes-en-cours.mjs --balayer')
   })
 })

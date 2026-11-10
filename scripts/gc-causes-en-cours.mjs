@@ -15,21 +15,22 @@
  * GARDE-FOUS : un fichier modifié depuis moins de 24 h reste, comme partout dans le `/gc`. Un dossier
  * `run-state` illisible ne condamne rien : ce jour-là, aucun run n'est jugé réglé, et le bilan le dit.
  *
- * CE QUI PART : déplacé dans la corbeille datée (`gc-corbeille/AAAA-MM-JJ/`), avec sa ligne de
- * MANIFEST, par `balayer` de `gc-disque.mjs`. Rien n'est supprimé : la purge reste à
- * `scripts/gc-purger-corbeilles.mjs`, sur accord.
+ * CE QUI PART : supprimé pour de bon, sans corbeille, et seulement avec `--supprimer`. Le `/gc`
+ * quotidien ne le lance pas seul (`skills/gc/SKILL.md`) : il affiche la liste, et l'accord de
+ * l'utilisateur tranche. Chaque fichier est revérifié juste avant d'être effacé.
  *
  * Usage, depuis le dépôt Autowin :
- *   node --no-warnings scripts/gc-causes-en-cours.mjs [--balayer] [--donnees <chemin>]
+ *   node --no-warnings scripts/gc-causes-en-cours.mjs [--supprimer] [--donnees <chemin>]
  *
- * Sans `--balayer`, c'est une lecture seule. Sortie : JSON. Code 0 = passe faite, 1 = une sonde a
- * échoué ou un déplacement a échoué (dit dans le bilan), 2 = commande refusée.
+ * Sans `--supprimer`, c'est une lecture seule : le bilan dit ce qui partirait. Sortie : JSON.
+ * Code 0 = passe faite, 1 = une sonde a échoué ou une suppression a échoué (dit dans le bilan),
+ * 2 = commande refusée.
  */
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { balayer, depotEtDonnees } from './gc-disque.mjs'
+import { depotEtDonnees } from './gc-disque.mjs'
 
 const JOUR_MS = 86_400_000
 const PREFIXE_DU_RUN = 'run-'
@@ -109,12 +110,40 @@ export function causesDesRunsTermines(ctx) {
   return { candidats, gardes }
 }
 
+/**
+ * Supprime les candidats, sans corbeille. Chacun est revérifié juste avant : un run repris entre la
+ * lecture et la suppression garde son fichier, et une suppression ne se rattrape pas. Un échec se dit
+ * au bilan, les autres candidats partent quand même. Rend `{ supprimes, retenus, echecs, taille }`.
+ */
+export function supprimerLesCandidats(candidats, ctx) {
+  const encoreCandidats = new Set(causesDesRunsTermines(ctx).candidats.map((c) => c.chemin))
+  const bilan = { supprimes: [], retenus: [], echecs: [], taille: 0 }
+  for (const candidat of candidats) {
+    if (!encoreCandidats.has(candidat.chemin)) {
+      bilan.retenus.push({ chemin: candidat.chemin, motif: 'plus candidat au moment de supprimer' })
+      continue
+    }
+    try {
+      unlinkSync(candidat.chemin)
+      bilan.supprimes.push({
+        chemin: candidat.chemin,
+        taille: candidat.taille,
+        motif: candidat.motif
+      })
+      bilan.taille += candidat.taille
+    } catch (erreur) {
+      bilan.echecs.push({ chemin: candidat.chemin, motif: String(erreur?.code ?? erreur) })
+    }
+  }
+  return bilan
+}
+
 function main() {
   let options
   try {
     options = parseArgs({
       options: {
-        balayer: { type: 'boolean', default: false },
+        supprimer: { type: 'boolean', default: false },
         donnees: { type: 'string' }
       },
       strict: true
@@ -130,9 +159,9 @@ function main() {
   }
   const ctx = { donnees, maintenant: Date.now() }
   const bilan = causesDesRunsTermines(ctx)
-  if (options.balayer) bilan.balayage = balayer(bilan.candidats, ctx)
+  if (options.supprimer) bilan.suppression = supprimerLesCandidats(bilan.candidats, ctx)
   console.log(JSON.stringify(bilan, null, 2))
-  const echec = bilan.sondeEnEchec !== undefined || (bilan.balayage?.echecs.length ?? 0) > 0
+  const echec = bilan.sondeEnEchec !== undefined || (bilan.suppression?.echecs.length ?? 0) > 0
   process.exit(echec ? 1 : 0)
 }
 
