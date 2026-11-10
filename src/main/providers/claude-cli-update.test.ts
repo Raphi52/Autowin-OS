@@ -256,10 +256,13 @@ describe('mise a jour automatique du CLI Claude', () => {
     expect(await versionPubliee(fetch404 as unknown as typeof fetch)).toBeUndefined()
   })
 
-  it('l’app revérifie tant qu’elle tourne, pas seulement au démarrage, avec les versions branchées', () => {
+  it('le contrôle part au démarrage seulement, avec les versions branchées : aucune minuterie de fond', () => {
     const source = readFileSync(join(__dirname, '../index.ts'), 'utf8')
     expect(source).toMatch(/versions: \(bin\) => versionsDuCliClaude\(bin\)/)
-    // Après un résultat qui n'est pas un report, la tentative suivante est quand même programmée.
-    expect(source).toMatch(/\? REESSAI_MISE_A_JOUR_CLI_MS\s*:\s*VERIFICATION_CLI_MS/)
+    // Choix de l'utilisateur : une app restée ouverte ne revérifie pas. La seule reprogrammation
+    // permise est celle d'un binaire occupé.
+    const reprogrammations = source.match(/setTimeout\(tenterMiseAJourCli,[^)]*\)/g) ?? []
+    expect(reprogrammations).toEqual(['setTimeout(tenterMiseAJourCli, REESSAI_MISE_A_JOUR_CLI_MS)'])
+    expect(source).not.toMatch(/setInterval\(tenterMiseAJourCli/)
   })
 })

@@ -1400,28 +1400,27 @@ const agentModelsReady = modelCatalog.refresh(true)
 // Binaire occupe (agents survivants, autre session Claude Code) : la mise a jour echouait a coup sur
 // et bloquait 12 h (vecu le 2026-10-01). Elle est REPORTEE et retentee toutes les 15 min.
 const REESSAI_MISE_A_JOUR_CLI_MS = 15 * 60_000
-// La verification ne partait qu'au demarrage : une app restee ouverte, ou relancee moins de 12 h
-// apres la derniere tentative, gardait l'ancien CLI, donc l'ancienne liste de modeles (Fable 5.2,
-// publie le 2026-11-09 a 20:02, n'est arrive qu'au redemarrage de 01:15). Elle revient maintenant
-// toutes les 30 min ; le module ne lance `claude update` que si une version nouvelle est publiee.
-const VERIFICATION_CLI_MS = 30 * 60_000
+// Verification AU DEMARRAGE seulement (choix de l'utilisateur) : aucune minuterie tant que l'app reste
+// ouverte. Le demarrage compare la version installee a la version publiee, donc un redemarrage suffit
+// a prendre une publication nouvelle, meme moins de 12 h apres la tentative precedente. Seul un
+// binaire occupe fait retenter, pour ne pas perdre la mise a jour de ce demarrage.
 const tenterMiseAJourCli = (): void => {
   void maybeUpdateClaudeCli(join(app.getPath('userData'), 'claude-cli-update.json'), {
     binaireEnUsage: claudeExeEnCours,
     versions: (bin) => versionsDuCliClaude(bin)
   })
     .then((resultat) => {
-      if (resultat.outcome !== 'skipped') {
-        console.log(
-          `[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`
-        )
+      if (resultat.outcome === 'skipped') return
+      console.log(
+        `[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`
+      )
+      if (resultat.outcome === 'postponed') {
+        setTimeout(tenterMiseAJourCli, REESSAI_MISE_A_JOUR_CLI_MS).unref()
       }
       if (resultat.outcome === 'updated') void modelCatalog.refresh(true)
-      return resultat.outcome === 'postponed' ? REESSAI_MISE_A_JOUR_CLI_MS : VERIFICATION_CLI_MS
     })
-    .catch(() => VERIFICATION_CLI_MS)
-    .then((delai) => {
-      setTimeout(tenterMiseAJourCli, delai).unref()
+    .catch(() => {
+      // Deja neutralise dans le module : rien a faire ici.
     })
 }
 tenterMiseAJourCli()
