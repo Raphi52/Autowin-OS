@@ -35,6 +35,7 @@ import { raisonDeLErreur as message } from '../../shared/raison-de-l-erreur'
 import { supprimerArbreAsync } from '../fichiers/fs-supprimer'
 import {
   avancerLaBaseDuFil,
+  fichiersNonFusionnes,
   LONGUEUR_MAX_CHEMIN_DE_COPIE,
   lireLaBaseDuFil,
   ouvrirCopieDeLaPhoto,
@@ -256,6 +257,15 @@ async function ouvrirSansFile(
     return { ok: true, chemin: copie, base, deja: true, dependances }
   }
 
+  // Pendant une fusion, le dossier partagé porte des marqueurs de conflit : une copie ouverte maintenant
+  // hériterait d'un fichier cassé. Le refus nomme les fichiers, avant toute écriture.
+  const nonFusionnes = await fichiersNonFusionnes(entree.depot, git)
+  if (nonFusionnes.length > 0)
+    return refus(
+      'conflit',
+      `Le dossier partagé est en pleine fusion : ${liste(nonFusionnes)} en conflit. Aucune copie n’a été ouverte ; elle s’ouvrira quand la fusion sera finie.`,
+      nonFusionnes
+    )
   const photo = await photographierLeCode({
     dossier: entree.depot,
     conversationId: entree.tache,

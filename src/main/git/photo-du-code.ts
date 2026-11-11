@@ -71,6 +71,18 @@ async function racineDuDepot(dossier: string, git: GitRunner): Promise<string | 
   return racine || null
 }
 
+/**
+ * Les fichiers non fusionnés du dépôt : ceux qu'une fusion ou un cherry-pick a laissés en conflit. Vide hors
+ * fusion, et vide quand `dossier` n'est pas un dépôt.
+ */
+export async function fichiersNonFusionnes(dossier: string, runGit?: GitRunner): Promise<string[]> {
+  const git = runGit ?? (await defaultGitRunner())
+  const repo = await racineDuDepot(dossier, git)
+  if (!repo) return []
+  const sortie = await git(['diff', '--name-only', '--diff-filter=U', '-z'], repo)
+  return sortie.split('\0').filter(Boolean)
+}
+
 async function photographier(
   entree: {
     dossier: string
@@ -85,6 +97,10 @@ async function photographier(
   if (!ref) return null
   const repo = await racineDuDepot(entree.dossier, git)
   if (!repo) return null
+  // Pendant une fusion, un fichier en conflit porte ses marqueurs `<<<<<<<` : les ranger dans la photo ferait
+  // de ce texte cassé l'état du code, et une copie ouverte dessus hériterait d'un fichier cassé. Pas de photo
+  // tant que la fusion dure : le tour part sans photo, la copie attend.
+  if ((await fichiersNonFusionnes(repo, git)).length > 0) return null
 
   // L'index COPIÉ garde le cache des dates de fichiers : seuls les fichiers changés sont relus.
   const indexBrut = (await git(['rev-parse', '--git-path', 'index'], repo)).trim()

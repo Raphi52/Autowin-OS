@@ -217,6 +217,32 @@ describe('photoDuTour — la photo prise au début du tour d’un message', () =
   })
 })
 
+/*
+ * Une photo prise pendant un cherry-pick en conflit rangeait le fichier avec ses marqueurs `<<<<<<<` comme
+ * état du code : la copie ouverte dessus héritait d'un fichier cassé. Pas de photo tant que la fusion dure.
+ */
+describe('photographierLeCode — jamais pendant une fusion en conflit', () => {
+  it('ne photographie pas un dossier dont un fichier porte encore ses marqueurs de conflit', async () => {
+    const repo = await depot()
+    // Deux côtés qui réécrivent la même ligne : le cherry-pick de l'un dans l'autre s'arrête en conflit.
+    await git(repo, 'checkout', '-b', 'cote-a')
+    writeFileSync(join(repo, 'a.txt'), 'version du côté A\n')
+    await git(repo, 'commit', '-am', 'côté A')
+    await git(repo, 'checkout', 'main')
+    writeFileSync(join(repo, 'a.txt'), 'version de main\n')
+    await git(repo, 'commit', '-am', 'main')
+    await run('git', ['cherry-pick', 'cote-a'], { cwd: repo }).catch(() => undefined)
+    expect(await git(repo, 'diff', '--name-only', '--diff-filter=U')).toContain('a.txt')
+
+    expect(await photographierLeCode({ dossier: repo, conversationId: 'conv-1' })).toBeNull()
+    expect(await git(repo, 'for-each-ref', 'refs/autowin/tour/')).toBe('')
+
+    // La fusion finie (abandonnée ici), la photo reprend.
+    await git(repo, 'cherry-pick', '--abort')
+    expect(await photographierLeCode({ dossier: repo, conversationId: 'conv-1' })).not.toBeNull()
+  })
+})
+
 describe('ouvrirCopieDeLaPhoto — le code du tour, dans une copie séparée', () => {
   it('la copie porte le code de la photo ; le dossier partagé n’a pas bougé', async () => {
     const repo = await depot()

@@ -121,6 +121,34 @@ describe('copieDUnAutreDepot — lu dans le fichier .git de la copie, sans appel
   })
 })
 
+/*
+ * Ouvrir une copie pendant une fusion : la photo rangeait le fichier en conflit avec ses marqueurs, et la copie
+ * héritait d'un texte cassé. Le refus nomme le fichier, et ne laisse ni copie ni base.
+ */
+describe('ouvrirLaCopieDeTache — jamais pendant une fusion en conflit', () => {
+  it('refuse la copie tant que le dossier partagé a un fichier en conflit, et n’écrit rien', async () => {
+    const t = await temoin()
+    // Deux côtés qui réécrivent la même ligne : le cherry-pick de l'un dans l'autre s'arrête en conflit.
+    await git(t.depot, 'checkout', '-q', '-b', 'cote-a')
+    writeFileSync(join(t.depot, 'a.txt'), 'un\nDEUX-A\ntrois\n')
+    await git(t.depot, 'commit', '-q', '-am', 'côté A')
+    await git(t.depot, 'checkout', '-q', 'main')
+    writeFileSync(join(t.depot, 'a.txt'), 'un\nDEUX-MAIN\ntrois\n')
+    await git(t.depot, 'commit', '-q', '-am', 'main')
+    await run('git', ['cherry-pick', 'cote-a'], { cwd: t.depot }).catch(() => undefined)
+
+    const resultat = await ouvrirLaCopieDeTache({
+      dossierDeDonnees: t.donnees,
+      depot: t.depot,
+      tache: TACHE,
+      sansDistant: true
+    })
+    expect(resultat).toMatchObject({ ok: false, motif: 'conflit', fichiers: ['a.txt'] })
+    expect(existsSync(copieDe(t))).toBe(false)
+    expect(await lireLaBaseDuFil({ dossier: t.depot, conversationId: TACHE })).toBeNull()
+  })
+})
+
 interface Temoin {
   racine: string
   depot: string
