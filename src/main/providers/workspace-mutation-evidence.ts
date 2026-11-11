@@ -29,6 +29,11 @@ export type WorkspaceMutationSnapshot = ReadonlyMap<string, string> & {
   lineFingerprints: ReadonlyMap<string, readonly string[]>
   /** Positions exactes des fichiers surveillés, y compris ignorés par Git. */
   observedTails: ReadonlyMap<string, FileTailState>
+  /**
+   * Vrai quand Git a lu le dossier. Sans Git (hors dépôt, ou dépôt sans aucun commit), la photo est
+   * vide sans rien dire de ce qui a changé : un « rien écrit » ne doit jamais s'en déduire.
+   */
+  gitLu: boolean
 }
 
 const watcherSessionId = randomUUID()
@@ -99,7 +104,8 @@ export async function captureWorkspacePathGenerationMarker(
 
 function workspaceMutationSnapshot(
   entries: readonly (readonly [string, string, string, readonly string[]])[],
-  observedTails: ReadonlyMap<string, FileTailState> = new Map()
+  observedTails: ReadonlyMap<string, FileTailState>,
+  gitLu: boolean
 ): WorkspaceMutationSnapshot {
   return Object.assign(
     new Map(entries.map(([path, fingerprint]) => [path, fingerprint] as const)),
@@ -110,7 +116,8 @@ function workspaceMutationSnapshot(
       lineFingerprints: new Map(
         entries.map(([path, , , lineFingerprints]) => [path, lineFingerprints] as const)
       ),
-      observedTails
+      observedTails,
+      gitLu
     }
   )
 }
@@ -390,7 +397,7 @@ async function capturerMaintenant(
       normalizedObserved.map(async (path) => [path, await beginAtEnd(resolve(cwd, path))] as const)
     )
   )
-  if (!git.available || !git.state) return workspaceMutationSnapshot([], observedTails)
+  if (!git.available || !git.state) return workspaceMutationSnapshot([], observedTails, false)
   const cheminsDuStatut = git.state.changes.map((change) => change.path.replaceAll('\\', '/'))
   const paths = [...new Set([...cheminsDuStatut, ...normalizedObserved])]
   // Le lot ne porte QUE les entrees du statut : ce sont des fichiers (ou des dossiers non suivis
@@ -416,7 +423,7 @@ async function capturerMaintenant(
       diff.available ? addedLineFingerprintsFromUnifiedDiff(diff.diff ?? '') : []
     ] as const
   })
-  return workspaceMutationSnapshot(entries, observedTails)
+  return workspaceMutationSnapshot(entries, observedTails, true)
 }
 
 export async function appendWorkspaceMutationEvidence(

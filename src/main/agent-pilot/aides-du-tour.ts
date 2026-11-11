@@ -46,6 +46,28 @@ export function resolveLatestUserMessage(
   )
 }
 
+/** Sous le dossier du tour, mais hors du projet : scripts jetables et données de l'app. */
+const DOSSIERS_HORS_PROJET: ReadonlySet<string> = new Set(['.autowin-tmp', '.autowin-data'])
+
+/**
+ * Les fichiers DU PROJET parmi ceux qu'un appel a écrits, une fois chacun, en chemins à barres
+ * obliques. Une sonde jetable sous `.autowin-tmp` n'est pas un changement à faire vérifier : sans
+ * ce tri, un tour d'analyse qui s'aide d'un script resterait « à vérifier » sur le Board.
+ */
+export function fichiersEcritsDuProjet(chemins: Iterable<string>): string[] {
+  const vus = new Set<string>()
+  const ecrits: string[] = []
+  for (const brut of chemins) {
+    const chemin = brut.trim().replaceAll('\\', '/')
+    const cle = chemin.toLowerCase()
+    if (!chemin || vus.has(cle)) continue
+    if (cle.split('/').some((dossier) => DOSSIERS_HORS_PROJET.has(dossier))) continue
+    vus.add(cle)
+    ecrits.push(chemin)
+  }
+  return ecrits
+}
+
 /**
  * Capture avant/apres du dossier du tour, ABANDONNEE des qu'on annule : elle coute ~200 ms de git
  * sur un gros depot, et un Stop ne doit jamais attendre l'observabilite. Rend `undefined` = pas de

@@ -55,6 +55,12 @@ export type PilotEventKind =
    */
   | 'tests-du-terminal'
   /**
+   * Les fichiers qu'un appel au modèle vient d'écrire (`data` : chemins), relayés à la fin de chaque
+   * appel, liste vide comprise. Le tour les garde ; la carte du fil sait ainsi qu'il n'y a rien à
+   * vérifier.
+   */
+  | 'fichiers-ecrits'
+  /**
    * Réponse coupée par le filtre de sécurité du fournisseur (`data` : catégorie et explication),
    * relayée à chaque coupure. Écrite au journal du tour pour la rétrospective et le
    * kaizen ; l'avis lisible, lui, est déjà dans la réponse.

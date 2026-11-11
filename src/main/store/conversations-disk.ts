@@ -14,6 +14,7 @@ import { appendFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:f
 import { dirname, join } from 'node:path'
 import {
   flattenChatParts,
+  sontDesFichiersEcrits,
   sontDesTestsDuTerminal,
   type ChatTurnEvent
 } from '../../shared/chat-turn'
@@ -279,6 +280,8 @@ function isConversationMessage(value: unknown): boolean {
     return false
   }
   if (value.testsDuTerminal !== undefined && !sontDesTestsDuTerminal(value.testsDuTerminal))
+    return false
+  if (value.fichiersEcrits !== undefined && !sontDesFichiersEcrits(value.fichiersEcrits))
     return false
   if (value.runtime !== undefined && !isChatTurnRuntime(value.runtime)) return false
   if (

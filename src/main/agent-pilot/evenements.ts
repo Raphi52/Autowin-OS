@@ -135,6 +135,8 @@ export type PilotEventVariant =
       iteration: number
       data: Array<{ commande: string; codeDeSortie: number; changementDeDossier?: string }>
     }
+  /** Les fichiers du projet qu'un appel vient d'écrire ; vide = la photo du dossier n'a rien vu changer. */
+  | { kind: 'fichiers-ecrits'; iteration: number; data: string[] }
   /** Réponse coupée par le filtre de sécurité du fournisseur, une par coupure. */
   | {
       kind: 'coupure-filtre'

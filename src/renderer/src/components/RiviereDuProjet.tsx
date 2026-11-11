@@ -168,6 +168,7 @@ const TEXTES_FIXES_DE_LA_CARTE: readonly CleBoardEtMaintenance[] = [
   'constat.tourEnEchec',
   'constat.tourArrete',
   'constat.finiSansVerification',
+  'constat.rienAVerifier',
   'constat.repartDuResume',
   'constat.questionTAttend',
   'titre.demande',

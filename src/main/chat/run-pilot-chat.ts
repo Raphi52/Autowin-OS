@@ -37,6 +37,7 @@ import {
 } from './chat-turn-messages'
 import {
   cibleEntiereDe,
+  lireFichiersEcrits,
   lireTestsDuTerminal,
   statutComplet,
   type ChatTurnEvent,
@@ -889,6 +890,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // leur preuve sur la carte du fil.
           const tests = lireTestsDuTerminal(pilotEvent.data)
           if (tests.length > 0) durableEvent = { kind: 'tests-du-terminal', tests, ...heure }
+        } else if (pilotEvent.kind === 'fichiers-ecrits') {
+          // Une liste VIDE s'écrit aussi : c'est elle qui dit « ce tour n'a rien écrit ».
+          const chemins = lireFichiersEcrits(pilotEvent.data)
+          if (chemins) durableEvent = { kind: 'fichiers-ecrits', chemins }
         } else if (pilotEvent.kind === 'done') {
           /**
            * Le TEXTE du `done` doit atterrir dans le message quand rien n'a ete streame.

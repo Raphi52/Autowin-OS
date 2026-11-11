@@ -190,6 +190,12 @@ export interface ChatTurnState {
    * deux lignes de texte (« Bash · … », « Bash terminé »). Absent sur les tours antérieurs.
    */
   testsDuTerminal?: TestDuTerminal[]
+  /**
+   * Les fichiers du projet que ce tour a écrits, par ses outils d'édition comme par son terminal.
+   * VIDE est un fait (« rien écrit »), ABSENT veut dire qu'on ne le sait pas (tour ancien, photo du
+   * dossier impossible) : la carte du fil ne dit « rien à vérifier » que sur le premier.
+   */
+  fichiersEcrits?: string[]
 }
 
 /**
@@ -267,6 +273,30 @@ export function lireTestsDuTerminal(valeur: unknown): TestDuTerminal[] {
       ...(test.at === undefined ? {} : { at: test.at })
     }
   })
+}
+
+/** Plafond des chemins gardés par tour : au-delà, la carte sait déjà que le tour a écrit. */
+export const FICHIERS_ECRITS_MAX = 200
+const CHEMIN_ECRIT_MAX = 400
+
+/** Validation STRICTE (fichier des conversations) : tout ou rien. */
+export function sontDesFichiersEcrits(valeur: unknown): valeur is string[] {
+  return Array.isArray(valeur) && valeur.every((chemin) => typeof chemin === 'string')
+}
+
+/**
+ * Lecture TOLÉRANTE : garde les chemins, jette le reste. Sans tableau, rend `undefined` — « on ne
+ * sait pas » ne doit jamais devenir « rien écrit ».
+ */
+export function lireFichiersEcrits(valeur: unknown): string[] | undefined {
+  if (!Array.isArray(valeur)) return undefined
+  const chemins: string[] = []
+  for (const brut of valeur) {
+    if (typeof brut !== 'string') continue
+    const chemin = brut.trim().replaceAll('\\', '/').slice(0, CHEMIN_ECRIT_MAX)
+    if (chemin && !chemins.includes(chemin)) chemins.push(chemin)
+  }
+  return chemins.slice(0, FICHIERS_ECRITS_MAX)
 }
 
 /**
@@ -361,6 +391,8 @@ export type ChatTurnEvent =
    * qui plante après ses tests garde quand même leur preuve. `at` date chacun d'eux.
    */
   | { kind: 'tests-du-terminal'; tests: TestDuTerminal[]; at?: number }
+  /** Les fichiers qu'un appel au modèle vient d'écrire ; une liste vide se garde aussi. */
+  | { kind: 'fichiers-ecrits'; chemins: string[] }
   /**
    * Retire le texte d'un flux. `conclusionSeule` : seulement son DERNIER passage, celui qui suit le
    * dernier geste (action, image) — voir `rangsEffacesParLeReset`.
@@ -568,6 +600,16 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
     return {
       ...state,
       testsDuTerminal: [...(state.testsDuTerminal ?? []), ...recus].slice(-TESTS_DU_TERMINAL_MAX)
+    }
+  }
+
+  if (event.kind === 'fichiers-ecrits') {
+    // Statut INCHANGÉ. Les appels d'un même tour se cumulent ; une liste vide pose le fait.
+    const recus = lireFichiersEcrits(event.chemins)
+    if (!recus) return state
+    return {
+      ...state,
+      fichiersEcrits: lireFichiersEcrits([...(state.fichiersEcrits ?? []), ...recus])
     }
   }
 

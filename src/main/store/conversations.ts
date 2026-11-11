@@ -75,6 +75,8 @@ export interface Msg {
   reasoningMs?: number
   /** Tests joués par l'agent dans son terminal et leur code de sortie — preuves de la carte du fil. */
   testsDuTerminal?: TestDuTerminal[]
+  /** Fichiers du projet écrits par le tour ; vide = rien écrit, absent = inconnu (`ChatTurnState`). */
+  fichiersEcrits?: string[]
   /**
    * Message utilisateur ÉCRIT PENDANT un tour (orientation injectée) : il précise, il ne REPOND pas.
    *
@@ -674,7 +676,8 @@ export function applyTurnEventToMessages(
       ...(message.lookDecode ? { lookDecode: message.lookDecode } : {}),
       ...(message.actionsLog?.length ? { actionsLog: message.actionsLog } : {}),
       ...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {}),
-      ...(message.testsDuTerminal?.length ? { testsDuTerminal: message.testsDuTerminal } : {})
+      ...(message.testsDuTerminal?.length ? { testsDuTerminal: message.testsDuTerminal } : {}),
+      ...(message.fichiersEcrits ? { fichiersEcrits: message.fichiersEcrits } : {})
     },
     event
   )
@@ -691,6 +694,8 @@ export function applyTurnEventToMessages(
   // fix-ok: sans cette recopie, lookDecode n'est jamais écrit sur le message : la sortie du réducteur le perdrait.
   if (next.lookDecode !== undefined) message.lookDecode = next.lookDecode
   if (next.testsDuTerminal?.length) message.testsDuTerminal = next.testsDuTerminal
+  // Une liste VIDE se recopie : elle dit « rien écrit », ce que l'absence ne dit pas.
+  if (next.fichiersEcrits) message.fichiersEcrits = next.fichiersEcrits
   return message
 }
 

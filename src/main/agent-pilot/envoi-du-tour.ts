@@ -21,7 +21,7 @@ import {
 } from '../chat/chat-turn-messages'
 import { ecritUnFichierDeMemoire } from '../brain/lecon-non-retenue'
 import type { Message, SendOptions, SendResult } from '../providers/types'
-import { captureSaufAnnulation } from './aides-du-tour'
+import { captureSaufAnnulation, fichiersEcritsDuProjet } from './aides-du-tour'
 import type { ContexteDuTour } from './contexte-du-tour'
 import { iterationDuTour, type IterationDuTour } from './iteration-du-tour'
 import { REJECTED_QUESTION_MARKER } from './jetons-de-commande'
@@ -512,12 +512,22 @@ export async function appelDuModele(
       workspaceRoot: workspaceDuTour,
       evidence: res.executionEvidence ?? []
     })
+    const etatApres = etatAvantEnvoi
+      ? await captureSaufAnnulation(workspaceDuTour, signal)
+      : undefined
     if (etatAvantEnvoi) {
-      const etatApres = await captureSaufAnnulation(workspaceDuTour, signal)
       const changes = [...(etatApres ?? [])]
         .filter(([path, empreinte]) => etatAvantEnvoi.get(path) !== empreinte)
         .map(([path]) => path)
         .filter((path) => !dejaTraces.has(path.replaceAll('\\', '/').toLowerCase()))
+      // LA RÉPONSE GARDE CE QUE SON TOUR A ÉCRIT : la carte du fil ne range plus dans « À vérifier »
+      // une demande qui n'a touché aucun fichier. Une liste vide n'est dite que si Git a lu LES DEUX
+      // photos : une photo sans Git est vide sans rien dire, et une écriture par le terminal
+      // passerait pour « rien écrit ».
+      const ecrits = fichiersEcritsDuProjet([...dejaTraces, ...changes])
+      const photosLues = etatAvantEnvoi.gitLu && etatApres?.gitLu === true
+      if (ecrits.length > 0 || photosLues)
+        emit({ kind: 'fichiers-ecrits', data: ecrits, iteration: i })
       if (changes.length > 0)
         await appendWorkspaceMutationTrace({
           conversationId,

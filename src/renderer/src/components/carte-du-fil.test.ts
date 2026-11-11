@@ -35,6 +35,12 @@ const verify = (command: string, exitCode: number): unknown => ({
   ok: true,
   data: { command, exitCode, ok: exitCode === 0 }
 })
+const ask = (question: string): unknown => ({
+  kind: 'action',
+  name: 'ask',
+  ok: true,
+  data: { question, options: ['Oui', 'Non'] }
+})
 
 const CLOTURE = (recommande: string): string =>
   ['Réponse.', '', '✅ Fait', '1. une chose', '👉 Recommandé', recommande].join('\n')
@@ -210,6 +216,85 @@ describe('carteDuFil — la couleur suit la PREUVE', () => {
     })
     expect(etapes[0].statut).toBe('sans-preuve')
     expect(prouvees).toBe(0)
+  })
+
+  /*
+   * Mesuré du 1er au 11/11 : 316 demandes « finies sans vérification » sur 420 besoins n'avaient
+   * écrit aucun fichier. Rangées dans « À vérifier », elles y noyaient les 84 qui avaient écrit du
+   * code sans test. Une liste VIDE est un fait gardé par la réponse ; ABSENTE, on ne sait pas.
+   */
+  describe('un tour qui n’a écrit aucun fichier n’a rien à faire vérifier', () => {
+    const etapeDe = (extra: Record<string, unknown>, parts: unknown[] = [texte('voilà')]) =>
+      carteDuFil({ fil: [user('explique', 1), asst(2, parts, { turnId: 't1', ...extra })] })
+        .etapes[0]
+
+    it('liste vide : hors de « sans preuve », et le constat dit pourquoi', () => {
+      const etape = etapeDe({ fichiersEcrits: [] })
+      expect(etape.statut).toBe('prouve')
+      expect(etape.constat).toBe('rien à vérifier — aucun fichier écrit')
+    })
+
+    it('un fichier écrit sans vérification reste à vérifier', () => {
+      const etape = etapeDe({ fichiersEcrits: ['src/a.ts'] })
+      expect(etape.statut).toBe('sans-preuve')
+      expect(etape.constat).toBe('fini sans vérification')
+    })
+
+    it('liste absente (tour ancien) : on ne sait pas, donc à vérifier', () => {
+      expect(etapeDe({}).statut).toBe('sans-preuve')
+    })
+
+    it('une seule réponse du segment qui a écrit suffit à garder la demande à vérifier', () => {
+      const { etapes } = carteDuFil({
+        fil: [
+          user('corrige', 1),
+          asst(2, [texte('fait')], { turnId: 't1', fichiersEcrits: ['src/a.ts'] }),
+          asst(3, [texte('reformulé')], { turnId: 't1', fichiersEcrits: [] })
+        ]
+      })
+      expect(etapes[0].statut).toBe('sans-preuve')
+    })
+
+    it('une réponse de tour dont on ne sait rien empêche de conclure', () => {
+      const { etapes } = carteDuFil({
+        fil: [
+          user('corrige', 1),
+          asst(2, [texte('fait')], { turnId: 't0' }),
+          asst(3, [texte('reformulé')], { turnId: 't1', fichiersEcrits: [] })
+        ]
+      })
+      expect(etapes[0].statut).toBe('sans-preuve')
+    })
+
+    it('un avis de l’app, sans tour, ne compte pas', () => {
+      const { etapes } = carteDuFil({
+        fil: [
+          user('explique', 1),
+          asst(2, [texte('voilà')], { turnId: 't1', fichiersEcrits: [] }),
+          asst(3, [texte('avis de l’app')])
+        ]
+      })
+      expect(etapes[0].statut).toBe('prouve')
+    })
+
+    it('un test rouge ou un blocage déclaré passent avant', () => {
+      expect(etapeDe({ fichiersEcrits: [] }, [verify('npm test', 1)]).statut).toBe('refuse')
+      expect(etapeDe({ fichiersEcrits: [] }, [texte('⛔ Bloqué : clé absente')]).statut).toBe(
+        'refuse'
+      )
+    })
+
+    it('une vérification verte garde son propre constat', () => {
+      expect(etapeDe({ fichiersEcrits: [] }, [verify('npm test', 0)]).constat).toBe(
+        'npm test → exit 0'
+      )
+    })
+
+    it('une question encore posée n’est pas « rien à vérifier » : elle reste en attente', () => {
+      const etape = etapeDe({ fichiersEcrits: [] }, [texte('voilà'), ask('Tu veux la suite ?')])
+      expect(etape.statut).toBe('sans-preuve')
+      expect(etape.constat).toBe('une question t’attend')
+    })
   })
 
   it('un tour en échec ou arrêté : refusé', () => {

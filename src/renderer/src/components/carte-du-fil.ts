@@ -254,7 +254,8 @@ const BLOCAGE_DECLARE = /^.*(?:⛔\s*Bloqué|⚠️\s*Non résolu).*$/mu
 
 function statutDuSegment(
   reponses: readonly AsstMsg[],
-  auBoutDuFil: boolean
+  auBoutDuFil: boolean,
+  questionEnAttente: boolean
 ): { statut: StatutEtape; constat: string } {
   if (reponses.some((reponse) => !estFini(reponse)))
     return { statut: 'en-cours', constat: 'l’agent travaille' }
@@ -287,7 +288,28 @@ function statutDuSegment(
     return { statut: 'sans-preuve', constat: derniereIssue.issue.label }
   const preuve = issues.at(-1)
   if (preuve) return { statut: 'prouve', constat: preuve.label }
+  // Une question encore posée à l'utilisateur attend sa réponse : elle n'est pas « rien à vérifier ».
+  if (!questionEnAttente && rienEcrit(reponses))
+    return { statut: 'prouve', constat: CONSTAT_RIEN_A_VERIFIER }
   return { statut: 'sans-preuve', constat: 'fini sans vérification' }
+}
+
+/** Le constat d'une demande dont aucun tour n'a touché un fichier : elle sort de « À vérifier ». */
+export const CONSTAT_RIEN_A_VERIFIER = 'rien à vérifier — aucun fichier écrit'
+
+/**
+ * AUCUN tour de la demande n'a écrit de fichier. Mesuré du 1er au 11/11/2026 : 316 demandes
+ * « finies sans vérification » sur 420 besoins étaient dans ce cas, et noyaient dans « À vérifier »
+ * les 84 qui avaient écrit du code sans test. Il n'y a rien à faire vérifier d'un tour qui n'a rien
+ * changé ; le constat le dit, pour que ce vert ne passe pas pour un test passé.
+ *
+ * Seule une liste VIDE le prouve (`fichiersEcrits`, photo du dossier avant et après chaque appel).
+ * Une réponse de tour sans liste — tour ancien, photo impossible — laisse la demande à vérifier ;
+ * un message sans tour est un avis de l'app, qui n'écrit rien.
+ */
+function rienEcrit(reponses: readonly AsstMsg[]): boolean {
+  const tours = reponses.filter((reponse) => reponse.turnId)
+  return tours.length > 0 && tours.every((reponse) => reponse.fichiersEcrits?.length === 0)
 }
 
 export type Quai = 'haut' | 'bas'
@@ -351,11 +373,11 @@ export function carteDuFil(entree: {
     // « go » n'a rien à montrer de plus que la suite qu'il accepte : son texte est ce titre-là.
     const entiere = estCompactage(message) ? null : lectureDeLaDemande(fil, rang, MAX_TEXTE)
     const texte = !entiere ? undefined : entiere.genre === 'accord' ? titreEntier : entiere.texte
-    const lu = statutDuSegment(reponses, auBoutDuFil)
+    const question = auBoutDuFil && ouverte
+    const lu = statutDuSegment(reponses, auBoutDuFil, question)
     const statut = lu.statut
     let constat = lu.constat
     if (estCompactage(message) && statut === 'sans-preuve') constat = 'l’agent repart de ce résumé'
-    const question = auBoutDuFil && ouverte
     if (question && statut !== 'refuse') constat = 'une question t’attend'
     const instants = [message, ...segment]
       .map(instantDe)

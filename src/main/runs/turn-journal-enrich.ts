@@ -188,7 +188,9 @@ const DEJA_JOURNALISES = new Set([
   'cancellation',
   'prompt-call',
   // Recopié en événement durable `tests-du-terminal`, donc déjà dans le journal.
-  'tests-du-terminal'
+  'tests-du-terminal',
+  // Recopié en événement durable `fichiers-ecrits`, donc déjà dans le journal.
+  'fichiers-ecrits'
 ])
 
 /**

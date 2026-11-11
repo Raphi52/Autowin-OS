@@ -1,4 +1,5 @@
 import {
+  lireFichiersEcrits,
   lireTestsDuTerminal,
   reduceChatTurn,
   REASONING_MAX,
@@ -163,6 +164,11 @@ export interface HydratedAssistantMessage {
    */
   testsDuTerminal?: TestDuTerminal[]
   /**
+   * Fichiers du projet écrits par le tour : vide = rien écrit, absent = inconnu. La carte du fil ne
+   * dit « rien à vérifier » que sur une liste vide.
+   */
+  fichiersEcrits?: string[]
+  /**
    * DEBUT DU TOUR (ms epoch) : le zero de la colonne d'heures du rail. Relu du message
    * enregistre (`ts`, pose par le main au debut du tour) ; en direct, pris au premier evenement
    * date. Absent : le rail n'affiche aucune heure.
@@ -187,6 +193,8 @@ export interface StoredAssistantMessage {
   reasoningMs?: number
   /** Tests joués au terminal, conservés par le tour : les preuves de la carte après rechargement. */
   testsDuTerminal?: TestDuTerminal[]
+  /** Fichiers écrits par le tour, conservés avec lui : vide = rien écrit, absent = inconnu. */
+  fichiersEcrits?: string[]
   /** Heure de debut du tour (ms epoch), posee par le main : le zero du rail. */
   ts?: number
   /** Chantier dont ce message est le récapitulatif « Reprise du fil » (`Msg.repriseDuChantier`). */
@@ -894,6 +902,7 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     : parts
   // Relu tolérant : une entrée abîmée est jetée, elle ne fait pas tomber l'affichage du tour.
   const testsDuTerminal = lireTestsDuTerminal(message.testsDuTerminal)
+  const fichiersEcrits = lireFichiersEcrits(message.fichiersEcrits)
   return {
     role: 'assistant',
     ...(message.turnId ? { turnId: message.turnId } : {}),
@@ -920,6 +929,7 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     // disait « Raisonnement terminé » sans compteur (R5).
     ...(typeof message.reasoningMs === 'number' ? { reasoningMs: message.reasoningMs } : {}),
     ...(testsDuTerminal.length > 0 ? { testsDuTerminal } : {}),
+    ...(fichiersEcrits ? { fichiersEcrits } : {}),
     ...(typeof message.ts === 'number' ? { debutDuTour: message.ts } : {}),
     ...(message.repriseDuChantier ? { repriseDuChantier: message.repriseDuChantier } : {})
   }
@@ -1005,6 +1015,21 @@ function reduireEvenementDuPilote(
     if (!testsDuTerminal || testsDuTerminal === message.testsDuTerminal) return message
     return { ...message, turnId, testsDuTerminal }
   }
+  if (event.kind === 'fichiers-ecrits') {
+    // Même réduction que le tour enregistré : le direct et le relu ne peuvent pas diverger.
+    const chemins = lireFichiersEcrits(event.data)
+    if (!chemins) return message
+    const { fichiersEcrits } = reduceChatTurn(
+      {
+        turnId,
+        status: message.status,
+        parts: message.parts,
+        ...(message.fichiersEcrits ? { fichiersEcrits: message.fichiersEcrits } : {})
+      },
+      { kind: 'fichiers-ecrits', chemins }
+    )
+    return { ...message, turnId, ...(fichiersEcrits ? { fichiersEcrits } : {}) }
+  }
   let turnEvent: ChatTurnEvent | undefined
   if (event.kind === 'delta' && event.text && event.streamId)
     turnEvent = { kind: 'delta', streamId: event.streamId, text: event.text, ...heure }
@@ -1086,7 +1111,8 @@ function reduireEvenementDuPilote(
     ...(next.error ? { error: next.error } : {}),
     ...(coutUsd !== undefined ? { coutUsd } : {}),
     // Reçus plus tôt dans le tour : un delta ou la clôture ne doivent pas les effacer.
-    ...(message.testsDuTerminal ? { testsDuTerminal: message.testsDuTerminal } : {})
+    ...(message.testsDuTerminal ? { testsDuTerminal: message.testsDuTerminal } : {}),
+    ...(message.fichiersEcrits ? { fichiersEcrits: message.fichiersEcrits } : {})
   }
 }
 
