@@ -2000,14 +2000,15 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       }
     } finally {
       tourClos = true
+      if (veilleur) clearInterval(veilleur)
+      // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant. Il s'arrête
+      // en TÊTE du finally, avant tout nettoyage qui pourrait lever (finDuSuiviUltrathink, vidages).
       // La pensée générale et le décodage d'image en attente partent aussi ici : un tour rendu sans `done`
       // ni erreur ne passe ni par le routage du `done`, ni par le `catch`. Chaque vidage part même si le
       // précédent lève, et le journal part en dernier (son vidage coupe son minuteur de rafale).
       // fix-ok: cause mesurée (test « un tour rendu sans done ni erreur garde sa dernière rafale de pensée générale ») : le finally ne vidait que le décodage, jamais la pensée générale.
       try {
         finDuSuiviUltrathink?.()
-        // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.
-        if (veilleur) clearInterval(veilleur)
         viderLesTampons([raisonnementDuTour, lookDecodeDuTour, journalDuPilote])
       } finally {
         // Libère le tour même si un vidage a levé : l'erreur, elle, remonte.
