@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ConversationStore } from '../store/conversations'
 import { attendreEcrituresJournal, readTurnJournal } from '../runs/turn-journal'
+import { ActiveChatTurns } from './active-chat-turns'
 import {
   createRunPilotChat,
   type DirectChatRecovery,
@@ -92,7 +93,11 @@ describe('tour de chat — la pensée regroupée dans le journal fichier', () =>
       }
       const os = avecRepli({
         waitUntilReady: async () => {},
-        roles: { bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }), routageChatLectureSeuleActif: () => false, getBinding: () => ({ provider: 'codex', model: 'modele-test' }) },
+        roles: {
+          bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }),
+          routageChatLectureSeuleActif: () => false,
+          getBinding: () => ({ provider: 'codex', model: 'modele-test' })
+        },
         conversations: store,
         executionSupervisor: { currentSignal: () => undefined },
         runChatTurn: async (_contenu: string, _signal: AbortSignal, lancer: () => unknown) =>
@@ -154,7 +159,9 @@ describe('tour de chat — la pensée regroupée dans le journal fichier', () =>
       surEvenement: (e: unknown) => void,
       store: ConversationStore,
       filId: string
-    ) => Promise<unknown>
+    ) => Promise<unknown>,
+    // Dépendance réelle à remplacer (ici le registre des tours actifs) ; absente, le faux repli s'applique.
+    dependances: { activeChatTurns?: ActiveChatTurns } = {}
   ) {
     let t = 1000
     const store = new ConversationStore(() => t++)
@@ -188,7 +195,8 @@ describe('tour de chat — la pensée regroupée dans le journal fichier', () =>
         broadcast,
         drainPendingDirectives: () => [],
         notifyWatchdogWorkflowIncident: vi.fn(),
-        watchdogEngine: () => undefined
+        watchdogEngine: () => undefined,
+        ...dependances
       }) as unknown as RunPilotChatDeps
       // Un tour qui échoue peut rejeter sa promesse : le test lit ce que le fil a écrit, et rend l'erreur
       // à part, pour qu'un échec de la fin de tour ne passe pas inaperçu.
@@ -391,9 +399,12 @@ describe('tour de chat — la pensée regroupée dans le journal fichier', () =>
     expect(reponse?.reasoning).toBeUndefined()
   })
 
-  it('un message de tour retiré pendant la pensée ne fait pas échouer la fin du tour', async () => {
+  it('un message de tour retiré pendant le décodage fait remonter l’erreur, sans perdre la pensée en silence, et le tour se libère', async () => {
+    const tours = new ActiveChatTurns()
+    let idDuFil = ''
     const { rejete, cause, diffusions } = await reponseDuTour(
       async (surEvenement, store, filId) => {
+        idDuFil = filId
         surEvenement({
           kind: 'command',
           actionId: 'a1',
@@ -402,16 +413,19 @@ describe('tour de chat — la pensée regroupée dans le journal fichier', () =>
           iteration: 0
         })
         surEvenement({ kind: 'reasoning', text: 'Le cadre montre Paris.', iteration: 0 })
-        // Le message du tour disparaît pendant la pensée : rien ne reste où écrire la fin.
+        // Le message du tour disparaît alors que le fil existe : c'est un défaut, pas un cas à taire.
         const conversation = store.get(filId)
         if (conversation)
           conversation.messages = conversation.messages.filter((m) => m.role !== 'assistant')
         return { text: '' }
-      }
+      },
+      { activeChatTurns: tours }
     )
-    // Sans garde, la fin de tour lève avant le retrait du tour actif.
-    expect(cause).toBeUndefined()
-    expect(rejete).toBe(false)
+    // Jumeau accepté : un fil supprimé n'a plus où écrire (les écrivains le testent), un fil sans message de tour, si.
+    expect(rejete).toBe(true)
+    expect((cause as Error).message).toContain('Tour assistant inconnu')
+    // La fin de tour s'achève malgré l'erreur : le tour est libéré et l'écran prévenu.
+    expect(tours.isInFlight(idDuFil)).toBe(false)
     expect(diffusions).toContainEqual({ type: 'refresh', scope: 'conversations' })
   })
 
@@ -663,5 +677,175 @@ describe('tour de chat — la pensée regroupée dans le journal fichier', () =>
       return { text: '' }
     })
     expect(reponse?.lookDecode).toBe('Le cadre montre Paris.')
+  })
+
+  // fix-ok: cause mesurée sur la version sans correctif (run-pilot-chat.ts non corrigé) : la reprise écrit « montreParis. » (sa suite ne reçoit pas `suite`), et la pensée finale d'un tour sans `done` ne part jamais (« Je lis le fichier. » seul). Les deux tests passent avec le correctif.
+  it('une reprise dont la suite de la pensée générale commence par un espace garde cet espace', async () => {
+    const { reponse, appels } = await reprendreLeTour(
+      async (surEvenement) => {
+        surEvenement({ kind: 'reasoning', text: 'Le cadre montre', iteration: 0 })
+        // Une action ferme la rafale : « Le cadre montre » part au fil avant la coupure.
+        surEvenement({
+          kind: 'command',
+          actionId: 'a1',
+          name: 'read_file',
+          args: { path: 'x' },
+          iteration: 0
+        })
+        surEvenement({ kind: 'result', actionId: 'a1', name: 'read_file', ok: true, iteration: 0 })
+        return { text: '' }
+      },
+      async (surEvenement) => {
+        surEvenement({ kind: 'reasoning', text: ' Paris.', iteration: 1 })
+        surEvenement({ kind: 'done', text: '' })
+        return { text: '' }
+      }
+    )
+    // Exactement deux appels : l'essai coupé et sa reprise.
+    expect(appels).toBe(2)
+    // Le texte écrit avant la coupure finit sur « montre » : l'espace qui suit appartient à la suite.
+    // Une version fausse écrit « Le cadre montreParis. » : la reprise a perdu l'espace de tête.
+    expect(reponse?.reasoning).toBe('Le cadre montre Paris.')
+  })
+
+  it('une reprise dont l’essai coupé n’a rien écrit de pensée générale retire l’espace de tête, comme une pensée neuve', async () => {
+    const { reponse, appels } = await reprendreLeTour(
+      async (surEvenement) => {
+        surEvenement({
+          kind: 'command',
+          actionId: 'a1',
+          name: 'read_file',
+          args: { path: 'x' },
+          iteration: 0
+        })
+        surEvenement({ kind: 'result', actionId: 'a1', name: 'read_file', ok: true, iteration: 0 })
+        return { text: '' }
+      },
+      async (surEvenement) => {
+        surEvenement({ kind: 'reasoning', text: '  Le cadre montre Paris.', iteration: 1 })
+        surEvenement({ kind: 'done', text: '' })
+        return { text: '' }
+      }
+    )
+    // Jumeau du cas précédent : sans pensée déjà stockée, la reprise retire l'espace de tête comme une pensée neuve.
+    expect(appels).toBe(2)
+    expect(reponse?.reasoning).toBe('Le cadre montre Paris.')
+  })
+
+  it('un tour rendu sans done ni erreur garde sa dernière rafale de pensée générale', async () => {
+    const { reponse } = await reponseDuTour(async (surEvenement) => {
+      surEvenement({ kind: 'reasoning', text: 'Je lis le fichier.', iteration: 0 })
+      surEvenement({
+        kind: 'command',
+        actionId: 'a1',
+        name: 'read_file',
+        args: { path: 'x' },
+        iteration: 0
+      })
+      surEvenement({ kind: 'result', actionId: 'a1', name: 'read_file', ok: true, iteration: 0 })
+      surEvenement({ kind: 'reasoning', text: ' Il contient Paris.', iteration: 1 })
+      // Aucun `done`, aucune erreur : le pilote rend la main. La rafale « Il contient Paris. » n'est
+      // suivie d'aucun événement : elle ne part qu'à la fermeture du tour.
+      return { text: '' }
+    })
+    expect(reponse?.reasoning).toBe('Je lis le fichier. Il contient Paris.')
+  })
+
+  it('un message de tour retiré pendant une pensée générale en attente fait remonter l’erreur à la fin de tour, et le tour se libère', async () => {
+    const tours = new ActiveChatTurns()
+    let idDuFil = ''
+    const { rejete, cause } = await reponseDuTour(
+      async (surEvenement, store, filId) => {
+        idDuFil = filId
+        surEvenement({ kind: 'reasoning', text: 'Je lis le fichier.', iteration: 0 })
+        // Le message du tour disparaît pendant la pensée : la fin de tour n'a plus où écrire.
+        const conversation = store.get(filId)
+        if (conversation)
+          conversation.messages = conversation.messages.filter((m) => m.role !== 'assistant')
+        return { text: '' }
+      },
+      { activeChatTurns: tours }
+    )
+    // Aucune garde silencieuse : l'absence remonte à la fin de tour, comme au done.
+    expect(rejete).toBe(true)
+    expect((cause as Error).message).toContain('Tour assistant inconnu')
+    // Le tour est libéré malgré l'erreur.
+    expect(tours.isInFlight(idDuFil)).toBe(false)
+  })
+
+  it('un message de tour absent au done reste une erreur visible : seule la fin de tour tolère cette absence', async () => {
+    const { rejete, cause } = await reponseDuTour(async (surEvenement, store, filId) => {
+      surEvenement({ kind: 'reasoning', text: 'Je lis le fichier.', iteration: 0 })
+      // Le message du tour disparaît AVANT le done : le tour court encore, il n'a pas fini.
+      const conversation = store.get(filId)
+      if (conversation)
+        conversation.messages = conversation.messages.filter((m) => m.role !== 'assistant')
+      surEvenement({ kind: 'done', text: '' })
+      return { text: '' }
+    })
+    // Au done, le tour court encore : la pensée en attente part dès l'aiguillage du done, avant sa branche de clôture, et lève. L'absence reste visible.
+    expect(rejete).toBe(true)
+    expect((cause as Error).message).toContain('Tour assistant inconnu')
+  })
+
+  it('une écriture qui lève pendant la fin de tour ne laisse pas le tour actif ouvert', async () => {
+    const tours = new ActiveChatTurns()
+    let idDuFil = ''
+    const { rejete, cause } = await reponseDuTour(
+      async (surEvenement, store, filId) => {
+        idDuFil = filId
+        surEvenement({ kind: 'reasoning', text: 'Je lis le fichier.', iteration: 0 })
+        // Le store refuse la pensée seulement après le retour du pilote : c'est le premier vidage de la fin de tour.
+        const ecrire = store.applyTurnEvent.bind(store)
+        vi.spyOn(store, 'applyTurnEvent').mockImplementation((...args) => {
+          if (args[2].kind === 'reasoning') throw new Error('écriture en panne')
+          return ecrire(...args)
+        })
+        return { text: '' }
+      },
+      { activeChatTurns: tours }
+    )
+    // L'échec reste visible : la fin de tour ne l'avale pas.
+    expect(rejete).toBe(true)
+    expect((cause as Error).message).toBe('écriture en panne')
+    // Le tour est libéré malgré cet échec : tant qu'il reste actif, la conversation paraît occupée.
+    expect(tours.isInFlight(idDuFil)).toBe(false)
+  })
+
+  // fix-ok: cause mesurée (test « une écriture de pensée qui lève en fin de tour ne fait pas perdre la rafale du journal ») : le journal venait après la pensée, qui levait ; sa rafale n'était écrite qu'au bout de son minuteur.
+  it('une écriture de pensée qui lève en fin de tour ne fait pas perdre la rafale du journal', async () => {
+    const { rejete, cause, journal } = await reponseDuTour(async (surEvenement, store) => {
+      surEvenement({ kind: 'reasoning', text: 'Je lis le fichier.', iteration: 0 })
+      // Le store refuse la pensée au premier vidage de la fin de tour. Le décodage n'est pas en jeu :
+      // pensée et décodage ne retiennent jamais du texte à la fois (le routage vide l'un à l'arrivée de l'autre).
+      const ecrire = store.applyTurnEvent.bind(store)
+      vi.spyOn(store, 'applyTurnEvent').mockImplementation((...args) => {
+        if (args[2].kind === 'reasoning') throw new Error('écriture en panne')
+        return ecrire(...args)
+      })
+      return { text: '' }
+    })
+    expect(rejete).toBe(true)
+    expect((cause as Error).message).toBe('écriture en panne')
+    // La rafale part au journal malgré l'erreur, sans attendre le minuteur de rafale (1 s).
+    expect(journal.filter((e) => e.kind === 'reasoning-step').map((e) => e.text)).toEqual([
+      'Je lis le fichier.'
+    ])
+  })
+
+  it('une écriture de pensée qui lève pendant un échec ne fait pas perdre la rafale du journal', async () => {
+    const { rejete, journal } = await reponseDuTour(async (surEvenement, store) => {
+      surEvenement({ kind: 'reasoning', text: 'Je lis le fichier.', iteration: 0 })
+      const ecrire = store.applyTurnEvent.bind(store)
+      vi.spyOn(store, 'applyTurnEvent').mockImplementation((...args) => {
+        if (args[2].kind === 'reasoning') throw new Error('écriture en panne')
+        return ecrire(...args)
+      })
+      throw new Error('coupure du fournisseur')
+    })
+    expect(rejete).toBe(true)
+    expect(journal.filter((e) => e.kind === 'reasoning-step').map((e) => e.text)).toEqual([
+      'Je lis le fichier.'
+    ])
   })
 })

@@ -70,7 +70,10 @@ import {
 } from '../activity/chat-usage-settlement'
 import { taskUsageMetricsFromExecution } from '../activity/task-usage-metrics'
 import { describeChatTurnFailure } from '../providers/provider-failure-diagnosis'
-import { sameExecutionUsage, type ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
+import {
+  sameExecutionUsage,
+  type ExecutionUsageSnapshot
+} from '../orchestration/execution-supervisor'
 import { appendPromptCall } from '../activity/prompt-observability'
 import { promptCallToTraceEvents } from '../activity/prompt-call-trace'
 import { pilotActionToTraceEvent } from '../activity/pilot-action-trace'
@@ -254,6 +257,20 @@ export function annoncerFinDeTour(
  * décodage. Le nom se lit comme le chargeur le lit (`nomDeSkillDemande` : sans barre, premier mot), et
  * se compare sans casse, parce que le chargeur ouvre `look` quelle que soit la casse tapée.
  */
+/**
+ * Vide les tampons dans l'ordre. Un vidage qui lève ne prive pas les suivants de leur rafale : ils
+ * partent quand même, puis l'erreur remonte (si plusieurs lèvent, c'est la dernière qui remonte).
+ */
+function viderLesTampons(tampons: ReadonlyArray<{ vider(): void }>): void {
+  const [premier, ...reste] = tampons
+  if (!premier) return
+  try {
+    premier.vider()
+  } finally {
+    viderLesTampons(reste)
+  }
+}
+
 function chargeLaSkillLook(evenement: { kind: string; name?: unknown; args?: unknown }): boolean {
   if (evenement.kind !== 'command' || evenement.name !== 'skill_charger') return false
   const args = evenement.args
@@ -386,13 +403,25 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
      * l'ecran, et un rechargement de la vue en plein tour peignait un bloc vide (
      * `raisonnement-au-fil-du-tour.ts`).
      */
-    const raisonnementDuTour = ecrivainDeRaisonnement((portion) => {
-      if (conversationId && os.conversations.get(conversationId))
-        os.conversations.applyTurnEvent(conversationId, turnId, {
-          kind: 'reasoning',
-          text: portion
-        })
-    })
+    const messageDuTour = (id: string): Msg | undefined =>
+      os.conversations
+        .get(id)
+        ?.messages.find((message) => message.role === 'assistant' && message.turnId === turnId)
+    // Une reprise continue une pensée déjà écrite au tour : sa première portion garde son espace de tête.
+    // fix-ok: cause mesurée (test « une reprise dont la suite de la pensée générale commence par un espace ») : la reprise ouvrait le tampon sans `suite`, et sa première portion perdait son espace de tête.
+    const raisonnementDejaEcrit = Boolean(
+      conversationId && messageDuTour(conversationId)?.reasoning
+    )
+    const raisonnementDuTour = ecrivainDeRaisonnement(
+      (portion) => {
+        if (conversationId && os.conversations.get(conversationId))
+          os.conversations.applyTurnEvent(conversationId, turnId, {
+            kind: 'reasoning',
+            text: portion
+          })
+      },
+      { suite: raisonnementDejaEcrit }
+    )
     /**
      * LE DÉCODAGE D'IMAGE (skill look) a son propre tampon. Une fois `look` chargé dans ce tour, la pensée
      * va ICI et non dans le raisonnement général : elle s'affiche à part, et le modèle ne la relit jamais.
@@ -405,17 +434,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       recovery && conversationId
         ? lookDejaChargeDans(readTurnJournal(turnJournalRoot, conversationId, turnId))
         : false
-    const messageDuTour = (id: string): Msg | undefined =>
-      os.conversations
-        .get(id)
-        ?.messages.find((message) => message.role === 'assistant' && message.turnId === turnId)
-    const messageDuTourPresent = (id: string): boolean => Boolean(messageDuTour(id))
     // Une reprise continue un décodage déjà écrit au tour : sa première portion garde son espace de tête.
     const lookDecodeDejaEcrit = Boolean(conversationId && messageDuTour(conversationId)?.lookDecode)
     const lookDecodeDuTour = ecrivainDeRaisonnement(
       (portion) => {
-        // fix-ok: sans cette garde, applyTurnEvent lève « Tour assistant inconnu » et la fin de tour s'interrompt avant le retrait du tour actif.
-        if (conversationId && messageDuTourPresent(conversationId))
+        // Même condition que la pensée générale : seul un fil supprimé n'a plus où écrire. Un fil qui existe
+        // sans le message du tour est un défaut : applyTurnEvent lève, et l'erreur reste visible.
+        if (conversationId && os.conversations.get(conversationId))
           os.conversations.applyTurnEvent(conversationId, turnId, {
             kind: 'look-decode',
             text: portion
@@ -1190,7 +1215,11 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         // Un bloc posé par `montrer_bloc` n'est pas du texte DIT par le modèle : compté
         // ici, il s'intercalerait dans le déjà-dit (avant + bloc + après) ; `resteADire` n'y
         // retrouverait plus le texte de clôture « avant + après » et le republierait en entier.
-        if (pilotEvent.kind === 'delta' && pilotEvent.text && !estUnFluxDeBloc(pilotEvent.streamId)) {
+        if (
+          pilotEvent.kind === 'delta' &&
+          pilotEvent.text &&
+          !estUnFluxDeBloc(pilotEvent.streamId)
+        ) {
           // Deux itérations d'un même tour sont deux MESSAGES : les coller bout à bout soudait la
           // fin de l'un au début de l'autre (« …du balayage.```html-render »), ce qui sortait le
           // bloc mis en forme en texte brut. Cf. coller-texte-parle.ts pour le défaut mesuré.
@@ -1971,54 +2000,57 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       }
     } finally {
       tourClos = true
-      finDuSuiviUltrathink?.()
-      // Le décodage d'image en attente part aussi ici : un tour rendu sans `done` ni erreur ne passe
-      // ni par le routage du `done`, ni par le `catch`.
-      // fix-ok: sans ce vidage, la fin du décodage d'un tour rendu sans done ni erreur est perdue.
-      lookDecodeDuTour.vider()
-      // Aucun minuteur de rafale ne survit au tour.
-      journalDuPilote.vider()
-      // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.
-      if (veilleur) clearInterval(veilleur)
-      fermerTourPourGels()
-      usagePersistenceReady = true
-      if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
-      if (conversationId) {
-        activeChatTurns.delete(conversationId, controller)
-        broadcast({ type: 'refresh', scope: 'conversations' })
-        // APRÈS la sortie des tours actifs : l'agent réveillé lit alors `pilotChatActive` à faux.
-        // fix-ok: aucun événement « fin de tour » n'était émis : une règle task_create ne pouvait pas attendre un autre fil (rouge : run-pilot-chat.test.ts).
-        annoncerFinDeTour(deps.watchdogEngine(), conversationId, turnId)
-        /*
-         * ORIENTATIONS NON CONSOMMEES : rendues, jamais jetees.
-         *
-         * Avant, ce bloc les SUPPRIMAIT en qualifiant d'« obsoletes » des phrases que l'utilisateur
-         * venait d'ecrire. Une directive n'est lue qu'aux points d'iteration de la boucle pilote
-         * (`agent-pilot.ts`) : celle qui arrive pendant la redaction de la reponse finale n'en
-         * rencontre aucun. Elle disparaissait alors sans un mot, alors que son texte etait bien
-         * visible dans le fil — d'ou « quand j'oriente ca oublie parfois ».
-         *
-         * On les remonte a l'ecran, qui les remet en file : elles repartent comme un tour normal,
-         * exactement comme le chemin `/skill` annonce deja sa directive tardive au lieu de la taire.
-         */
-        // fix-ok: (tour 6e6212f1) — le finally rendait à l'écran une orientation déjà lue par le modèle (rouge sur 33c44fc0 : run-pilot-chat.orientations-remises.test.ts).
-        // Une orientation déjà remise au modèle par le contrôle avant outil n'est pas
-        // orpheline : la rendre la renverrait comme un tour de plus après un arrêt sur erreur.
-        const orphelines = solderOrientationsDuFil(
-          conversationId,
-          pendingDirectives.get(conversationId) ?? [],
-          'rendue'
-        )
-        if (pendingDirectives.delete(conversationId)) {
-          broadcast({ type: 'refresh', scope: 'directives' })
+      // La pensée générale et le décodage d'image en attente partent aussi ici : un tour rendu sans `done`
+      // ni erreur ne passe ni par le routage du `done`, ni par le `catch`. Chaque vidage part même si le
+      // précédent lève, et le journal part en dernier (son vidage coupe son minuteur de rafale).
+      // fix-ok: cause mesurée (test « un tour rendu sans done ni erreur garde sa dernière rafale de pensée générale ») : le finally ne vidait que le décodage, jamais la pensée générale.
+      try {
+        finDuSuiviUltrathink?.()
+        // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.
+        if (veilleur) clearInterval(veilleur)
+        viderLesTampons([raisonnementDuTour, lookDecodeDuTour, journalDuPilote])
+      } finally {
+        // Libère le tour même si un vidage a levé : l'erreur, elle, remonte.
+        fermerTourPourGels()
+        usagePersistenceReady = true
+        if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
+        if (conversationId) {
+          activeChatTurns.delete(conversationId, controller)
+          broadcast({ type: 'refresh', scope: 'conversations' })
+          // APRÈS la sortie des tours actifs : l'agent réveillé lit alors `pilotChatActive` à faux.
+          // fix-ok: aucun événement « fin de tour » n'était émis : une règle task_create ne pouvait pas attendre un autre fil (rouge : run-pilot-chat.test.ts).
+          annoncerFinDeTour(deps.watchdogEngine(), conversationId, turnId)
+          /*
+           * ORIENTATIONS NON CONSOMMEES : rendues, jamais jetees.
+           *
+           * Avant, ce bloc les SUPPRIMAIT en qualifiant d'« obsoletes » des phrases que l'utilisateur
+           * venait d'ecrire. Une directive n'est lue qu'aux points d'iteration de la boucle pilote
+           * (`agent-pilot.ts`) : celle qui arrive pendant la redaction de la reponse finale n'en
+           * rencontre aucun. Elle disparaissait alors sans un mot, alors que son texte etait bien
+           * visible dans le fil — d'ou « quand j'oriente ca oublie parfois ».
+           *
+           * On les remonte a l'ecran, qui les remet en file : elles repartent comme un tour normal,
+           * exactement comme le chemin `/skill` annonce deja sa directive tardive au lieu de la taire.
+           */
+          // fix-ok: (tour 6e6212f1) — le finally rendait à l'écran une orientation déjà lue par le modèle (rouge sur 33c44fc0 : run-pilot-chat.orientations-remises.test.ts).
+          // Une orientation déjà remise au modèle par le contrôle avant outil n'est pas
+          // orpheline : la rendre la renverrait comme un tour de plus après un arrêt sur erreur.
+          const orphelines = solderOrientationsDuFil(
+            conversationId,
+            pendingDirectives.get(conversationId) ?? [],
+            'rendue'
+          )
+          if (pendingDirectives.delete(conversationId)) {
+            broadcast({ type: 'refresh', scope: 'directives' })
+          }
+          // Un « ultrathink » tapé que ce tour n'a pas lu repart avec son message : le tour neuf monte.
+          rendreUltrathinkTape(conversationId, orphelines)
+          if (orphelines.length) {
+            broadcast({ type: 'directives-orphelines', convId: conversationId, textes: orphelines })
+          }
         }
-        // Un « ultrathink » tapé que ce tour n'a pas lu repart avec son message : le tour neuf monte.
-        rendreUltrathinkTape(conversationId, orphelines)
-        if (orphelines.length) {
-          broadcast({ type: 'directives-orphelines', convId: conversationId, textes: orphelines })
-        }
+        resolveCompletion()
       }
-      resolveCompletion()
     }
   }
 
