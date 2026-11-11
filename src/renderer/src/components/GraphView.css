@@ -521,6 +521,16 @@
   box-shadow: 0 0 12px rgba(117, 215, 255, 0.2);
 }
 
+/* « Dossiers » partage l'habillage de ⚙ (classe commune, thèmes compris) : seule la place change,
+   il se range à gauche de ✦ (32 px + 6 px d'écart). */
+.graph-dossiers-button {
+  right: 92px;
+  width: auto;
+  padding: 0 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .graph-settings-popover {
   position: absolute;
   z-index: 14;
