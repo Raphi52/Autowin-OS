@@ -149,5 +149,31 @@ describe('popup quotas : resets offerts et compte', () => {
     })
     expect(onSelect).toHaveBeenCalledWith('default')
   })
+
+  /**
+   * Les comptes passent AVANT les resets offerts : cette liste grandit avec chaque reset, et la popup
+   * coupait ce qui dépassait sa hauteur. Un bloc placé après elle pouvait donc disparaître sans bruit.
+   */
+  it('place les comptes avant les resets offerts', async () => {
+    await monter(
+      { modelQuotas: vi.fn(async () => snapshot), claudeResets: vi.fn(async () => resets) },
+      {
+        comptes: {
+          accounts: [{ id: 'default', displayName: 'prenom.nom@example.com', tier: 'TEAM' }],
+          selectedId: 'default',
+          activeId: 'default',
+          busy: false,
+          error: null,
+          onSelect: vi.fn()
+        }
+      }
+    )
+    const comptesBloc = document.body.querySelector('[data-testid="model-quota-accounts"]')
+    const resetsBloc = document.body.querySelector('[data-testid="model-quota-resets"]')
+    expect(comptesBloc, 'bloc des comptes absent').not.toBeNull()
+    expect(resetsBloc, 'bloc des resets absent').not.toBeNull()
+    const ordre = comptesBloc && resetsBloc ? comptesBloc.compareDocumentPosition(resetsBloc) : 0
+    expect(ordre & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
 })
 // fix-ok: fichier NOUVEAU écrit en plusieurs pas (création puis compléments), pas un correctif à l aveugle — contrat mesuré : GET oauth/usage?cedar_ember=1 → 200 (sonde 2026-09-23), POST reset_rate_limits copié de claude.exe

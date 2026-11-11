@@ -596,6 +596,41 @@ export function ModelQuotaIndicator({
                 </button>
               ))}
             </div>
+            {/* Juste sous les onglets : placée après les resets offerts, cette section était rognée par la
+                hauteur maximale de la popup. Les comptes se choisissent avant de lire les quotas qui en dépendent. */}
+            {affiche === 'claude' && comptes && comptes.accounts.length > 0 && (
+              <div className="router-accounts" data-testid="model-quota-accounts">
+                <span className="router-accounts-title">{t('quota.compte')}</span>
+                <div className="router-accounts-list">
+                  {comptes.accounts.map((account) => {
+                    const choisi =
+                      comptes.selectedId === undefined
+                        ? account.id === comptes.activeId
+                        : comptes.selectedId === account.id
+                    return (
+                      <button
+                        key={account.id}
+                        type="button"
+                        className={`router-account-chip${choisi ? ' is-active' : ''}`}
+                        data-testid={`model-quota-account-${account.id}`}
+                        aria-pressed={choisi}
+                        disabled={comptes.busy}
+                        title={account.email ?? account.displayName}
+                        onClick={() => comptes.onSelect(account.id)}
+                      >
+                        {account.displayName}
+                        {account.tier && <em className="router-account-tier">{account.tier}</em>}
+                      </button>
+                    )
+                  })}
+                </div>
+                {comptes.error && (
+                  <p className="router-account-error" role="alert">
+                    {t('quota.actionImpossible', { erreur: comptes.error })}
+                  </p>
+                )}
+              </div>
+            )}
             {error && <p className="model-quota-error">{error}</p>}
             <div className="model-quota-list">
               {/* Seules les barres de l'onglet ouvert (2026-11-04) : la liste montrait les
@@ -700,39 +735,6 @@ export function ModelQuotaIndicator({
                 {claimMessage && (
                   <p className="model-quota-reset-message" role="status">
                     {claimMessage}
-                  </p>
-                )}
-              </div>
-            )}
-            {affiche === 'claude' && comptes && comptes.accounts.length > 0 && (
-              <div className="router-accounts" data-testid="model-quota-accounts">
-                <span className="router-accounts-title">{t('quota.compte')}</span>
-                <div className="router-accounts-list">
-                  {comptes.accounts.map((account) => {
-                    const choisi =
-                      comptes.selectedId === undefined
-                        ? account.id === comptes.activeId
-                        : comptes.selectedId === account.id
-                    return (
-                      <button
-                        key={account.id}
-                        type="button"
-                        className={`router-account-chip${choisi ? ' is-active' : ''}`}
-                        data-testid={`model-quota-account-${account.id}`}
-                        aria-pressed={choisi}
-                        disabled={comptes.busy}
-                        title={account.email ?? account.displayName}
-                        onClick={() => comptes.onSelect(account.id)}
-                      >
-                        {account.displayName}
-                        {account.tier && <em className="router-account-tier">{account.tier}</em>}
-                      </button>
-                    )
-                  })}
-                </div>
-                {comptes.error && (
-                  <p className="router-account-error" role="alert">
-                    {t('quota.actionImpossible', { erreur: comptes.error })}
                   </p>
                 )}
               </div>

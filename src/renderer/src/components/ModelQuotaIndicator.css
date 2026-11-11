@@ -162,6 +162,9 @@
    Orchestrateur, lui aussi rendu dans <body> (ChatView.css, `.model-select-menu.is-flottant`). */
 .model-quota-popover.is-flottant {
   z-index: 9000;
+  /* Défiler plutôt que couper : la base `overflow: hidden` rognait sans prévenir ce qui dépasse
+     `max-height`, y compris la section des comptes. */
+  overflow-y: auto;
 }
 
 .model-quota-popover header,

@@ -109,6 +109,16 @@ describe('barre de quota cliquable', () => {
   })
 
   /**
+   * COMPTES INVISIBLES DANS LA POPUP. La base de `.model-quota-popover` coupe ce qui dépasse sa hauteur
+   * maximale sans défiler : la section des comptes, placée après les resets offerts, sortait donc de la
+   * popup. La popup flottante doit défiler, pour qu'aucune section ne disparaisse en silence.
+   */
+  it('fait défiler la popup flottante au lieu de couper son contenu', () => {
+    const bloc = styles.match(/\.model-quota-popover\.is-flottant\s*{([^}]*)}/s)?.[1] ?? ''
+    expect(bloc).toMatch(/overflow-y:\s*auto/)
+  })
+
+  /**
    * BULLE TRANSPARENTE AU SURVOL (2026-10-10, « elle devrait avoir un fond noir »). Le fond venait
    * du jeton `--surface-panel`, qui vaut un verre a 4,5 % dans le theme Nebuleuse de verre. La
    * bulle porte desormais un noir opaque en dur, repris tel quel par les themes generes.
