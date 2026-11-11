@@ -36,8 +36,9 @@ describe('rangement automatique au premier message', () => {
     const essai = corps.slice(corps.indexOf('try {'))
     // Le resultat est garde pour l'enchainement du chat avant d'etre rendu : le contrat
     // reste que la fin du tour est signalee dans le `finally` du MEME `try` que l'appel au tour.
+    // Seuls des appels sans argument peuvent la preceder (ex. `retirerCopieALaDemande()`).
     expect(essai).toMatch(
-      /try \{\s*const resultat = await lancerTour\(\.\.\.args\)[^]*?return resultat\s*\} finally \{\s*finirTour\(\)/
+      /try \{\s*const resultat = await lancerTour\(\.\.\.args\)[^]*?return resultat\s*\} finally \{\s*(?:\w+\(\)\s*)*finirTour\(\)/
     )
   })
 

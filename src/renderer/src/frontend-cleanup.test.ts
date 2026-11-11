@@ -80,9 +80,8 @@ describe('frontend cleanup guard', () => {
   it('suspends Agent Studio event listeners while its tab is hidden', () => {
     // Le nom a change (`RolesView` etait un alias d'une ligne, supprime) ; l'INVARIANT verifie est
     // inchange : `active` doit etre propage pour que l'onglet cache suspende ses ecouteurs.
-    expect(source('components/AgentStudioView.tsx')).toContain(
-      '<AgentsTopologyView active={active} />'
-    )
+    // On vise l'attribut, pas la mise en forme : la balise passe sur plusieurs lignes depuis qu'elle a d'autres props.
+    expect(source('components/AgentStudioView.tsx')).toMatch(/<AgentsTopologyView\s+active=\{active\}/)
     expect(source('components/AgentsTopologyView.tsx')).toContain('if (!active) return')
   })
 
