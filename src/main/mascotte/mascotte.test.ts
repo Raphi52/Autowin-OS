@@ -606,7 +606,7 @@ describe('mascotte du bureau — style machine (conv-346)', () => {
   })
 })
 
-describe('mascotte du bureau — style panda en peluche', () => {
+describe('mascotte du bureau — style panda en kimono', () => {
   const css = (
     etat: 'calme' | 'travail' | 'attente' | 'probleme',
     pastille: string | null = null
@@ -624,7 +624,7 @@ describe('mascotte du bureau — style panda en peluche', () => {
       expect(html).toContain(accroche)
   })
 
-  it('chaque planche est une planche de 16 images : le WebP annonce 2560 x 192', () => {
+  it('chaque planche est une planche de 16 images : le WebP annonce 3072 x 192', () => {
     const planches = [
       ...htmlDeMascotte('panda').matchAll(/data:image\/webp;base64,([A-Za-z0-9+/=]+)/gu)
     ]
@@ -633,7 +633,7 @@ describe('mascotte du bureau — style panda en peluche', () => {
       const vp8x = octets.indexOf('VP8X')
       expect(vp8x).toBeGreaterThan(0)
       // VP8X : largeur - 1 puis hauteur - 1, sur 24 bits petit-boutistes, 12 octets après le nom.
-      expect(octets.readUIntLE(vp8x + 12, 3) + 1).toBe(2560)
+      expect(octets.readUIntLE(vp8x + 12, 3) + 1).toBe(3072)
       expect(octets.readUIntLE(vp8x + 15, 3) + 1).toBe(192)
     }
   })
@@ -649,6 +649,15 @@ describe('mascotte du bureau — style panda en peluche', () => {
     // La bulle dit déjà « ! » : la pastille « ! » ne le répète pas, un compte reste affiché.
     expect(css('probleme', '!').split('\n').at(-1)).toBe('body .n{display:none}')
     expect(css('probleme', '2').split('\n').at(-1)).toContain('body .n{color:#fff')
+    // Pétales de cerisier : deux, lents, au repos ; une pluie quand un fil attend ; aucun en échec.
+    const html = htmlDeMascotte('panda')
+    expect(html.match(/class="ps"/gu)).toHaveLength(2)
+    expect(html.match(/class="pl"/gu)).toHaveLength(7)
+    expect(html).toMatch(/\.ps\{display:block;[^}]*pe 9s/u)
+    expect(css('attente')).toContain('body .pl{display:block}')
+    expect(css('attente')).toContain('body .ps{display:none}')
+    expect(css('probleme')).toContain('body .ps{display:none}')
+    expect(css('travail')).not.toContain('.pl')
     expect(12.8 / 1.6).toBe(8)
     expect(Math.round((14.4 / 1.6) * 1000) / 1000).toBe(9)
     expect(25.6 / 3.2).toBe(8)

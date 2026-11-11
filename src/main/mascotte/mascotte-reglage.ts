@@ -72,7 +72,7 @@ type ReglageMascotte = {
  */
 /**
  * `machine` : la petite machine de NieR, rendue en 3D ; c'est elle que montre le thème NieR.
- * `panda` : le panda en peluche, modelé et animé dans Blender (fourrure, squelette, huit gestes).
+ * `panda` : la panda en kimono, modelée et animée dans Blender (fourrure, squelette, huit gestes).
  */
 export const STYLES_MASCOTTE = ['magicien', 'basique', 'machine', 'panda'] as const
 export type StyleMascotte = (typeof STYLES_MASCOTTE)[number]
