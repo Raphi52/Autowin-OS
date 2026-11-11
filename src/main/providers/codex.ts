@@ -470,14 +470,16 @@ export function codexLauncher(
   appData = process.env.APPDATA,
   entrypointExists: (path: string) => boolean = existsSync,
   platform: NodeJS.Platform = process.platform,
-  arch: string = process.arch
+  arch: string = process.arch,
+  // L'environnement se passe en paramètre : un test qui réécrit process.env.PATH casse ses voisins du worker.
+  environnement: NodeJS.ProcessEnv = process.env
 ): { executable: string; prefixArgs: string[] } {
-  const explicitBinary = process.env.CODEX_BIN
+  const explicitBinary = environnement.CODEX_BIN
   if (explicitBinary) return { executable: explicitBinary, prefixArgs: [] }
   // Le prefixe npm n'est PAS toujours celui de %APPDATA% (npm prefix configure, pnpm, volta, install
   // machine) : chercher aussi dans le PATH. Un chemin en dur unique faisait echouer le fan-out scout
   // avec « Codex CLI introuvable » (observe le 2026-07-29) alors que le CLI etait bien installe.
-  const env: NodeJS.ProcessEnv = { ...process.env }
+  const env: NodeJS.ProcessEnv = { ...environnement }
   if (appData) env.APPDATA = appData
   else delete env.APPDATA
   const entrypoint = findNpmGlobalFile(CODEX_PACKAGE_ENTRY, { env, exists: entrypointExists })

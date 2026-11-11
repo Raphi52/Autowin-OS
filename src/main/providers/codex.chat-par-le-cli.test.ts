@@ -309,29 +309,20 @@ describe('un APPDATA redirigé (instance cachée) ne cache pas le CLI du profil'
     )
 
   it('prend le CLI du profil avant celui du PATH, dont le compagnon est trop long', () => {
-    delete process.env.CODEX_BIN
     const presents = new Set([
       entree(prefixeWinget),
       natif(prefixeWinget),
       entree(prefixeProfil),
       natif(prefixeProfil)
     ])
-    const precedents = { PATH: process.env.PATH, USERPROFILE: process.env.USERPROFILE }
-    process.env.PATH = prefixeWinget
-    process.env.USERPROFILE = profil
-    try {
-      const lanceur = codexLauncher(
-        join(profil, 'AppData', 'Local', 'autowin-hdesk', 'instance', 'appdata'),
-        (chemin) => presents.has(chemin),
-        'win32',
-        'x64'
-      )
-      expect(lanceur.executable).toBe(natif(prefixeProfil))
-    } finally {
-      if (precedents.PATH === undefined) delete process.env.PATH
-      else process.env.PATH = precedents.PATH
-      if (precedents.USERPROFILE === undefined) delete process.env.USERPROFILE
-      else process.env.USERPROFILE = precedents.USERPROFILE
-    }
+    // L'environnement est passé en paramètre : process.env, partagé par le worker, n'est jamais réécrit ici.
+    const lanceur = codexLauncher(
+      join(profil, 'AppData', 'Local', 'autowin-hdesk', 'instance', 'appdata'),
+      (chemin) => presents.has(chemin),
+      'win32',
+      'x64',
+      { PATH: prefixeWinget, USERPROFILE: profil }
+    )
+    expect(lanceur.executable).toBe(natif(prefixeProfil))
   })
 })
