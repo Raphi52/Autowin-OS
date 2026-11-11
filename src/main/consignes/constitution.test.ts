@@ -203,9 +203,7 @@ describe('CONSTITUTION (source unique du soul)', () => {
   })
 
   it('garde ses renvois internes COHÉRENTS avec la numérotation courante', () => {
-    const numeros = new Set(
-      [...CONSTITUTION.matchAll(/^(\d+)\. /gmu)].map((m) => Number(m[1]))
-    )
+    const numeros = new Set([...CONSTITUTION.matchAll(/^(\d+)\. /gmu)].map((m) => Number(m[1])))
     const renvois = [...CONSTITUTION.matchAll(/réflexe (\d+)/gu)].map((m) => Number(m[1]))
 
     expect(renvois.length).toBeGreaterThan(3)
