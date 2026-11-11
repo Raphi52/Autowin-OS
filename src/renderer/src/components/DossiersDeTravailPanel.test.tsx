@@ -3,31 +3,51 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DossiersDeTravailPanel } from './DossiersDeTravailPanel'
+import {
+  CLE_DOSSIERS_CONNUS,
+  CLE_DOSSIERS_RETIRES,
+  EVT_DOSSIERS_DU_CHAT,
+  retirerDossierDuChat
+} from './dossiers-du-chat'
 
 const ROTATION = 'D:\\BrainRotRoyale'
+const JOURNAL = 'D:\\Notes\\Journal'
+const DEPOT = 'D:\\AutoWinOS'
+const PERSONNEL = 'C:\\Users\\moi'
 
 type Demande = ReturnType<typeof vi.fn>
-interface ApiAffectations {
+interface ApiDuPanneau {
   brainAffectations: Demande
   enregistrerBrainAffectation: Demande
-  retirerBrainAffectation: Demande
+  executionWorkspace: Demande
+  dossierPersonnel: Demande
 }
 
-/** Le pont du lot 3, simulé : chaque demande rend la liste telle que le processus principal la renverrait. */
-function installerApi(liste: unknown[] = []): ApiAffectations {
-  const api: ApiAffectations = {
-    brainAffectations: vi.fn().mockResolvedValue({ affectations: liste }),
-    enregistrerBrainAffectation: vi.fn().mockResolvedValue({ affectations: liste }),
-    retirerBrainAffectation: vi.fn().mockResolvedValue({ affectations: [] })
+/**
+ * Le pont simulé : les affectations telles que le processus principal les renverrait, plus les deux
+ * dossiers que le Chat propose toujours (dépôt de la session, « This computer »).
+ */
+function installerApi(affectations: unknown[] = []): ApiDuPanneau {
+  const api: ApiDuPanneau = {
+    brainAffectations: vi.fn().mockResolvedValue({ affectations }),
+    enregistrerBrainAffectation: vi.fn().mockResolvedValue({ affectations }),
+    executionWorkspace: vi.fn().mockResolvedValue({ path: DEPOT }),
+    dossierPersonnel: vi.fn().mockResolvedValue(PERSONNEL)
   }
-  ;(window as unknown as { api: ApiAffectations }).api = api
+  ;(window as unknown as { api: ApiDuPanneau }).api = api
   return api
+}
+
+/** La liste du menu « Ranger dans… » du Chat, telle qu'il la garde dans le stockage local. */
+function poserDossiersDuChat(dossiers: string[], retires: string[] = []): void {
+  localStorage.setItem(CLE_DOSSIERS_CONNUS, JSON.stringify(dossiers))
+  localStorage.setItem(CLE_DOSSIERS_RETIRES, JSON.stringify(retires))
 }
 
 const flush = (): Promise<void> =>
   act(async () => new Promise<void>((resolve) => setTimeout(resolve, 0)))
 
-describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
+describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail du Chat', () => {
   let container: HTMLDivElement
   let root: Root
 
@@ -36,6 +56,7 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
   })
 
   beforeEach(() => {
+    localStorage.clear()
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -53,32 +74,25 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
     })
     await flush()
   }
-  const champ = (): HTMLInputElement =>
-    container.querySelector<HTMLInputElement>('input[type="text"]') as HTMLInputElement
-  const BRAIN_AJOUT = 'Brain du nouveau dossier'
-  /** Les deux segments Équipe | Perso d'une ligne, ou ceux de l'ajout, retrouvés par leur nom. */
-  const segments = (nom: string): HTMLButtonElement[] => {
+  /** Les chemins listés, dans l'ordre affiché. */
+  const chemins = (): (string | null)[] =>
+    [...container.querySelectorAll('.dossiers-travail__chemin')].map((e) => e.textContent)
+  const noms = (): (string | null)[] =>
+    [...container.querySelectorAll('.dossiers-travail__nom')].map((e) => e.textContent)
+  /** Les deux segments Équipe | Perso d'une ligne, retrouvés par leur nom. */
+  const segments = (cwd: string): HTMLButtonElement[] => {
     const groupe = [...container.querySelectorAll('[role="group"]')].find(
-      (element) => element.getAttribute('aria-label') === nom
+      (element) => element.getAttribute('aria-label') === `Brain de ${cwd}`
     )
     return groupe ? [...groupe.querySelectorAll<HTMLButtonElement>('button[data-brain]')] : []
   }
-  /** Le Brain choisi pour un dossier : le segment enfoncé. */
+  /** Le Brain montré pour un dossier : le segment enfoncé. */
   const brainDe = (cwd: string): string | undefined =>
-    segments(`Brain de ${cwd}`)
+    segments(cwd)
       .find((segment) => segment.getAttribute('aria-pressed') === 'true')
       ?.getAttribute('data-brain') ?? undefined
   const filtre = (): HTMLInputElement =>
     container.querySelector<HTMLInputElement>('input[type="search"]') as HTMLInputElement
-  const bouton = (libelle: string): HTMLButtonElement | undefined =>
-    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (element) => element.textContent === libelle
-    )
-  const cliquer = async (cible: HTMLButtonElement | undefined): Promise<void> => {
-    if (!cible) throw new Error('bouton absent')
-    await act(async () => cible.click())
-    await flush()
-  }
   const saisir = async (zone: HTMLInputElement, valeur: string): Promise<void> => {
     const poser = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     await act(async () => {
@@ -86,8 +100,8 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
       zone.dispatchEvent(new Event('input', { bubbles: true }))
     })
   }
-  const choisir = async (nom: string, valeur: string): Promise<void> => {
-    const segment = segments(nom).find((element) => element.getAttribute('data-brain') === valeur)
+  const choisir = async (cwd: string, valeur: string): Promise<void> => {
+    const segment = segments(cwd).find((element) => element.getAttribute('data-brain') === valeur)
     if (!segment) throw new Error('segment absent')
     await act(async () => segment.click())
     await flush()
@@ -103,90 +117,116 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
     container.querySelector('.domain-warning[role="status"]:not(.setting-help)')?.textContent ??
     undefined
 
-  it('rend chaque dossier assigné avec son Brain et son bouton de retrait', async () => {
-    installerApi([{ cwd: ROTATION, brain: 'perso' }])
+  it('liste les dossiers du Chat, « This computer » en tête puis le dépôt de la session', async () => {
+    installerApi()
+    poserDossiersDuChat([ROTATION, JOURNAL])
     await monter()
-    expect(container.textContent).toContain(ROTATION)
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, ROTATION, JOURNAL])
+    expect(noms()).toEqual(['💻 This computer', 'AutoWinOS', 'BrainRotRoyale', 'Journal'])
+  })
+
+  it('ne liste pas un dossier assigné qui n’est pas un dossier du Chat', async () => {
+    installerApi([{ cwd: 'D:\\Ailleurs', brain: 'perso' }])
+    poserDossiersDuChat([ROTATION])
+    await monter()
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, ROTATION])
+  })
+
+  it('ne liste pas le dépôt de la session quand sa croix l’a retiré, mais garde « This computer »', async () => {
+    installerApi()
+    poserDossiersDuChat([ROTATION], [DEPOT, PERSONNEL])
+    await monter()
+    expect(chemins()).toEqual([PERSONNEL, ROTATION])
+  })
+
+  it('ne répète pas un dossier présent dans le Chat et parmi ceux toujours proposés', async () => {
+    installerApi()
+    poserDossiersDuChat(['D:/AutoWinOS/', ROTATION])
+    await monter()
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, ROTATION])
+  })
+
+  it('suit un retrait fait ailleurs pendant que le menu est ouvert', async () => {
+    installerApi()
+    poserDossiersDuChat([ROTATION, JOURNAL])
+    await monter()
+    await act(async () => {
+      retirerDossierDuChat(ROTATION)
+    })
+    await flush()
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, JOURNAL])
+  })
+
+  it('relit la liste à l’annonce du Chat, même sans retrait', async () => {
+    installerApi()
+    poserDossiersDuChat([ROTATION])
+    await monter()
+    poserDossiersDuChat([ROTATION, JOURNAL])
+    await act(async () => {
+      window.dispatchEvent(new Event(EVT_DOSSIERS_DU_CHAT))
+    })
+    await flush()
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, ROTATION, JOURNAL])
+  })
+
+  it('montre le Brain de l’équipe pour un dossier sans affectation', async () => {
+    installerApi()
+    poserDossiersDuChat([ROTATION])
+    await monter()
+    expect(brainDe(ROTATION)).toBe('equipe')
+  })
+
+  it('montre le Brain assigné au dossier, chemin comparé sans casse ni séparateur final', async () => {
+    installerApi([{ cwd: 'd:/brainrotroyale/', brain: 'perso' }])
+    poserDossiersDuChat([ROTATION])
+    await monter()
     expect(brainDe(ROTATION)).toBe('perso')
-    expect(bouton('Retirer')).toBeDefined()
   })
 
-  it('dit qu’aucun dossier n’est assigné quand la liste est vide', async () => {
-    installerApi([])
+  it('montre le Brain hérité d’un dossier parent, et le plus précis gagne', async () => {
+    installerApi([
+      { cwd: 'D:\\Notes', brain: 'perso' },
+      { cwd: 'D:\\Notes\\Journal\\Archives', brain: 'equipe' }
+    ])
+    poserDossiersDuChat([JOURNAL, 'D:\\Notes\\Journal\\Archives', 'D:\\NotesVoisin'])
     await monter()
-    expect(container.textContent).toContain('Aucun dossier assigné')
-    expect(container.querySelector('ul')).toBeNull()
+    expect(brainDe(JOURNAL)).toBe('perso')
+    expect(brainDe('D:\\Notes\\Journal\\Archives')).toBe('equipe')
+    // Un frère au nom voisin n'est pas un sous-dossier.
+    expect(brainDe('D:\\NotesVoisin')).toBe('equipe')
   })
 
-  it('assigne un chemin absolu avec le Brain choisi, puis affiche la liste renvoyée', async () => {
-    const api = installerApi([])
+  it('assigne le Brain choisi au dossier, puis montre la liste renvoyée', async () => {
+    const api = installerApi()
     api.enregistrerBrainAffectation.mockResolvedValueOnce({
       affectations: [{ cwd: ROTATION, brain: 'perso' }]
     })
+    poserDossiersDuChat([ROTATION])
     await monter()
-    await saisir(champ(), ROTATION)
-    await choisir(BRAIN_AJOUT, 'perso')
-    await cliquer(bouton('Assigner'))
-    expect(api.enregistrerBrainAffectation).toHaveBeenCalledWith({
-      cwd: ROTATION,
-      brain: 'perso'
-    })
+    await choisir(ROTATION, 'perso')
+    expect(api.enregistrerBrainAffectation).toHaveBeenCalledWith({ cwd: ROTATION, brain: 'perso' })
     expect(brainDe(ROTATION)).toBe('perso')
-    expect(champ().value).toBe('')
-  })
-
-  it('montre la raison d’un refus et garde le chemin saisi', async () => {
-    const api = installerApi([])
-    api.enregistrerBrainAffectation.mockResolvedValueOnce({
-      affectations: [],
-      erreur: 'Chemin absolu obligatoire.'
-    })
-    await monter()
-    await saisir(champ(), 'relatif')
-    await cliquer(bouton('Assigner'))
-    expect(alerte()).toBe('Chemin absolu obligatoire.')
-    expect(avertissement()).toBeUndefined()
-    expect(champ().value).toBe('relatif')
-  })
-
-  it('lit un ajout réussi dans la liste même si la réponse porte une `erreur` : la saisie se vide, et le message s’affiche en avertissement, pas en alerte', async () => {
-    const api = installerApi([])
-    api.enregistrerBrainAffectation.mockResolvedValueOnce({
-      affectations: [{ cwd: ROTATION, brain: 'perso' }],
-      erreur: 'Fichier illisible mis de côté.'
-    })
-    await monter()
-    await saisir(champ(), ROTATION)
-    await choisir(BRAIN_AJOUT, 'perso')
-    await cliquer(bouton('Assigner'))
-    expect(brainDe(ROTATION)).toBe('perso')
-    expect(champ().value).toBe('')
-    expect(avertissement()).toBe('Fichier illisible mis de côté.')
     expect(alerte()).toBeUndefined()
   })
 
-  it('garde la liste et montre la raison quand le retrait porte une `erreur` : rien n’a été modifié, c’est un échec', async () => {
+  it('ne redemande rien quand on clique le Brain déjà montré', async () => {
     const api = installerApi([{ cwd: ROTATION, brain: 'perso' }])
-    api.retirerBrainAffectation.mockResolvedValueOnce({
-      affectations: [{ cwd: ROTATION, brain: 'perso' }],
-      erreur: 'Fichier des affectations illisible : rien n’a été modifié.'
-    })
+    poserDossiersDuChat([ROTATION])
     await monter()
-    await cliquer(bouton('Retirer'))
-    expect(api.retirerBrainAffectation).toHaveBeenCalledWith({ cwd: ROTATION })
-    expect(brainDe(ROTATION)).toBe('perso')
-    expect(alerte()).toBe('Fichier des affectations illisible : rien n’a été modifié.')
-    expect(avertissement()).toBeUndefined()
+    await choisir(ROTATION, 'perso')
+    await choisir(DEPOT, 'equipe')
+    expect(api.enregistrerBrainAffectation).not.toHaveBeenCalled()
   })
 
-  it('lit aussi dans la liste le changement de Brain d’un dossier déjà assigné : une `erreur` qui accompagne l’écriture est un avertissement', async () => {
+  it('une `erreur` qui accompagne une écriture réussie est un avertissement, pas une alerte', async () => {
     const api = installerApi([{ cwd: ROTATION, brain: 'perso' }])
     api.enregistrerBrainAffectation.mockResolvedValueOnce({
       affectations: [{ cwd: ROTATION, brain: 'equipe' }],
       erreur: 'Fichier illisible mis de côté.'
     })
+    poserDossiersDuChat([ROTATION])
     await monter()
-    await choisir(`Brain de ${ROTATION}`, 'equipe')
+    await choisir(ROTATION, 'equipe')
     expect(brainDe(ROTATION)).toBe('equipe')
     expect(avertissement()).toBe('Fichier illisible mis de côté.')
     expect(alerte()).toBeUndefined()
@@ -198,116 +238,94 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
       affectations: [{ cwd: ROTATION, brain: 'perso' }],
       erreur: 'Écriture impossible.'
     })
+    poserDossiersDuChat([ROTATION])
     await monter()
-    await choisir(`Brain de ${ROTATION}`, 'equipe')
+    await choisir(ROTATION, 'equipe')
     expect(brainDe(ROTATION)).toBe('perso')
     expect(alerte()).toBe('Écriture impossible.')
     expect(avertissement()).toBeUndefined()
   })
 
+  it('montre en échec une demande qui n’aboutit pas', async () => {
+    const api = installerApi()
+    api.enregistrerBrainAffectation.mockRejectedValueOnce(new Error('canal coupé'))
+    poserDossiersDuChat([ROTATION])
+    await monter()
+    await choisir(ROTATION, 'perso')
+    expect(brainDe(ROTATION)).toBe('equipe')
+    expect(alerte()).toBe('Impossible d’enregistrer cette affectation.')
+  })
+
   it('affiche en avertissement l’`erreur` qui accompagne la liste lue à l’ouverture (fichier présent mais illisible)', async () => {
-    const api = installerApi([])
+    const api = installerApi()
     api.brainAffectations.mockResolvedValueOnce({
       affectations: [],
       erreur: 'Le fichier brain-affectations.json est présent mais illisible.'
     })
+    poserDossiersDuChat([ROTATION])
     await monter()
-    expect(container.textContent).toContain('Aucun dossier assigné')
     expect(avertissement()).toBe('Le fichier brain-affectations.json est présent mais illisible.')
     expect(alerte()).toBeUndefined()
   })
 
-  it('compare le chemin saisi à la liste renvoyée sous forme normalisée (casse, séparateurs, séparateur final)', async () => {
-    const api = installerApi([])
-    api.enregistrerBrainAffectation.mockResolvedValueOnce({
-      affectations: [{ cwd: ROTATION, brain: 'perso' }]
-    })
-    await monter()
-    await saisir(champ(), 'd:/brainrotroyale/')
-    await choisir(BRAIN_AJOUT, 'perso')
-    await cliquer(bouton('Assigner'))
-    expect(champ().value).toBe('')
-  })
-
-  it('change le Brain d’un dossier déjà assigné, puis retire le dossier', async () => {
-    const api = installerApi([{ cwd: ROTATION, brain: 'perso' }])
-    api.enregistrerBrainAffectation.mockResolvedValueOnce({
-      affectations: [{ cwd: ROTATION, brain: 'equipe' }]
-    })
-    await monter()
-    await choisir(`Brain de ${ROTATION}`, 'equipe')
-    expect(api.enregistrerBrainAffectation).toHaveBeenLastCalledWith({
-      cwd: ROTATION,
-      brain: 'equipe'
-    })
-    expect(brainDe(ROTATION)).toBe('equipe')
-    await cliquer(bouton('Retirer'))
-    expect(api.retirerBrainAffectation).toHaveBeenCalledWith({ cwd: ROTATION })
-    expect(container.textContent).toContain('Aucun dossier assigné')
-  })
-
-  it('dit que la liste n’a pas pu être lue, au lieu d’afficher une liste vide', async () => {
+  it('dit que les Brains n’ont pas pu être lus, au lieu de montrer « Équipe » partout', async () => {
     const api = installerApi()
     api.brainAffectations.mockRejectedValueOnce(new Error('canal coupé'))
+    poserDossiersDuChat([ROTATION])
     await monter()
-    expect(alerte()).toBe('Impossible de lire les dossiers de travail assignés.')
+    expect(alerte()).toBe('Impossible de lire le Brain de chaque dossier de travail.')
+    expect(container.querySelector('ul')).toBeNull()
   })
 
   it('ne fait pas tomber la vue quand le pont manque (application pas à jour)', async () => {
     ;(window as unknown as { api: object }).api = {}
+    poserDossiersDuChat([ROTATION])
     await monter()
-    expect(alerte()).toBe('Impossible de lire les dossiers de travail assignés.')
-    expect(container.querySelector('form.dossiers-travail__ajout')).not.toBeNull()
+    expect(alerte()).toBe('Impossible de lire le Brain de chaque dossier de travail.')
+  })
+
+  it('dit qu’il n’y a aucun dossier de travail quand le Chat n’en a pas', async () => {
+    const api = installerApi()
+    api.executionWorkspace.mockResolvedValue({ path: '' })
+    api.dossierPersonnel.mockResolvedValue('')
+    await monter()
+    expect(container.textContent).toContain('Aucun dossier de travail')
+    expect(container.querySelector('ul')).toBeNull()
+    expect(container.querySelector('input[type="search"]')).toBeNull()
   })
 
   it('montre chaque dossier sur deux lignes : son nom, puis son chemin complet', async () => {
-    installerApi([
-      { cwd: 'D:\\Projets\\Facturation\\Archives', brain: 'equipe' },
-      { cwd: 'D:\\', brain: 'perso' }
-    ])
+    installerApi()
+    poserDossiersDuChat(['D:\\Projets\\Facturation\\Archives'])
     await monter()
-    const lignes = [...container.querySelectorAll('.dossiers-travail__ligne')]
-    const lire = (ligne: Element, classe: string): string | null | undefined =>
-      ligne.querySelector(classe)?.textContent
-    expect(lire(lignes[0], '.dossiers-travail__nom')).toBe('Archives')
-    expect(lire(lignes[0], '.dossiers-travail__chemin')).toBe('D:\\Projets\\Facturation\\Archives')
-    // Une racine n'a pas de dernier segment : son nom reste le chemin.
-    expect(lire(lignes[1], '.dossiers-travail__nom')).toBe('D:\\')
+    const ligne = [...container.querySelectorAll('.dossiers-travail__ligne')].at(-1)
+    expect(ligne?.querySelector('.dossiers-travail__nom')?.textContent).toBe('Archives')
+    expect(ligne?.querySelector('.dossiers-travail__chemin')?.textContent).toBe(
+      'D:\\Projets\\Facturation\\Archives'
+    )
   })
 
-  it('filtre les dossiers sur leur chemin, sans tenir compte de la casse, et dit quand rien ne correspond', async () => {
-    installerApi([
-      { cwd: ROTATION, brain: 'perso' },
-      { cwd: 'D:\\Notes\\Journal', brain: 'equipe' }
-    ])
+  it('filtre les dossiers sur leur chemin ou leur nom, sans tenir compte de la casse, et dit quand rien ne correspond', async () => {
+    installerApi()
+    poserDossiersDuChat([ROTATION, JOURNAL])
     await monter()
     await saisir(filtre(), 'journal')
-    expect(container.querySelectorAll('.dossiers-travail__ligne')).toHaveLength(1)
-    expect(container.textContent).not.toContain(ROTATION)
+    expect(chemins()).toEqual([JOURNAL])
+    await saisir(filtre(), 'this comp')
+    expect(chemins()).toEqual([PERSONNEL])
     await saisir(filtre(), 'introuvable')
     expect(container.querySelector('ul')).toBeNull()
     expect(container.textContent).toContain('Aucun dossier ne correspond.')
   })
 
-  it('ne propose pas de filtre quand aucun dossier n’est assigné', async () => {
-    installerApi([])
+  it('n’a ni ajout d’un chemin libre ni retrait : la liste se tient depuis le Chat', async () => {
+    installerApi([{ cwd: ROTATION, brain: 'perso' }])
+    poserDossiersDuChat([ROTATION])
     await monter()
-    expect(container.querySelector('input[type="search"]')).toBeNull()
-  })
-
-  it('range l’ajout derrière « Assigner un dossier », replié à l’ouverture', async () => {
-    installerApi([])
-    await monter()
-    const pli = container.querySelector<HTMLDetailsElement>('details')
-    expect(pli?.open).toBe(false)
-    expect(pli?.querySelector('summary')?.textContent).toBe('Assigner un dossier')
-    expect(pli?.querySelector('form.dossiers-travail__ajout')).not.toBeNull()
-  })
-
-  it('ne redemande rien quand on clique le Brain déjà choisi', async () => {
-    const api = installerApi([{ cwd: ROTATION, brain: 'perso' }])
-    await monter()
-    await choisir(`Brain de ${ROTATION}`, 'perso')
-    expect(api.enregistrerBrainAffectation).not.toHaveBeenCalled()
+    expect(container.querySelector('form')).toBeNull()
+    expect(container.querySelector('input[type="text"]')).toBeNull()
+    const libelles = [...container.querySelectorAll('button')].map((b) => b.textContent)
+    expect(libelles).not.toContain('Retirer')
+    expect(libelles).not.toContain('Assigner')
   })
 })

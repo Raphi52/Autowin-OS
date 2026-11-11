@@ -349,9 +349,7 @@ describe('vue Knowledge — menu des dossiers de travail', () => {
     await act(async () => boutonDossiers()?.click())
     await flush()
     expect(api.brainAffectations).toHaveBeenCalled()
-    expect(
-      container.querySelector('.graph-dossiers-popover .dossiers-travail__ajout')
-    ).not.toBeNull()
+    expect(container.querySelector('.graph-dossiers-popover .dossiers-travail')).not.toBeNull()
     expect(boutonDossiers()?.getAttribute('aria-expanded')).toBe('true')
   })
 
@@ -363,7 +361,7 @@ describe('vue Knowledge — menu des dossiers de travail', () => {
     )
     await flush()
     expect(container.querySelector('.graph-settings-popover')).not.toBeNull()
-    expect(container.querySelector('.dossiers-travail__ajout')).toBeNull()
+    expect(container.querySelector('.dossiers-travail')).toBeNull()
   })
 
   it('le bouton reste sans Brain perso détecté : seule la bascule disparaît', async () => {

@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react'
 import type { Affectation } from '../../../main/brain/brain-affectation'
 import type { BrainAffectationsState } from '../../../shared/preload-contracts'
+import { cleDeDossier, dossiersDuBoard } from '../../../shared/board-dossiers-du-chat'
 import { useTextesKnowledge } from '../textes-ecrans/knowledge'
+import {
+  EVT_DOSSIERS_DU_CHAT,
+  NOM_DU_DOSSIER_PERSONNEL,
+  lireDossierPersonnel,
+  lireDossiersDuChat,
+  lireDossiersRetires,
+  lireDossiersToujoursProposes
+} from './dossiers-du-chat'
 import './DossiersDeTravailPanel.css'
 
 /**
- * Dossiers de travail (plan « Affectation des dossiers de travail aux Brains », lot 4) : quel Brain
- * reçoit les notes écrites depuis un dossier. Liste filtrable (nom du dossier, chemin dessous), choix
- * Équipe ou Perso, retrait, ajout d'un chemin absolu. Chaque demande passe par les canaux du lot 3 ;
- * la réponse porte la liste à jour, et c'est elle qui remplace l'affichage.
+ * Brain par dossier : quel Brain reçoit les notes écrites depuis chaque dossier de travail.
+ * LA LISTE EST CELLE DU CHAT (menu « Ranger dans… », la même que le Board), ni plus ni moins : un
+ * dossier s'ajoute et se retire là-bas, ce menu ne tient pas une seconde liste. Chaque ligne montre
+ * le Brain qui s'applique VRAIMENT au dossier — le sien, celui d'un dossier parent, sinon l'équipe —
+ * et un clic sur l'autre segment l'assigne. La réponse porte les affectations à jour, et c'est elle
+ * qui remplace l'affichage.
  */
 type Brain = Affectation['brain']
 
@@ -65,6 +76,50 @@ function cheminComparable(chemin: string): string {
     .toLowerCase()
 }
 
+/**
+ * Le Brain qui reçoit les notes de ce dossier : la règle de `brainPourCwd` (processus principal),
+ * rejouée pour l'affichage. L'affectation la plus précise qui couvre le dossier gagne ; aucune =
+ * l'équipe. Le `/` ajouté empêche un frère au nom voisin (« Notes » et « NotesVoisin ») d'y passer.
+ */
+function brainDuDossier(affectations: readonly Affectation[], cwd: string): Brain {
+  const cible = cheminComparable(cwd)
+  let brain: Brain = 'equipe'
+  let longueur = -1
+  for (const affectation of affectations) {
+    const dossier = cheminComparable(affectation.cwd)
+    if (dossier.length <= longueur) continue
+    if (cible !== dossier && !cible.startsWith(`${dossier}/`)) continue
+    brain = affectation.brain
+    longueur = dossier.length
+  }
+  return brain
+}
+
+/**
+ * Les dossiers de travail du Chat, dans l'ordre de son menu : « This computer », puis le dépôt de la
+ * session, puis les dossiers mémorisés. La règle est celle du Board (`dossiersDuBoard`) : un dossier
+ * toujours proposé sort quand sa croix l'a retiré, sauf « This computer ».
+ */
+async function lireLesDossiersDeTravail(): Promise<{
+  dossiers: string[]
+  personnel: string | null
+}> {
+  const [toujours, personnel] = await Promise.all([
+    lireDossiersToujoursProposes(),
+    lireDossierPersonnel()
+  ])
+  const proposes = [personnel, ...(toujours ?? [])]
+  const tous = dossiersDuBoard(lireDossiersDuChat(), proposes, lireDossiersRetires(), [personnel])
+  const rang = new Map(
+    dossiersDuBoard([], proposes, lireDossiersRetires(), [personnel]).map((chemin, i) => [
+      cleDeDossier(chemin),
+      i
+    ])
+  )
+  const place = (chemin: string): number => rang.get(cleDeDossier(chemin)) ?? proposes.length
+  return { dossiers: [...tous].sort((a, b) => place(a) - place(b)), personnel }
+}
+
 /** Le dossier figure-t-il dans la liste avec ce Brain ? La liste stocke le chemin résolu, pas la saisie. */
 function estAssigne(affectations: Affectation[], cwd: string, brain: Brain): boolean {
   const voulu = cheminComparable(cwd)
@@ -82,11 +137,31 @@ export function DossiersDeTravailPanel(): React.JSX.Element {
   const [enCours, setEnCours] = useState(false)
   /** Le message accompagne une demande qui a abouti : c'est un avertissement, pas un échec. */
   const [avertissement, setAvertissement] = useState(false)
-  const [chemin, setChemin] = useState('')
-  const [brainNouveau, setBrainNouveau] = useState<Brain>('equipe')
+  const [dossiers, setDossiers] = useState<string[]>([])
+  /** « This computer » : il porte ce nom dans le Chat, pas celui du compte Windows. */
+  const [personnel, setPersonnel] = useState<string | null>(null)
   const [filtre, setFiltre] = useState('')
 
-  // Relue à chaque ouverture des réglages : la liste montrée est celle du fichier, pas une copie ancienne.
+  // La liste suit le Chat : lue à l'ouverture, relue quand un dossier y est retiré pendant que le menu est
+  // ouvert (croix du Board ou du Chat).
+  useEffect(() => {
+    let courant = true
+    const lire = (): void => {
+      void lireLesDossiersDeTravail().then((lu) => {
+        if (!courant) return
+        setDossiers(lu.dossiers)
+        setPersonnel(lu.personnel)
+      })
+    }
+    lire()
+    window.addEventListener(EVT_DOSSIERS_DU_CHAT, lire)
+    return () => {
+      courant = false
+      window.removeEventListener(EVT_DOSSIERS_DU_CHAT, lire)
+    }
+  }, [])
+
+  // Relues à chaque ouverture du menu : les Brains montrés sont ceux du fichier, pas une copie ancienne.
   // Un pont absent (app pas à jour) se dit ici : l'appel est dans le `try`, il ne fait pas tomber la vue.
   useEffect(() => {
     let courant = true
@@ -96,7 +171,7 @@ export function DossiersDeTravailPanel(): React.JSX.Element {
         if (!courant) return
         setAffectations(reponse.affectations)
         // La lecture a répondu : une `erreur` (fichier présent mais illisible) accompagne la liste.
-        // Sans elle, « aucun dossier assigné » s'afficherait alors qu'il en reste dans ce fichier.
+        // Sans elle, chaque dossier se lirait « Équipe » alors que ce fichier en assigne peut-être.
         setMessage(reponse.erreur ?? '')
         setAvertissement(reponse.erreur !== undefined)
       } catch {
@@ -109,71 +184,57 @@ export function DossiersDeTravailPanel(): React.JSX.Element {
   }, [])
 
   /**
-   * Une demande. La liste renvoyée remplace l'affichage ; un refus reste visible, sans rien effacer.
-   * `reussie` dit si la réponse vaut réussite. Par défaut, aucune `erreur` : c'est la règle du
-   * retrait, où une `erreur` veut dire que rien n'a été modifié.
+   * Assigne un Brain à un dossier. Les affectations renvoyées remplacent l'affichage ; un refus reste
+   * visible, sans rien effacer. Le succès se lit dans la liste renvoyée, pas dans l'absence de
+   * `erreur` : une `erreur` peut accompagner une écriture réussie (fichier illisible mis de côté,
+   * affectation écrite dans un fichier neuf), et c'est alors un avertissement.
    */
-  async function ecrire(
-    demande: () => Promise<BrainAffectationsState>,
-    reussie: (reponse: BrainAffectationsState) => boolean = (reponse) =>
-      reponse.erreur === undefined
-  ): Promise<boolean> {
+  async function assigner(cwd: string, brain: Brain): Promise<void> {
     setEnCours(true)
     setMessage('')
     setAvertissement(false)
     try {
-      const reponse = await demande()
+      const reponse: BrainAffectationsState = await window.api.enregistrerBrainAffectation({
+        cwd,
+        brain
+      })
       setAffectations(reponse.affectations)
       setMessage(reponse.erreur ?? '')
-      const ok = reussie(reponse)
-      // Une `erreur` qui accompagne une écriture réussie (fichier illisible mis de côté) reste un avertissement.
-      setAvertissement(ok && reponse.erreur !== undefined)
-      return ok
+      setAvertissement(estAssigne(reponse.affectations, cwd, brain) && reponse.erreur !== undefined)
     } catch {
       setMessage(t('dossiers.erreur.action'))
-      return false
     } finally {
       setEnCours(false)
     }
-  }
-
-  /**
-   * Assigne un Brain à un dossier : ajout, ou changement du Brain d'un dossier déjà listé (même canal).
-   * Le succès se lit dans la liste renvoyée, pas dans l'absence de `erreur` : une `erreur` peut
-   * accompagner une écriture réussie (fichier illisible mis de côté, affectation écrite dans un
-   * fichier neuf).
-   */
-  function assigner(cwd: string, brain: Brain): Promise<boolean> {
-    return ecrire(
-      () => window.api.enregistrerBrainAffectation({ cwd, brain }),
-      (reponse) => estAssigne(reponse.affectations, cwd, brain)
-    )
-  }
-
-  async function ajouter(event: React.FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault()
-    const cwd = chemin.trim()
-    if (cwd === '') return
-    if (await assigner(cwd, brainNouveau)) setChemin('')
   }
 
   // Un échec de lecture passe devant tout autre message, et n'est jamais un avertissement.
   const avis = lectureEchouee ? t('dossiers.erreur.charger') : message
   const avertit = avertissement && !lectureEchouee
 
+  const clePersonnelle = cleDeDossier(personnel)
+  const nomAffiche = (cwd: string): string =>
+    clePersonnelle && cleDeDossier(cwd) === clePersonnelle
+      ? NOM_DU_DOSSIER_PERSONNEL
+      : nomDuDossier(cwd)
   const cherche = filtre.trim().toLowerCase()
   const visibles =
     cherche === ''
-      ? affectations
-      : affectations.filter((affectation) => affectation.cwd.toLowerCase().includes(cherche))
+      ? dossiers
+      : dossiers.filter((cwd) =>
+          `${cwd}
+${nomAffiche(cwd)}`
+            .toLowerCase()
+            .includes(cherche)
+        )
 
   return (
     <section className="dossiers-travail">
-      {affectations.length === 0 ? (
+      {lectureEchouee ? null : dossiers.length === 0 ? (
+        // Sans Brain lu, montrer « Équipe » sur chaque ligne affirmerait ce qu'on ne sait pas.
         <p className="setting-help">{t('dossiers.vide')}</p>
       ) : (
         <>
-          {/* `search`, pas `text` : le seul champ texte du panneau reste le chemin à assigner. */}
           <input
             type="search"
             className="dossiers-travail__filtre"
@@ -186,70 +247,30 @@ export function DossiersDeTravailPanel(): React.JSX.Element {
             <p className="setting-help">{t('dossiers.filtre.aucun')}</p>
           ) : (
             <ul className="dossiers-travail__liste" aria-label={t('dossiers.liste.aria')}>
-              {visibles.map((affectation) => (
-                <li key={affectation.cwd} className="dossiers-travail__ligne">
+              {visibles.map((cwd) => (
+                <li key={cwd} className="dossiers-travail__ligne">
                   <span className="dossiers-travail__texte">
-                    <span className="dossiers-travail__nom">{nomDuDossier(affectation.cwd)}</span>
-                    <span className="dossiers-travail__chemin">{affectation.cwd}</span>
+                    <span className="dossiers-travail__nom">{nomAffiche(cwd)}</span>
+                    <span className="dossiers-travail__chemin">{cwd}</span>
                   </span>
                   <ChoixBrain
-                    label={t('dossiers.brainDe.aria', { dossier: affectation.cwd })}
-                    valeur={affectation.brain}
+                    label={t('dossiers.brainDe.aria', { dossier: cwd })}
+                    valeur={brainDuDossier(affectations, cwd)}
                     disabled={enCours}
-                    onChange={(brain) => void assigner(affectation.cwd, brain)}
+                    onChange={(brain) => void assigner(cwd, brain)}
                   />
-                  <button
-                    type="button"
-                    className="dossiers-travail__lien"
-                    disabled={enCours}
-                    aria-label={t('dossiers.retirer.aria', { dossier: affectation.cwd })}
-                    onClick={() =>
-                      void ecrire(() =>
-                        window.api.retirerBrainAffectation({ cwd: affectation.cwd })
-                      )
-                    }
-                  >
-                    {t('dossiers.retirer')}
-                  </button>
                 </li>
               ))}
             </ul>
           )}
         </>
       )}
-      <div className="dossiers-travail__pied">
-        {/* Replié : la liste se lit d'abord, l'ajout ne prend sa place que sur demande. */}
-        <details className="dossiers-travail__pli">
-          <summary className="dossiers-travail__lien">{t('dossiers.ajout.deplier')}</summary>
-          <form className="dossiers-travail__ajout" onSubmit={(event) => void ajouter(event)}>
-            <input
-              type="text"
-              aria-label={t('dossiers.chemin.aria')}
-              placeholder={t('dossiers.chemin.placeholder')}
-              value={chemin}
-              disabled={enCours}
-              onChange={(event) => setChemin(event.target.value)}
-            />
-            <ChoixBrain
-              label={t('dossiers.brain.aria')}
-              valeur={brainNouveau}
-              disabled={enCours}
-              onChange={setBrainNouveau}
-            />
-            <button
-              type="submit"
-              className="dossiers-travail__lien"
-              disabled={enCours || chemin.trim() === ''}
-            >
-              {t('dossiers.ajouter')}
-            </button>
-          </form>
-        </details>
-        {/* La règle tient en quelques mots ; l'explication entière reste au survol. */}
-        <span className="dossiers-travail__regle" title={t('dossiers.aide')}>
+      {!lectureEchouee && (
+        // La règle tient en quelques mots ; l'explication entière reste au survol.
+        <p className="dossiers-travail__regle" title={t('dossiers.aide')}>
           {t('dossiers.regle')}
-        </span>
-      </div>
+        </p>
+      )}
       {avis && (
         // Avertissement : `domain-warning`, la classe des réglages du Brain (couleur du thème), en
         // `status`. Échec : le style d'aide, en `alert`.

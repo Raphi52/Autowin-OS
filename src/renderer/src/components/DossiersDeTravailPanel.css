@@ -11,8 +11,7 @@
   width: min(420px, calc(100% - 28px));
 }
 
-.dossiers-travail__filtre,
-.dossiers-travail__ajout input {
+.dossiers-travail__filtre {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -26,13 +25,11 @@
   font: inherit;
 }
 
-.dossiers-travail__filtre:focus-visible,
-.dossiers-travail__ajout input:focus-visible {
+.dossiers-travail__filtre:focus-visible {
   border-bottom-color: var(--gold);
 }
 
-.dossiers-travail__filtre::placeholder,
-.dossiers-travail__ajout input::placeholder {
+.dossiers-travail__filtre::placeholder {
   color: var(--text-dim);
 }
 
@@ -42,15 +39,11 @@
   list-style: none;
 }
 
-.dossiers-travail__ligne,
-.dossiers-travail__ajout {
+.dossiers-travail__ligne {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-}
-
-.dossiers-travail__ligne {
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
 }
@@ -97,25 +90,11 @@
   font-weight: 600;
 }
 
-.dossiers-travail__brains button:focus-visible,
-.dossiers-travail__lien:focus-visible {
+.dossiers-travail__brains button:focus-visible {
   outline: 1px solid var(--gold);
   outline-offset: -1px;
 }
 
-/* Action secondaire : un mot souligné en pointillé, jamais un bouton plein à côté du Brain. */
-.dossiers-travail__lien {
-  padding: 0;
-  border: 0;
-  border-bottom: 1px dotted var(--text-dim);
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  font: inherit;
-  white-space: nowrap;
-}
-
-.dossiers-travail__lien:hover:not(:disabled),
 .dossiers-travail__brains button:hover:not(:disabled):not([aria-pressed='true']) {
   color: var(--text);
 }
@@ -125,33 +104,7 @@
   opacity: 0.5;
 }
 
-.dossiers-travail__pied {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  align-items: baseline;
-  justify-content: space-between;
-  padding-top: 10px;
-}
-
-.dossiers-travail__pli > summary {
-  display: inline-block;
-  list-style: none;
-}
-
-.dossiers-travail__pli > summary::-webkit-details-marker {
-  display: none;
-}
-
-/* Ouvert, l'ajout prend toute la largeur : la règle passe dessous au lieu de serrer le champ. */
-.dossiers-travail__pli[open] {
-  flex: 1 1 100%;
-}
-
-.dossiers-travail__ajout {
-  margin-top: 8px;
-}
-
 .dossiers-travail__regle {
+  margin: 10px 0 0;
   color: var(--text-dim);
 }
