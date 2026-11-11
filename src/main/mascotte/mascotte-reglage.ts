@@ -70,8 +70,11 @@ type ReglageMascotte = {
  * magicien : c'est la mascotte que l'utilisateur vient de faire dessiner, le choix sert à revenir à
  * la bille.
  */
-/** `machine` : la petite machine de NieR, rendue en 3D ; c'est elle que montre le thème NieR. */
-export const STYLES_MASCOTTE = ['magicien', 'basique', 'machine'] as const
+/**
+ * `machine` : la petite machine de NieR, rendue en 3D ; c'est elle que montre le thème NieR.
+ * `panda` : le panda en peluche, modelé et animé dans Blender (fourrure, squelette, huit gestes).
+ */
+export const STYLES_MASCOTTE = ['magicien', 'basique', 'machine', 'panda'] as const
 export type StyleMascotte = (typeof STYLES_MASCOTTE)[number]
 export const STYLE_MASCOTTE_PAR_DEFAUT: StyleMascotte = 'magicien'
 
@@ -157,7 +160,7 @@ export function ecrireStyleMascotte(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
   if (!estUnStyleMascotte(valeur))
-    throw new Error('Style de la mascotte invalide (magicien, basique ou machine attendu).')
+    throw new Error('Style de la mascotte invalide (magicien, basique, machine ou panda attendu).')
   const fichier = mascotteReglageFile(env)
   if (!fichier)
     throw new Error('Dossier de données introuvable (APPDATA) : style de la mascotte non gardé.')

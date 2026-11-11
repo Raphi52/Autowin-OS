@@ -486,9 +486,12 @@ const api = {
   afficherMascotte: (affichee: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:mascotte:afficher', affichee),
   /** Le style de la mascotte : le magicien ou la bille basique. */
-  styleMascotte: (): Promise<'magicien' | 'basique' | 'machine'> => ipcRenderer.invoke('os:mascotte:style'),
+  styleMascotte: (): Promise<'magicien' | 'basique' | 'machine' | 'panda'> =>
+    ipcRenderer.invoke('os:mascotte:style'),
   /** Le choix de Settings · Interface : rend le style tel que le moteur l'a enregistré. */
-  choisirStyleMascotte: (style: 'magicien' | 'basique' | 'machine'): Promise<'magicien' | 'basique' | 'machine'> =>
+  choisirStyleMascotte: (
+    style: 'magicien' | 'basique' | 'machine' | 'panda'
+  ): Promise<'magicien' | 'basique' | 'machine' | 'panda'> =>
     ipcRenderer.invoke('os:mascotte:choisir-style', style),
   /** Le thème appliqué, pour que la mascotte passe en machine sous le thème NieR. */
   themeMascotte: (theme: string): Promise<boolean> => ipcRenderer.invoke('os:mascotte:theme', theme),

@@ -136,7 +136,7 @@ export const PLAN = {
   knowledge: ['semantic-temporal-ipc-contract'],
   mascotte: [
     'mascotte', 'mascotte-fenetre', 'mascotte-machine-images', 'mascotte-menu', 'mascotte-personnage',
-    'mascotte-reglage', 'mascotte-runs', 'quartier-presence', 'quartier-presence-collegues',
+    'mascotte-panda-images', 'mascotte-reglage', 'mascotte-runs', 'quartier-presence', 'quartier-presence-collegues',
     'quartier-presence-filtre', 'quartier-presence-masques'
   ],
   media: [

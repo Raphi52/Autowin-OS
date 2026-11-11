@@ -605,3 +605,67 @@ describe('mascotte du bureau — style machine (conv-346)', () => {
     expect(pointSurLaBille({ x: 2, y: 130 }, 'machine')).toBe(false)
   })
 })
+
+describe('mascotte du bureau — style panda en peluche', () => {
+  const css = (
+    etat: 'calme' | 'travail' | 'attente' | 'probleme',
+    pastille: string | null = null
+  ) => cssDeLEtat({ etat, pastille, fil: null }, 'panda')
+
+  it('la page embarque ses 8 planches, sans script, et respire puis grignote au repos', () => {
+    const html = htmlDeMascotte('panda')
+    expect(html.match(/data:image\/webp;base64,/gu)).toHaveLength(8)
+    expect(html).toContain('img-src data:')
+    expect(html).not.toMatch(/<script/iu)
+    expect(html).toMatch(/\.bw\{[^}]*var\(--repos\)[^}]*steps\(16\)[^}]*gc 25\.6s step-end/u)
+    expect(html).toContain('@keyframes gc{0%{background-image:var(--repos)}62.5%')
+    // Mêmes accroches que les autres styles : la fenêtre y pose le nombre, la croix et les clics.
+    for (const accroche of ['class="ob"', 'class="bw"', 'class="n"', 'class="bu"', 'class="f"'])
+      expect(html).toContain(accroche)
+  })
+
+  it('chaque planche est une planche de 16 images : le WebP annonce 2560 x 192', () => {
+    const planches = [
+      ...htmlDeMascotte('panda').matchAll(/data:image\/webp;base64,([A-Za-z0-9+/=]+)/gu)
+    ]
+    for (const [, donnees] of planches) {
+      const octets = Buffer.from(donnees, 'base64')
+      const vp8x = octets.indexOf('VP8X')
+      expect(vp8x).toBeGreaterThan(0)
+      // VP8X : largeur - 1 puis hauteur - 1, sur 24 bits petit-boutistes, 12 octets après le nom.
+      expect(octets.readUIntLE(vp8x + 12, 3) + 1).toBe(2560)
+      expect(octets.readUIntLE(vp8x + 15, 3) + 1).toBe(192)
+    }
+  })
+
+  it('un geste ne change qu’entre deux boucles : la durée du cycle est un multiple de la boucle', () => {
+    expect(css('calme')).toBe('')
+    expect(css('travail', '3')).toContain('sp 1.6s steps(16) infinite,gt 12.8s step-end infinite')
+    expect(css('travail', '3')).toContain('body .n::after{content:"3"}')
+    expect(css('attente')).toContain('sp 1.6s steps(16) infinite,ga 14.4s step-end infinite')
+    expect(css('attente')).toContain('content:"✓"')
+    expect(css('probleme')).toContain('var(--souci)')
+    expect(css('probleme')).toContain('content:"!"')
+    // La bulle dit déjà « ! » : la pastille « ! » ne le répète pas, un compte reste affiché.
+    expect(css('probleme', '!').split('\n').at(-1)).toBe('body .n{display:none}')
+    expect(css('probleme', '2').split('\n').at(-1)).toContain('body .n{color:#fff')
+    expect(12.8 / 1.6).toBe(8)
+    expect(Math.round((14.4 / 1.6) * 1000) / 1000).toBe(9)
+    expect(25.6 / 3.2).toBe(8)
+  })
+
+  it('sur l’accueil : il dort au repos, travaille en lecture, et son éveil est sa page nue', () => {
+    expect(cssDeLAccueil('sommeil', 0, 'panda')).toBe(css('calme'))
+    expect(cssDeLAccueil('lecture', 0, 'panda')).toBe(css('travail'))
+    expect(cssDeLAccueil('eveil', 0, 'panda')).toBe('')
+    expect(cssDeLAccueil('coucou', 0, 'panda')).toBe(css('attente'))
+    expect(cssDeLAccueil('eveil', 2, 'panda')).toBe(css('travail', '2'))
+  })
+
+  it('le ventre et la croix restent cliquables, le vide autour laisse passer', () => {
+    const g = geometrieMascotte('panda')
+    expect(pointSurLaBille({ x: g.centre.x, y: g.centre.y }, 'panda')).toBe(true)
+    expect(pointSurLaBille({ x: g.croix.x + 9, y: g.croix.y + 9 }, 'panda')).toBe(true)
+    expect(pointSurLaBille({ x: 2, y: 130 }, 'panda')).toBe(false)
+  })
+})

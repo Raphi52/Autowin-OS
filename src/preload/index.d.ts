@@ -320,8 +320,10 @@ interface ChatApi {
   mascotteAffichee: () => Promise<boolean>
   afficherMascotte: (affichee: boolean) => Promise<boolean>
   /** Le style de la mascotte du bureau : le magicien ou la bille basique. */
-  styleMascotte: () => Promise<'magicien' | 'basique' | 'machine'>
-  choisirStyleMascotte: (style: 'magicien' | 'basique' | 'machine') => Promise<'magicien' | 'basique' | 'machine'>
+  styleMascotte: () => Promise<'magicien' | 'basique' | 'machine' | 'panda'>
+  choisirStyleMascotte: (
+    style: 'magicien' | 'basique' | 'machine' | 'panda'
+  ) => Promise<'magicien' | 'basique' | 'machine' | 'panda'>
   themeMascotte: (theme: string) => Promise<boolean>
   /** La vraie page de la mascotte, pour l'accueil d'un fil vide. */
   mascottePage: () => Promise<{ html: string; largeur: number; hauteur: number }>
