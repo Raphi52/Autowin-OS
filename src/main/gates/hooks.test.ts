@@ -44,6 +44,13 @@ describe('hooks déterministes in-app (repro kit)', () => {
     expect(v.detail).toMatch(/pour lever ce refus, dépose dans src\/main\/juge\/objections-juge\.ts un commentaire `fix-ok: /)
   })
 
+  // Un fichier supprimé par le run ne peut plus porter la ligne `fix-ok:` : le refus doit dire aussi la
+  // voie qui marche sans fichier, nommer la cause dans la réponse.
+  it('fix-gate : le refus nomme aussi la voie de la réponse, pour un fichier supprimé', () => {
+    const [v] = detectBlindFixLoop({ 'src/main/sonde-supprimee.ts': 4 })
+    expect(v.detail).toMatch(/nomme sa cause dans ta réponse : `CausalHypothesis: src\/main\/sonde-supprimee\.ts/)
+  })
+
   it('done-without-proof : refuse le green sans preuve, passe avec ≥1 preuve', () => {
     expect(requireProofBeforeGreen(0)).toHaveLength(1)
     expect(requireProofBeforeGreen(2)).toHaveLength(0)

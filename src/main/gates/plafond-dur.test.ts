@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plafondDurReparations } from './stopgate'
+import { arretDeLaReparation, plafondDurReparations } from './stopgate'
 
 /**
  * UNE SEULE SOURCE pour le plafond dur — la leçon la plus chère de ce chantier.
@@ -13,6 +13,26 @@ import { plafondDurReparations } from './stopgate'
  * recrée ce défaut si le devis continue de provisionner l'ancien chiffre. D'où cette fonction : la
  * boucle et le devis lisent la même, et un test le vérifie plutôt que de faire confiance.
  */
+/*
+ * Un plafond à zéro arrête le run : l'arrêt doit DIRE pourquoi. Le motif de la politique (budget bloquant,
+ * plafond déclaré à zéro) était déjà poussé dans la trace ; le message d'arrêt, lui, restait muet.
+ */
+describe('plafond dur à zéro : l’arrêt dit pourquoi', () => {
+  it('cite le motif de la politique dans le message d’arrêt, jamais un arrêt muet', () => {
+    const arret = arretDeLaReparation({
+      tentative: 1,
+      reparationsAccordees: 0,
+      plafondDur: 0,
+      motifPlafond:
+        'aucune réparation : le budget est en mode bloquant, une nouvelle dépense demande un nouveau tour humain',
+      motifsCourants: ['Promis mais pas fait : 1 point(s) annoncé(s) au départ ne sont pas faits.'],
+      motifsPrecedents: []
+    })
+    expect(arret).toContain('plafond dur de 0 passage(s) atteint')
+    expect(arret).toContain('le budget est en mode bloquant')
+  })
+})
+
 describe('plafond dur des réparations', () => {
   it('laisse de la marge au-delà des réparations provisionnées', () => {
     // C'est tout l'objet : un run qui progresse doit pouvoir dépasser le provisionnement.

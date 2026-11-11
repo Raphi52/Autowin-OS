@@ -47,6 +47,21 @@ export function runDuFichier(nom) {
   return MOTIF_RUN_ID.test(runId) ? runId : null
 }
 
+/**
+ * Le nom de fichier qu'`identifiantBureauCache` (src/main/consignes/consigne-bureau-cache.ts) donne aux
+ * fichiers de cause d'un run. Mêmes règles, relues ici parce que ce script est du node pur ; le test les
+ * vérifie contre la version TypeScript. Le nom est tronqué à 40 caractères et mis en minuscules : on compare
+ * donc des NOMS, jamais un runId brut.
+ */
+export function nomDeCauseDuRun(runId) {
+  const nettoye = String(runId ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+  return `run-${nettoye || 'sans-id'}`
+}
+
 /** Un dossier absent n'est pas une panne : rien n'y est tenu, ou rien n'y est posé. */
 function listerOuVide(dossier) {
   try {
@@ -69,7 +84,12 @@ export function causesDesRunsTermines(ctx) {
   // L'état tenu d'abord : si le lire échoue, aucun run ne peut être jugé réglé.
   const etat = listerOuVide(dossierEtat)
   if (etat.sondeEnEchec) return { candidats: [], gardes, sondeEnEchec: etat.sondeEnEchec }
-  const tenus = new Set(etat.noms)
+  // Un run est tenu si son état existe. On compare le NOM du fichier de cause (nomDeCauseDuRun), pas le runId.
+  const tenus = new Set(
+    etat.noms
+      .filter((nom) => nom.endsWith('.json'))
+      .map((nom) => nomDeCauseDuRun(nom.slice(0, -'.json'.length)))
+  )
 
   const causes = listerOuVide(dossierCauses)
   if (causes.sondeEnEchec) return { candidats: [], gardes, sondeEnEchec: causes.sondeEnEchec }
@@ -81,7 +101,7 @@ export function causesDesRunsTermines(ctx) {
       gardes.nomInconnu += 1
       continue
     }
-    if (tenus.has(`${runId}.json`)) {
+    if (tenus.has(nom.slice(0, -'.json'.length))) {
       gardes.encoreTenu += 1
       continue
     }

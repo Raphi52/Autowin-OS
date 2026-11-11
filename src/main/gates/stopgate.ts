@@ -300,6 +300,8 @@ export function arretDeLaReparation(entree: {
   reparationsAccordees: number
   /** Le garde-fou de dernier ressort. Zéro interdit toute réparation. */
   plafondDur: number
+  /** Le motif que la politique a donné à ce zéro (budget bloquant, plafond déclaré à zéro), dit dans l'arrêt. */
+  motifPlafond?: string
   motifsCourants: readonly string[]
   motifsPrecedents: readonly string[]
   /**
@@ -382,7 +384,8 @@ export function arretDeLaReparation(entree: {
     return undefined
   }
   if (entree.tentative >= entree.plafondDur) {
-    return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
+    const pourquoi = entree.motifPlafond ? ` — ${entree.motifPlafond}` : ''
+    return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees})${pourquoi}.`
   }
   const repetitions = entree.noteEnProgres ? 0 : (entree.refusIdentiquesConsecutifs ?? 0)
   // tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : un refus fix-gate se lève par UNE ligne

@@ -77,6 +77,8 @@ export function deciderDuPassage(entree: {
   attempt: number
   reparationsAccordees: number
   plafondDur: number
+  /** Le motif de la politique quand le plafond vaut zéro : il est dit dans l'arrêt, jamais muet. */
+  motifPlafond?: string
   motifsCourants: readonly string[]
   etat: EtatDeBoucleDeReparation
   bundlePerime?: { bundleMs: number; sourceMs: number; demarrageMs?: number; bundle: string }
@@ -104,6 +106,7 @@ export function deciderDuPassage(entree: {
     tentative: attempt + 1,
     reparationsAccordees,
     plafondDur,
+    ...(entree.motifPlafond ? { motifPlafond: entree.motifPlafond } : {}),
     motifsCourants,
     motifsPrecedents: etat.motifsPrecedents,
     refusIdentiquesConsecutifs: etat.refusIdentiquesConsecutifs,

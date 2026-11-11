@@ -67,7 +67,7 @@ export const SEUIL_FIX_GATE = 3
 export function detailRefusFixGate(count: number, file: string): string {
   // Le refus doit porter son geste de sortie : tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb,
   // la reparation l'a recu 2 fois sans deposer le jeton et la boucle s'est figee en rouge.
-  return `${count} édits de ${file} sans cause vérifiée (CausalHypothesis/fix-ok/check:) — pour lever ce refus, dépose dans ${file} un commentaire \`fix-ok: <cause mesurée>\``
+  return `${count} édits de ${file} sans cause vérifiée (CausalHypothesis/fix-ok/check:) — pour lever ce refus, dépose dans ${file} un commentaire \`fix-ok: <cause mesurée>\` ; si ce fichier n'existe plus, nomme sa cause dans ta réponse : \`CausalHypothesis: ${file} — <cause mesurée>\``
 }
 
 /**

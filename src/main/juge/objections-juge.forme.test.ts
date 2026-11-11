@@ -211,3 +211,40 @@ describe('« passes » au sens de nom (passes intermédiaires) n’est pas un ef
     ).toHaveLength(1)
   })
 })
+
+describe('« passes » au sens de nom n’est pas un effet ; le verbe « passe » en est un', () => {
+  it('une remarque OK: forme qui cite « les passes intermédiaires » ne bloque pas', () => {
+    expect(
+      objectionsDuJuge(
+        'VALIDE\nOBJECTIONS:\n- OK: forme — le commentaire cite les passes intermédiaires du juge.'
+      )
+    ).toEqual([])
+  })
+
+  it('une remarque MINEUR de forme qui nomme « trois passes » ne bloque pas', () => {
+    expect(
+      objectionsDuJuge(
+        'VALIDE\nOBJECTIONS:\n- MINEUR: le titre de la section mentionne trois passes.'
+      )
+    ).toEqual([])
+  })
+
+  it('le verbe (passe, passent) reste un effet, même après un nombre : bloque', () => {
+    for (const texte of [
+      '- OK: forme — le titre dit que le test passe avant la correction.',
+      '- MINEUR: le titre dit que les tests passent avant la correction.',
+      '- OK: forme — ça passe alors que le bandeau dit le contraire.',
+      '- OK: forme — 54 sur 54 passent, mais le titre dit le contraire.',
+      '- MINEUR: le titre dit que trois passent avant la correction.'
+    ]) {
+      expect(objectionsDuJuge(`VALIDE\nOBJECTIONS:\n${texte}`)).toHaveLength(1)
+    }
+  })
+
+  it('rejeu de la remarque qui a fait refuser le lot « Affichage » : elle ne bloque plus', () => {
+    // Chemin raccourci ; le reste de la remarque est celui du juge.
+    const remarque =
+      "- OK: forme — objection précédente corrigée. Le bilan final dit « conversation de test » partout, et le commentaire de `LookDecodeBlock.test.tsx` (l.5-8) est réécrit et lisible. Les passes intermédiaires gardent encore « vrai fil », et les noms `final2-look-decode-fil-reel-*.png` aussi : historique, à lire avec la mention « conversation de test »."
+    expect(objectionsDuJuge(`VALIDE\nOBJECTIONS:\n${remarque}`)).toEqual([])
+  })
+})

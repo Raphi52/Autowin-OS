@@ -17,6 +17,7 @@ import {
   runDuFichier,
   supprimerLesCandidats
 } from './gc-causes-en-cours.mjs'
+import { identifiantBureauCache } from '../src/main/consignes/consigne-bureau-cache'
 
 /*
  * Un poste jetable : `.autowin-data/autowin-os/` avec ses deux dossiers. Les noms reprennent ceux de
@@ -106,6 +107,30 @@ describe('causesDesRunsTermines — ce qui part au ménage', () => {
     const bilan = causesDesRunsTermines(ctx())
     expect(bilan.candidats).toEqual([])
     expect(bilan.sondeEnEchec).toBeDefined()
+  })
+})
+
+/*
+ * Le fichier de cause d'un run porte le nom que donne `identifiantBureauCache` : minuscules, caractères
+ * hors [a-z0-9] en tirets, 40 caractères au plus. Un run qui ne tient pas tel quel dans ce nom ne doit pas
+ * être jugé réglé parce que son fichier ne se retrouve pas sous son identifiant : on compare les NOMS.
+ */
+describe('un run tenu garde son fichier, même si son nom de fichier diffère de son identifiant', () => {
+  it('un identifiant de plus de 40 caractères : son fichier (tronqué) est gardé', () => {
+    const identifiant = 'build-lot-1-ajoute-lookdecode-tour-mwbj0fkn'
+    expect(identifiantBureauCache(identifiant)).toBe('run-build-lot-1-ajoute-lookdecode-tour-mwbj0')
+    causeDuRun('run-build-lot-1-ajoute-lookdecode-tour-mwbj0.json')
+    etatDuRun(identifiant)
+    expect(cheminsCandidats()).toEqual([])
+    expect(causesDesRunsTermines(ctx()).gardes.encoreTenu).toBe(1)
+  })
+
+  it('un identifiant avec majuscules et un point : son fichier est gardé', () => {
+    const identifiant = 'Run_Mixte.7'
+    expect(identifiantBureauCache(identifiant)).toBe('run-run-mixte-7')
+    causeDuRun('run-run-mixte-7.json')
+    etatDuRun(identifiant)
+    expect(cheminsCandidats()).toEqual([])
   })
 })
 

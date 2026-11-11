@@ -3299,6 +3299,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       attempt,
       reparationsAccordees: politique.reparations,
       plafondDur: PLAFOND_DUR,
+      motifPlafond: politique.motif,
       motifsCourants: gate.reasons,
       etat: { motifsPrecedents, refusIdentiquesConsecutifs, meilleureNote },
       // Seule la note rendue DANS ce passage compte : un refus avant le juge laisse
