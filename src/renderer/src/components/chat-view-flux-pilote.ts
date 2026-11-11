@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import {
   createLiveRunDeltaBatcher,
+  fondreLotDEvenementsPilote,
   reduceAssistantPilotEvent,
   porteLActionOuverte
 } from './chat-view-model'
@@ -71,10 +72,10 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
      * existait déjà (branché sur `orchestrate-delta`) ; le chemin le PLUS fréquent — le streaming du
      * chat — ne l'utilisait pas.
      *
-     * Ce qui est batché : seulement le TEXTE qui s'accumule (`delta`, `reasoning`, `think`). Tout le
-     * reste — `command`, `result`, `stream-reset`, `done`, `error`, `cancellation` — vide le tampon
-     * puis s'applique IMMÉDIATEMENT : une clôture ne doit jamais dormir une frame, et l'ordre des
-     * événements dans le réducteur est préservé par ce flush.
+     * Ce qui est batché : seulement le TEXTE qui s'accumule (`delta`, `reasoning`, `look-decode`,
+     * `think`). Tout le reste — `command`, `result`, `stream-reset`, `done`, `error`, `cancellation` —
+     * vide le tampon puis s'applique IMMÉDIATEMENT : une clôture ne doit jamais dormir une frame, et
+     * l'ordre des événements dans le réducteur est préservé par ce flush.
      */
     const pilotBatcher = createLiveRunDeltaBatcher<{
       conversationId: string
@@ -88,11 +89,12 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
           parConversation.set(item.conversationId, liste)
         }
         for (const [conversationId, events] of parConversation)
-          patchLast(conversationId, (message) => {
-            let etat = message as AsstMsg
-            for (const event of events) etat = reduceAssistantPilotEvent(etat, event) as AsstMsg
-            Object.assign(message, etat)
-          })
+          // fix-ok: cause mesurée — le chaînage `etat = reduce(etat, e)` remplaçait l'état par le retour du
+          // delta, qui ne recopie ni le décodage ni le raisonnement : perdus dès qu'un delta suit dans le
+          // même lot (mesuré rouge sur les deux). Fondre chaque retour DANS le message corrige les deux.
+          patchLast(conversationId, (message) =>
+            fondreLotDEvenementsPilote(message as AsstMsg, events)
+          )
       },
       (flush) => window.requestAnimationFrame(flush),
       (handle) => window.cancelAnimationFrame(handle)
@@ -240,7 +242,12 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
           streamId: e.streamId,
           ...(e.conclusionSeule ? { conclusionSeule: true as const } : {})
         })
-      if (e.kind === 'delta' || e.kind === 'reasoning' || e.kind === 'think') {
+      if (
+        e.kind === 'delta' ||
+        e.kind === 'reasoning' ||
+        e.kind === 'look-decode' ||
+        e.kind === 'think'
+      ) {
         pilotBatcher.enqueue({ conversationId, event: e })
         return
       }

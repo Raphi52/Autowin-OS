@@ -18,6 +18,11 @@ export type PilotEventKind =
   | 'think'
   /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté. */
   | 'reasoning'
+  /**
+   * Décodage d'image de la skill look : le raisonnement émis APRÈS le chargement de `look` dans le tour.
+   * Affiché dans son propre bloc, jamais dans le bloc « Raisonnement » ni dans la réponse.
+   */
+  | 'look-decode'
   | 'command'
   /** Signe de vie d'une action LONGUE encore en cours : ne resout rien. */
   | 'action-progress'
@@ -55,3 +60,33 @@ export type PilotEventKind =
    * kaizen ; l'avis lisible, lui, est déjà dans la réponse.
    */
   | 'coupure-filtre'
+
+// fix-ok: cause mesurée — la couverture de l'union n'était vérifiée par aucun contrôle compilé : un genre fantôme ajouté à `PilotEventKind` passait `npm run typecheck:web` (code 0) et vitest (3/3). Ce Record, lu par le typage du renderer et du main, le fait échouer.
+/**
+ * Garde de COMPILATION du vocabulaire : une clé par genre de `PilotEventKind`, ni plus ni moins.
+ * Ajouter un genre à l'union sans l'ajouter ici fait échouer `npm run typecheck` sur cette ligne
+ * (« Property '<genre>' is missing »). Elle vit dans ce fichier et non dans un test : les `*.test.ts`
+ * de `src/shared` ne sont lus par aucun tsconfig, alors que celui-ci l'est (le renderer et le main
+ * l'importent). Le test `pilot-events.test.ts` fige le contenu de ce Record.
+ */
+export const GENRES_DU_PILOTE: Record<PilotEventKind, true> = {
+  delta: true,
+  'stream-reset': true,
+  think: true,
+  reasoning: true,
+  'look-decode': true,
+  command: true,
+  'action-progress': true,
+  'provider-status': true,
+  result: true,
+  done: true,
+  error: true,
+  retry: true,
+  cancellation: true,
+  'prompt-call': true,
+  artifact: true,
+  'echecs-abandonnes': true,
+  'taches-de-fond': true,
+  'tests-du-terminal': true,
+  'coupure-filtre': true
+}

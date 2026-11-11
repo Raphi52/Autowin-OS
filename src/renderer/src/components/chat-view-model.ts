@@ -129,6 +129,11 @@ export interface HydratedAssistantMessage {
    */
   reasoning?: string
   /**
+   * Décodage d'image de la skill look — TRANSITOIRE comme `reasoning` : jamais mêlé à la réponse, il a
+   * son propre bloc à côté du raisonnement. Borné comme lui (`REASONING_MAX`) : seule sa fin est gardée.
+   */
+  lookDecode?: string
+  /**
    * COUT DU TOUR tel que le fournisseur l'a rendu dans l'evenement `done` (`usage.costUsd`).
    * Recopie, jamais recalcule : le seul chiffre de reference reste celui du main.
    */
@@ -174,6 +179,8 @@ export interface StoredAssistantMessage {
   error?: string
   /** Raisonnement conservé par le tour : c'est lui qui rend le bloc « Réflexion » relisible. */
   reasoning?: string
+  /** Décodage d'image (skill look) conservé par le tour : c'est lui qui rend son bloc relisible. */
+  lookDecode?: string
   /** Journal des actions conservé par le tour : c'est lui qui rend le bloc « Actions » relisible. */
   actionsLog?: string[]
   /** Durée du raisonnement (ms) conservée par le tour : le compteur de la capsule après rechargement. */
@@ -335,6 +342,17 @@ export interface AssistantPilotEvent {
   /** Heure posee par le main a la reception (rail du tour) : date la part ouverte. */
   at?: number
 }
+
+/** Ne se compile que si `T` vaut `never` : tout genre qui n'entre pas dans `kind` y fait une erreur. */
+type AucunGenreAbsent<T extends never> = T
+// fix-ok: cause mesurée — `kind` rétréci à `Exclude<PilotEventKind, 'prompt-call'>` ne se voyait qu'en passant, par chat-view-flux-pilote.ts (l.96 et l.259) ; cette garde le signale ici, à sa définition.
+/**
+ * Garde de COMPILATION : un genre du vocabulaire partagé absent de `kind` fait échouer la
+ * compilation ici, au lieu de sortir sans bruit du réducteur.
+ */
+export type GenresAbsentsDeKind = AucunGenreAbsent<
+  Exclude<PilotEventKind, AssistantPilotEvent['kind']>
+>
 
 /**
  * Réconcilie l'état DÉRIVÉ des actions d'un tour terminé : une action sans résultat n'est pas
@@ -890,6 +908,8 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     // Le raisonnement SURVIT au rechargement : sans cette ligne, le bloc « Réflexion » d'un tour
     // relu reste vide alors que le tour l'a bien conservé.
     ...(message.reasoning ? { reasoning: message.reasoning } : {}),
+    // Le décodage d'image survit au rechargement, dans SON bloc : jamais versé dans le raisonnement.
+    ...(message.lookDecode ? { lookDecode: message.lookDecode } : {}),
     // Le JOURNAL DES ACTIONS survit de la même façon : sans cette ligne, le bloc « Actions » d'un
     // tour relu est vide alors que le tour l'a bien conservé. `providerStatus` (l'en-tête repliée)
     // reprend la DERNIÈRE ligne, exactement ce que montrait le direct à la fin du tour.
@@ -918,6 +938,18 @@ export function reduceAssistantPilotEvent(
     message.debutDuTour ?? (!message.done && typeof event.at === 'number' ? event.at : undefined)
   if (debut === undefined || suivant.debutDuTour === debut) return suivant
   return { ...suivant, debutDuTour: debut }
+}
+
+/**
+ * Un lot d'événements du pilote (texte qui s'accumule) appliqué au message de la vue. Chaque retour
+ * se fond DANS le message avant l'événement suivant : un retour partiel (un delta ne recopie ni le
+ * raisonnement ni le décodage) n'efface pas ce qu'un événement précédent du lot vient d'écrire.
+ */
+export function fondreLotDEvenementsPilote(
+  message: HydratedAssistantMessage,
+  events: AssistantPilotEvent[]
+): void {
+  for (const event of events) Object.assign(message, reduceAssistantPilotEvent(message, event))
 }
 
 function reduireEvenementDuPilote(
@@ -949,6 +981,14 @@ function reduireEvenementDuPilote(
   if (event.kind === 'reasoning' && event.text) {
     const merged = `${message.reasoning ?? ''}${event.text}`
     return { ...message, turnId, reasoning: merged.slice(-REASONING_MAX) }
+  }
+  // Décodage d'image (skill look) : même traitement que le raisonnement, dans SON champ — jamais dans
+  // `parts`, jamais dans le statut. fix-ok: cause mesurée — sans cette branche, `look-decode` ne
+  // correspond à aucun cas du réducteur : `lookDecode` reste `undefined` au lieu de « The cube is red. »
+  // (relevé par vitest).
+  if (event.kind === 'look-decode' && event.text) {
+    const merged = `${message.lookDecode ?? ''}${event.text}`
+    return { ...message, turnId, lookDecode: merged.slice(-REASONING_MAX) }
   }
   const heure = typeof event.at === 'number' ? { at: event.at } : {}
   if (event.kind === 'tests-du-terminal') {

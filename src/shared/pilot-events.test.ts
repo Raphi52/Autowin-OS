@@ -1,22 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PilotEventKind } from './pilot-events'
-import type { AssistantPilotEvent } from '../renderer/src/components/chat-view-model'
-
-const PILOT_EVENT_KINDS = [
-  'delta',
-  'stream-reset',
-  'think',
-  'reasoning',
-  'command',
-  'action-progress',
-  'result',
-  'done',
-  'error',
-  'retry',
-  'cancellation',
-  'prompt-call',
-  'artifact'
-] as const satisfies readonly PilotEventKind[]
+import { GENRES_DU_PILOTE } from './pilot-events'
 
 /**
  * GARDE ANTI-DÉRIVE du vocabulaire d'évènements du pilote.
@@ -28,39 +11,36 @@ const PILOT_EVENT_KINDS = [
  * d'une liste se traduisait par un évènement silencieusement ignoré, jamais par une erreur.
  *
  * Ces tests existent pour que la prochaine dérive soit une ERREUR et non un silence.
+ *
+ * Deux gardes se complètent. La couverture de l'union `PilotEventKind` se vérifie À LA COMPILATION,
+ * dans `pilot-events.ts` (`GENRES_DU_PILOTE`). Ce fichier-ci fige le contenu de ce vocabulaire à
+ * l'exécution : un genre ajouté ou retiré doit se déclarer ici aussi.
  */
 describe('vocabulaire des évènements du pilote — une seule source', () => {
-  it('PILOT_EVENT_KINDS couvre EXHAUSTIVEMENT le type (ajouter un kind sans l’y mettre ne compile pas)', () => {
-    // Ce Record est le garde COMPILE-TIME : ajouter un membre à `PilotEventKind` sans l'ajouter ici
-    // provoque « Property '<kind>' is missing », avant tout run.
-    const exhaustive: Record<PilotEventKind, true> = {
-      delta: true,
-      'stream-reset': true,
-      think: true,
-      reasoning: true,
-      command: true,
-      'action-progress': true,
-      result: true,
-      done: true,
-      error: true,
-      retry: true,
-      cancellation: true,
-      'prompt-call': true,
-      artifact: true
-    }
-    // Et le garde RUNTIME : la constante ne doit ni en oublier, ni en inventer.
-    expect([...PILOT_EVENT_KINDS].sort()).toEqual(Object.keys(exhaustive).sort())
-  })
-
-  it('n’a ni doublon ni trou', () => {
-    expect(new Set(PILOT_EVENT_KINDS).size).toBe(PILOT_EVENT_KINDS.length)
-    expect(PILOT_EVENT_KINDS).toHaveLength(13)
-  })
-
-  it('le renderer accepte TOUS les kinds que le main peut émettre', () => {
-    // C'est la régression exacte qui s'était produite : `AssistantPilotEvent` refusait `prompt-call`.
-    // Si un jour son `kind` cesse d'être `PilotEventKind`, cette affectation ne compilera plus.
-    const received: Array<AssistantPilotEvent['kind']> = [...PILOT_EVENT_KINDS]
-    expect(received).toHaveLength(PILOT_EVENT_KINDS.length)
+  // fix-ok: cause mesurée — une liste écrite dans le test n'est comparée qu'à elle-même : un genre
+  // fantôme ajouté à l'union laissait vitest vert (3/3). Le test lit donc `GENRES_DU_PILOTE`.
+  it('GENRES_DU_PILOTE liste exactement les 19 genres attendus', () => {
+    const attendus = [
+      'delta',
+      'stream-reset',
+      'think',
+      'reasoning',
+      'look-decode',
+      'command',
+      'action-progress',
+      'provider-status',
+      'result',
+      'done',
+      'error',
+      'retry',
+      'cancellation',
+      'prompt-call',
+      'artifact',
+      'echecs-abandonnes',
+      'taches-de-fond',
+      'tests-du-terminal',
+      'coupure-filtre'
+    ]
+    expect(Object.keys(GENRES_DU_PILOTE).sort()).toEqual([...attendus].sort())
   })
 })

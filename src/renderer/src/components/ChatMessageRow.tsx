@@ -50,6 +50,7 @@ import type { SelectionAPlanifier } from '../../../shared/plan-de-lots'
 import { ceQuiAEteCompris } from '../../../shared/lecture-retenue'
 import { Spinner } from './Spinner'
 import { ThinkingBlock } from './ThinkingBlock'
+import { LookDecodeBlock } from './LookDecodeBlock'
 
 /** Le texte de la ligne « compréhension » : ce que l'agent a compris, en clair et en gras, seul. */
 function LigneDeLaLectureRetenue({ texte }: { texte: string }): React.JSX.Element {
@@ -894,6 +895,11 @@ const LigneDuFil = memo(
               {...(finDuRaisonnement !== undefined ? { finDuRaisonnement } : {})}
             />
           )}
+        {/* Le décodage de l'image (skill look) a SON bloc, à côté du raisonnement et jamais à sa place :
+            le bloc Raisonnement ci-dessus ne le reçoit pas. */}
+        {message.lookDecode
+          ? noeud('look-decode', 'tour', undefined, <LookDecodeBlock text={message.lookDecode} />)
+          : null}
         <div className="msg-turn">
           {timeline.map((timelineItem, timelineIndex) =>
             timelineItem.kind === 'receipt' ? (

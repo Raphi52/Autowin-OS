@@ -59,6 +59,8 @@ export const TEXTES_FR = {
   'pensee.reduire': 'Réduire',
   'pensee.toutLire.un': 'Tout lire · {n} paragraphe',
   'pensee.toutLire.plusieurs': 'Tout lire · {n} paragraphes',
+  // Bloc « Décodage de l'image » (skill look), à côté du bloc « Raisonnement ».
+  'decodageImage.titre': "Décodage de l'image",
   'pensee.statut.pending': 'À faire',
   'pensee.statut.in_progress': 'En cours',
   'pensee.statut.completed': 'Terminée',
@@ -275,6 +277,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'pensee.reduire': 'Collapse',
   'pensee.toutLire.un': 'Read all · {n} paragraph',
   'pensee.toutLire.plusieurs': 'Read all · {n} paragraphs',
+  // Block « Image decoding » (skill look), next to the reasoning block.
+  'decodageImage.titre': 'Image decoding',
   'pensee.statut.pending': 'To do',
   'pensee.statut.in_progress': 'In progress',
   'pensee.statut.completed': 'Done',
