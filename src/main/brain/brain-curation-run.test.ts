@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmdirSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -74,6 +82,44 @@ describe('déclencheur de curation Brain', () => {
     // Le script lui-même reste celui du code INSTALLÉ, et la promotion reste demandée.
     expect(args).toContain(join(installe, 'brain_curate.py'))
     expect(args).toContain('--apply')
+  })
+
+  it('écrit la sortie de la curation dans un journal sous LOCALAPPDATA, au lieu de la jeter', () => {
+    const { root, tooling, python } = fauxBrain(['a.md'])
+    const local = mkdtempSync(join(tmpdir(), 'curation-local-'))
+    const options: Record<string, unknown>[] = []
+    const spawnFn = (_bin: string, _args: readonly string[], opts: Record<string, unknown>) => {
+      options.push(opts)
+      return { unref: vi.fn() }
+    }
+    const env = {
+      AUTOWIN_BRAIN_ROOT: root,
+      AUTOWIN_BRAIN_TOOLING: tooling,
+      AUTOWIN_BRAIN_PYTHON: python,
+      LOCALAPPDATA: local
+    }
+    expect(startBrainCuration(env, spawnFn).status).toBe('launched')
+    const journal = join(local, 'autowin-brain-curation.log')
+    expect(readFileSync(journal, 'utf8')).toContain(`curation de ${root} (1 candidat(s))`)
+    const stdio = options[0].stdio as unknown[]
+    expect(typeof stdio[1]).toBe('number')
+    expect(stdio[2]).toBe(stdio[1])
+  })
+
+  it('sans LOCALAPPDATA (hors Windows), la sortie reste ignorée et aucun journal n’est écrit', () => {
+    const { root, tooling, python } = fauxBrain(['a.md'])
+    const options: Record<string, unknown>[] = []
+    const spawnFn = (_bin: string, _args: readonly string[], opts: Record<string, unknown>) => {
+      options.push(opts)
+      return { unref: vi.fn() }
+    }
+    const env = {
+      AUTOWIN_BRAIN_ROOT: root,
+      AUTOWIN_BRAIN_TOOLING: tooling,
+      AUTOWIN_BRAIN_PYTHON: python
+    }
+    expect(startBrainCuration(env, spawnFn).status).toBe('launched')
+    expect(options[0].stdio).toBe('ignore')
   })
 
   it('lance le Python de BASE sans console quand le venv est un venv uv, jamais son relais python.exe', () => {

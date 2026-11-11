@@ -12,7 +12,16 @@
  * Ce que le déclencheur ne fait PAS : décider. `brain_curate.py --apply` n'exécute QUE la partie
  * mécanique (verdict `promote`). Les fusions et les rejets restent à une session humaine ou IA.
  */
-import { existsSync, mkdirSync, readdirSync, rmdirSync, statSync } from 'node:fs'
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  rmdirSync,
+  statSync
+} from 'node:fs'
 import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
@@ -195,8 +204,19 @@ export function startBrainCuration(
     rendu = true
     rendreVerrou(verrou)
   }
+  // Sortie du script dans un journal sous LOCALAPPDATA (Windows). `stdio: 'ignore'` la jetait : un
+  // échec de la curation ne laissait aucune trace. Sans LOCALAPPDATA, elle reste ignorée.
+  const journal = env.LOCALAPPDATA ? join(env.LOCALAPPDATA, 'autowin-brain-curation.log') : null
+  let sortie = -1
   let child: ReturnType<typeof spawnFn>
   try {
+    if (journal) {
+      sortie = openSync(journal, 'a')
+      appendFileSync(
+        journal,
+        `--- ${new Date().toISOString()} curation de ${brainRoot} (${enAttente} candidat(s))\n`
+      )
+    }
     child = spawnFn(
       command.bin,
       [
@@ -213,15 +233,24 @@ export function startBrainCuration(
         '--reviewer',
         CURATION_REVIEWER
       ],
-      { cwd: command.cwd, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
+      {
+        cwd: command.cwd,
+        env: childEnv,
+        detached: true,
+        stdio: sortie >= 0 ? ['ignore', sortie, sortie] : 'ignore',
+        windowsHide: true
+      }
     )
   } catch (e) {
+    if (sortie >= 0) closeSync(sortie)
     liberer()
     return {
       status: 'unavailable',
       detail: `lancement de brain_curate.py impossible (${(e as Error).message})`
     }
   }
+  // Le processus lancé garde sa copie du descripteur : la nôtre se ferme ici.
+  if (sortie >= 0) closeSync(sortie)
   if (child.once) {
     // Échec du lancement (programme introuvable…) : `exit` peut ne jamais venir.
     child.once('error', liberer)
