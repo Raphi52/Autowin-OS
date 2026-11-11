@@ -256,7 +256,13 @@ function isConversationMessage(value: unknown): boolean {
   ) {
     return false
   }
-  if (!isOptionalString(value.error) || !isOptionalString(value.reasoning)) return false
+  if (
+    !isOptionalString(value.error) ||
+    !isOptionalString(value.reasoning) ||
+    !isOptionalString(value.lookDecode)
+  ) {
+    return false
+  }
   if (
     value.actionsLog !== undefined &&
     (!Array.isArray(value.actionsLog) ||

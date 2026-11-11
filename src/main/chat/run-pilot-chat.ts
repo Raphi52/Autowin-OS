@@ -47,10 +47,10 @@ import {
   rangDuDernierRun,
   type SourceDuRun
 } from './dernier-run-entier'
-import type { AttachmentMeta } from '../store/conversations'
+import type { AttachmentMeta, Msg } from '../store/conversations'
 import { closingTurnDelivery } from '../runs/turn-closing'
 import { ligneDePropositionGrow } from './proposition-grow'
-import { appendTurnEvent } from '../runs/turn-journal'
+import { appendTurnEvent, readTurnJournal, type TurnJournalEvent } from '../runs/turn-journal'
 import { evenementResultatDurable } from './durable-result-event'
 import { ouvrirTourDeChat } from '../gel/gel-main'
 import {
@@ -99,6 +99,7 @@ import type { TraceLedger } from '../activity/ledger'
 import type { AppEvent } from '../commands/commands'
 import { collerTexteParle } from './coller-texte-parle'
 import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
+import { nomDeSkillDemande } from '../commands/skill-charger-command'
 import type { TacheDeFondARelancer } from '../providers/types'
 import { contenusDesToursArretes } from '../app/reprise-apres-arret'
 import { contenusDesAvisDeLApp, demandeSansAction } from './deux-lectures'
@@ -247,6 +248,27 @@ export function annoncerFinDeTour(
     )
 }
 
+/**
+ * Le chargement de la skill look ouvre le décodage d'image du tour : le raisonnement qui suit EST ce
+ * décodage. Le nom se lit comme le chargeur le lit (`nomDeSkillDemande` : sans barre, premier mot), et
+ * se compare sans casse, parce que le chargeur ouvre `look` quelle que soit la casse tapée.
+ */
+function chargeLaSkillLook(evenement: { kind: string; name?: unknown; args?: unknown }): boolean {
+  if (evenement.kind !== 'command' || evenement.name !== 'skill_charger') return false
+  const args = evenement.args
+  const nom =
+    typeof args === 'object' && args !== null ? (args as { nom?: unknown }).nom : undefined
+  return nomDeSkillDemande(nom).toLowerCase() === 'look'
+}
+
+/**
+ * Une reprise repart d'un tour déjà commencé. Le journal du tour garde chaque commande durable, avec ses
+ * arguments : il dit si `look` a été chargé dans l'essai coupé. Même lecture que le déclencheur en direct.
+ */
+function lookDejaChargeDans(journal: readonly TurnJournalEvent[]): boolean {
+  return journal.some((evenement) => chargeLaSkillLook(evenement))
+}
+
 export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
   const {
     os,
@@ -370,6 +392,36 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           text: portion
         })
     })
+    /**
+     * LE DÉCODAGE D'IMAGE (skill look) a son propre tampon. Une fois `look` chargé dans ce tour, la pensée
+     * va ICI et non dans le raisonnement général : elle s'affiche à part, et le modèle ne la relit jamais.
+     * Une reprise repart d'un tour déjà commencé : `look` peut avoir été chargé dans l'essai coupé, et une
+     * action déjà réglée n'est pas réémise à la reprise. Le journal du tour garde la commande, et c'est lui
+     * qui la relit (les actions réglées ne couvrent que le dernier appel du fournisseur).
+     */
+    // fix-ok: une reprise relit le journal du tour : la commande skill_charger de l'essai coupé y est restée, et sans elle la reprise repartait sans décodage.
+    let lookActif =
+      recovery && conversationId
+        ? lookDejaChargeDans(readTurnJournal(turnJournalRoot, conversationId, turnId))
+        : false
+    const messageDuTour = (id: string): Msg | undefined =>
+      os.conversations
+        .get(id)
+        ?.messages.find((message) => message.role === 'assistant' && message.turnId === turnId)
+    const messageDuTourPresent = (id: string): boolean => Boolean(messageDuTour(id))
+    // Une reprise continue un décodage déjà écrit au tour : sa première portion garde son espace de tête.
+    const lookDecodeDejaEcrit = Boolean(conversationId && messageDuTour(conversationId)?.lookDecode)
+    const lookDecodeDuTour = ecrivainDeRaisonnement(
+      (portion) => {
+        // fix-ok: sans cette garde, applyTurnEvent lève « Tour assistant inconnu » et la fin de tour s'interrompt avant le retrait du tour actif.
+        if (conversationId && messageDuTourPresent(conversationId))
+          os.conversations.applyTurnEvent(conversationId, turnId, {
+            kind: 'look-decode',
+            text: portion
+          })
+      },
+      { suite: lookDecodeDejaEcrit }
+    )
     /**
      * Le reste du pilote vers le JOURNAL fichier, la pensée regroupée par rafale (
      * 355 683 lignes d'un ou deux mots sur les journaux *, 55 % de leur poids).
@@ -909,6 +961,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // ... et dans le TOUR lui-meme, il y est DEJA, rafale par rafale : on n'ecrit que ce qui
           // attend encore. Reecrire le texte entier le DEDOUBLERAIT (le reducteur concatene).
           raisonnementDuTour.vider()
+          // ... et le décodage d'image : même vidage, par symétrie. Le routage du `done` a déjà
+          // vidé les deux tampons : celui-ci ne prend rien aujourd'hui.
+          lookDecodeDuTour.vider()
           // ... et le JOURNAL DES ACTIONS avec lui, pour la même raison exactement : une seule
           // écriture à la clôture, la vue ayant déjà son direct.
           if (conversationId && streamedActions.length > 0)
@@ -1143,7 +1198,18 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         }
         // Accumule la pensee ; un evenement d'une autre sorte (action, commande, texte, fin) ecrit
         // dans le tour la rafale qui vient de finir.
-        raisonnementDuTour.recevoir(pilotEvent)
+        // Charger la skill look ouvre le décodage d'image pour le reste du tour : sa pensée ne va plus
+        // dans le raisonnement général.
+        // fix-ok: sans ce tri, toute la pensée du tour irait au raisonnement général et le décodage resterait vide.
+        if (chargeLaSkillLook(pilotEvent)) lookActif = true
+        const versLeDecodage = pilotEvent.kind === 'reasoning' && lookActif
+        if (versLeDecodage) lookDecodeDuTour.recevoir(pilotEvent)
+        else if (pilotEvent.kind === 'reasoning') raisonnementDuTour.recevoir(pilotEvent)
+        else {
+          // Un événement qui n'est pas de la pensée vide les deux tampons, chacun ce qu'il contient.
+          raisonnementDuTour.recevoir(pilotEvent)
+          lookDecodeDuTour.recevoir(pilotEvent)
+        }
         if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
           // Le tour ENREGISTRÉ garde la commande entière, comme le direct : relu, le
           // bloc Actions ne montrait sinon qu'une commande coupée à 120 caractères.
@@ -1237,8 +1303,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
          * AVANT `applyDurableEvent` : la rafale de pensée en attente part au disque
          * avant la commande, le texte ou la fin que celui-ci écrit — la pensée reste à sa place.
          * Les deux écritures ne portent jamais le même `kind` : l'ordre d'un même événement tient.
+         * SAUF le décodage d'image : il n'entre pas dans le journal. `readTurnEvents`
+         * (src/main/kaizen/autowin-kaizen-context.ts) relit les événements d'un tour, tous genres
+         * confondus, et les rend au modèle ; le fil et la conversation gardent le texte (lookDecode).
          */
-        if (conversationId) {
+        // fix-ok: kaizen relit tous les événements d'un tour, sans filtre de genre : le décodage ne doit pas entrer dans ce journal.
+        if (conversationId && !versLeDecodage) {
           try {
             journalDuPilote.recevoir(pilotEvent, Date.now())
           } catch {
@@ -1419,6 +1489,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         if (tourClos) return
         emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
           ...livePilotEvent,
+          // Le décodage d'image part en direct sous SON genre : le fil le range dans son bloc, et la
+          // pensée générale ne le voit jamais.
+          ...(versLeDecodage ? { kind: 'look-decode' } : {}),
           conversationId,
           turnId
         })
@@ -1823,6 +1896,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const coupureMotivee = terminal.kind === 'failed' && controller.signal.aborted
       // Un tour qui echoue ou est coupe en pleine pensee garde la rafale en cours.
       raisonnementDuTour.vider()
+      // ... et le décodage d'image : sa rafale en cours part aussi, avant l'état terminal.
+      lookDecodeDuTour.vider()
       // ... dans le journal fichier aussi, AVANT son état terminal.
       journalDuPilote.vider()
       if (conversationId && os.conversations.get(conversationId)) {
@@ -1892,6 +1967,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     } finally {
       tourClos = true
       finDuSuiviUltrathink?.()
+      // Le décodage d'image en attente part aussi ici : un tour rendu sans `done` ni erreur ne passe
+      // ni par le routage du `done`, ni par le `catch`.
+      // fix-ok: sans ce vidage, la fin du décodage d'un tour rendu sans done ni erreur est perdue.
+      lookDecodeDuTour.vider()
       // Aucun minuteur de rafale ne survit au tour.
       journalDuPilote.vider()
       // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.

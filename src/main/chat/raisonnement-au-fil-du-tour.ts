@@ -21,11 +21,21 @@ export type EcrivainDeRaisonnement = {
   recevoir(event: { kind: string; text?: string }): void
   /** Écrit ce qui reste en attente (clôture, échec, coupure). Sans effet si rien n'attend. */
   vider(): void
-  /** Toute la pensée du tour, écrite ou non (la trace causale et le journal la veulent entière). */
+  /**
+   * La pensée générale du tour, écrite ou non : la trace causale et le journal de la conversation la lisent à la clôture.
+   * Le décodage de l'image (skill look) a son propre écrivain (lookDecode) : il n'entre pas ici.
+   */
   readonly texte: string
 }
 
-export function ecrivainDeRaisonnement(ecrire: (portion: string) => void): EcrivainDeRaisonnement {
+/**
+ * `suite` : un texte est DÉJÀ stocké avant ce tampon (reprise d'un tour coupé). Sa première portion
+ * continue ce texte, et son espace de tête sépare deux mots : il ne se retire pas.
+ */
+export function ecrivainDeRaisonnement(
+  ecrire: (portion: string) => void,
+  options: { suite?: boolean } = {}
+): EcrivainDeRaisonnement {
   let accumule = ''
   let ecrit = 0
   const vider = (): void => {
@@ -33,7 +43,8 @@ export function ecrivainDeRaisonnement(ecrire: (portion: string) => void): Ecriv
     // Un reste fait seulement d'espaces ATTEND la suite : il sépare deux mots de deux rafales.
     if (!portion.trim()) return
     // La pensée stockée commence au premier caractère lisible, comme l'ancien `trim()` de clôture.
-    if (ecrit === 0) portion = portion.trimStart()
+    // fix-ok: une suite de reprise garde son espace : sans cela « montre » et « Paris. » se collaient.
+    if (ecrit === 0 && !options.suite) portion = portion.trimStart()
     ecrit = accumule.length
     ecrire(portion)
   }

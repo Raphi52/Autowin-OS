@@ -469,3 +469,36 @@ describe('conversations-disk — sauvegarde avant la premiere ecriture migree', 
     expect(readFileSync(backup, 'utf8')).toBe(legacy)
   })
 })
+
+describe('conversations-disk — décodage de l’image (lookDecode)', () => {
+  it('lookDecode survit à l’écriture puis au rechargement, comme reasoning', () => {
+    const p = join(dir, 'look-decode-aller-retour.json')
+    const store = new ConversationStore(() => 1000)
+    const c = store.create({ title: 'Décodage', provider: 'claude' })
+    store.beginTurn(c.id, { content: 'regarde cette image' }, { turnId: 'tour-look' })
+    store.applyTurnEvent(c.id, 'tour-look', { kind: 'look-decode', text: 'Le cadre montre Paris.' })
+    saveConversations(store.list(), p)
+
+    const reponse = loadConversations(p)[0]?.messages.find((m) => m.role === 'assistant')
+    expect(reponse?.lookDecode).toBe('Le cadre montre Paris.')
+  })
+
+  it('un lookDecode qui n’est pas un texte rend le store illisible, comme reasoning', () => {
+    const p = join(dir, 'look-decode-invalide.json')
+    writeFileSync(
+      p,
+      JSON.stringify([
+        {
+          id: 'conv-look-invalide',
+          title: 'Décodage',
+          provider: 'claude',
+          messages: [{ role: 'assistant', content: '', ts: 10, lookDecode: 42 }],
+          createdAt: 9,
+          updatedAt: 10
+        }
+      ]),
+      'utf8'
+    )
+    expect(() => loadConversations(p)).toThrow('Store conversations corrompu')
+  })
+})

@@ -64,6 +64,11 @@ export interface Msg {
   error?: string
   /** Raisonnement conservé du tour — alimente le bloc « Réflexion » après un rechargement. */
   reasoning?: string
+  /**
+   * Décodage d'image de la skill look : le raisonnement émis après son chargement, gardé À PART du
+   * raisonnement. Il n'entre jamais dans `parts`, donc ni dans le texte à plat ni dans ce que le modèle relit.
+   */
+  lookDecode?: string
   /** Journal des actions conservé du tour — alimente le bloc « Actions » après un rechargement. */
   actionsLog?: string[]
   /** Durée du raisonnement (ms) — le compteur de la capsule « Raisonnement » après un rechargement. */
@@ -666,6 +671,7 @@ export function applyTurnEventToMessages(
       ...(message.runtime ? { runtime: message.runtime } : {}),
       ...(message.error ? { error: message.error } : {}),
       ...(message.reasoning ? { reasoning: message.reasoning } : {}),
+      ...(message.lookDecode ? { lookDecode: message.lookDecode } : {}),
       ...(message.actionsLog?.length ? { actionsLog: message.actionsLog } : {}),
       ...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {}),
       ...(message.testsDuTerminal?.length ? { testsDuTerminal: message.testsDuTerminal } : {})
@@ -681,6 +687,9 @@ export function applyTurnEventToMessages(
   message.actionsLog = next.actionsLog
   // Recopie CONDITIONNELLE : les messages des tours sans duree ne recoivent aucune cle de plus.
   if (next.reasoningMs !== undefined) message.reasoningMs = next.reasoningMs
+  // Recopie CONDITIONNELLE aussi : un tour sans décodage d'image ne reçoit aucune clé de plus.
+  // fix-ok: sans cette recopie, lookDecode n'est jamais écrit sur le message : la sortie du réducteur le perdrait.
+  if (next.lookDecode !== undefined) message.lookDecode = next.lookDecode
   if (next.testsDuTerminal?.length) message.testsDuTerminal = next.testsDuTerminal
   return message
 }
