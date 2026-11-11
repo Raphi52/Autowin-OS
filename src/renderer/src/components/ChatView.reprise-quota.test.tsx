@@ -55,8 +55,6 @@ describe('bouton « Reprendre les conversations coupées par le quota »', () =>
     expect(bouton(vue.container)?.textContent).toContain('(2)')
 
     await vue.click('[data-testid="conv-reprise-quota-bouton"]')
-    // La reprise est SÉQUENTIELLE (un fil à la fois, pour ne pas retomber sur le même mur) : le
-    // second départ n'a lieu qu'après le retour du premier.
     await vi.waitFor(() => expect(resumePilotChat).toHaveBeenCalledTimes(2))
     expect(resumePilotChat.mock.calls.map(([id]) => id)).toEqual(['B', 'D'])
     await vue.unmount()
@@ -77,16 +75,16 @@ describe('bouton « Reprendre les conversations coupées par le quota »', () =>
   })
 
   /**
-   * DEFAUT VECU le 2026-09-05 : « j'ai cliqué, ça n'en a repris qu'une sur 3 ». Les trois etaient
-   * bien en file, mais un fil repris passe OCCUPE et sort aussitot de la liste des coupes : le bloc
-   * entier disparaissait au premier clic, emportant toute trace de la file. Deux fils attendaient
-   * leur tour sans que rien ne le dise.
+   * TOUS LES FILS PARTENT AU CLIC (demande du 2026-11-11 : « ça devrait les relancer tous en même
+   * temps, pas les queue »). La reprise attendait la FIN de chaque tour avant de lancer le suivant :
+   * six fils coupés, cinq restaient à l'arrêt derrière un tour de plusieurs minutes — et déjà le
+   * 2026-09-05, « j'ai cliqué, ça n'en a repris qu'une sur 3 ».
    */
-  it('reste visible pendant la file et annonce ou elle en est', async () => {
-    let libererLePremier!: (v: unknown) => void
+  it('relance tous les fils en même temps, sans attendre la fin du premier', async () => {
+    // Le premier tour ne finit jamais : en file, le second fil ne partirait pas.
     const resumePilotChat = vi
       .fn()
-      .mockImplementationOnce(() => new Promise((resolve) => (libererLePremier = resolve)))
+      .mockImplementationOnce(() => new Promise(() => {}))
       .mockResolvedValue({ ok: true, cancelled: false, turnId: 't' })
     const vue = await mountChat(
       chatApi({
@@ -100,11 +98,13 @@ describe('bouton « Reprendre les conversations coupées par le quota »', () =>
       })
     )
     await vue.click('[data-testid="conv-reprise-quota-bouton"]')
-    // Le premier fil tourne encore : le bouton ne doit NI disparaitre, NI taire la file.
-    await vi.waitFor(() => expect(bouton(vue.container)?.textContent).toContain('1/2'))
-    expect(bouton(vue.container)?.textContent).toContain('1 en attente')
-    libererLePremier({ ok: true, cancelled: false, turnId: 't' })
     await vi.waitFor(() => expect(resumePilotChat).toHaveBeenCalledTimes(2))
+    expect(resumePilotChat.mock.calls.map(([id]) => id)).toEqual(['B', 'D'])
+    // L'accusé de réception n'attend pas non plus la fin des tours : plus rien n'est en file.
+    expect(
+      vue.container.querySelector('[data-testid="conv-reprise-quota-notice"]')?.textContent
+    ).toBe('2 conversations reprises.')
+    expect(vue.container.textContent).not.toContain('en attente')
     await vue.unmount()
   })
 

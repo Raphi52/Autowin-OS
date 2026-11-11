@@ -3912,7 +3912,7 @@ export function ChatView({
     toursAutoRef,
     vueMonteeRef
   })
-  const { convsCoupeesParQuota, situationsDeLaReprise, repriseQuotaEnCours, repriseQuotaProgres, repriseQuotaNotice, repriseQuotaMasqueePour, setRepriseQuotaMasqueePour, cleRepriseQuota, reprendreConversationsCoupeesParQuota, resumePilotTurn, viewRun, relireRunOuvert } = useRepriseDesTours({
+  const { convsCoupeesParQuota, situationsDeLaReprise, repriseQuotaNotice, repriseQuotaMasqueePour, setRepriseQuotaMasqueePour, cleRepriseQuota, reprendreConversationsCoupeesParQuota, resumePilotTurn, viewRun, relireRunOuvert } = useRepriseDesTours({
     activeRef,
     busyConversations,
     busyConversationsRef,
@@ -4137,45 +4137,34 @@ export function ChatView({
             </div>
           )}
           {/* MASQUE quand rien n'est coupe : un bouton « 0 » vu toute la journee devient du decor.
-            MAIS reste VISIBLE tant qu'une reprise tourne : les fils repris sortent de la liste des
-            coupes des qu'ils passent occupes, si bien que le bloc disparaissait au premier clic et
-            emportait la progression avec lui — « ca n'en a repris qu'une sur 3 » (2026-09-05),
-            alors que les deux autres attendaient leur tour, invisibles. */}
-          {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) &&
-            (repriseQuotaEnCours || repriseQuotaMasqueePour !== cleRepriseQuota) && (
+            La notice garde le bloc ouvert quelques secondes apres le clic : tous les fils repris
+            passent occupes d'un coup et sortent de la liste des coupes, le clic resterait sinon
+            sans accuse de reception. */}
+          {(convsCoupeesParQuota.length > 0 || repriseQuotaNotice) &&
+            repriseQuotaMasqueePour !== cleRepriseQuota && (
               <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
-                {!repriseQuotaEnCours ? (
-                  <button
-                    type="button"
-                    className="conv-reprise-quota-fermer"
-                    data-testid="conv-reprise-quota-fermer"
-                    aria-label={texteFil('quota.masquer')}
-                    title={texteFil('quota.masquer.titre')}
-                    onClick={() => setRepriseQuotaMasqueePour(cleRepriseQuota)}
-                  >
-                    ×
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className="conv-reprise-quota-fermer"
+                  data-testid="conv-reprise-quota-fermer"
+                  aria-label={texteFil('quota.masquer')}
+                  title={texteFil('quota.masquer.titre')}
+                  onClick={() => setRepriseQuotaMasqueePour(cleRepriseQuota)}
+                >
+                  ×
+                </button>
                 {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
                 reprise, la notice reste seule quelques secondes, sans un « (0) » qui n'offre
                 rien a cliquer. */}
-                {convsCoupeesParQuota.length > 0 || repriseQuotaEnCours ? (
+                {convsCoupeesParQuota.length > 0 ? (
                   <button
                     type="button"
                     className="conv-date-sort"
                     data-testid="conv-reprise-quota-bouton"
-                    disabled={repriseQuotaEnCours}
-                    onClick={() => void reprendreConversationsCoupeesParQuota()}
+                    onClick={reprendreConversationsCoupeesParQuota}
                     title={texteFil('quota.reprendre.titre')}
                   >
-                    {repriseQuotaEnCours ? (
-                      <>
-                        <Spinner size={12} label={texteFil('quota.repriseEnCours.aria')} />
-                        {repriseQuotaProgres ?? texteFil('quota.repriseEnCours')}
-                      </>
-                    ) : (
-                      texteFil('quota.reprendre', { n: convsCoupeesParQuota.length })
-                    )}
+                    {texteFil('quota.reprendre', { n: convsCoupeesParQuota.length })}
                   </button>
                 ) : null}
                 {situationsDeLaReprise.map((situation) => (

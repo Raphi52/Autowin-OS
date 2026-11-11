@@ -70,12 +70,6 @@ export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
     () => situationsDeReprise(convsCoupeesParQuota),
     [convsCoupeesParQuota]
   )
-  const [repriseQuotaEnCours, setRepriseQuotaEnCours] = useState(false)
-  /**
-   * Ou en est la file. Une reprise attend la FIN d'un tour avant de lancer le suivant : sans ce
-   * compteur, une file de trois ne montre que le premier fil qui bouge, et se lit comme une panne.
-   */
-  const [repriseQuotaProgres, setRepriseQuotaProgres] = useState<string | null>(null)
   const [repriseQuotaNotice, setRepriseQuotaNotice] = useState<string | null>(null)
   /* Croix de fermeture (demande du 2026-09-15) : on retient la LISTE des fils coupes au moment du
      clic. Le bloc revient de lui-meme si un nouveau fil est coupe — masquer pour toujours ferait
@@ -94,40 +88,27 @@ export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
     const t = setTimeout(() => setRepriseQuotaNotice(null), 10_000)
     return () => clearTimeout(t)
   }, [repriseQuotaNotice])
-  async function reprendreConversationsCoupeesParQuota(): Promise<void> {
-    if (repriseQuotaEnCours) return
+  /**
+   * TOUS EN MÊME TEMPS (demande du 2026-11-11). Une file lançait un fil puis attendait la FIN de
+   * son tour : six fils coupés, cinq restaient à l'arrêt derrière un tour de plusieurs minutes.
+   * Le risque assumé : six tours partent sur un quota qui vient de revenir. Un fil qui retombe sur
+   * le mur repasse rouge et revient dans ce bloc, où un nouveau clic le reprend.
+   *
+   * Rien n'attend la fin des tours, le bloc n'a donc plus d'état « en cours » : chaque fil montre
+   * lui-même qu'il tourne, et un second clic ne double rien (`resumePilotTurn` écarte un fil déjà
+   * occupé).
+   */
+  function reprendreConversationsCoupeesParQuota(): void {
     const cibles = convsCoupeesParQuota.map((c) => c.id)
     if (cibles.length === 0) return
-    setRepriseQuotaEnCours(true)
-    setRepriseQuotaNotice(null)
-    let reprises = 0
-    try {
-      // SEQUENTIEL, a dessein : lancer dix fils d'un coup retomberait sur le meme mur, et
-      // consommerait le quota qui vient tout juste de revenir.
-      for (const [rang, id] of cibles.entries()) {
-        setRepriseQuotaProgres(
-          texteFil('quota.progres', {
-            rang: rang + 1,
-            total: cibles.length,
-            attente: cibles.length - rang - 1
-          })
-        )
-        try {
-          await resumePilotTurn(id)
-          reprises += 1
-        } catch {
-          // Un fil qui refuse ne doit pas emporter les suivants.
-        }
-      }
-    } finally {
-      setRepriseQuotaEnCours(false)
-      setRepriseQuotaProgres(null)
-      setRepriseQuotaNotice(
-        reprises === cibles.length
-          ? texteFil(reprises > 1 ? 'quota.reprisesFaites' : 'quota.repriseFaite', { n: reprises })
-          : texteFil('quota.reprisesPartielles', { n: reprises, total: cibles.length })
-      )
-    }
+    for (const id of cibles)
+      // Un fil qui refuse ne doit pas emporter les autres, ni partir en rejet non rattrapé.
+      void resumePilotTurn(id).catch((error) => traceSilentFailure('reprise-quota', error))
+    setRepriseQuotaNotice(
+      texteFil(cibles.length > 1 ? 'quota.reprisesFaites' : 'quota.repriseFaite', {
+        n: cibles.length
+      })
+    )
   }
   // Le minuteur est armé AVANT que la fonction ne soit définie (ordre des déclarations) : il passe
   // par cette référence plutôt que par une capture, qui serait figée sur un état périmé.
@@ -237,8 +218,6 @@ export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
   return {
     convsCoupeesParQuota,
     situationsDeLaReprise,
-    repriseQuotaEnCours,
-    repriseQuotaProgres,
     repriseQuotaNotice,
     repriseQuotaMasqueePour,
     setRepriseQuotaMasqueePour,

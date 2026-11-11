@@ -99,8 +99,8 @@ export interface ConversationCandidateQuota {
  * Les conversations à relancer : pastille ROUGE **et** mur de quota, en excluant celles dont un
  * tour tourne déjà (relancer par-dessus serait refusé côté principal, sans bruit).
  *
- * L'ordre d'entrée est conservé : la reprise est séquentielle, et l'utilisateur voit repartir ses
- * fils dans l'ordre où il les lit.
+ * L'ordre d'entrée est conservé : celui où l'utilisateur lit ses fils. Le clic les relance tous
+ * en même temps (`chat-view-reprise.ts`).
  */
 export function conversationsCoupeesParQuota<T extends ConversationCandidateQuota>(
   conversations: readonly T[],
