@@ -60,7 +60,9 @@ describe('fichier de règles du dépôt', () => {
     (r) => {
       expect(() => new RegExp(r.outils)).not.toThrow()
       expect(() => new RegExp(r.motif, 'i')).not.toThrow()
-      if (r.sauf) expect(() => new RegExp(r.sauf, 'i')).not.toThrow()
+      // Capturé avant la fermeture : le rétrécissement de `r.sauf` ne traverse pas une fonction.
+      const sauf = r.sauf
+      if (sauf) expect(() => new RegExp(sauf, 'i')).not.toThrow()
       expect(r.exemples.oui.length).toBeGreaterThan(0)
       expect(r.exemples.non.length).toBeGreaterThan(0)
       for (const e of r.exemples.oui)

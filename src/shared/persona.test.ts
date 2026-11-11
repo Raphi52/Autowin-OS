@@ -49,7 +49,11 @@ describe('injection de la persona', () => {
   })
 
   it('un panel scout reçoit un angle distinct par membre, le web en premier', () => {
-    const panel = anglesDuPanelScout([{ model: 'a' }, { model: 'b' }, { model: 'c' }])
+    const panel = anglesDuPanelScout<{ model: string; persona?: string }>([
+      { model: 'a' },
+      { model: 'b' },
+      { model: 'c' }
+    ])
     expect(panel.map((m) => m.persona)).toEqual(['externe', 'rupture', 'usage'])
     // Le web existe comme angle, et son bloc dit de citer une URL datée.
     expect(personaInstruction('externe')).toMatch(/URL/u)
@@ -59,12 +63,14 @@ describe('injection de la persona', () => {
   it('un angle déjà posé est gardé et n’est pas redistribué ; un membre seul reste tel quel', () => {
     const panel = anglesDuPanelScout([{ persona: 'externe' }, {}, {}])
     expect(panel.map((m) => m.persona)).toEqual(['externe', 'rupture', 'usage'])
-    expect(anglesDuPanelScout([{ model: 'seul' }])).toEqual([{ model: 'seul' }])
+    expect(anglesDuPanelScout<{ model: string; persona?: string }>([{ model: 'seul' }])).toEqual([
+      { model: 'seul' }
+    ])
     expect(anglesDuPanelScout([])).toEqual([])
   })
 
   it('au-delà du catalogue, la répartition reboucle sans laisser de membre sans angle', () => {
-    const panel = anglesDuPanelScout(Array.from({ length: 7 }, () => ({})))
+    const panel = anglesDuPanelScout<{ persona?: string }>(Array.from({ length: 7 }, () => ({})))
     expect(panel.every((m) => Boolean(m.persona))).toBe(true)
     expect(new Set(panel.slice(0, 5).map((m) => m.persona)).size).toBe(5)
   })

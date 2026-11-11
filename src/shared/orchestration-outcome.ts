@@ -46,6 +46,10 @@ export interface OrchestrationOutcome {
   gateReasons?: unknown
   runPath?: unknown
   runId?: unknown
+  /** Sorties des étapes du run, telles que l'orchestrateur les rend (`phaseOutputs`). */
+  phaseOutputs?: unknown
+  /** Reprise livrée après une coupure : posée par `orchestrate-turn-persistence.ts`, sans `status`. */
+  resumed?: unknown
   /**
    * Le travail est-il RESTE dans la copie isolee ? Signal, jamais une devinette de vocabulaire.
    *

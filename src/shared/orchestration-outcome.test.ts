@@ -7,7 +7,6 @@ import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
   markdownCodeContinuationPrefixes,
-  demoteUnvalidatedSuccessClaims,
   reconcileClosedOrchestrationText,
   reconcileClosedOrchestrationTextParts,
   runLabelFromPath

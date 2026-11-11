@@ -32,8 +32,7 @@ describe('formatOrchestrationOutcome — sans vocabulaire de mécanique', () => 
   it('un succès traduit aussi son statut', () => {
     const texte = formatOrchestrationOutcome(true, {
       status: 'green',
-      valid: true,
-      delivered: true
+      valid: true
     })
     sansJargon(texte)
     expect(texte).toContain('réussi')
