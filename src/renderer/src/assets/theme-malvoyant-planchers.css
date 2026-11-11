@@ -894,7 +894,8 @@
 
 /* components/ProjetsPartagesDuBoard.css — tailles */
 :root[data-theme^='malvoyant-'] .besoins-projets-titre,
-:root[data-theme^='malvoyant-'] .besoins-projets-note {
+:root[data-theme^='malvoyant-'] .besoins-projets-note,
+:root[data-theme^='malvoyant-'] .besoins-projets-entete {
   font-size: 13px;
 }
 
