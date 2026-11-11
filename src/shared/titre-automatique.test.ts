@@ -3,10 +3,25 @@ import {
   TITRE_PROVISOIRE,
   texteQuiNomme,
   titreApresMessage,
+  titreDepuisMessage,
   titreEstProvisoire
 } from './titre-automatique'
 
 const QUAND = new Date(2026, 9, 16, 10, 5)
+
+/*
+ * Une clé collée dans un message ne doit pas devenir le titre d'un fil, ni celui d'une demande du Board
+ * (`ecarts.json` le recopiait). Le titre se rédige à la source.
+ */
+describe('titre automatique — une clé collée ne sort pas dans le titre', () => {
+  it('rédige la clé du message avant de le reprendre en titre', () => {
+    const titre = titreDepuisMessage(
+      'mets ma clé sk-or-v1-FAUXFAUXFAUXFAUXFAUXFAUXFAUXFAUX dans le fichier'
+    )
+    expect(titre).not.toContain('FAUXFAUX')
+    expect(titre).toContain('[REDACTED]')
+  })
+})
 
 /**
  * Le titre est celui du PREMIER message, puis il ne bouge plus. « Le titre suit le dernier

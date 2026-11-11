@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { redactTrace } from './trace-redact'
+import { redactTrace, redigerTexte } from './trace-redact'
 
 const red = (v: unknown): string => JSON.stringify(redactTrace(v))
 
@@ -83,5 +83,24 @@ describe('identifiant collé en clair (conv-854, saisie ts 1790334398650)', () =
     const debut = performance.now()
     expect(redactTrace(blob)).toBe(blob)
     expect(performance.now() - debut).toBeLessThan(50)
+  })
+})
+
+/*
+ * Un titre ou la première ligne d'une demande passe par `redigerTexte` : une clé collée dans le chat ne
+ * doit pas remonter dans `ecarts.json` (mesuré : une clé OpenRouter complète y figurait). `gsk_` est le
+ * préfixe des clés Groq, que le coffre ne couvre pas forcément.
+ */
+describe('redigerTexte — un texte libre sans clé', () => {
+  it('masque une clé OpenRouter et une clé Groq, le reste ne bouge pas', () => {
+    expect(
+      redigerTexte(
+        'clé sk-or-v1-FAUXFAUXFAUXFAUXFAUXFAUXFAUXFAUX puis gsk_FAUXFAUXFAUXFAUXFAUXFAUX'
+      )
+    ).toBe('clé [REDACTED] puis [REDACTED]')
+  })
+
+  it('ne touche pas un texte ordinaire', () => {
+    expect(redigerTexte('écris à user@corp.com merci')).toBe('écris à user@corp.com merci')
   })
 })

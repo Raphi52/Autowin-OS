@@ -15,7 +15,7 @@
  * La rédaction utilise les DEUX ; `brain-remember.ts` n'importe que `SHAPES`.
  */
 const KEYED = String.raw`(Bearer\s+)[^\s"']+|((?:api[_-]?key|token|secret|password)["']?\s*(?::\s*[A-Za-z_$][\w.$<>\[\]| ]*)?(?:\/\*[\s\S]*?\*\/\s*)?[=:]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;]+)`
-const SHAPES = String.raw`\b(?:sk-(?:proj-)?|gh[pousr]_)[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|\bAKIA[A-Z0-9]{16}\b|\bAIza[A-Za-z0-9_-]{30,}\b|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`
+const SHAPES = String.raw`\b(?:sk-(?:proj-)?|gh[pousr]_|gsk_)[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|\bAKIA[A-Z0-9]{16}\b|\bAIza[A-Za-z0-9_-]{30,}\b|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`
 
 /**
  * Identifiant collé en clair : « adresse@domaine.tld <mot de passe> ». Mesuré, saisie
@@ -40,7 +40,7 @@ const SECRET_VALUE = new RegExp(`${KEYED}|${SHAPES}|${EMAIL_CREDENTIAL}`, 'gi')
  * Encore la distinction « rédiger ≠ décider » : la rédaction reste insensible à la casse (sur-rédiger est
  * gratuit), mais un garde de DÉCISION doit être sensible — sinon `SK-10023847`, une référence article, se
  * fait refuser comme un jeton `sk-` (faux refus mesuré le 2026-07-30). Les préfixes de tous ces formats
- * sont imposés par leurs éditeurs : `ghp_`, `xoxb-`, `sk-`, `eyJ`, `AKIA`, `AIza`.
+ * sont imposés par leurs éditeurs : `ghp_`, `gsk_`, `xoxb-`, `sk-`, `eyJ`, `AKIA`, `AIza`.
  */
 export const SECRET_SHAPES_SOURCE = SHAPES
 
@@ -89,6 +89,14 @@ function redact(value: unknown, key = ''): unknown {
 /** Rédige récursivement toute valeur (clés sensibles → [REDACTED], motifs secrets masqués). */
 export function redactTrace(value: unknown): unknown {
   return redact(value)
+}
+
+/**
+ * Rédige un texte libre (titre, première ligne d'une demande) avant qu'il ne soit écrit sur disque ou
+ * affiché : une clé collée dans le chat ne doit pas remonter dans un titre.
+ */
+export function redigerTexte(texte: string): string {
+  return String(redact(texte))
 }
 
 /** Exposé pour réutilisation ciblée (ex. normalisation). */

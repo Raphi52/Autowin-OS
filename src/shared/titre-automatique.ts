@@ -16,6 +16,7 @@
  */
 import { estRelanceSansObjet } from './relance-sans-objet'
 import { avecMarqueurDeMoment, compacter, empreinte } from './titre-sans-homonyme'
+import { redigerTexte } from './trace-redact'
 
 /** Le titre posé sur un fil créé d'avance (fenêtre mosaïque, ouverture directe), avant tout message. */
 export const TITRE_PROVISOIRE = 'Nouvelle conversation'
@@ -31,7 +32,7 @@ export type OrigineTitre = 'auto' | 'utilisateur'
 
 /** Le titre repris d'un message : 80 caractères, coupé au dernier espace pour ne pas trancher un mot. */
 export function titreDepuisMessage(source: string): string {
-  const propre = compacter(source)
+  const propre = compacter(redigerTexte(source))
   if (propre.length <= TITRE_CONVERSATION_MAX) return propre
   const coupe = propre.slice(0, TITRE_CONVERSATION_MAX)
   const dernierEspace = coupe.lastIndexOf(' ')

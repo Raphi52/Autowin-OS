@@ -44,6 +44,7 @@ import {
   type EtatDesLiens
 } from '../tickets/liens-work-items'
 import { phraseDuRefusDans } from '../../shared/echec-publication'
+import { redigerTexte } from '../../shared/trace-redact'
 
 /** Le message tel qu'il est stocké — le strict nécessaire, pour rester testable sans le store. */
 export type MessageStockePourLaCarte = Partial<StoredAssistantMessage> & {
@@ -150,10 +151,10 @@ export function demandesDuFil(
     const envoiRefuse = envoiRefuseDuTour(conversation.messages, etape.rang)
     demandes.push({
       conversationId: conversation.id,
-      conversationTitre: conversation.title,
+      conversationTitre: redigerTexte(conversation.title),
       rang: etape.rang,
       ...(etape.messageId ? { messageId: etape.messageId } : {}),
-      titre: etape.titre,
+      titre: redigerTexte(etape.titre),
       ...(etape.texte ? { texte: etape.texte } : {}),
       statut: decision.statut,
       constat: borner(decision.constat, MAX_CONSTAT),
