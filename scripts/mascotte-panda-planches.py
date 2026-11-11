@@ -1,10 +1,14 @@
 """Assemble les images de la panda en kimono en planches pour la mascotte du bureau.
 
 La panda est modelee et animee dans Blender (fourrure, squelette, kimono, visage a expressions,
-huit gestes de 16 images). Blender rend une image par numero (`f-001.png` ... `f-128.png`,
-192x192, fond transparent) ; ce script les colle par geste en planches de 16 images cote a cote,
-en WebP, et ecrit le module TypeScript que la page de la mascotte embarque. La fenetre de la
-mascotte n'admet aucun script : la 3D y est rejouee en CSS, par `steps(16)`.
+huit gestes de 16 images). Blender rend une image par numero (`f-001.png` ... `f-128.png`, fond
+transparent, 384x384 : le double de la planche, reduit ici pour un poil et des motifs plus nets) ;
+ce script les colle par geste en planches de 16 images de 192x192 cote a cote, en WebP, et ecrit
+le module TypeScript que la page de la mascotte embarque. La fenetre de la mascotte n'admet aucun
+script : la 3D y est rejouee en CSS, par `steps(16)`.
+
+Rendu : UN seul Blender a la fois, deux au plus. Sur une carte graphique de 2 Go, quatre rendus
+en parallele se disputent la memoire : mesure, plus de 100 s par image chacun contre 9 s seul.
 
 Usage : python scripts/mascotte-panda-planches.py <dossier des f-NNN.png> [--apercu <dossier>]
 """
@@ -32,10 +36,11 @@ ENTETE = """/**
 """
 
 
-# Le rendu de Blender sort peu contraste (noir de la fourrure vers 54-70, blanc vers 205-215 sur
+# Le rendu de Blender sort peu contraste (noir de la fourrure vers 49-90, blanc vers 207-223 sur
 # 255, mesures sur l'image de repos) : pose sur un bureau, la panda paraissait delavee. On etire
-# donc les tons entre ces deux bornes, sans toucher a la transparence.
-NOIR, BLANC = 46, 218
+# donc les tons entre ces deux bornes, sans toucher a la transparence. Le noir se cale juste sous le
+# poil le plus sombre : plus bas, son pelage noir, fin et clair aux pointes, tournait au gris.
+NOIR, BLANC = 45, 220
 TABLE = [max(0, min(255, round((v - NOIR) * 255 / (BLANC - NOIR)))) for v in range(256)]
 
 
@@ -61,13 +66,24 @@ def opacite_au_bord(image: Image.Image) -> int:
     return max(max(alpha.crop(bord).tobytes()) for bord in BORDS)
 
 
+def a_la_taille(image: Image.Image, nom: str) -> Image.Image:
+    """Rend l'image a la taille de la planche : telle quelle, ou reduite d'un facteur entier."""
+    if image.size == (LARGEUR, HAUTEUR):
+        return image
+    facteur = image.size[0] // LARGEUR
+    if facteur < 2 or image.size != (LARGEUR * facteur, HAUTEUR * facteur):
+        raise SystemExit(f"{nom} : {image.size}, attendu un multiple entier de {(LARGEUR, HAUTEUR)}")
+    # « RGBa » = couleurs deja multipliees par la transparence : sans cela, la reduction melange le
+    # noir invisible du fond aux bords du dessin et les cerne de sombre.
+    return image.convert("RGBa").resize((LARGEUR, HAUTEUR), Image.LANCZOS).convert("RGBA")
+
+
 def planche(dossier: Path, rang: int, au_bord: dict[int, int]) -> Image.Image:
     feuille = Image.new("RGBA", (LARGEUR * IMAGES_PAR_GESTE, HAUTEUR), (0, 0, 0, 0))
     for i in range(IMAGES_PAR_GESTE):
         numero = rang * IMAGES_PAR_GESTE + i + 1
-        image = Image.open(dossier / f"f-{numero:03d}.png").convert("RGBA")
-        if image.size != (LARGEUR, HAUTEUR):
-            raise SystemExit(f"f-{numero:03d}.png : {image.size}, attendu {(LARGEUR, HAUTEUR)}")
+        nom = f"f-{numero:03d}.png"
+        image = a_la_taille(Image.open(dossier / nom).convert("RGBA"), nom)
         au_bord[numero] = opacite_au_bord(image)
         feuille.paste(contraste(image), (i * LARGEUR, 0))
     return feuille
