@@ -19,7 +19,7 @@ import { GENRES_DU_PILOTE } from './pilot-events'
 describe('vocabulaire des évènements du pilote — une seule source', () => {
   // fix-ok: cause mesurée — une liste écrite dans le test n'est comparée qu'à elle-même : un genre
   // fantôme ajouté à l'union laissait vitest vert (3/3). Le test lit donc `GENRES_DU_PILOTE`.
-  it('GENRES_DU_PILOTE liste exactement les 19 genres attendus', () => {
+  it('GENRES_DU_PILOTE liste exactement les 20 genres attendus', () => {
     const attendus = [
       'delta',
       'stream-reset',
@@ -39,6 +39,7 @@ describe('vocabulaire des évènements du pilote — une seule source', () => {
       'echecs-abandonnes',
       'taches-de-fond',
       'tests-du-terminal',
+      'fichiers-ecrits',
       'coupure-filtre'
     ]
     expect(Object.keys(GENRES_DU_PILOTE).sort()).toEqual([...attendus].sort())

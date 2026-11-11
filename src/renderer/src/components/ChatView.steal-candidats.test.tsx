@@ -45,6 +45,22 @@ const RAPPORT_STEAL = [
   'CIBLE: Réservation des fichiers entre fils — POURQUOI: la seule protection est une règle écrite'
 ].join('\n')
 
+/** Une fonctionnalité rend UN candidat : sa meilleure version, cochée par la seule CIBLE. */
+const RAPPORT_FONCTIONNALITE = [
+  '## 2. Définir',
+  'Job : reprendre une session interrompue sans perdre le fil.',
+  '',
+  '## 6. Le meilleur de chaque',
+  ENTETE_CANDIDATS,
+  '|---|---|---|---|---|---|',
+  '| 1 | 88 | 🆕 nouveauté | Reprise de session par journal d’événements | fidélité au résultat ◐→✅ [P1] 🟢 | journal lu par `src/main/chat/chat-mcp.ts`, effort moyen |',
+  '',
+  '## 7. Écartés',
+  '- Sauvegarde par instantané : perd les derniers tours, note 61.',
+  '',
+  'CIBLE: Reprise de session par journal d’événements — POURQUOI: seule version qui ne perd aucun tour'
+].join('\n')
+
 let h: Harness | null = null
 beforeAll(installRafShim)
 afterEach(async () => {
@@ -66,6 +82,48 @@ const promptsEnvoyes = (pilotChat: ReturnType<typeof vi.fn>): string =>
 describe('steal — le rapport rend des candidats à cocher, comme scout', () => {
   it('la skill impose l en-tête que le panneau sait lire', () => {
     expect(SKILL_STEAL).toContain(ENTETE_CANDIDATS)
+  })
+
+  it('la skill annonce les deux formes d’entrée : produit ou projet, et fonctionnalité', () => {
+    expect(SKILL_STEAL).toContain('/steal <fonctionnalité>')
+    expect(SKILL_STEAL).toContain('## Mode FONCTIONNALITÉ')
+  })
+
+  it('une fonctionnalité rend UN candidat : sa meilleure version, cochée, part dans ce fil', async () => {
+    const pilotChat = vi.fn().mockResolvedValue({ ok: true })
+    const messages = [
+      { role: 'user', content: '/steal reprise de session' },
+      { role: 'assistant', done: true, parts: [{ kind: 'text', text: RAPPORT_FONCTIONNALITE }] }
+    ]
+    h = await mountChat(
+      chatApi({
+        pilotChat,
+        conversations: vi.fn().mockResolvedValue([conversation('A', messages)]),
+        conversation: vi.fn(async (id: string) => conversation(id, messages))
+      })
+    )
+    await h.click('.conv-item .conv-pick')
+    const ecran = h.container
+
+    const lignes = [...ecran.querySelectorAll('[data-testid="cpick-ligne"]')]
+    expect(lignes).toHaveLength(1)
+    const coches = lignes.map(
+      (ligne) => ligne.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked
+    )
+    expect(coches).toEqual([true])
+
+    // Une fonctionnalité est un ajout : elle se cadre, jamais en correction directe.
+    const voies = ecran.querySelectorAll('[data-testid="cpick-voie-piste"]')
+    expect(voies).toHaveLength(1)
+    for (const voie of voies) {
+      expect(voie.getAttribute('aria-label')).toMatch(/^À cadrer/u)
+    }
+
+    await h.click('[data-testid="cpick-lancer"]')
+    const envoye = promptsEnvoyes(pilotChat)
+    expect(envoye).toContain('Traite ce candidat')
+    expect(envoye).toContain('Reprise de session par journal d’événements')
+    expect(envoye).not.toContain('Correction DIRECTE')
   })
 
   it('le rapport reste lisible, la prise de CIBLE est cochée et part dans le travail complet', async () => {

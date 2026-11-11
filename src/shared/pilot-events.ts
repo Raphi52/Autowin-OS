@@ -94,5 +94,6 @@ export const GENRES_DU_PILOTE: Record<PilotEventKind, true> = {
   'echecs-abandonnes': true,
   'taches-de-fond': true,
   'tests-du-terminal': true,
+  'fichiers-ecrits': true,
   'coupure-filtre': true
 }

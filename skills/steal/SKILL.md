@@ -1,17 +1,15 @@
 ---
 name: steal
 description: >-
-  Recense TOUS les acteurs qui vendent un produit (startups, éditeurs, open source) et prend le
-  meilleur de chacun. PAS pour : améliorer une codebase (→ `scout`), cadrer (→ `frame`), coder (→ `build`).
-  Déclencher sur `/steal <produit>`, « trouve toutes les startups qui font X », « parmi tous ces
-  acteurs, qu'est-ce qu'ils font mieux que nous », « prends le meilleur de chaque ». Deux modes : ÉCART
-  (notre produit confronté au marché) et VIERGE (rien encore, on compose la spécification). Rend le
-  journal des requêtes, une matrice des capacités (un champion par capacité, son mécanisme cité, une
-  source lue et datée, l'état chez nous) et AU PLUS 5 prises compatibles, en candidats `scout` —
-  jamais la somme de tout.
-  Lecture seule. Ne pas utiliser non plus pour « un X meilleur que Y » au besoin déjà fixé (→ `frame`),
-  le retard concurrent du bulletin d'Autowin (→ `maintenance`), le meilleur workflow (→ `arena`) ni
-  l'allure d'un écran (→ `draft`).
+  Recense TOUS les acteurs qui vendent un produit ou un projet (startups, éditeurs, open source) et prend le
+  meilleur de chacun. PAS pour : améliorer une codebase (→ `scout`), cadrer (→ `frame`), coder (→ `build`),
+  un « X meilleur que Y » sans marché public (→ `frame`), le retard concurrent du bulletin (→ `maintenance`), le meilleur
+  workflow (→ `arena`), l'allure d'un écran (→ `draft`). Déclencher sur `/steal <produit ou projet>`,
+  `/steal <fonctionnalité>`, « trouve toutes les startups qui font X », « parmi tous ces acteurs, qu'est-ce
+  qu'ils font mieux que nous ». Deux modes : ÉCART (notre projet face au marché) et VIERGE (rien encore).
+  Rend le journal des requêtes, une matrice des capacités (un champion par capacité, source datée) et AU
+  PLUS 5 prises, en candidats `scout`. Avec une FONCTIONNALITÉ : UNE seule meilleure version, candidat
+  unique dans le dossier de travail du fil. Lecture seule.
 ---
 
 # steal — recenser tous ceux qui vendent le produit, et prendre le meilleur de chacun (lecture seule)
@@ -36,19 +34,23 @@ Ce que la version improvisée de conv-783 a appris, et que cette procédure corr
 - la synthèse listait des manques sans dire lesquels se contredisent → test de compatibilité, thèse à protéger.
 
 ## Contrôle d'entrée
-1. **Le produit est-il nommé ?** Sinon, déduis-le du fil ou du dépôt courant et annonce-le en une ligne
+1. **L'objet est-il nommé ?** Sinon, déduis-le du fil ou du dépôt courant et annonce-le en une ligne
    (« je suppose X — corrige-moi »). Ne pose pas la question.
+   **Produit ou fonctionnalité ?** Un produit ou un projet est ce qu'un éditeur vend ou publie en entier
+   (un CRM, une base vectorielle, un cockpit d'agents) : la procédure de base, étapes 1 à 6. Une
+   fonctionnalité est une capacité précise d'un produit (le mode hors ligne, l'export PDF, la reprise après
+   erreur) : le mode FONCTIONNALITÉ, plus bas. Doute : ta lecture en une ligne, puis tu lances.
 2. **Quel mode ?**
    - **ÉCART** : un produit à nous existe (dépôt, outil, base de notes) → on le confronte et on prend ce qui manque.
    - **VIERGE** : rien encore → on compose la spécification « meilleur de chaque ». Exige un MARCHÉ : au
      moins 3 éditeurs ou projets publics qui font le produit. « Un X meilleur que Y » dont le besoin ou la
      pile est déjà fixé, ou dont Y est un outil interne, n'en a pas → `frame` (conv-1019).
 3. **Est-ce bien cette skill ?** steal quand l'OBJET est le marché : énumérer les vendeurs d'une
-   catégorie et les comparer capacité par capacité. Sinon :
+   catégorie (ou ceux qui font une fonctionnalité) et les comparer capacité par capacité. Sinon :
    - l'objet est NOTRE code ou produit, l'extérieur n'apporte que quelques idées → `scout` (son bras
      externe en sème 3 au plus) ;
    - une question courte (« quel est le meilleur outil de X ? », « A ou B ? ») → réponse directe ;
-   - un besoin déjà choisi → `frame` ; l'allure d'un écran, même inspirée d'éditeurs nommés → `draft` ;
+   - un besoin à cadrer sans marché → `frame` ; l'allure d'un écran, même inspirée d'éditeurs nommés → `draft` ;
      la meilleure façon d'exécuter une tâche → `arena` ; le retard concurrent d'Autowin dans le bulletin
      du matin → `maintenance` ; rassembler le contexte d'une tâche, sans recherche externe → `think`.
 
@@ -164,6 +166,50 @@ bouton qui lance le travail complet (cadrage, construction, nettoyage, jugement)
   ce numéro : d'où un Quoi et une raison sans chiffre. Une seule prise, jamais `CIBLES:` : une prise = un
   cadrage (conv-783 : deux prises lancées ensemble ont donné un seul gros chantier, difficile à vérifier).
 
+## Mode FONCTIONNALITÉ — la meilleure version d'une seule, dans le dossier cible
+
+Même recensement que le mode produit, mais sur UNE capacité : on ne retient pas « le meilleur de chaque », on
+retient LA meilleure version. Le dossier cible est le dossier de travail du fil (ton répertoire courant) : c'est
+là que la prise se branchera. Steal n'y écrit rien, il rend le candidat.
+
+**Gate de marché** : au moins 3 implémentations publiques de la fonctionnalité (éditeurs, bibliothèques, projets
+ouverts). Moins de 3, ou une fonctionnalité propre à un outil interne → `frame`, pas steal.
+
+1. **Cible et coût** — annonce en une ligne la fonctionnalité, le dossier cible et le coût (10 à 30 recherches).
+   Si la demande nomme un AUTRE dossier, ce fil n'y travaille pas : dis-le, rends quand même le candidat, et dis
+   qu'il se lance depuis un fil ouvert dans ce dossier.
+2. **Définir** — une phrase de JOB (ce qu'elle apporte à l'utilisateur, dans quelles conditions), ce qui est
+   DEDANS et DEHORS, puis 4 à 6 CRITÈRES de « meilleure version » tirés du job : fidélité au résultat attendu,
+   couverture des cas limites, intégration dans notre pile, licence, activité récente, coût d'exploitation.
+   Les critères sont posés AVANT de lire un seul site, comme la grille du mode produit.
+3. **Recenser** — comme l'étape 2 (angles, filtre d'admission, journal des requêtes, contrôles de saturation),
+   mais sur les IMPLÉMENTATIONS de la fonctionnalité. Vise 10 à 25 implémentations admises ; si la saturation
+   arrive avant, écris le nombre réel dans Limites.
+4. **Qualifier** — chaque implémentation admise, sur SES critères : source PRIMAIRE de sa version (code à un
+   permalien, documentation, journal des changements), citation, lien profond, date de lecture, licence. Un
+   critère non lu s'écrit « non vérifié » : jamais une note devinée. Les niveaux de preuve de l'étape 3 s'appliquent.
+5. **Choisir** — UNE meilleure version : celle qui gagne sur les critères qui comptent pour le job, à preuve égale.
+   Un 🔴 ne gagne pas face à un 🟡 ou 🟢 comparable. Si deux versions se disputent, tu tranches et tu écris ce
+   qui est sacrifié. On ne mélange pas deux implémentations : ce serait deux fonctionnalités, et un mélange ne se
+   teste pas comme un champion.
+6. **Confronter** — notre état sur CETTE fonctionnalité dans le dossier cible (étape 4) : un `fichier:ligne` qui
+   la porte, ou une absence prouvée. Déjà là et équivalente → rien à prendre : dis-le, et rends `CIBLE: aucune`,
+   sans tableau. Présente sous un autre nom, ou moins bonne → la prise devient « étendre », pas « créer ».
+7. **Rendre** — UN candidat, au format de l'étape 6 : une seule ligne du tableau, sous l'en-tête exact
+   `| # | Score | Type | Quoi | Pourquoi | Comment |`. Score = sa note (étape 5). Type `🆕 nouveauté`. Quoi = le
+   mécanisme du champion et son nom, en une ligne de texte simple. Pourquoi = les critères tenus, les preuves
+   (🟢🟡🔴 + renvois), l'écart comblé. Comment = le module ou le fichier du dossier cible où ça se branche, et le
+   plus petit pas utile. Les autres implémentations vont dans « Écartés » (une ligne, une note, une raison). La
+   ligne `CIBLE:` recopie le Quoi mot pour mot.
+
+Ensuite steal s'arrête : il ne code pas. Le panneau de candidats présente la prise cochée ; son bouton de
+lancement (ou l'enchaînement auto) fait partir le travail complet — cadrage, construction, nettoyage, jugement —
+dans ce fil, donc dans le dossier cible.
+
+Le rapport garde l'ordre du mode produit : « Produit » devient la fonctionnalité, son dossier cible et ses
+critères ; « Recherches » et « Paysage » listent les implémentations admises ; « Le meilleur de chaque » ne
+contient que le candidat unique.
+
 ## Rapport
 Dans cet ordre, compact :
 1. **Produit** — le job en une phrase, dedans/dehors, le mode (ÉCART ou VIERGE).
@@ -189,5 +235,6 @@ Termine par la ligne `CIBLE:` : la prise que tu recommandes de cadrer en premier
 - Rendre les prises sous une autre forme que le tableau de candidats (autres colonnes, liste, prose) :
   l'app n'y voit alors rien à cocher, et l'utilisateur doit recopier la prise à la main.
 - Copier du code sans vérifier sa licence, ou reprendre un nom commercial au lieu d'un mécanisme.
-- Coder : steal ne modifie rien. Améliorer NOTRE code ou produit → `scout` ; cadrer une prise →
+- En mode FONCTIONNALITÉ, rendre plusieurs prises ou mélanger deux implémentations : une seule meilleure version, un seul candidat.
+- Coder : steal ne modifie rien, ni en mode produit ni en mode fonctionnalité : la prise part dans le dossier cible par le panneau (`CIBLE:`). Améliorer NOTRE code ou produit → `scout` ; cadrer une prise →
   `frame` ; la construire → `build` ; retard concurrent dans le bulletin du matin → `maintenance`.
