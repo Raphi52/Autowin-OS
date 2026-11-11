@@ -183,3 +183,31 @@ describe('une remarque de forme reste notée : relecture seule et mémoire du ju
     expect(objectionsDuJuge(DEFAUT_CONV_1716)).toHaveLength(1)
   })
 })
+
+describe('« passes » au sens de nom (passes intermédiaires) n’est pas un effet', () => {
+  it('une remarque de forme qui nomme des passes intermédiaires ne bloque pas', () => {
+    expect(
+      objectionsDuJuge(
+        'VALIDE\nOBJECTIONS:\n- OK: forme — le commentaire de la ligne 40 décrit les passes intermédiaires du build, pas le résultat final.'
+      )
+    ).toEqual([])
+    expect(
+      objectionsDuJuge(
+        'VALIDE\nOBJECTIONS:\n- MINEUR: le commentaire de la ligne 40 décrit les passes intermédiaires du build.'
+      )
+    ).toEqual([])
+  })
+
+  it('le verbe qui fait passer un test reste un effet : bloque', () => {
+    expect(
+      objectionsDuJuge(
+        'VALIDE\nOBJECTIONS:\n- OK: forme — le commentaire dit que les tests passent sans erreur.'
+      )
+    ).toHaveLength(1)
+    expect(
+      objectionsDuJuge(
+        'VALIDE\nOBJECTIONS:\n- OK: forme — le commentaire dit que le test passes sans erreur.'
+      )
+    ).toHaveLength(1)
+  })
+})

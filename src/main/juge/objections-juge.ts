@@ -126,8 +126,10 @@ function normaliser(ligne: string): string {
  */
 const NOMME_UNE_FORME =
   /\b(commentaires?|bandeaux?|titres?|accords?|formulations?|libelles?|orthographe|intitules?)\b/
+// « passes » après un déterminant ou un nombre est un nom (« les passes intermédiaires ») : ce n'est
+// pas un effet. Ailleurs « passes » peut être un verbe : le doute bloque.
 const PORTE_UN_EFFET =
-  /\b(lit|lisent|ignore\w*|rend|rendent|rendu|attach\w*|disparai\w*|disparu|appel\w*|compte\w*|casse\w*|plante\w*|echou\w*|echec|rouge\w*|faux|fausse?s?|passe\w*|manqu\w*|bloqu\w*|aucun test\w*|sans test\w*|pas de test\w*|code de sortie)\b/
+  /\b(lit|lisent|ignore\w*|rend|rendent|rendu|attach\w*|disparai\w*|disparu|appel\w*|compte\w*|casse\w*|plante\w*|echou\w*|echec|rouge\w*|faux|fausse?s?|passe(?!s\b)\w*|(?<!\b(?:les|des|de|ces|mes|tes|ses|nos|vos|leurs|autres|plusieurs|quelques|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|\d+)\s+)passes|manqu\w*|bloqu\w*|aucun test\w*|sans test\w*|pas de test\w*|code de sortie)\b/
 
 /**
  * Une remarque qui ne touche que la forme : une forme nommée, et aucun effet. Un écart de périmètre
