@@ -71,4 +71,13 @@ describe('la prose du bloc MÉMOIRE nomme la portée', () => {
     // Avec outils directs, c'est l'argument lui-même qui le dit.
     expect(remember().args.scope).toMatch(/« global »[\s\S]*le projet courant/u)
   })
+
+  it('ne dit plus que `portee` vaut `equipe` par défaut : sans elle, c’est le Brain du dossier', () => {
+    // `brainPourRemember` : Brain assigné au dossier de travail, à défaut l'équipe. La prose et
+    // l'argument du catalogue disent la même règle.
+    const texte = buildChatPilotagePrompt(CATALOG)
+    expect(texte).not.toContain('`equipe` (défaut)')
+    expect(texte).toContain('sans ce champ, Brain du dossier de travail, sinon équipe')
+    expect(remember().args.portee).toMatch(/Sans ce champ[\s\S]*dossier de travail[\s\S]*sinon à l’équipe/u)
+  })
 })

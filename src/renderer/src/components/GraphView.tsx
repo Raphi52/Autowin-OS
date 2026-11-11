@@ -58,6 +58,7 @@ import {
   completeProgressiveGraph,
   dynamicGraphForKey,
   filterGraphVisibility,
+  filtrerGrapheParAffichage,
   focusedNodeIdsFor,
   galaxyNodeAppearance,
   getGraphVisualProfile,
@@ -85,6 +86,7 @@ import {
   themeClusterAnchors,
   toggleThemeSelection,
   visibleThemeClusterIds,
+  type AffichageBrains,
   type GraphData,
   type GraphLink,
   type GraphNode,
@@ -106,11 +108,12 @@ import {
 } from './GraphView.panels'
 import { ModuleHeader } from './ModuleHeader'
 import { KnowledgeInboxPanel } from './KnowledgeInboxPanel'
+import { DossiersDeTravailPanel } from './DossiersDeTravailPanel'
 import { BrainRetrievalBench } from './BrainRetrievalBench'
 import './GraphView.css'
 import { Spinner } from './Spinner'
 
-type PanelTab = 'visibility' | 'node' | 'workbench'
+type PanelTab = 'visibility' | 'node' | 'workbench' | 'dossiers'
 type ResizableColumn = 'theme' | 'visibility' | 'detail'
 type ColumnWidths = GraphColumnWidths
 const EMPTY_THEME_SELECTION = new Set<string>()
@@ -188,6 +191,12 @@ export function GraphView({
    * propre (recherche, thèmes, boîte de réception).
    */
   const [reunis, setReunis] = useState(false)
+  /**
+   * Bascule « Brains affichés » dans la vue des deux : elle FILTRE le graphe fusionné déjà chargé, sans
+   * le recharger (les liens du pont disparaissent avec la note qu'on masque). Hors vue des deux, elle ne
+   * sert pas : le sélecteur choisit alors un seul Brain.
+   */
+  const [affichage, setAffichage] = useState<AffichageBrains>('deux')
   const selectedRef = useRef(selected)
   useLayoutEffect(() => {
     selectedRef.current = selected
@@ -519,6 +528,9 @@ export function GraphView({
         ? 'equipe'
         : undefined
 
+  /** Ce que montre la bascule : le filtre de la vue des deux, sinon le Brain affiché. */
+  const choixAffiche = reunisActif ? affichage : filtreBrains
+
   useEffect(() => {
     if (!selected) return
     const cacheKey = `${selected}\u0000${settings.lod}${reunisActif ? '\u0000reunis' : ''}`
@@ -647,9 +659,17 @@ export function GraphView({
     [graph.nodes, searchCatalogThemes, selectedBrain?.kind, themeQuery, vaultSearch]
   )
   const visibleSearchNodes = selectedBrain?.kind === 'vault' ? vaultSearch : catalogSearch.nodes
+  // La bascule des deux Brains ne touche qu'au graphe fusionné déjà chargé.
+  const grapheAffiche = useMemo(
+    () => (reunisActif ? filtrerGrapheParAffichage(graph, affichage) : graph),
+    [affichage, graph, reunisActif]
+  )
   const displayGraph = useMemo(
-    () => mesurerBlocGraphe('graph:visibilite', () => filterGraphVisibility(graph, settings.orphans)),
-    [graph, settings.orphans]
+    () =>
+      mesurerBlocGraphe('graph:visibilite', () =>
+        filterGraphVisibility(grapheAffiche, settings.orphans)
+      ),
+    [grapheAffiche, settings.orphans]
   )
   const healthIssues = useMemo(() => knowledgeHealthIssues(graph), [graph])
   const healthRelationByNode = useMemo(() => {
@@ -1809,6 +1829,8 @@ export function GraphView({
     // la caméra, laissant un gros plan sur un nœud qui n'existe plus dans le graphe suivant.
     clearNodeSelection()
     setReunis(deux)
+    // Un graphe chargé repart sans filtre : « Les deux » ouvre toujours la vue complète.
+    setAffichage('deux')
     setSelected(chemin)
     setActiveThemes(new Set())
     setCollapsedTreeNodeIds(new Set())
@@ -1871,19 +1893,26 @@ export function GraphView({
                 key={choix}
                 type="button"
                 role="radio"
-                aria-checked={filtreBrains === choix}
-                className={filtreBrains === choix ? 'is-active' : undefined}
-                onClick={() =>
+                aria-checked={choixAffiche === choix}
+                className={choixAffiche === choix ? 'is-active' : undefined}
+                onClick={() => {
+                  // Les deux Brains sont déjà chargés : la bascule ne fait que filtrer ce graphe.
+                  if (reunisActif) {
+                    if (choix === affichage) return
+                    clearNodeSelection()
+                    setAffichage(choix)
+                    return
+                  }
                   changerDeBrain(
                     choix === 'perso' ? brainPerso.path : brainEquipe.path,
                     choix === 'deux'
                   )
-                }
+                }}
               >
                 {t(`graphe.filtreBrains.${choix}`)}
               </button>
             ))}
-            {reunisActif && graph.ponts && (
+            {reunisActif && affichage === 'deux' && graph.ponts && (
               <span
                 className="graph-brains-filtre__ponts"
                 data-testid="ponts-brains"
@@ -2522,6 +2551,37 @@ export function GraphView({
                 />
                 <p className="setting-help">{t('graphe.nombre.aide')}</p>
               </SettingsSection>
+            </div>
+          </div>
+        )}
+        {/* Le menu des dossiers de travail a son bouton ici : rangé dans les réglages ⚙, il restait
+            introuvable. Visible en permanence : la bascule « Brains affichés » n'apparaît qu'avec deux
+            Brains détectés, et ce menu doit se trouver sans attendre cette détection. Le bouton est
+            placé APRÈS ⚙ : `.graph-settings-button` désigne toujours ⚙ en premier. */}
+        <button
+          type="button"
+          className={`graph-settings-button graph-dossiers-button ${panelTab === 'dossiers' ? 'is-active' : ''}`}
+          aria-label={t('dossiers.titre')}
+          aria-expanded={panelTab === 'dossiers'}
+          title={t('dossiers.bouton.titre')}
+          onClick={() => setPanelTab((current) => (current === 'dossiers' ? 'node' : 'dossiers'))}
+        >
+          {t('dossiers.bouton')}
+        </button>
+        {panelTab === 'dossiers' && (
+          <div className="graph-settings-popover graph-dossiers-popover">
+            <div className="graph-settings-popover__heading">
+              <strong>{t('dossiers.popover.titre')}</strong>
+              <button
+                type="button"
+                onClick={() => setPanelTab('node')}
+                aria-label={t('dossiers.fermer')}
+              >
+                ×
+              </button>
+            </div>
+            <div className="visibility-settings">
+              <DossiersDeTravailPanel />
             </div>
           </div>
         )}

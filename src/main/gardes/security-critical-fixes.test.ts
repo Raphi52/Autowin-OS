@@ -872,7 +872,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   qu'une personne a tape « ultrathink » dans le texte qu'elle envoie. Il n'accepte qu'une
     //   chaine, gardee en memoire deux heures au plus, et ne peut que monter la reflexion d'UN
     //   tour qui porte ce texte : il n'ecrit rien sur disque. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(302)
+    // MISE A JOUR 2026-11-11 — 302 -> 305, MESURE par ce test (rouge a 305) : TROIS ajouts, aucun
+    //   retrait, dans `ipc/chat.ts`, gardes des leur PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Affectations des Brains')` : `os:brain-affectations`
+    //   (liste), `os:brain-affectations:enregistrer` (cwd + Brain equipe ou perso, valides avant
+    //   `brain-affectation.ts`), `os:brain-affectations:retirer` (cwd). Un refus rend une raison
+    //   lisible sans rien ecrire (`brain-affectation-canaux.ts`). `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(305)
     expect(unguarded).toEqual([])
   })
 

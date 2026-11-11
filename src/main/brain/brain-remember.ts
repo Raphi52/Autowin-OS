@@ -30,6 +30,9 @@ import { shaHeadSurDisque } from '../git/depot-git'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
 import { sharedBrainOrigin } from './brain-paths'
 import { memoryWorkspaceIdentity } from './session-memory-echo'
+import { brainPourCwd } from './brain-affectation'
+import { racineBrainPerso } from './brain-perso-racine'
+import type { QuelBrain } from './brain-reglage'
 
 /** Types acceptés par le garde du Brain (`brain_propose.ALLOWED_TYPES`). Liste FERMÉE. */
 export const REMEMBER_TYPES = ['lesson', 'decision', 'preference', 'domain'] as const
@@ -684,6 +687,35 @@ export function projectScopeFromWorkspace(workspace?: string): string {
     // Pas de manifeste lisible (dossier hors Node, JSON cassé) : le nom du dossier reste tracable.
   }
   return slug(basename(resolve(root)))
+}
+
+/** Le Brain qui reçoit un `remember`, et si ce choix est un repli (dossier perso sans Brain perso réglé). */
+export interface BrainPourRemember {
+  brain: QuelBrain
+  repli: boolean
+}
+
+/**
+ * QUEL BRAIN REÇOIT LA NOTE — plan « Affectation des dossiers de travail aux Brains », lot 2.
+ *
+ * Une `portee` EXPLICITE (`equipe` ou `perso`) garde la priorité : l'agent a rangé lui-même, et il l'a
+ * dit. Sans elle, c'est le dossier de travail du tour qui décide : son Brain assigné (brain-affectation),
+ * sinon l'équipe, comme avant. Une valeur hors `equipe`/`perso` compte comme absente.
+ *
+ * Un dossier assigné au perso sans Brain perso réglé ne fait PAS refuser la note : elle va à l'équipe,
+ * et `repli` le dit pour que le résultat ne prétende pas le contraire. Le refus d'un `perso` explicite,
+ * lui, reste à l'appelant, qui dispose du Brain perso.
+ */
+export function brainPourRemember(
+  portee: unknown,
+  dossierDuTour: string | undefined,
+  env: NodeJS.ProcessEnv = process.env
+): BrainPourRemember {
+  const explicite = typeof portee === 'string' ? portee.trim().toLowerCase() : ''
+  if (explicite === 'equipe' || explicite === 'perso') return { brain: explicite, repli: false }
+  const assigne = brainPourCwd(dossierDuTour ?? '', env)
+  if (assigne === 'perso' && !racineBrainPerso(env)) return { brain: 'equipe', repli: true }
+  return { brain: assigne ?? 'equipe', repli: false }
 }
 
 /**

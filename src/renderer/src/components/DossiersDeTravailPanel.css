@@ -1,0 +1,33 @@
+/* Dossiers de travail (réglages de la vue Knowledge) : mise en page seulement, les couleurs viennent du thème. */
+.dossiers-travail__liste {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dossiers-travail__ligne,
+.dossiers-travail__ajout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.dossiers-travail__chemin {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.dossiers-travail__ajout {
+  margin-top: 8px;
+}
+
+.dossiers-travail__ajout input {
+  grid-column: 1 / -1;
+  min-width: 0;
+}

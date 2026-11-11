@@ -159,10 +159,11 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
         'facultatif — uid(s) des notes que ce fait REMPLACE (lus via brain_read) ; la note ancienne ne passe « remplacée » qu’à la revue',
       // 2026-10-28 : deux Brains, et c'est l'agent qui range (choix de l'utilisateur).
       portee:
-        'equipe | perso — OÙ ranger le fait. equipe : il touche un projet, un outil ou un système de l’équipe. perso : tout le reste — privé, jamais partagé. Défaut : equipe. Dis ensuite en une ligne où tu l’as rangé (champ `rangement` du résultat)'
+        'equipe | perso — OÙ ranger le fait. equipe : il touche un projet, un outil ou un système de l’équipe. perso : tout le reste — privé, jamais partagé. Sans ce champ, la note va au Brain assigné au dossier de travail, s’il y en a un ; sinon à l’équipe. Dis ensuite en une ligne où tu l’as rangé (champ `rangement` du résultat)'
     },
-    // `scope` est rempli depuis le projet (`rememberFact`), `portee` vaut `equipe` par
-    // défaut et `runId` se déduit de l'issue du tour. Les exiger coûtait un refus pour rien.
+    // `scope` est rempli depuis le projet (`rememberFact`), `portee` suit le dossier de
+    // travail (sinon `equipe`) et `runId` se déduit de l'issue du tour. Les exiger coûtait
+    // un refus pour rien.
     argsFacultatifs: [
       'scope',
       'learningOutcome',

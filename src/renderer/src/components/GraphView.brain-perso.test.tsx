@@ -3,8 +3,15 @@ import { act, createElement, forwardRef, useImperativeHandle } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Ce que le moteur 3D reçoit à dessiner : la vue y lit les nœuds visibles après la bascule.
+const etatRendu = vi.hoisted(() => ({ noeuds: [] as string[] }))
+
 vi.mock('react-force-graph-3d', () => ({
-  default: forwardRef(function FakeForceGraph(_props: unknown, ref) {
+  default: forwardRef(function FakeForceGraph(
+    props: { graphData?: { nodes?: Array<{ id: string }> } },
+    ref
+  ) {
+    etatRendu.noeuds = (props.graphData?.nodes ?? []).map((noeud) => noeud.id)
     useImperativeHandle(ref, () => ({
       cameraPosition: vi.fn().mockReturnValue({ x: 0, y: 0, z: 100 }),
       d3Force: (name: string) => (name === 'link' ? { distance: vi.fn() } : { strength: vi.fn() }),
@@ -225,6 +232,7 @@ describe('vue Knowledge — Brain perso à côté du Brain d’équipe', () => {
  * et un filtre pour voir que les nodes de l'un ou l'autre dans la vue knowledge »).
  */
 describe('vue Knowledge — filtre Équipe · Perso · Les deux', () => {
+  const noeudsAffiches = (): string[] => etatRendu.noeuds
   const filtre = (): HTMLButtonElement[] => [
     ...container.querySelectorAll<HTMLButtonElement>('[aria-label="Brains affichés"] button')
   ]
@@ -235,7 +243,7 @@ describe('vue Knowledge — filtre Équipe · Perso · Les deux', () => {
     await flush()
   }
 
-  it('propose les trois choix ; « Les deux » charge le graphe relié et dit combien de ponts il trace', async () => {
+  it('propose les trois choix ; « Les deux » charge le graphe relié, puis Équipe et Perso le filtrent sans le recharger', async () => {
     const api = installerApi()
     api.loadBrainGraphReunis = vi.fn().mockResolvedValue({
       nodes: [
@@ -271,17 +279,29 @@ describe('vue Knowledge — filtre Équipe · Perso · Les deux', () => {
       '1 pont perso → équipe'
     )
 
+    // La bascule filtre le graphe déjà chargé : aucun rechargement, le sélecteur reste sur l'équipe.
+    expect(noeudsAffiches()).toEqual(['knowledge/typecheck', 'perso:knowledge/typage'])
+    const chargesAvant = api.loadBrainGraph.mock.calls.length
     await cliquer('Perso')
-    expect(api.loadBrainGraph).toHaveBeenLastCalledWith(PERSO, expect.any(Number))
+    expect(noeudsAffiches()).toEqual(['perso:knowledge/typage'])
     expect(container.querySelector('[data-testid="ponts-brains"]')).toBeNull()
-    // Le sélecteur suit le filtre : il montre le Brain perso.
     expect(
       container.querySelector<HTMLSelectElement>('select[aria-label="Graphe de connaissances"]')
         ?.value
-    ).toBe(PERSO)
+    ).toBe(EQUIPE)
+    expect(api.loadBrainGraphReunis).toHaveBeenCalledTimes(1)
+    expect(api.loadBrainGraph.mock.calls.length).toBe(chargesAvant)
 
     await cliquer('Équipe')
-    expect(api.loadBrainGraph).toHaveBeenLastCalledWith(EQUIPE, expect.any(Number))
+    expect(noeudsAffiches()).toEqual(['knowledge/typecheck'])
+    expect(api.loadBrainGraphReunis).toHaveBeenCalledTimes(1)
+
+    await cliquer('Les deux')
+    expect(noeudsAffiches()).toEqual(['knowledge/typecheck', 'perso:knowledge/typage'])
+    expect(container.querySelector('[data-testid="ponts-brains"]')?.textContent).toBe(
+      '1 pont perso → équipe'
+    )
+    expect(api.loadBrainGraphReunis).toHaveBeenCalledTimes(1)
   })
 
   it('dit pourquoi aucun pont n’est tracé', async () => {
@@ -305,5 +325,53 @@ describe('vue Knowledge — filtre Équipe · Perso · Les deux', () => {
       .mockResolvedValue([{ id: 'brain', label: 'Brain', path: EQUIPE, sizeMb: 1, kind: 'vault' }])
     await monter()
     expect(filtre()).toEqual([])
+  })
+})
+
+/**
+ * LE MENU DES DOSSIERS DE TRAVAIL DEPUIS LA VUE (2026-11-11, demande utilisateur : « il me manque le
+ * menu pour assigner des projets (CWD) à un brain »). Il était rangé tout en bas des réglages ⚙, après
+ * quatre sections : introuvable pour qui ne descend pas. Il a désormais son bouton, à côté de ⚙.
+ */
+describe('vue Knowledge — menu des dossiers de travail', () => {
+  const installerAvecDossiers = (): Record<string, ReturnType<typeof vi.fn>> => {
+    const api = installerApi()
+    api.brainAffectations = vi.fn().mockResolvedValue({ affectations: [] })
+    return api
+  }
+  const boutonDossiers = (): HTMLButtonElement | null =>
+    container.querySelector<HTMLButtonElement>('[aria-label="Dossiers de travail"]')
+
+  it('un bouton « Dossiers » ouvre le menu d’affectation directement', async () => {
+    const api = installerAvecDossiers()
+    await monter()
+    expect(boutonDossiers()?.textContent).toBe('Dossiers')
+    await act(async () => boutonDossiers()?.click())
+    await flush()
+    expect(api.brainAffectations).toHaveBeenCalled()
+    expect(
+      container.querySelector('.graph-dossiers-popover .dossiers-travail__ajout')
+    ).not.toBeNull()
+    expect(boutonDossiers()?.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('le menu n’est pas dupliqué dans les réglages ⚙', async () => {
+    installerAvecDossiers()
+    await monter()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Réglages de visibilité"]')?.click()
+    )
+    await flush()
+    expect(container.querySelector('.graph-settings-popover')).not.toBeNull()
+    expect(container.querySelector('.dossiers-travail__ajout')).toBeNull()
+  })
+
+  it('le bouton reste sans Brain perso détecté : seule la bascule disparaît', async () => {
+    const api = installerAvecDossiers()
+    api.listBrains = vi
+      .fn()
+      .mockResolvedValue([{ id: 'brain', label: 'Brain', path: EQUIPE, sizeMb: 1, kind: 'vault' }])
+    await monter()
+    expect(boutonDossiers()).not.toBeNull()
   })
 })

@@ -647,8 +647,9 @@ export function buildChatPilotagePrompt(
         // sinon les arguments de `remember` ne part que sur ce chemin-là, jamais en double.
         horsOutilRemember(
           `\`scope\` — omets-le et Autowin met le projet courant ; \`global\` seulement si le fait ` +
-            `vaut au-delà. \`portee\` — OÙ ranger : \`equipe\` (défaut) si le fait touche un projet, ` +
-            `un outil ou un système de l'équipe, \`perso\` sinon (privé, jamais partagé) ; dis ensuite ` +
+            `vaut au-delà. \`portee\` — OÙ ranger : \`equipe\` si le fait touche un projet, ` +
+            `un outil ou un système de l'équipe, \`perso\` sinon (privé, jamais partagé) ; sans ce ` +
+            `champ, Brain du dossier de travail, sinon équipe ; dis ensuite ` +
             `où tu l'as rangé (champ \`rangement\`). Le fait est AUTOPORTÉ (relisible dans 3 mois ` +
             `sans cette conversation), avec une source traçable. Les formes acceptées, en ENTIER : ` +
             `\`git:<chemin>@<sha>\` pour du code (par défaut) · \`url:https://…\` · ` +

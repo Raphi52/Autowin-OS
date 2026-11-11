@@ -172,6 +172,27 @@ export const TEXTES_FR = {
   'panneau.theme.aria': 'Nœuds des thèmes actifs par ordre alphabétique',
   'panneau.theme.vide': 'Aucun nœud dans ce thème.',
 
+  // — Dossiers de travail (réglages de la vue) : quel Brain reçoit les notes écrites depuis un dossier —
+  'dossiers.titre': 'Dossiers de travail',
+  'dossiers.aide':
+    'Les notes écrites depuis ce dossier et ses sous-dossiers vont au Brain choisi ; le dossier le plus précis gagne. Les recherches interrogent toujours les deux Brains.',
+  'dossiers.vide': 'Aucun dossier assigné : les notes vont au Brain de l’équipe.',
+  'dossiers.liste.aria': 'Dossiers de travail assignés',
+  'dossiers.brainDe.aria': 'Brain de {dossier}',
+  'dossiers.retirer': 'Retirer',
+  'dossiers.retirer.aria': 'Retirer l’affectation de {dossier}',
+  'dossiers.chemin.aria': 'Chemin absolu du dossier de travail',
+  'dossiers.chemin.placeholder': 'D:\\Projets\\MonDossier',
+  'dossiers.brain.aria': 'Brain du nouveau dossier',
+  'dossiers.ajouter': 'Assigner',
+  'dossiers.erreur.charger': 'Impossible de lire les dossiers de travail assignés.',
+  'dossiers.erreur.action': 'Impossible d’enregistrer cette affectation.',
+  'dossiers.bouton': 'Dossiers',
+  'dossiers.bouton.titre':
+    'Dossiers de travail : quel Brain reçoit les notes écrites depuis chaque dossier',
+  'dossiers.popover.titre': 'Brain par dossier',
+  'dossiers.fermer': 'Fermer les dossiers de travail',
+
   // — Sujets de l'arbre (graph-brain-categories) et libellés du modèle (graph-view-model) —
   'sujet.kit': 'Le kit et la façon de travailler',
   'sujet.brain': 'Le Brain lui-même',
@@ -392,6 +413,26 @@ export const TEXTES_EN: Record<CleKnowledge, string> = {
   'panneau.theme.titre': 'Theme nodes',
   'panneau.theme.aria': 'Nodes of the active themes in alphabetical order',
   'panneau.theme.vide': 'No node in this theme.',
+
+  'dossiers.titre': 'Working folders',
+  'dossiers.aide':
+    'Notes written from this folder and its subfolders go to the chosen Brain; the most specific folder wins. Searches always query both Brains.',
+  'dossiers.vide': 'No folder assigned: notes go to the team Brain.',
+  'dossiers.liste.aria': 'Assigned working folders',
+  'dossiers.brainDe.aria': 'Brain of {dossier}',
+  'dossiers.retirer': 'Remove',
+  'dossiers.retirer.aria': 'Remove the assignment of {dossier}',
+  'dossiers.chemin.aria': 'Absolute path of the working folder',
+  'dossiers.chemin.placeholder': 'D:\\Projects\\MyFolder',
+  'dossiers.brain.aria': 'Brain of the new folder',
+  'dossiers.ajouter': 'Assign',
+  'dossiers.erreur.charger': 'Could not read the assigned working folders.',
+  'dossiers.erreur.action': 'Could not save this assignment.',
+  'dossiers.bouton': 'Folders',
+  'dossiers.bouton.titre':
+    'Working folders: which Brain receives the notes written from each folder',
+  'dossiers.popover.titre': 'Brain per folder',
+  'dossiers.fermer': 'Close the working folders',
 
   'sujet.kit': 'The kit and the way of working',
   'sujet.brain': 'The Brain itself',

@@ -40,10 +40,12 @@ import type {
   AgentTopology,
   ExecutionWorkspaceState,
   BrainPersoState,
+  BrainAffectationsState,
   BrainReglageState,
   NativePreflightTrace
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
+import type { Affectation } from '../main/brain/brain-affectation'
 import type {
   BilanDesMentions,
   CarteDesBesoins,
@@ -560,6 +562,10 @@ interface ChatApi {
   coffreReimporter: () => Promise<ReponseGesteCoffre>
   enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }) => Promise<BrainPersoState>
   resetBrainPerso: () => Promise<BrainPersoState>
+  /** Les affectations dossier de travail → Brain (`src/main/brain/brain-affectation-canaux.ts`). */
+  brainAffectations: () => Promise<BrainAffectationsState>
+  enregistrerBrainAffectation: (entree: Affectation) => Promise<BrainAffectationsState>
+  retirerBrainAffectation: (entree: { cwd: string }) => Promise<BrainAffectationsState>
   toolUsage: () => Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   >

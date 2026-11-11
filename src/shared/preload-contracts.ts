@@ -6,6 +6,8 @@
  * dans `src/main/**` doit être IMPORTÉ de là — jamais dupliqué ici.
  */
 
+import type { Affectation } from '../main/brain/brain-affectation'
+
 /** Pièce jointe telle qu'envoyée par le renderer à `pilotChat` — avant tout stockage. */
 export interface ChatAttachment {
   name: string
@@ -106,6 +108,18 @@ export interface BrainPersoState {
   /** Le serveur perso sert un AUTRE dossier (lancé avant un changement de réglage). */
   serveurSurUnAutreDossier: boolean
   /** Raison d'un enregistrement refusé (chemin introuvable, clonage raté…). */
+  erreur?: string
+}
+
+/**
+ * Les affectations dossier de travail → Brain (plan « Affectation des dossiers de travail aux Brains »,
+ * `src/main/brain/brain-affectation.ts`). Même forme que le Brain perso : toujours la liste à jour, et
+ * `erreur` quand la demande est refusée (entrée invalide, écriture impossible).
+ */
+export interface BrainAffectationsState {
+  /** Les affectations enregistrées. Vide = aucune : les notes vont au Brain de l'équipe. */
+  affectations: Affectation[]
+  /** Raison d'une demande refusée. Absente = demande acceptée. */
   erreur?: string
 }
 

@@ -400,6 +400,26 @@ export function filterGraphVisibility(graph: GraphData, showOrphans: boolean): G
   return { nodes: graph.nodes.filter((node) => connected.has(node.id)), links: graph.links }
 }
 
+/**
+ * Bascule « Affichage » des deux Brains : ne garde que les notes d'une marque. `deux` ne retire rien.
+ * Une note perso porte `perso: true`, toutes les autres sont d'équipe. Un lien disparaît avec l'une de
+ * ses extrémités, pont compris. À n'appliquer qu'à un graphe des deux Brains : hors de là, aucune note
+ * ne porte la marque.
+ */
+export type AffichageBrains = 'deux' | 'equipe' | 'perso'
+
+export function filtrerGrapheParAffichage(graph: GraphData, affichage: AffichageBrains): GraphData {
+  if (affichage === 'deux') return graph
+  const nodes = graph.nodes.filter((node) =>
+    node.perso === true ? affichage === 'perso' : affichage === 'equipe'
+  )
+  const gardees = new Set(nodes.map((node) => node.id))
+  const links = graph.links.filter(
+    (link) => gardees.has(endpointId(link.source)) && gardees.has(endpointId(link.target))
+  )
+  return { ...graph, nodes, links }
+}
+
 export function nodeColorForTheme(
   node: GraphNode,
   activeThemes: ReadonlySet<string>,

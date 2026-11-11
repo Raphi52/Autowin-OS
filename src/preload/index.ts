@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { ReponseServeursMcp, ServeurMcpUtilisateur } from '../main/providers/mcp-servers'
 import type { EtatCoffre, ReponseGesteCoffre } from '../main/app/coffre-cles'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
+import type { Affectation } from '../main/brain/brain-affectation'
 import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/conversations/messages-entre-fils-app'
 import type {
   GestePlanDeLots,
@@ -25,6 +26,7 @@ import type {
   AgentTopology,
   ExecutionWorkspaceState,
   BrainPersoState,
+  BrainAffectationsState,
   BrainReglageState,
   NativePreflightTrace
 } from '../shared/preload-contracts'
@@ -814,6 +816,14 @@ const api = {
   enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }): Promise<BrainPersoState> =>
     ipcRenderer.invoke('os:brain-perso:enregistrer', entree),
   resetBrainPerso: (): Promise<BrainPersoState> => ipcRenderer.invoke('os:brain-perso:reset'),
+  // Affectations dossier de travail → Brain (`src/main/brain/brain-affectation-canaux.ts`) : quel
+  // Brain reçoit les notes écrites depuis un dossier.
+  brainAffectations: (): Promise<BrainAffectationsState> =>
+    ipcRenderer.invoke('os:brain-affectations'),
+  enregistrerBrainAffectation: (entree: Affectation): Promise<BrainAffectationsState> =>
+    ipcRenderer.invoke('os:brain-affectations:enregistrer', entree),
+  retirerBrainAffectation: (entree: { cwd: string }): Promise<BrainAffectationsState> =>
+    ipcRenderer.invoke('os:brain-affectations:retirer', entree),
   toolUsage: (): Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   > => ipcRenderer.invoke('os:toolUsage'),

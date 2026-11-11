@@ -79,6 +79,11 @@ import {
   racineBrainPerso
 } from '../brain/brain-perso'
 import { defaultBrainRoot } from '../brain/brain-paths'
+import {
+  enregistrerAffectationDepuisLeRendu,
+  listerAffectations,
+  retirerAffectationDepuisLeRendu
+} from '../brain/brain-affectation-canaux'
 import type {
   BrainPersoState,
   BrainReglageState,
@@ -1692,6 +1697,23 @@ Le fil reprend ensuite normalement.`
     // Retire le RÉGLAGE seulement : le dossier et ses notes restent sur le disque.
     effacerBrainReglage(process.env, 'perso')
     return brainPersoState()
+  })
+
+  // AFFECTATIONS dossier de travail → Brain (plan « Affectation des dossiers de travail aux Brains »,
+  // lot 3). La validation, la liste à jour et les refus lisibles vivent dans brain-affectation-canaux.ts.
+  ipcMain.handle('os:brain-affectations', (event) => {
+    assertTrustedRendererSender(event, 'Affectations des Brains')
+    return listerAffectations(process.env)
+  })
+
+  ipcMain.handle('os:brain-affectations:enregistrer', (event, entree: unknown) => {
+    assertTrustedRendererSender(event, 'Affectations des Brains')
+    return enregistrerAffectationDepuisLeRendu(process.env, entree)
+  })
+
+  ipcMain.handle('os:brain-affectations:retirer', (event, entree: unknown) => {
+    assertTrustedRendererSender(event, 'Affectations des Brains')
+    return retirerAffectationDepuisLeRendu(process.env, entree)
   })
 
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {

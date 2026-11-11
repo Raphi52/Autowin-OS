@@ -4,7 +4,7 @@ import type { AppCommandBus } from './commands'
 import type { RoleBinding } from '../profil/roles'
 import { retenirPreferenceAuProfil } from '../profil/profil-utilisateur'
 import { envDuBrainPerso, origineBrainPerso, depotsBrainPerso, promouvoirBrainPerso } from '../brain/brain-perso'
-import { rememberFact } from '../brain/brain-remember'
+import { brainPourRemember, rememberFact } from '../brain/brain-remember'
 import type { OutcomeLearningResult } from '../brain/outcome-learning-supervisor'
 import { brainServiceToken } from '../brain/brain-retrieval'
 import { appendBrainTrace } from '../activity/brain-trace-spool'
@@ -29,12 +29,10 @@ export async function executerMemoire(
        * `portee`. Sans Brain perso réglé, un fait perso est REFUSÉ, jamais rabattu sur l'équipe :
        * ce serait publier à toute l'équipe ce que l'utilisateur voulait garder pour lui.
        */
-      const portee =
-        String(a.portee ?? '')
-          .trim()
-          .toLowerCase() === 'perso'
-          ? 'perso'
-          : 'equipe'
+      // Sans `portee` (lot 2 du plan d'affectation), le Brain assigné au dossier de travail du tour
+      // décide, sinon l'équipe ; un dossier perso sans Brain perso réglé retombe sur l'équipe, et le DIT.
+      const choix = brainPourRemember(a.portee, bus.workspaceDuTour)
+      const portee = choix.brain
       const envPerso = portee === 'perso' ? envDuBrainPerso() : undefined
       if (portee === 'perso' && !envPerso) {
         return {
@@ -45,7 +43,12 @@ export async function executerMemoire(
             'rien n’a été retenu — aucun Brain perso n’est réglé (Réglages › Diagnostic › Brain perso). Dis-le à l’utilisateur ; ne le range pas dans le Brain d’équipe à sa place'
         }
       }
-      const rangement = portee === 'perso' ? 'Brain perso' : 'Brain d’équipe'
+      const rangement =
+        portee === 'perso'
+          ? 'Brain perso'
+          : choix.repli
+            ? 'Brain d’équipe (repli : aucun Brain perso réglé)'
+            : 'Brain d’équipe'
       const convId = conversationId ?? bus.activeConversationId ?? ''
       const learningOutcome =
         a.learningOutcome === 'success' || a.learningOutcome === 'failure'
@@ -115,6 +118,14 @@ export async function executerMemoire(
         }
       } finally {
         releaseProposal?.()
+      }
+      // Repli : le dossier est assigné au perso, sans Brain perso réglé. Dit dans le détail, sans
+      // affirmer un dépôt qui n'a peut-être pas eu lieu : la destination est l'équipe, et c'est tout.
+      if (choix.repli) {
+        outcome = {
+          ...outcome,
+          detail: `${outcome.detail} — Repli : ce dossier est assigné au Brain perso, mais aucun Brain perso n’est réglé (Réglages › Diagnostic › Brain perso) : la note est destinée au Brain d’équipe, pas au perso. Dis-le à l’utilisateur.`
+        }
       }
       /**
        * L'ÉCRITURE VERS LE BRAIN EST UN APPEL AU BRAIN, et elle n'en laissait aucune trace.
