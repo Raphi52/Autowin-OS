@@ -24,6 +24,7 @@ import { ArtifactPile } from './ArtifactPile'
 import { AssistantActivityGroup } from './ChatView.parts'
 import { clotureEnDernier } from './cloture-en-dernier'
 import { CheckIcon, CopyIcon, EditIcon, ForkIcon, InspectIcon, RewindIcon } from './chat-view-icons'
+import type { PersistedReponseRemplacee } from '../../../shared/chat-turn'
 import { formatFileSize } from './chat-attachments'
 import { formaterHeureComplete, formaterHeureMessage } from './heure-message'
 import {
@@ -283,7 +284,9 @@ function terminalFailureReason(message: Msg): string | undefined {
 }
 
 type AssistantTimelineItem =
-  { kind: 'parts'; parts: ChatPart[] } | { kind: 'receipt'; receipt: DirectiveReceipt }
+  | { kind: 'parts'; parts: ChatPart[] }
+  | { kind: 'receipt'; receipt: DirectiveReceipt }
+  | { kind: 'remplacee'; reponse: PersistedReponseRemplacee }
 
 /**
  * Clé d'un point du rail : celle que portait le bloc avant le rail. Une question `ask` garde
@@ -299,9 +302,10 @@ function cleDuBloc(part: ChatRenderBlock, index: number): string {
 
 function splitAssistantTimeline(
   parts: ChatPart[],
-  receipts: DirectiveReceipt[]
+  receipts: DirectiveReceipt[],
+  remplacees: readonly PersistedReponseRemplacee[] = []
 ): AssistantTimelineItem[] {
-  if (receipts.length === 0) return [{ kind: 'parts', parts }]
+  if (receipts.length === 0 && remplacees.length === 0) return [{ kind: 'parts', parts }]
   // Un recu SANS point d accroche (la reponse n affichait encore rien) passe EN DERNIER : sinon
   // le message tape pendant un travail s affichait AU-DESSUS du bloc en cours (2026-09-01).
   const rang = function (receipt: DirectiveReceipt): number {
@@ -328,8 +332,22 @@ function splitAssistantTimeline(
     flushParts()
     timeline.push({ kind: 'receipt', receipt })
   }
+  // Une réponse remplacée se pose AVANT la part de son rang : c'est là que la relance l'a remplacée.
+  // Le tri est stable : deux réponses au même rang gardent leur ordre d'écriture.
+  const ordreDesRemplacees = remplacees.slice().sort((gauche, droite) => gauche.rang - droite.rang)
+  let remplaceeIndex = 0
+  const appendRemplacees = (rangMax: number): void => {
+    let reponse = ordreDesRemplacees[remplaceeIndex]
+    while (reponse && reponse.rang <= rangMax) {
+      flushParts()
+      timeline.push({ kind: 'remplacee', reponse })
+      remplaceeIndex += 1
+      reponse = ordreDesRemplacees[remplaceeIndex]
+    }
+  }
 
   parts.forEach((part, partIndex) => {
+    appendRemplacees(partIndex)
     if (part.kind === 'text') {
       let textOffset = 0
       while (ordered[receiptIndex]?.afterPartIndex === partIndex) {
@@ -354,6 +372,7 @@ function splitAssistantTimeline(
       receiptIndex += 1
     }
   })
+  appendRemplacees(Number.POSITIVE_INFINITY)
   while (receiptIndex < ordered.length) {
     appendReceipt(ordered[receiptIndex])
     receiptIndex += 1
@@ -664,10 +683,11 @@ const LigneDuFil = memo(
       // declenchee apres son ecriture (demande du 2026-09-12). Pendant l'ecriture, on ne
       // touche a rien : le texte doit apparaitre dans l'ordre ou il arrive.
       message.done ? clotureEnDernier(message.parts) : message.parts,
-      directiveReceipts ?? []
+      directiveReceipts ?? [],
+      message.reponsesRemplacees ?? []
     )
     const blocsParElement = timeline.map((element) =>
-      element.kind === 'receipt' ? [] : groupAssistantActivity(element.parts)
+      element.kind === 'parts' ? groupAssistantActivity(element.parts) : []
     )
     const reponse = placeDeLaReponse(blocsParElement, message.done)
     // La ligne « compréhension » se lit EN TÊTE du tour, au-dessus des blocs Raisonnement, Actions
@@ -902,7 +922,23 @@ const LigneDuFil = memo(
           : null}
         <div className="msg-turn">
           {timeline.map((timelineItem, timelineIndex) =>
-            timelineItem.kind === 'receipt' ? (
+            timelineItem.kind === 'remplacee' ? (
+              noeud(
+                `remplacee-${timelineIndex}`,
+                'autre',
+                timelineItem.reponse.parts[0]?.at,
+                <details className="msg-remplacee">
+                  <summary>Réponse remplacée par une relance</summary>
+                  <div className="msg-body" dir="auto">
+                    <MessageDuFil.Provider value={identiteDeLaReponse(message, conversationId)}>
+                      <Markdown
+                        text={timelineItem.reponse.parts.map((part) => part.text).join('')}
+                      />
+                    </MessageDuFil.Provider>
+                  </div>
+                </details>
+              )
+            ) : timelineItem.kind === 'receipt' ? (
               noeud(
                 `receipt-${timelineItem.receipt.id}`,
                 'autre',

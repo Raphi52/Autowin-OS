@@ -59,7 +59,14 @@ export type TurnUsage = {
  */
 export type PilotEventVariant =
   | { kind: 'delta'; streamId: string; text: string; iteration: number }
-  | { kind: 'stream-reset'; streamId: string; iteration: number; conclusionSeule?: true }
+  | {
+      kind: 'stream-reset'
+      streamId: string
+      iteration: number
+      conclusionSeule?: true
+      /** Une relance refait cette réponse : le texte retiré se garde replié dans le fil. */
+      remplacee?: true
+    }
   /** `iteration` : le fil en fait le flux `fallback:<iteration>` (effaçable par une relance, D2). */
   | { kind: 'think'; text: string; iteration?: number }
   /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté dans le message. */
@@ -200,6 +207,8 @@ export interface PilotEvent {
   streamId?: string
   /** `stream-reset` : ne retirer que le dernier passage du flux (`rangsEffacesParLeReset`). */
   conclusionSeule?: true
+  /** `stream-reset` d'une relance : le texte retiré se garde replié dans le fil. */
+  remplacee?: true
   actionId?: string
   /** Heure de l'evenement (ms), posee a sa reception par le chat : rail du tour. */
   at?: number

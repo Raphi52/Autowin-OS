@@ -6352,6 +6352,24 @@ button.chat-project-dot:disabled {
   padding: 1px 0;
 }
 
+/* RÉPONSE REMPLACÉE PAR UNE RELANCE (2026-11-11) : gardée repliée à sa place, pour qu'une réponse
+   refaite ne disparaisse plus sans trace. Repliée par défaut : la nouvelle réponse reste la lecture. */
+.msg-remplacee {
+  margin: 4px 0;
+  color: var(--text-dim);
+}
+.msg-remplacee > summary {
+  cursor: pointer;
+  font-size: 0.85em;
+}
+.msg-remplacee[open] > summary {
+  margin-bottom: 4px;
+}
+/* Une fois dépliée, la réponse remplacée se lit en retrait : elle n'est plus la réponse en vigueur. */
+.msg-remplacee .msg-body {
+  color: var(--text-dim);
+}
+
 /* LIGNE « LECTURE RETENUE » (2026-10-23 : « un style distinct, texte atténué et petite
    étiquette lecture, pour qu'elle se repère d'un coup d'œil avant la réponse »). Bloc à part
    (`lectureRetenue`, chat-view-model.ts) : plus petit et atténué que la réponse, précédé d'une

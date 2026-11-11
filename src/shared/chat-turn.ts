@@ -15,6 +15,17 @@ export interface PersistedChatTextPart {
   at?: number
 }
 
+/**
+ * Une réponse REMPLACÉE par une relance, gardée à sa place : le texte qu'elle a affiché avant d'être
+ * refaite. Elle ne vit PAS dans `parts` : le contenu du message, l'historique renvoyé au modèle et les
+ * décisions du pilote ne doivent jamais relire une réponse qui a été remplacée. Le fil la montre
+ * repliée, juste devant la part de rang `rang`.
+ */
+export interface PersistedReponseRemplacee {
+  rang: number
+  parts: PersistedChatTextPart[]
+}
+
 export interface PersistedChatActionPart {
   kind: 'action'
   /** Heure de la commande (ms depuis l'époque) — même rôle que `PersistedChatTextPart.at`. */
@@ -196,6 +207,11 @@ export interface ChatTurnState {
    * dossier impossible) : la carte du fil ne dit « rien à vérifier » que sur le premier.
    */
   fichiersEcrits?: string[]
+  /**
+   * Réponses remplacées par une relance, gardées repliées dans le fil (`PersistedReponseRemplacee`).
+   * Hors de `parts` : elles ne comptent ni dans le contenu, ni dans l'historique renvoyé au modèle.
+   */
+  reponsesRemplacees?: PersistedReponseRemplacee[]
 }
 
 /**
@@ -395,9 +411,10 @@ export type ChatTurnEvent =
   | { kind: 'fichiers-ecrits'; chemins: string[] }
   /**
    * Retire le texte d'un flux. `conclusionSeule` : seulement son DERNIER passage, celui qui suit le
-   * dernier geste (action, image) — voir `rangsEffacesParLeReset`.
+   * dernier geste (action, image) — voir `rangsEffacesParLeReset`. `remplacee` : une relance refait
+   * cette réponse ; le texte retiré se garde replié dans le fil (`reponsesRemplacees`).
    */
-  | { kind: 'stream-reset'; streamId: string; conclusionSeule?: true }
+  | { kind: 'stream-reset'; streamId: string; conclusionSeule?: true; remplacee?: true }
   | { kind: 'resumed' }
   | {
       kind: 'command'
@@ -556,6 +573,30 @@ export function rangsEffacesParLeReset(
   return rangs
 }
 
+/**
+ * UNE RELANCE GARDE LA RÉPONSE QU'ELLE REMPLACE, repliée à sa place.
+ *
+ * Le texte retiré de `parts` (comme avant) ne disparaît plus du fil : il se pose ici avec son rang, et
+ * le rendu le montre replié, juste devant la part qui le suivait. Les réponses déjà gardées reculent
+ * d'autant de parts retirées qui les précèdent, pour rester à leur place.
+ */
+function garderLaReponseRemplacee(
+  state: ChatTurnState,
+  rangs: readonly number[]
+): PersistedReponseRemplacee[] {
+  const deplacees = (state.reponsesRemplacees ?? []).map((reponse) => ({
+    ...reponse,
+    rang: reponse.rang - rangs.filter((rang) => rang < reponse.rang).length
+  }))
+  const parts = rangs.flatMap((rang) => {
+    const part = state.parts[rang]
+    return part?.kind === 'text' ? [part] : []
+  })
+  const premier = rangs[0]
+  if (premier === undefined || parts.length === 0) return deplacees
+  return [...deplacees, { rang: premier, parts }]
+}
+
 export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): ChatTurnState {
   if (event.kind === 'resumed') return { ...state, status: 'streaming', error: undefined }
 
@@ -630,8 +671,12 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
   }
 
   if (event.kind === 'stream-reset') {
-    const effaces = new Set(rangsEffacesParLeReset(state.parts, event))
-    return { ...state, parts: state.parts.filter((_part, rang) => !effaces.has(rang)) }
+    const rangs = rangsEffacesParLeReset(state.parts, event)
+    const effaces = new Set(rangs)
+    const parts = state.parts.filter((_part, rang) => !effaces.has(rang))
+    if (!event.remplacee) return { ...state, parts }
+    const gardees = garderLaReponseRemplacee(state, rangs)
+    return gardees.length ? { ...state, parts, reponsesRemplacees: gardees } : { ...state, parts }
   }
 
   if (event.kind === 'command') {

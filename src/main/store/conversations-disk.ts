@@ -175,6 +175,28 @@ function isPersistedChatPart(value: unknown): boolean {
   return false
 }
 
+/** Une réponse remplacée relue du disque : un rang entier et des parts de texte, rien d'autre. */
+function sontDesReponsesRemplacees(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (reponse) =>
+        isRecord(reponse) &&
+        typeof reponse.rang === 'number' &&
+        Number.isInteger(reponse.rang) &&
+        reponse.rang >= 0 &&
+        Array.isArray(reponse.parts) &&
+        reponse.parts.every(
+          (part) =>
+            isRecord(part) &&
+            part.kind === 'text' &&
+            typeof part.text === 'string' &&
+            isOptionalString(part.streamId)
+        )
+    )
+  )
+}
+
 function isAttachment(value: unknown): boolean {
   if (!isRecord(value)) return false
   if (
@@ -282,6 +304,11 @@ function isConversationMessage(value: unknown): boolean {
   if (value.testsDuTerminal !== undefined && !sontDesTestsDuTerminal(value.testsDuTerminal))
     return false
   if (value.fichiersEcrits !== undefined && !sontDesFichiersEcrits(value.fichiersEcrits))
+    return false
+  if (
+    value.reponsesRemplacees !== undefined &&
+    !sontDesReponsesRemplacees(value.reponsesRemplacees)
+  )
     return false
   if (value.runtime !== undefined && !isChatTurnRuntime(value.runtime)) return false
   if (
@@ -1101,16 +1128,22 @@ export function persistConversations(
           Repli : le JOURNAL, un fichier distinct, rejoué au prochain démarrage. Seulement si aucune
           écriture n'est en vol — sinon l'ajout synchrone la devancerait et casserait l'ordre.
         */
-        const cause = erreurSnapshot instanceof Error ? erreurSnapshot.message : String(erreurSnapshot)
+        const cause =
+          erreurSnapshot instanceof Error ? erreurSnapshot.message : String(erreurSnapshot)
         if (lot.length && !journalEnVol(path)) {
           try {
             appendConversationChanges(lot, actives(), path)
-            console.error(`[conversations] fermeture : snapshot refusé (${cause}), lot sauvé dans le journal.`)
+            console.error(
+              `[conversations] fermeture : snapshot refusé (${cause}), lot sauvé dans le journal.`
+            )
             return
           } catch (erreurJournal) {
-            const causeJournal = erreurJournal instanceof Error ? erreurJournal.message : String(erreurJournal)
+            const causeJournal =
+              erreurJournal instanceof Error ? erreurJournal.message : String(erreurJournal)
             pending.unshift(...lot)
-            console.error(`[conversations] fermeture : ÉCHEC d'écriture, ${lot.length} changement(s) perdu(s). Snapshot : ${cause}. Journal : ${causeJournal}.`)
+            console.error(
+              `[conversations] fermeture : ÉCHEC d'écriture, ${lot.length} changement(s) perdu(s). Snapshot : ${cause}. Journal : ${causeJournal}.`
+            )
             return
           }
         }

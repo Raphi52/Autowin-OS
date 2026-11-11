@@ -9,6 +9,7 @@ import {
   type ChatTurnRuntime,
   type ChatTurnStatus,
   type PersistedChatPart,
+  type PersistedReponseRemplacee,
   type TestDuTerminal
 } from '../../shared/chat-turn'
 import {
@@ -60,6 +61,11 @@ export interface Msg {
   turnConversationId?: string
   status?: ChatTurnStatus
   parts?: PersistedChatPart[]
+  /**
+   * Réponses remplacées par une relance, gardées repliées dans le fil. Hors de `parts` : le contenu
+   * et l'historique renvoyé au modèle ne les relisent jamais.
+   */
+  reponsesRemplacees?: PersistedReponseRemplacee[]
   runtime?: ChatTurnRuntime
   error?: string
   /** Raisonnement conservé du tour — alimente le bloc « Réflexion » après un rechargement. */
@@ -677,7 +683,10 @@ export function applyTurnEventToMessages(
       ...(message.actionsLog?.length ? { actionsLog: message.actionsLog } : {}),
       ...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {}),
       ...(message.testsDuTerminal?.length ? { testsDuTerminal: message.testsDuTerminal } : {}),
-      ...(message.fichiersEcrits ? { fichiersEcrits: message.fichiersEcrits } : {})
+      ...(message.fichiersEcrits ? { fichiersEcrits: message.fichiersEcrits } : {}),
+      ...(message.reponsesRemplacees?.length
+        ? { reponsesRemplacees: message.reponsesRemplacees }
+        : {})
     },
     event
   )
@@ -696,6 +705,7 @@ export function applyTurnEventToMessages(
   if (next.testsDuTerminal?.length) message.testsDuTerminal = next.testsDuTerminal
   // Une liste VIDE se recopie : elle dit « rien écrit », ce que l'absence ne dit pas.
   if (next.fichiersEcrits) message.fichiersEcrits = next.fichiersEcrits
+  if (next.reponsesRemplacees?.length) message.reponsesRemplacees = next.reponsesRemplacees
   return message
 }
 
@@ -966,7 +976,9 @@ export class ConversationStore {
     // principal -- le poste dominant du gel de l'interface.
     const ts = this.now()
     const id = this.nextUniqueConversationId()
-    const dossier = estCheminDeDossier(p.projectPath) ? canonicalProjectPath(p.projectPath) : undefined
+    const dossier = estCheminDeDossier(p.projectPath)
+      ? canonicalProjectPath(p.projectPath)
+      : undefined
     const conversation: Conversation = {
       schemaVersion: 3,
       id,

@@ -51,10 +51,16 @@ export function iterationDuTour(entree: {
       for (const streamId of iter.fluxAffichesCetteIteration) {
         if (streamId === direct && etat.gesteDansLAppel) {
           if (etat.texteApresLeDernierGeste)
-            emit({ kind: 'stream-reset', streamId, iteration: i, conclusionSeule: true })
+            emit({
+              kind: 'stream-reset',
+              streamId,
+              iteration: i,
+              conclusionSeule: true,
+              remplacee: true
+            })
           continue
         }
-        emit({ kind: 'stream-reset', streamId, iteration: i })
+        emit({ kind: 'stream-reset', streamId, iteration: i, remplacee: true })
       }
       iter.fluxAffichesCetteIteration.clear()
       iter.successfulStreamedPrefix = ''

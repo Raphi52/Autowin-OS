@@ -86,6 +86,8 @@ export interface PilotEvent {
   streamId?: string
   /** `stream-reset` : seulement le dernier passage du flux (`rangsEffacesParLeReset`). */
   conclusionSeule?: true
+  /** `stream-reset` d'une relance : le texte retiré se garde replié dans le fil. */
+  remplacee?: true
   actionId?: string
   iteration?: number
   name?: string

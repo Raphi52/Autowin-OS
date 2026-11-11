@@ -877,8 +877,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           durableEvent = {
             kind: 'stream-reset',
             streamId: pilotEvent.streamId,
-            // Une relance ne retire que la conclusion — le fil enregistré aussi.
-            ...(pilotEvent.conclusionSeule ? { conclusionSeule: true as const } : {})
+            // Une relance ne retire que la conclusion — le fil enregistré aussi, et il garde ce
+            // qu'elle retire, replié (`remplacee`).
+            ...(pilotEvent.conclusionSeule ? { conclusionSeule: true as const } : {}),
+            ...(pilotEvent.remplacee ? { remplacee: true as const } : {})
           }
         else if (pilotEvent.kind === 'think' && pilotEvent.text)
           durableEvent = {

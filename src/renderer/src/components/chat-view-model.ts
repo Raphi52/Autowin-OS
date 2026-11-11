@@ -14,6 +14,7 @@ import {
   type PersistedChatErrorPart,
   type PersistedChatPart,
   type PersistedChatTextPart,
+  type PersistedReponseRemplacee,
   type PipelineChoice,
   type PipelinePrompt,
   type TestDuTerminal
@@ -169,6 +170,11 @@ export interface HydratedAssistantMessage {
    */
   fichiersEcrits?: string[]
   /**
+   * Réponses remplacées par une relance, gardées repliées à leur place dans le fil. Hors de `parts` :
+   * elles ne comptent ni dans le contenu, ni dans l'historique renvoyé au modèle.
+   */
+  reponsesRemplacees?: PersistedReponseRemplacee[]
+  /**
    * DEBUT DU TOUR (ms epoch) : le zero de la colonne d'heures du rail. Relu du message
    * enregistre (`ts`, pose par le main au debut du tour) ; en direct, pris au premier evenement
    * date. Absent : le rail n'affiche aucune heure.
@@ -195,6 +201,8 @@ export interface StoredAssistantMessage {
   testsDuTerminal?: TestDuTerminal[]
   /** Fichiers écrits par le tour, conservés avec lui : vide = rien écrit, absent = inconnu. */
   fichiersEcrits?: string[]
+  /** Réponses remplacées par une relance, conservées par le tour : repliées dans le fil après rechargement. */
+  reponsesRemplacees?: PersistedReponseRemplacee[]
   /** Heure de debut du tour (ms epoch), posee par le main : le zero du rail. */
   ts?: number
   /** Chantier dont ce message est le récapitulatif « Reprise du fil » (`Msg.repriseDuChantier`). */
@@ -339,6 +347,8 @@ export interface AssistantPilotEvent {
   streamId?: string
   /** `stream-reset` : seulement le dernier passage du flux (`rangsEffacesParLeReset`). */
   conclusionSeule?: true
+  /** `stream-reset` d'une relance : le texte retiré se garde replié dans le fil. */
+  remplacee?: true
   actionId?: string
   iteration?: number
   text?: string
@@ -930,6 +940,9 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     ...(typeof message.reasoningMs === 'number' ? { reasoningMs: message.reasoningMs } : {}),
     ...(testsDuTerminal.length > 0 ? { testsDuTerminal } : {}),
     ...(fichiersEcrits ? { fichiersEcrits } : {}),
+    ...(message.reponsesRemplacees?.length
+      ? { reponsesRemplacees: message.reponsesRemplacees }
+      : {}),
     ...(typeof message.ts === 'number' ? { debutDuTour: message.ts } : {}),
     ...(message.repriseDuChantier ? { repriseDuChantier: message.repriseDuChantier } : {})
   }
@@ -1037,7 +1050,8 @@ function reduireEvenementDuPilote(
     turnEvent = {
       kind: 'stream-reset',
       streamId: event.streamId,
-      ...(event.conclusionSeule ? { conclusionSeule: true as const } : {})
+      ...(event.conclusionSeule ? { conclusionSeule: true as const } : {}),
+      ...(event.remplacee ? { remplacee: true as const } : {})
     }
   else if (event.kind === 'think' && event.text)
     turnEvent = {
@@ -1093,7 +1107,8 @@ function reduireEvenementDuPilote(
       turnId,
       status: message.status,
       parts: message.parts,
-      ...(message.error ? { error: message.error } : {})
+      ...(message.error ? { error: message.error } : {}),
+      ...(message.reponsesRemplacees ? { reponsesRemplacees: message.reponsesRemplacees } : {})
     },
     turnEvent
   )
@@ -1112,7 +1127,8 @@ function reduireEvenementDuPilote(
     ...(coutUsd !== undefined ? { coutUsd } : {}),
     // Reçus plus tôt dans le tour : un delta ou la clôture ne doivent pas les effacer.
     ...(message.testsDuTerminal ? { testsDuTerminal: message.testsDuTerminal } : {}),
-    ...(message.fichiersEcrits ? { fichiersEcrits: message.fichiersEcrits } : {})
+    ...(message.fichiersEcrits ? { fichiersEcrits: message.fichiersEcrits } : {}),
+    ...(next.reponsesRemplacees ? { reponsesRemplacees: next.reponsesRemplacees } : {})
   }
 }
 
@@ -2039,7 +2055,8 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       const memeQuestion = normaliserQuestion(askDecision.question)
       const ancienne = blocks.findIndex(
         (bloc) =>
-          bloc.kind === 'ask-decision' && normaliserQuestion(bloc.decision.question) === memeQuestion
+          bloc.kind === 'ask-decision' &&
+          normaliserQuestion(bloc.decision.question) === memeQuestion
       )
       if (ancienne >= 0) blocks.splice(ancienne, 1)
       blocks.push({
