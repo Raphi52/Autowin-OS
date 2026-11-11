@@ -55,13 +55,21 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
   }
   const champ = (): HTMLInputElement =>
     container.querySelector<HTMLInputElement>('input[type="text"]') as HTMLInputElement
-  const selectDe = (cwd: string): HTMLSelectElement | undefined =>
-    [...container.querySelectorAll<HTMLSelectElement>('select')].find(
-      (liste) => liste.getAttribute('aria-label') === `Brain de ${cwd}`
+  const BRAIN_AJOUT = 'Brain du nouveau dossier'
+  /** Les deux segments Équipe | Perso d'une ligne, ou ceux de l'ajout, retrouvés par leur nom. */
+  const segments = (nom: string): HTMLButtonElement[] => {
+    const groupe = [...container.querySelectorAll('[role="group"]')].find(
+      (element) => element.getAttribute('aria-label') === nom
     )
-  const selectAjout = (): HTMLSelectElement | undefined =>
-    container.querySelector<HTMLSelectElement>('select[aria-label="Brain du nouveau dossier"]') ??
-    undefined
+    return groupe ? [...groupe.querySelectorAll<HTMLButtonElement>('button[data-brain]')] : []
+  }
+  /** Le Brain choisi pour un dossier : le segment enfoncé. */
+  const brainDe = (cwd: string): string | undefined =>
+    segments(`Brain de ${cwd}`)
+      .find((segment) => segment.getAttribute('aria-pressed') === 'true')
+      ?.getAttribute('data-brain') ?? undefined
+  const filtre = (): HTMLInputElement =>
+    container.querySelector<HTMLInputElement>('input[type="search"]') as HTMLInputElement
   const bouton = (libelle: string): HTMLButtonElement | undefined =>
     [...container.querySelectorAll<HTMLButtonElement>('button')].find(
       (element) => element.textContent === libelle
@@ -78,12 +86,10 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
       zone.dispatchEvent(new Event('input', { bubbles: true }))
     })
   }
-  const choisir = async (liste: HTMLSelectElement | undefined, valeur: string): Promise<void> => {
-    if (!liste) throw new Error('liste absente')
-    await act(async () => {
-      liste.value = valeur
-      liste.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+  const choisir = async (nom: string, valeur: string): Promise<void> => {
+    const segment = segments(nom).find((element) => element.getAttribute('data-brain') === valeur)
+    if (!segment) throw new Error('segment absent')
+    await act(async () => segment.click())
     await flush()
   }
   /** Un échec : la demande n'a rien modifié. */
@@ -101,7 +107,7 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
     installerApi([{ cwd: ROTATION, brain: 'perso' }])
     await monter()
     expect(container.textContent).toContain(ROTATION)
-    expect(selectDe(ROTATION)?.value).toBe('perso')
+    expect(brainDe(ROTATION)).toBe('perso')
     expect(bouton('Retirer')).toBeDefined()
   })
 
@@ -119,13 +125,13 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
     })
     await monter()
     await saisir(champ(), ROTATION)
-    await choisir(selectAjout(), 'perso')
+    await choisir(BRAIN_AJOUT, 'perso')
     await cliquer(bouton('Assigner'))
     expect(api.enregistrerBrainAffectation).toHaveBeenCalledWith({
       cwd: ROTATION,
       brain: 'perso'
     })
-    expect(selectDe(ROTATION)?.value).toBe('perso')
+    expect(brainDe(ROTATION)).toBe('perso')
     expect(champ().value).toBe('')
   })
 
@@ -151,9 +157,9 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
     })
     await monter()
     await saisir(champ(), ROTATION)
-    await choisir(selectAjout(), 'perso')
+    await choisir(BRAIN_AJOUT, 'perso')
     await cliquer(bouton('Assigner'))
-    expect(selectDe(ROTATION)?.value).toBe('perso')
+    expect(brainDe(ROTATION)).toBe('perso')
     expect(champ().value).toBe('')
     expect(avertissement()).toBe('Fichier illisible mis de côté.')
     expect(alerte()).toBeUndefined()
@@ -168,7 +174,7 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
     await monter()
     await cliquer(bouton('Retirer'))
     expect(api.retirerBrainAffectation).toHaveBeenCalledWith({ cwd: ROTATION })
-    expect(selectDe(ROTATION)?.value).toBe('perso')
+    expect(brainDe(ROTATION)).toBe('perso')
     expect(alerte()).toBe('Fichier des affectations illisible : rien n’a été modifié.')
     expect(avertissement()).toBeUndefined()
   })
@@ -180,8 +186,8 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
       erreur: 'Fichier illisible mis de côté.'
     })
     await monter()
-    await choisir(selectDe(ROTATION), 'equipe')
-    expect(selectDe(ROTATION)?.value).toBe('equipe')
+    await choisir(`Brain de ${ROTATION}`, 'equipe')
+    expect(brainDe(ROTATION)).toBe('equipe')
     expect(avertissement()).toBe('Fichier illisible mis de côté.')
     expect(alerte()).toBeUndefined()
   })
@@ -193,8 +199,8 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
       erreur: 'Écriture impossible.'
     })
     await monter()
-    await choisir(selectDe(ROTATION), 'equipe')
-    expect(selectDe(ROTATION)?.value).toBe('perso')
+    await choisir(`Brain de ${ROTATION}`, 'equipe')
+    expect(brainDe(ROTATION)).toBe('perso')
     expect(alerte()).toBe('Écriture impossible.')
     expect(avertissement()).toBeUndefined()
   })
@@ -218,7 +224,7 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
     })
     await monter()
     await saisir(champ(), 'd:/brainrotroyale/')
-    await choisir(selectAjout(), 'perso')
+    await choisir(BRAIN_AJOUT, 'perso')
     await cliquer(bouton('Assigner'))
     expect(champ().value).toBe('')
   })
@@ -229,12 +235,12 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
       affectations: [{ cwd: ROTATION, brain: 'equipe' }]
     })
     await monter()
-    await choisir(selectDe(ROTATION), 'equipe')
+    await choisir(`Brain de ${ROTATION}`, 'equipe')
     expect(api.enregistrerBrainAffectation).toHaveBeenLastCalledWith({
       cwd: ROTATION,
       brain: 'equipe'
     })
-    expect(selectDe(ROTATION)?.value).toBe('equipe')
+    expect(brainDe(ROTATION)).toBe('equipe')
     await cliquer(bouton('Retirer'))
     expect(api.retirerBrainAffectation).toHaveBeenCalledWith({ cwd: ROTATION })
     expect(container.textContent).toContain('Aucun dossier assigné')
@@ -252,5 +258,56 @@ describe('DossiersDeTravailPanel — rendu de base et demandes', () => {
     await monter()
     expect(alerte()).toBe('Impossible de lire les dossiers de travail assignés.')
     expect(container.querySelector('form.dossiers-travail__ajout')).not.toBeNull()
+  })
+
+  it('montre chaque dossier sur deux lignes : son nom, puis son chemin complet', async () => {
+    installerApi([
+      { cwd: 'D:\\Projets\\Facturation\\Archives', brain: 'equipe' },
+      { cwd: 'D:\\', brain: 'perso' }
+    ])
+    await monter()
+    const lignes = [...container.querySelectorAll('.dossiers-travail__ligne')]
+    const lire = (ligne: Element, classe: string): string | null | undefined =>
+      ligne.querySelector(classe)?.textContent
+    expect(lire(lignes[0], '.dossiers-travail__nom')).toBe('Archives')
+    expect(lire(lignes[0], '.dossiers-travail__chemin')).toBe('D:\\Projets\\Facturation\\Archives')
+    // Une racine n'a pas de dernier segment : son nom reste le chemin.
+    expect(lire(lignes[1], '.dossiers-travail__nom')).toBe('D:\\')
+  })
+
+  it('filtre les dossiers sur leur chemin, sans tenir compte de la casse, et dit quand rien ne correspond', async () => {
+    installerApi([
+      { cwd: ROTATION, brain: 'perso' },
+      { cwd: 'D:\\Notes\\Journal', brain: 'equipe' }
+    ])
+    await monter()
+    await saisir(filtre(), 'journal')
+    expect(container.querySelectorAll('.dossiers-travail__ligne')).toHaveLength(1)
+    expect(container.textContent).not.toContain(ROTATION)
+    await saisir(filtre(), 'introuvable')
+    expect(container.querySelector('ul')).toBeNull()
+    expect(container.textContent).toContain('Aucun dossier ne correspond.')
+  })
+
+  it('ne propose pas de filtre quand aucun dossier n’est assigné', async () => {
+    installerApi([])
+    await monter()
+    expect(container.querySelector('input[type="search"]')).toBeNull()
+  })
+
+  it('range l’ajout derrière « Assigner un dossier », replié à l’ouverture', async () => {
+    installerApi([])
+    await monter()
+    const pli = container.querySelector<HTMLDetailsElement>('details')
+    expect(pli?.open).toBe(false)
+    expect(pli?.querySelector('summary')?.textContent).toBe('Assigner un dossier')
+    expect(pli?.querySelector('form.dossiers-travail__ajout')).not.toBeNull()
+  })
+
+  it('ne redemande rien quand on clique le Brain déjà choisi', async () => {
+    const api = installerApi([{ cwd: ROTATION, brain: 'perso' }])
+    await monter()
+    await choisir(`Brain de ${ROTATION}`, 'perso')
+    expect(api.enregistrerBrainAffectation).not.toHaveBeenCalled()
   })
 })
