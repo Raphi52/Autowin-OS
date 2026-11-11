@@ -20,12 +20,16 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).toContain("inférer la destination probable de l'utilisateur")
     expect(CONSTITUTION).toContain('regarder un à deux coups plus loin')
     expect(CONSTITUTION).toContain("Le minimum conforme n'est pas une condition d'arrêt")
-    expect(CONSTITUTION).toContain("n'autorise ni extension silencieuse du périmètre ni mutation non demandée")
+    expect(CONSTITUTION).toContain(
+      "n'autorise ni extension silencieuse du périmètre ni mutation non demandée"
+    )
     expect(CONSTITUTION).toContain("signal explicite de l'utilisateur ou d'un artefact observé")
     expect(CONSTITUTION).toContain('une seule extension concrète à forte valeur, en une phrase')
     expect(CONSTITUTION).toContain('sans lancer de nouvel outil ni de recherche supplémentaire')
     expect(CONSTITUTION).toContain('Une demande explicitement bornée')
-    expect(CONSTITUTION).toContain("Un artefact peut confirmer un état, jamais définir à lui seul l'intention utilisateur")
+    expect(CONSTITUTION).toContain(
+      "Un artefact peut confirmer un état, jamais définir à lui seul l'intention utilisateur"
+    )
     expect(CONSTITUTION).toContain('sécurité, accès, données personnelles ou secrets')
   })
 
@@ -52,7 +56,7 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).toContain("le critère d'arrêt reste ce qui a été demandé et prouvé")
   })
 
-  it("interdit de REMPLACER en silence la tâche énoncée", () => {
+  it('interdit de REMPLACER en silence la tâche énoncée', () => {
     expect(CONSTITUTION).toContain('La tâche énoncée ne se remplace pas en cours de route')
     expect(CONSTITUTION).toContain("l'énoncé reçu reste la cible jusqu'au bout")
     expect(CONSTITUTION).toContain('arrête-toi et dis-le, avec la preuve du constat')
@@ -247,7 +251,7 @@ describe('CONSTITUTION (source unique du soul)', () => {
    * livrable » les envoyait donc dans un texte que rien ne relit. Mesure sur 227 fils : 31 reponses
    * portent une ligne « Leçon : », 5 seulement dans un tour qui a appele `remember`.
    */
-  it("ne fait plus écrire une leçon à chaud, et ne prend plus une promesse de comportement pour une leçon", () => {
+  it('ne fait plus écrire une leçon à chaud, et ne prend plus une promesse de comportement pour une leçon', () => {
     expect(CONSTITUTION).not.toContain('écrire la leçon AVANT de continuer')
     expect(CONSTITUTION).toContain('une leçon écrite à chaud')
     expect(CONSTITUTION).toContain('Une promesse sur ton propre comportement')
