@@ -19,6 +19,8 @@
  * n'est pas vu d'avance. Ce qu'il écrit atterrit dans le dossier partagé, comme avant les copies.
  */
 
+import { decouperHeredocs } from './heredocs'
+
 export const NOM_CONF_COPIE_A_LA_DEMANDE = 'copie-a-la-demande.json'
 export const NOM_DEMANDE_DE_COPIE = 'copie-demandee.json'
 export const NOM_REPONSE_DE_COPIE = 'copie-ouverte.json'
@@ -46,6 +48,8 @@ export interface IoCibleDuDepot {
   /** Vrai si git ignore ce chemin dans le dépôt ; `undefined` si git n'a pas su répondre. */
   estIgnore: (chemin: string) => boolean | undefined
   windows: boolean
+  /** Le découpage des heredocs, PASSÉ (jamais appelé par nom : voir `src/shared/heredocs.ts`). */
+  decoupeHeredocs: typeof decouperHeredocs
 }
 
 /**
@@ -89,7 +93,27 @@ export function cibleDEcritureDansLeDepot(
   }
   if (!/^(Bash|PowerShell|Monitor)$/.test(appel.outil)) return undefined
 
-  return analyser(String(appel.shell ?? ''), appel.cwd || depot, 0)
+  return analyser(sansCorpsDeCode(String(appel.shell ?? '')), appel.cwd || depot, 0)
+
+  /**
+   * Le corps d'un heredoc donné à un programme de code (`node <<E`, `python - <<E`), ou écrit dans un
+   * fichier de code (`cat > x.mjs <<E`), est du code de ce langage, pas du shell : ses `=>` et ses `>`
+   * ne sont pas des redirections. Un corps qu'un shell lance (`bash <<E`, `cat <<E | sh`, ou un fichier
+   * dont la première ligne est `#!/bin/bash`) reste lu.
+   */
+  function sansCorpsDeCode(texte: string): string {
+    const { lignes, heredocs } = io.decoupeHeredocs(texte)
+    const retires = new Set<number>()
+    for (const h of heredocs) {
+      if (/(^|[\s|;&(])(bash|sh|zsh|dash|ksh|cmd|powershell|pwsh)(?=\s|$)/.test(h.tube)) continue
+      if (/^#!.*\b(bash|sh|zsh|dash|ksh)\b/.test(lignes[h.debut] ?? '')) continue
+      const code =
+        /(^|[\s|;&(])(node|nodejs|bun|deno|python3?|py)(?=\s|$)/.test(h.tube) ||
+        /\.([mc]?[jt]sx?|py)$/i.test(h.cible ?? '')
+      if (code) for (let j = h.debut; j <= h.fin; j++) retires.add(j)
+    }
+    return retires.size ? lignes.filter((_, j) => !retires.has(j)).join('\n') : texte
+  }
 
   // Découpage en commandes simples (séparateurs hors guillemets) et en mots ; une redirection
   // devient le mot REDIRECTION suivi de sa cible. `depart` : le dossier courant au début du texte.
@@ -441,6 +465,8 @@ export interface ModulesDuControle {
     unlinkSync: (chemin: string) => void
   }
   path: IoCibleDuDepot['path'] & IoCopieALaDemande['path']
+  /** Le découpage des heredocs, passé au contrôle (voir `IoCibleDuDepot`). */
+  decoupeHeredocs: IoCibleDuDepot['decoupeHeredocs']
   cp: {
     spawnSync: (
       commande: string,
@@ -471,7 +497,7 @@ export function copieAvantLEcritureSurDisque(
       typeof conf.reponse !== 'string'
     )
       return undefined
-    const { fs, path, cp } = modules
+    const { fs, path, cp, decoupeHeredocs } = modules
     const ioCible = {
       path,
       windows: process.platform === 'win32',
@@ -481,7 +507,8 @@ export function copieAvantLEcritureSurDisque(
           windowsHide: true
         })
         return r.status === 0 ? true : r.status === 1 ? false : undefined
-      }
+      },
+      decoupeHeredocs
     }
     const sommeil = new Int32Array(new SharedArrayBuffer(4))
     const io = {
@@ -555,9 +582,10 @@ import cp from 'node:child_process';
 const cibleDEcritureDansLeDepot = ${cibleDEcritureDansLeDepot.toString()};
 const copieAvantLEcriture = ${copieAvantLEcriture.toString()};
 const copieAvantLEcritureSurDisque = ${copieAvantLEcritureSurDisque.toString()};
+const decouperHeredocs = ${decouperHeredocs.toString()};
 /** \`appels\` : [{ outil: 'Bash' | 'Edit', chemin, shell, cwd }]. Rend le motif de refus, ou undefined. */
 export function motifDeCopie(appels, conf) {
-  return copieAvantLEcritureSurDisque(appels, conf, { fs, path, cp }, cibleDEcritureDansLeDepot, copieAvantLEcriture);
+  return copieAvantLEcritureSurDisque(appels, conf, { fs, path, cp, decoupeHeredocs: decouperHeredocs }, cibleDEcritureDansLeDepot, copieAvantLEcriture);
 }
 `
 }

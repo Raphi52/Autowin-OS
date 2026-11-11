@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import path from 'node:path'
+import { decouperHeredocs } from './heredocs'
 import {
   cibleDEcritureDansLeDepot,
   copieAvantLEcriture,
+  moduleCopieALaDemande,
   type AppelVuParLeControle,
   type IoCopieALaDemande
 } from './copie-a-la-demande'
@@ -17,6 +19,7 @@ const ignores = [path.join(depot, 'node_modules'), path.join(depot, '.autowin-da
 const io = {
   path,
   windows: false,
+  decoupeHeredocs: decouperHeredocs,
   estIgnore: (chemin: string) =>
     ignores.some((d) => chemin === d || chemin.startsWith(d + path.sep))
 }
@@ -90,6 +93,28 @@ describe('cibleDEcritureDansLeDepot — le terminal', () => {
     expect(cible(appel('Bash', { shell }))).toBe(path.resolve(depot, vise))
   })
 
+  it.each([
+    ["node --input-type=module <<'EOF'\nconst f = (x) => x.endsWith('.ts')\nEOF"],
+    ["python3 - <<'PY'\nprint(a > b)\nPY"],
+    ["cat > /tmp/script.mjs <<'EOF'\nconst f = (x) => x.endsWith('.ts')\nEOF\nnode /tmp/script.mjs"]
+  ])(
+    'le corps d’un heredoc de code (JavaScript ou Python) n’est pas du shell : cas %#',
+    (shell) => {
+      expect(cible(appel('Bash', { shell }))).toBeUndefined()
+    }
+  )
+
+  it.each([
+    ["bash <<'EOF'\necho x > src/a.ts\nEOF", 'src/a.ts'],
+    ["cat <<'EOF' | sh\necho x > src/b.ts\nEOF", 'src/b.ts'],
+    ["cat > src/d.ts <<'EOF'\nconst f = (x) => x\nEOF", 'src/d.ts'],
+    ['echo a => src/c.ts', 'src/c.ts'],
+    ["cat > /tmp/s.sh <<'EOF'\necho x > src/e.ts\nEOF\nbash /tmp/s.sh", 'src/e.ts'],
+    ["cat > /tmp/run.ts <<'EOF'\n#!/bin/bash\necho x > src/f.ts\nEOF\nbash /tmp/run.ts", 'src/f.ts']
+  ])('une vraie écriture reste vue, même à côté d’une flèche : cas %#', (shell, vise) => {
+    expect(cible(appel('Bash', { shell }))).toBe(path.resolve(depot, vise))
+  })
+
   it('PowerShell : les cmdlets d’écriture, chemin nommé ou en premier', () => {
     expect(cible(appel('PowerShell', { shell: 'Set-Content -Path src/a.ts -Value "x"' }))).toBe(
       path.join(depot, 'src/a.ts')
@@ -140,7 +165,12 @@ describe('cibleDEcritureDansLeDepot — le terminal', () => {
 describe('cibleDEcritureDansLeDepot — chemins à la Git Bash sous Windows', () => {
   it('`/d/depot/src/a.ts` vise `D:\\depot\\src\\a.ts`', () => {
     const w = path.win32
-    const ioWin = { path: w, windows: true, estIgnore: () => false }
+    const ioWin = {
+      path: w,
+      windows: true,
+      estIgnore: () => false,
+      decoupeHeredocs: decouperHeredocs
+    }
     expect(
       cibleDEcritureDansLeDepot(
         appel('Bash', { shell: 'echo x > /d/Depot/src/a.ts', cwd: 'C:\\ailleurs' }),
@@ -223,5 +253,28 @@ describe('copieAvantLEcriture — l’échange avec l’app', () => {
       io
     )
     expect(motif).toContain('pas encore prête')
+  })
+})
+
+describe('module Codex, Grok et agy — le même contrôle, généré pour être chargé', () => {
+  it('charge le module écrit sur le disque : un corps de code ne réclame rien, une vraie écriture si', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { pathToFileURL } = await import('node:url')
+    const dir = mkdtempSync(path.join(tmpdir(), 'module-copie-'))
+    const fichier = path.join(dir, 'copie-a-la-demande.mjs')
+    writeFileSync(fichier, moduleCopieALaDemande(), 'utf8')
+    const { motifDeCopie } = await import(pathToFileURL(fichier).href)
+    // La copie est déjà ouverte : une écriture dans le code se fait renvoyer vers elle.
+    const copie = path.join(dir, 'copie')
+    const reponse = path.join(dir, 'reponse.json')
+    writeFileSync(reponse, JSON.stringify({ ok: true, chemin: copie }), 'utf8')
+    const conf = { depot, demande: path.join(dir, 'demande.json'), reponse, attenteMs: 1000 }
+    const motif = (shell: string): string | undefined =>
+      motifDeCopie([{ outil: 'Bash', chemin: '', shell, cwd: depot }], conf)
+    expect(
+      motif("node --input-type=module <<'EOF'\nconst f = (x) => x.endsWith('.ts')\nEOF")
+    ).toBeUndefined()
+    expect(motif('echo x > src/a.ts')).toContain(copie)
   })
 })

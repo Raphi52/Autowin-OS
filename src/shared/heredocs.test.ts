@@ -130,3 +130,40 @@ describe('hook réel du CLI — heredoc de simple texte', () => {
     expect(decision('git stash')).toBe('deny')
   })
 })
+
+describe('hook réel du CLI — corps de code dans un heredoc', () => {
+  it('un corps de code (node, python) ne réclame pas de copie ; une vraie écriture dans le code, si', async () => {
+    const { spawnSync, execFileSync } = await import('node:child_process')
+    const { writeFileSync, mkdirSync, mkdtempSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const dir = mkdtempSync(join(tmpdir(), 'garde-corps-code-'))
+    const script = join(dir, 'garde.mjs')
+    writeFileSync(script, scriptHookGardes(refusReglageProd, refusSqlAgent, []), 'utf8')
+    expect(execFileSync(process.execPath, ['--check', script]).toString()).toBe('')
+    // La copie est déjà ouverte : une écriture dans le code se fait renvoyer vers elle (refus).
+    const depot = join(dir, 'depot')
+    mkdirSync(depot)
+    const reponse = join(dir, 'reponse.json')
+    writeFileSync(
+      join(dir, 'copie-a-la-demande.json'),
+      JSON.stringify({ depot, demande: join(dir, 'demande.json'), reponse, attenteMs: 1000 }),
+      'utf8'
+    )
+    writeFileSync(reponse, JSON.stringify({ ok: true, chemin: join(dir, 'copie') }), 'utf8')
+    const decision = (commande: string): string | undefined => {
+      const sortie = spawnSync(process.execPath, [script], {
+        input: JSON.stringify({ tool_name: 'Bash', cwd: depot, tool_input: { command: commande } }),
+        encoding: 'utf8'
+      }).stdout
+      return sortie ? JSON.parse(sortie).hookSpecificOutput.permissionDecision : undefined
+    }
+    expect(
+      decision(
+        ["node --input-type=module <<'EOF'", 'const f = (x) => x.endsWith(".ts")', 'EOF'].join(SAUT)
+      )
+    ).toBeUndefined()
+    expect(decision(["python3 - <<'PY'", 'print(a > b)', 'PY'].join(SAUT))).toBeUndefined()
+    expect(decision('echo x > src/a.ts')).toBe('deny')
+  })
+})

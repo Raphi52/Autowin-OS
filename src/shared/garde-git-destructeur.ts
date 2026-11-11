@@ -596,7 +596,7 @@ const copieALaDemande = (j, chemin, shell) => {
     return copieAvantLEcritureSurDisque(
       [{ outil: String(j.tool_name || ''), chemin, shell, cwd: String(j.cwd || process.cwd()) }],
       { attenteMs: ${ATTENTE_COPIE_MS}, ...conf },
-      { fs, path, cp },
+      { fs, path, cp, decoupeHeredocs: decouperHeredocs },
       cibleDEcritureDansLeDepot,
       copieAvantLEcriture
     );
