@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from './agent-pilot'
 import { configureAutowinAppDataBase } from '../app/app-data'
+import { attendreFichier } from '../gel/ecriture-hors-fil'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
@@ -44,7 +45,10 @@ beforeEach(() => {
   racine = mkdtempSync(join(tmpdir(), 'aos-etat-envoi-refuse-'))
   configureAutowinAppDataBase(racine)
 })
-afterEach(() => {
+afterEach(async () => {
+  // Une écriture de la base peut encore être en vol à la fin du test : sans l'attendre, rmSync
+  // (récursif) se heurte à un dossier qui se remplit (ENOTEMPTY).
+  await attendreFichier()
   configureAutowinAppDataBase(undefined)
   rmSync(racine, { recursive: true, force: true })
 })
