@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { ANNEAU_FRAGMENT_SHADER, COMPOSITIONS, PLANETE_FRAGMENT_SHADER } from './home-decor-scene'
+import { ANNEAU_FRAGMENT_SHADER, PLANETE_FRAGMENT_SHADER } from './home-decor-scene'
 
 /**
  * CE QUE L'UTILISATEUR A DEMANDE, mot pour mot :
@@ -66,20 +66,6 @@ describe('planètes du décor — surface CALCULÉE et détaillée (demande conv
       expect(PLANETE_FRAGMENT_SHADER).toMatch(/rim|limbe/)
       // La face nuit n'est pas noire — sinon la planète est amputée sur un fond noir.
       expect(PLANETE_FRAGMENT_SHADER).toMatch(/uNuit/)
-    })
-
-    it('chaque planète de la composition à planètes porte SON propre relief', () => {
-      // Vise `actuel` par son NOM : la composition a planetes n'est plus le defaut depuis le 2026-10-17
-      // (l'avenue), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
-      const planetes = COMPOSITIONS.actuel.planetes
-      expect(planetes.length).toBeGreaterThanOrEqual(3)
-      for (const planete of planetes) {
-        // Le grain de la surface : deux planètes de même `seed` sont la même planète.
-        expect(typeof planete.seed).toBe('number')
-        // Des bandes en nombre réel : à 0, la surface redevient une turbulence isotrope.
-        expect(planete.bandes).toBeGreaterThanOrEqual(3)
-      }
-      expect(new Set(planetes.map((p) => p.seed)).size).toBe(planetes.length)
     })
   })
 

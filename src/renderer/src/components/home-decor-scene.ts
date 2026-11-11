@@ -3,7 +3,6 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { createAvenueEnArrierePlan } from './decor-avenue-hote'
 import { DECOR_DEFAUT } from './fond-accueil'
 
 /**
@@ -281,27 +280,10 @@ function buildFilantes(random: () => number): THREE.Points {
  * le sujet dominant, la densité de matière, le langage formel (matière diffuse contre ligne), l'usage
  * de l'accent, et le régime de mouvement. Toutes restent dans le monde déjà validé par l'utilisateur :
  * centre noir, nébuleuses roses et cyan, or pour la structure.
- *
- * `avenue` est d'une autre famille : ce n'est pas une composition de ce fichier mais une scène à part
- * (`home-decor-avenue.ts`), l'avenue cyberpunk sous l'orage demandée le 2026-10-17.
  */
-export type DecorVariant = 'avenue' | 'actuel' | 'limbe' | 'poussiere' | 'orbites' | 'nappe'
-
-/** Les directions « spatiales », celles que ce fichier compose (toutes sauf l'avenue). */
-export type DirectionSpatiale = Exclude<DecorVariant, 'avenue'>
+export type DecorVariant = 'limbe' | 'poussiere' | 'orbites' | 'nappe'
 
 export const DECOR_VARIANTS: readonly { id: DecorVariant; nom: string; resume: string }[] = [
-  {
-    id: 'avenue',
-    nom: 'Avenue',
-    resume:
-      'une avenue cyberpunk sous l orage : foule à capuches et manteaux longs, néons, tags, la ville en contrebas'
-  },
-  {
-    id: 'actuel',
-    nom: 'Actuel',
-    resume: 'quatre nébuleuses aux angles, trois planètes annelées, arcs discrets'
-  },
   {
     id: 'limbe',
     nom: 'Limbe',
@@ -332,7 +314,7 @@ export interface DecorScene {
   dispose(): void
   readonly canvas: HTMLCanvasElement
   /**
-   * Scène dessinée dans son propre fil (decor-avenue-hote.ts) : faux tant que l'image demandée n'y est
+   * Scène dessinée hors du fil principal : faux tant que l'image demandée n'y est
    * pas dessinée — la boucle attend alors au lieu de perdre son tour (DecorDeFond, decor-cadence.ts).
    * Absent = toujours prête.
    */
@@ -340,7 +322,7 @@ export interface DecorScene {
   /** Même cas : ce qu'a coûté, dans ce fil, la dernière image dessinée (ms) ; `null` avant la première. */
   coutDerniereImage?(): number | null
   /**
-   * Côté Worker seulement (avenue montée avec `refletApresImage`) : le travail à faire APRÈS
+   * Côté fil dédié seulement : le travail à faire APRÈS
    * l'image, dans une tâche à part, pour que l'image s'affiche sans l'attendre (le reflet de l'eau).
    */
   apresImage?(): void
@@ -1102,7 +1084,7 @@ export const NUAGE_COSMIQUE = {
   /** Le violet de theme.css : c'est lui qui apporte le rouge, donc le « violet ». */
   secondaire: VIOLET,
   /** Opacité maximale du cœur. Basse : le centre porte les widgets de l'accueil. */
-  opacite: 0.30,
+  opacite: 0.3,
   /** Rose magenta : la troisieme teinte de la nebuleuse, portee par les seuls filaments. */
   accent: 0xff4fa3,
   /** Turquoise : la teinte froide des bords, ce qui empeche la nebuleuse de virer monochrome. */
@@ -1649,62 +1631,7 @@ interface Composition {
   parallaxe: number
 }
 
-export const COMPOSITIONS: Record<DirectionSpatiale, Composition> = {
-  actuel: {
-    nebuleuses: [
-      { fx: -0.86, fy: 0.62, z: -11, color: ROSE, secondary: VIOLET, k: 0.38 },
-      { fx: -0.78, fy: -0.68, z: -8, color: CYAN, secondary: 0x2b6cff, k: 0.34 },
-      { fx: 0.86, fy: 0.68, z: -12, color: CYAN, secondary: VIOLET, k: 0.36 },
-      { fx: 0.8, fy: -0.64, z: -8, color: ROSE, secondary: 0xff6bd6, k: 0.32 }
-    ],
-    planetes: [
-      {
-        fx: 0.72,
-        fy: -0.74,
-        z: -5,
-        radius: 0.2,
-        color: 0xc98a4a,
-        ringColor: GOLD,
-        rings: 3,
-        tilt: 0.42,
-        seed: 1.7,
-        bandes: 5.2,
-        lunes: 3
-      },
-      {
-        fx: 0.82,
-        fy: 0.6,
-        z: -8,
-        radius: 0.15,
-        color: 0x3f6fa8,
-        ringColor: CYAN,
-        rings: 2,
-        tilt: -0.3,
-        seed: 8.3,
-        bandes: 3.4,
-        lunes: 2
-      },
-      {
-        fx: -0.8,
-        fy: -0.6,
-        z: -7,
-        radius: 0.12,
-        color: 0x7a4a72,
-        ringColor: ROSE,
-        rings: 2,
-        tilt: 0.55,
-        seed: 14.9,
-        bandes: 6.8,
-        lunes: 1
-      }
-    ],
-    arcs: 7,
-    satellites: 0,
-    // Le nuage cosmique demandé : ancré au milieu, il DÉRIVE autour de ce point.
-    nuage: { fx: 0, fy: 0 },
-    tempo: 1,
-    parallaxe: 1
-  },
+export const COMPOSITIONS: Record<DecorVariant, Composition> = {
   // UN sujet dominant au lieu de plusieurs, et beaucoup moins de matière : le contraste vient de la
   // silhouette et du terminateur, pas de l'accumulation.
   limbe: {
@@ -1821,14 +1748,6 @@ export const COMPOSITIONS: Record<DirectionSpatiale, Composition> = {
  * La promesse de `poussiere` reste testee, sous son nom propre : changer de defaut ne doit pas
  * effacer la garantie d'une direction qu'on peut encore choisir.
  */
-/*
- * L'AVENUE CYBERPUNK, demandee le 2026-10-17, nouveau CHANGEMENT de decision assume.
- *
- * Apres une serie de brouillons regardes dans le fil, l'utilisateur a ecrit « Passe au vrai fond de
- * l'Accueil avec ce look » : l'avenue sous l'orage, sa foule dark cyberpunk, ses tags et la ville en
- * contrebas remplacent les planetes. Comme pour `poussiere` avant elles, les planetes ne sont pas
- * effacees : `actuel` reste choisissable et sa promesse reste testee sous son NOM.
- */
 // La valeur vit dans fond-accueil.ts, seule source du fond choisi (menu des réglages de l'Accueil)
 // Le menu la lit sans charger three.js. Ré-exportée ici, où l'on cherche le défaut du décor.
 export { DECOR_DEFAUT }
@@ -1852,10 +1771,6 @@ export function estDirectionDecor(valeur: unknown): valeur is DecorVariant {
  */
 export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorScene | null {
   const direction: DecorVariant = estDirectionDecor(variante) ? variante : DECOR_DEFAUT
-  // L'avenue est une scene a part, avec sa propre chaine de rendu : elle ne partage rien des
-  // compositions spatiales ci-dessous. Elle se dessine dans un Worker, hors du fil de l'interface
-  // (decor-avenue-hote.ts) ; sans Worker, dans la page comme avant.
-  if (direction === 'avenue') return createAvenueEnArrierePlan()
   let renderer: THREE.WebGLRenderer
   try {
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'default' })

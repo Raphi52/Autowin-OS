@@ -71,16 +71,12 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
   }, [])
 
   /**
-   * L'AVENUE NE LIT PAS LE THÈME : sa palette est la sienne, écrite dans
-   * home-decor-avenue.ts, qui ne consulte aucune teinte du thème. La reconstruire à chaque
-   * changement de thème recompilait la scène pour rien (2 à 3,7 s sans rue). Seules les directions
-   * « spatiales », qui relisent les teintes à leur création, suivent encore le thème.
+   * Seules les directions « spatiales » relisent les teintes du thème à leur création : changer de
+   * thème les reconstruit. Le noir ne monte aucune scène, et le Quartier est une peinture : ni l'un ni
+   * l'autre ne suit le thème, et les reconstruire pour rien coûterait une scène entière.
    */
-  // Le noir non plus : il ne monte aucune scène. Le Quartier non plus : c'est une peinture.
   const cleTheme =
-    variante === 'avenue' || variante === FOND_FALAISE || fondSansScene(variante)
-      ? 'palette-propre'
-      : themeApplique
+    variante === FOND_FALAISE || fondSansScene(variante) ? 'palette-propre' : themeApplique
 
   useEffect(() => {
     actifRef.current = actif

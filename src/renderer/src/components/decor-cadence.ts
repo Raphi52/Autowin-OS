@@ -31,7 +31,7 @@ export const IMAGES_PAR_SECONDE_DECOR = 60 // plafond 30 levé le 2026-11-04 («
 
 /**
  * LA CADENCE AU REPOS (2026-10-19) : fenêtre sans le focus, ou aucun geste depuis
- * `REPOS_APRES_MS`. Mesuré au banc (scripts/banc-decor-budget.mjs) : 34 ms de calcul par image dans
+ * `REPOS_APRES_MS`. Mesuré au banc de décor (retiré) : 34 ms de calcul par image dans
  * le fil du décor — à 30 images/s, les trois quarts d'un cœur, pour un Accueil qui reste ouvert des
  * heures sans qu'on y touche. Au repos, la moitié. Le premier geste ramène la cadence visée.
  */

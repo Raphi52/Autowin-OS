@@ -9,7 +9,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * LE DÉFAUT, mesuré le 2026-10-17 (sonde de l'Accueil, pile d'appel relevée par CDP) :
- * à chaque ouverture de l'Accueil, le fond avenue était construit DEUX fois, à 0,2-0,8 s d'écart.
+ * à chaque ouverture de l'Accueil, le fond 3D était construit DEUX fois, à 0,2-0,8 s d'écart.
  * La seconde construction venait de `commitDoubleInvokeEffectsInDEV` : en développement,
  * `<StrictMode>` (main.tsx) monte chaque effet, le démonte et le remonte aussitôt. L'utilisateur
  * fait tourner Autowin EN DÉVELOPPEMENT (`.autowin-data/electron-dev/electron.exe .`) : il payait
@@ -33,14 +33,14 @@ interface FausseScene {
 const creees: FausseScene[] = []
 
 vi.mock('./home-decor-scene', () => ({
-  DECOR_DEFAUT: 'avenue',
+  DECOR_DEFAUT: 'poussiere',
   createDecorScene: vi.fn(() => {
     const canvas = document.createElement('canvas')
     const scene: FausseScene = {
       canvas,
       render: vi.fn(),
       resize: vi.fn(),
-      // Comme les vraies scènes (home-decor-scene.ts, decor-avenue-hote.ts) : libérer retire l'image.
+      // Comme les vraies scènes (home-decor-scene.ts) : libérer retire l'image.
       dispose: vi.fn(() => canvas.remove())
     }
     creees.push(scene)
@@ -87,11 +87,11 @@ afterEach(() => {
   }
   creees.length = 0
   document.documentElement.removeAttribute('data-theme')
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
 })
 
 beforeEach(() => {
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
 })
 
 describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => {
@@ -112,7 +112,7 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
   })
 
   it('un VRAI changement de thème reconstruit une direction spatiale (teintes relues)', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'actuel')
+    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
     await monter()
     await act(async () => {
       document.documentElement.setAttribute('data-theme', 'holographique-clair')
@@ -122,18 +122,6 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
     expect(creees).toHaveLength(2)
     expect(creees[0].dispose).toHaveBeenCalledTimes(1)
     expect(creees[1].dispose).not.toHaveBeenCalled()
-  })
-
-  it('un changement de thème NE reconstruit PAS l avenue : sa palette ne dépend pas du thème', async () => {
-    // Home-decor-avenue.ts ne lit aucune teinte du thème ; la reconstruire recompilait
-    // toute la scène (2 à 3,7 s sans rue) pour une image identique.
-    await monter()
-    await act(async () => {
-      document.documentElement.setAttribute('data-theme', 'holographique-clair')
-      await Promise.resolve()
-    })
-    expect(creees).toHaveLength(1)
-    expect(creees[0].dispose).not.toHaveBeenCalled()
   })
 
   it('EN VEILLE (hors de l Accueil) : la scène reste, cachée, ne dessine plus ; au retour, redessine sans être reconstruite', async () => {
@@ -220,15 +208,15 @@ describe('le fond suit le choix fait dans les réglages de l Accueil (conv-346)'
     })
   }
 
-  it('passer à Planètes reconstruit le décor sur les planètes, sans redémarrer', async () => {
+  it('changer de direction reconstruit le décor, sans redémarrer', async () => {
     await monter()
     expect(creees).toHaveLength(1)
     const { createDecorScene } = await import('./home-decor-scene')
-    expect(vi.mocked(createDecorScene).mock.calls.at(-1)?.[0]).toBe('avenue')
-    await choisir('actuel')
+    expect(vi.mocked(createDecorScene).mock.calls.at(-1)?.[0]).toBe('poussiere')
+    await choisir('limbe')
     expect(creees).toHaveLength(2)
     expect(creees[0].dispose).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(createDecorScene).mock.calls.at(-1)?.[0]).toBe('actuel')
+    expect(vi.mocked(createDecorScene).mock.calls.at(-1)?.[0]).toBe('limbe')
   })
 
   it('Noir : aucune scène construite, l hôte peint le noir', async () => {
@@ -240,12 +228,12 @@ describe('le fond suit le choix fait dans les réglages de l Accueil (conv-346)'
     expect(fond.querySelector('canvas')).toBeNull()
   })
 
-  it('passer de Cyberpunk à Noir libère la scène ; revenir la reconstruit', async () => {
+  it('passer d une scène à Noir libère la scène ; revenir la reconstruit', async () => {
     const hote = await monter()
     await choisir('noir')
     expect(creees[0].dispose).toHaveBeenCalledTimes(1)
     expect(hote.querySelector('.decor-de-fond canvas')).toBeNull()
-    await choisir('avenue')
+    await choisir('poussiere')
     expect(creees).toHaveLength(2)
     expect((hote.querySelector('.decor-de-fond') as HTMLElement).dataset.fond).toBeUndefined()
   })

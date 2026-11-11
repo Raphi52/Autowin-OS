@@ -32,7 +32,9 @@ let pilote: PiloteQuartier
 let racine: Root | null = null
 let hote: HTMLElement | null = null
 
-async function monter(onNavigate = vi.fn()): Promise<{ vue: HTMLElement; onNavigate: typeof onNavigate }> {
+async function monter(
+  onNavigate = vi.fn()
+): Promise<{ vue: HTMLElement; onNavigate: typeof onNavigate }> {
   hote = document.createElement('div')
   document.body.appendChild(hote)
   racine = createRoot(hote)
@@ -105,7 +107,7 @@ describe('les widgets vivent dans leurs tours', () => {
   })
 
   it('laisse les tuiles de toujours sous un autre fond', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
     const { vue } = await monter()
     expect(vue.querySelectorAll('.home-tile').length).toBeGreaterThan(3)
     expect(vue.querySelector('[data-testid="quartier-etiquette"]')).toBeNull()
@@ -149,7 +151,9 @@ describe('les gestes sur le décor', () => {
     const { vue } = await monter()
     sous = { type: 'vue', cle: 'chat', destination: 'chat', rect }
     await act(async () => {
-      vue.querySelector('[data-testid="home-widget-agenda"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      vue
+        .querySelector('[data-testid="home-widget-agenda"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(pilote.zoomerSur).not.toHaveBeenCalled()
   })
@@ -158,10 +162,14 @@ describe('les gestes sur le décor', () => {
     const { vue } = await monter()
     sous = { type: 'vue', cle: 'chat', destination: 'chat', rect }
     await act(async () => {
-      vue.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 120, clientY: 150 }))
+      vue.dispatchEvent(
+        new PointerEvent('pointermove', { bubbles: true, clientX: 120, clientY: 150 })
+      )
     })
     expect(vue.getAttribute('data-sur-cible')).toBe('true')
-    expect(vue.querySelector('[data-testid="quartier-etiquette"]')?.textContent).toContain('Maison de thé')
+    expect(vue.querySelector('[data-testid="quartier-etiquette"]')?.textContent).toContain(
+      'Maison de thé'
+    )
   })
 })
 
@@ -324,7 +332,7 @@ describe('le bouton « Mes agents / Toute l’équipe » (D8)', () => {
   })
 
   it('n’apparaît pas sous un autre fond', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
     const { vue } = await monter()
     expect(vue.querySelector('[data-testid="home-village"]')).toBeNull()
   })

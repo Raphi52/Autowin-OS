@@ -15,7 +15,7 @@
  * panneau Performance lit les mesures au moment où elles sont écrites.
  *
  * Seules les mesures de React sont touchées : elles se reconnaissent à `detail.devtools`, le format
- * des pistes DevTools. Celles de l'app, lues par nom (`home-decor-avenue.ts`), ne bougent pas.
+ * des pistes DevTools. Celles de l'app, lues par nom, ne bougent pas.
  */
 type Mesurer = Performance['measure']
 

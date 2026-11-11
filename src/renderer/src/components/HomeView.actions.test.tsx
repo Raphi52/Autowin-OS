@@ -86,7 +86,7 @@ beforeEach(() => {
   // Outlook ne se lit qu'apres « Connecter Outlook » : ces tests partent connectes.
   window.localStorage.setItem('autowin.outlook.connecte', '1')
   // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
   ;(window as unknown as { innerWidth: number }).innerWidth = 1440
   ;(window as unknown as { innerHeight: number }).innerHeight = 900
   poserApi()
@@ -168,7 +168,11 @@ async function geste(el: Element, de: [number, number], vers: [number, number]):
   await act(async () => pointer('pointerup', vers[0], vers[1], window))
 }
 
-async function touche(el: Element, key: string, modifs: Partial<KeyboardEvent> = {}): Promise<void> {
+async function touche(
+  el: Element,
+  key: string,
+  modifs: Partial<KeyboardEvent> = {}
+): Promise<void> {
   await act(async () => {
     const event = new Event('keydown', { bubbles: true, cancelable: true }) as Event &
       Record<string, unknown>
@@ -218,7 +222,9 @@ describe('la vue agit : ouvrir dans Outlook', () => {
 
   it('AFFICHE la cause quand Outlook refuse', async () => {
     // Un clic sans effet ET sans explication est pire que pas de clic du tout.
-    poserApi({ outlookOuvrir: vi.fn(async () => ({ ok: false, erreur: 'Cet element n existe plus' })) })
+    poserApi({
+      outlookOuvrir: vi.fn(async () => ({ ok: false, erreur: 'Cet element n existe plus' }))
+    })
     const container = await mount()
     const bouton = await ouvrirLaConversation(container)
     await act(async () => bouton.click())
@@ -328,9 +334,9 @@ describe('annuler un geste', () => {
   it('est desactive tant qu il n y a rien a defaire', async () => {
     const container = await mount()
     await ouvrirReglages(container)
-    expect((container.querySelector('[data-testid="home-undo"]') as HTMLButtonElement).disabled).toBe(
-      true
-    )
+    expect(
+      (container.querySelector('[data-testid="home-undo"]') as HTMLButtonElement).disabled
+    ).toBe(true)
   })
 
   it('rend la boite precedente AU PIXEL apres un deplacement', async () => {
@@ -490,7 +496,9 @@ describe('la notice d usage s efface', () => {
     const container = await mount()
     expect(container.querySelector('.home-view__masthead p')).toBeNull()
     await ouvrirReglages(container)
-    const rappel = container.querySelector('[data-testid="home-rappel-notice"]') as HTMLButtonElement
+    const rappel = container.querySelector(
+      '[data-testid="home-rappel-notice"]'
+    ) as HTMLButtonElement
     expect(rappel).not.toBeNull()
     // Effacer une aide SANS moyen de la revoir echangerait une friction contre une autre.
     await act(async () => rappel.click())

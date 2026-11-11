@@ -22,7 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 vi.mock('./home-decor-scene', () => ({
-  DECOR_DEFAUT: 'avenue',
+  DECOR_DEFAUT: 'poussiere',
   createDecorScene: vi.fn(() => {
     const canvas = document.createElement('canvas')
     return { canvas, render: vi.fn(), resize: vi.fn(), dispose: vi.fn(() => canvas.remove()) }
@@ -77,10 +77,10 @@ afterEach(() => {
 })
 
 describe('couleur des boutons de fenêtre selon le fond de l Accueil', () => {
-  it('thème clair : clairs sur la scène Cyberpunk, foncés dès qu on quitte l Accueil', async () => {
+  it('thème clair : clairs sur une scène 3D, foncés dès qu on quitte l Accueil', async () => {
     poserTheme('clair', '#14192a')
     expect(derniere()).toBe('#14192a')
-    choisirFondAccueil('avenue')
+    choisirFondAccueil('limbe')
     await rendre(true)
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
     await rendre(false)
@@ -89,9 +89,9 @@ describe('couleur des boutons de fenêtre selon le fond de l Accueil', () => {
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
   })
 
-  it('thème clair : clairs aussi sur Planètes, foncés sur « Aucun »', async () => {
+  it('thème clair : clairs aussi sur une autre scène 3D, foncés sur « Aucun »', async () => {
     poserTheme('vanilla-claude', '#141413')
-    choisirFondAccueil('actuel')
+    choisirFondAccueil('poussiere')
     await rendre(true)
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
     await act(async () => choisirFondAccueil('noir'))
@@ -100,7 +100,7 @@ describe('couleur des boutons de fenêtre selon le fond de l Accueil', () => {
 
   it('changer de thème SUR l Accueil garde la règle', async () => {
     poserTheme('nebuleuse-verre', '#ece8f7')
-    choisirFondAccueil('avenue')
+    choisirFondAccueil('limbe')
     await rendre(true)
     // Thème sombre : ses propres symboles clairs, rien n'est imposé.
     expect(derniere()).toBe('#ece8f7')
@@ -114,7 +114,7 @@ describe('couleur des boutons de fenêtre selon le fond de l Accueil', () => {
 
   it('l Accueil démonté ne laisse pas les boutons clairs derrière lui', async () => {
     poserTheme('holographique-clair', '#1c172b')
-    choisirFondAccueil('avenue')
+    choisirFondAccueil('limbe')
     await rendre(true)
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
     const { root } = monte!

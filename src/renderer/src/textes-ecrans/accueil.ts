@@ -79,7 +79,6 @@ export const TEXTES_FR = {
   'aide.tuiles':
     'Prenez une tuile n’importe où et posez-la : elle reste exactement là où vous la lâchez. Les huit bords la redimensionnent, les flèches aussi (Maj pour la taille).',
   'fond.aucun': 'Aucun',
-  'fond.planetes': 'Planètes',
   'fond.quartier': 'Le Quartier',
   'quartier.ouvre': 'Ouvre {vue}',
   'quartier.sortir': 'Sortir le widget de sa tour',
@@ -430,7 +429,6 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'aide.tuiles':
     'Pick up a tile anywhere and put it down: it stays exactly where you release it. The eight edges resize it, and so do the arrow keys (Shift for the size).',
   'fond.aucun': 'None',
-  'fond.planetes': 'Planets',
   'fond.quartier': 'The Quarter',
   'quartier.ouvre': 'Opens {vue}',
   'quartier.sortir': 'Bring the widget out of its tower',

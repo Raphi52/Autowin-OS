@@ -51,16 +51,6 @@ describe('accueil — nuage cosmique central mobile et lunes autour des planète
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
   describe('LE NUAGE : cosmique, bleu-violet, AU MILIEU, et il se déplace', () => {
-    it('la composition à planètes porte un nuage central déclaré', () => {
-      // Vise `actuel` par son NOM : la composition a planetes n'est plus le defaut depuis le 2026-10-17
-      // (l'avenue), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
-      const nuage = COMPOSITIONS.actuel.nuage
-      expect(nuage).toBeTruthy()
-      // « au milieu » : le nuage est posé au centre du cadre, pas dans un angle comme les nébuleuses.
-      expect(Math.abs(nuage!.fx)).toBeLessThanOrEqual(0.15)
-      expect(Math.abs(nuage!.fy)).toBeLessThanOrEqual(0.15)
-    })
-
     it('BLEU-VIOLET : le canal bleu domine les deux teintes du nuage', () => {
       const bleu = (hex: number): number => hex & 0xff
       const vert = (hex: number): number => (hex >> 8) & 0xff
@@ -106,11 +96,10 @@ describe('accueil — nuage cosmique central mobile et lunes autour des planète
   })
 
   describe('LES LUNES : autour des planètes, et elles tournent', () => {
-    it('chaque planète de la composition à planètes porte au moins une lune', () => {
-      // Vise `actuel` par son NOM : la composition a planetes n'est plus le defaut depuis le 2026-10-17
-      // (l'avenue), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
-      const planetes = COMPOSITIONS.actuel.planetes
-      expect(planetes.length).toBeGreaterThanOrEqual(3)
+    it('chaque planète du décor porte au moins une lune, et l une en porte plusieurs', () => {
+      // Toutes les directions à planètes : la garantie suit les planètes qui restent, pas un nom retiré.
+      const planetes = Object.values(COMPOSITIONS).flatMap((c) => c.planetes)
+      expect(planetes.length).toBeGreaterThan(0)
       for (const planete of planetes) {
         expect(planete.lunes).toBeGreaterThanOrEqual(1)
       }

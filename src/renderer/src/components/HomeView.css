@@ -35,7 +35,7 @@
 }
 
 /* Le calque du CENTRE, sans teinte en sombre : il assombrissait le milieu à 46 % pour un décor
-   « qui garde le milieu noir » (les nébuleuses). Sur l'avenue, le milieu, c'est la rue et ses
+   « qui garde le milieu noir » (les nébuleuses). Sur les scènes 3D, le milieu est lumineux, avec ses
    néons : retiré le 2026-10-21 (« ya un filtre qui assombrit je veux des couleurs
    petantes »). La lisibilité reste portée par le fond opaque de chaque tuile. Le calque reste :
    la base claire y pose son éclairci central (theme-modes.css). */
@@ -67,7 +67,7 @@
    les foncent à part. Le texte reste donc celui du thème ; c'est le fond qui lui répond.
    Le bois vient de la peinture et ne suit aucun thème : d'où les couleurs fixes.
    LES `!important` SONT VOULUS : un thème peint ses tuiles pour son propre décor (les tubes néon de
-   Nébuleuse sont relevés sur l'avenue Cyberpunk). Sur le Quartier, le décor décide, et les
+   Nébuleuse sont relevés sur les scènes 3D). Sur le Quartier, le décor décide, et les
    autres fonds gardent leurs tuiles telles quelles. */
 .home-view[data-fond='falaise'] .home-tile__label {
   height: 32px;

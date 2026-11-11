@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 /**
  * LE FOND 3D EN VEILLE HORS DE L'ACCUEIL, au lieu d'être détruit (2026-10-19).
  *
- * MESURE QUI LE MOTIVE (scripts/banc-decor-budget.mjs, copie d'origin/main) : chaque retour sur
+ * MESURE QUI LE MOTIVE (banc de décor, retiré) : chaque retour sur
  * l'Accueil reconstruisait tout — contexte WebGL, compilation des programmes, 19 Mo de passants
  * rechargés — et la première image revenait 2,2 à 3,7 s après le clic.
  *

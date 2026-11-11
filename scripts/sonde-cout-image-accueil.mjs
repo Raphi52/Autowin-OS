@@ -4,7 +4,7 @@
  *
  * POURQUOI (conv-1512, 2026-11-04) : « l'accueil ça fait laggy ». Le fond falaise (quartier-scene.ts)
  * se dessine dans le fil de l'interface ; decor-cadence.ts espace les images dès qu'une image coûte
- * plus de la moitié de l'intervalle. banc-decor-budget.mjs ne mesure que l'ancien fond « avenue ».
+ * plus de la moitié de l'intervalle. Le banc de décor retiré ne mesurait que l'ancien fond « avenue ».
  * Cette sonde lit les repères `decor:image` posés par DecorDeFond.tsx et rend les centiles.
  *
  * Usage :

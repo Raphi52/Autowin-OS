@@ -22,10 +22,10 @@ describe('le Quartier dans le menu Fond', () => {
     expect(fondSansScene(FOND_FALAISE)).toBe(false)
   })
 
-  it('se choisit dans le menu, à côté des autres fonds (D1 : rien n’est remplacé)', () => {
+  it('se choisit dans le menu, sans le Cyberpunk ni les Planètes, retirés', () => {
     const ids = FONDS_ACCUEIL.map((f) => f.id)
     expect(ids).toContain(FOND_FALAISE)
-    expect(ids).toContain('avenue')
+    expect(ids).not.toContain('avenue')
     expect(ids).toContain('noir')
   })
 
@@ -43,8 +43,10 @@ describe('le Quartier dans le menu Fond', () => {
     expect(lireFondAccueil()).toBe('nier')
   })
 
-  it('garde le choix fait dans le menu, retour à Cyberpunk compris', () => {
+  it('un Cyberpunk ou des Planètes enregistrés avant leur retrait retombent sur le Quartier', () => {
     window.localStorage.setItem(CLE_FOND_ACCUEIL, 'avenue')
-    expect(lireFondAccueil()).toBe('avenue')
+    expect(lireFondAccueil()).toBe(FOND_FALAISE)
+    window.localStorage.setItem(CLE_FOND_ACCUEIL, 'actuel')
+    expect(lireFondAccueil()).toBe(FOND_FALAISE)
   })
 })

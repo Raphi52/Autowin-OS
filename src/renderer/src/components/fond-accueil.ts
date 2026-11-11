@@ -17,11 +17,10 @@ import { traduireAccueil } from '../textes-ecrans/accueil'
 import type { DecorVariant } from './home-decor-scene'
 
 /**
- * Le fond affiché tant que personne n'en a choisi un autre : l'avenue cyberpunk, décidée le
- * 2026-10-17 (« Passe au vrai fond de l'Accueil avec ce look » — l'historique est en
- * commentaire de `home-decor-scene.ts`, qui ré-exporte cette valeur).
+ * Le décor spatial de repli, celui d'avant les planètes : il prend la place d'une valeur enregistrée
+ * qu'aucune direction ne reconnaît. Il n'est proposé dans aucun menu ; `home-decor-scene.ts` le ré-exporte.
  */
-export const DECOR_DEFAUT: DecorVariant = 'avenue'
+export const DECOR_DEFAUT: DecorVariant = 'poussiere'
 
 /**
  * Un fond d'Accueil : une direction du décor 3D, le noir qui n'en monte aucune, ou le Quartier, une
@@ -55,9 +54,7 @@ export const FOND_DEFAUT: FondAccueil = FOND_FALAISE
  * `fondSansScene(variante)` puis passe la variante à `monterDecor(…: DecorVariant)`. Avec un `boolean`,
  * TypeScript ne retirait pas `'noir' | 'nier'` du type, et le typage web était rouge depuis 5a4086cb.
  */
-export function fondSansScene(
-  fond: FondAccueil
-): fond is typeof FOND_NOIR | typeof FOND_NIER {
+export function fondSansScene(fond: FondAccueil): fond is typeof FOND_NOIR | typeof FOND_NIER {
   return fond === FOND_NOIR || fond === FOND_NIER
 }
 
@@ -121,15 +118,14 @@ export const FONDS_ACCUEIL: readonly { id: FondAccueil; nom: string }[] = [
       return traduireAccueil('fond.quartier', langueCourante())
     }
   },
-  { id: 'avenue', nom: 'Cyberpunk' },
-  {
-    id: 'actuel',
-    get nom() {
-      return traduireAccueil('fond.planetes', langueCourante())
-    }
-  },
   { id: FOND_NIER, nom: 'Nier Automata (radar)' }
 ]
+
+/**
+ * Les fonds retirés du menu : un poste qui les avait choisis retombe sur le Quartier, et leur scène
+ * ne monte jamais.
+ */
+const FONDS_RETIRES: readonly string[] = ['avenue', 'actuel']
 
 /**
  * Le fond choisi, ou le défaut si rien n'a jamais été enregistré.
@@ -140,7 +136,8 @@ export const FONDS_ACCUEIL: readonly { id: FondAccueil; nom: string }[] = [
 export function lireFondAccueil(): FondAccueil {
   if (typeof window === 'undefined') return FOND_DEFAUT
   const enregistre = window.localStorage.getItem(CLE_FOND_ACCUEIL)
-  if (enregistre) return enregistre as FondAccueil
+  if (enregistre)
+    return FONDS_RETIRES.includes(enregistre) ? FOND_FALAISE : (enregistre as FondAccueil)
   const repris = reprendreFondPrecedent()
   if (repris) return repris
   // Rien de choisi : le thème Nier Automata prend son radar, les autres le défaut.

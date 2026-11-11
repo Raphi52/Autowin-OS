@@ -15,7 +15,7 @@ const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivEl
 beforeEach(() => {
   window.localStorage.clear()
   // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
   // Equivalent d'un DEMARRAGE de l'application : la memoire d'ouverture du panneau vit dans le
   // module, elle survivrait donc d'un test a l'autre.
   oublierOuvertureReglages()
@@ -69,10 +69,7 @@ async function ouvrirReglages(c: HTMLDivElement): Promise<void> {
  * considere qu'elle n'a pas change. Il faut passer par le setter natif du prototype.
  */
 function saisir(champ: HTMLInputElement, valeur: string): void {
-  const setter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    'value'
-  )?.set
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
   setter?.call(champ, valeur)
   champ.dispatchEvent(new Event('input', { bubbles: true }))
 }
@@ -169,15 +166,15 @@ describe('un interrupteur par widget', () => {
 describe('le nom de l assistant', () => {
   it('se choisit DANS SON WIDGET et devient le titre de la tuile', async () => {
     const container = await mount()
-    expect(
-      q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent
-    ).toBe('Jarvis')
+    expect(q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent).toBe(
+      'Jarvis'
+    )
     await ouvrirReglages(container)
     const champ = q<HTMLInputElement>(container, '[data-testid="jarvis-nom"]')!
     await act(async () => saisir(champ, 'Alfred'))
-    expect(
-      q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent
-    ).toBe('Alfred')
+    expect(q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent).toBe(
+      'Alfred'
+    )
     expect(window.localStorage.getItem(CLE_NOM_JARVIS)).toBe('Alfred')
   })
 
@@ -212,9 +209,9 @@ describe('le nom de l assistant', () => {
   it('reprend le nom enregistre a l ouverture suivante', async () => {
     window.localStorage.setItem(CLE_NOM_JARVIS, 'Friday')
     const container = await mount()
-    expect(
-      q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent
-    ).toBe('Friday')
+    expect(q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent).toBe(
+      'Friday'
+    )
   })
 })
 
@@ -234,7 +231,9 @@ describe('relire Outlook se commande depuis la tuile Outlook', () => {
     const container = await mount()
     const bouton = q<HTMLButtonElement>(container, '[data-testid="home-refresh-outlook"]')!
     await act(async () => bouton.click())
-    expect(q<HTMLElement>(container, '[data-testid="home-widget-mails"]')!.dataset.held).toBeUndefined()
+    expect(
+      q<HTMLElement>(container, '[data-testid="home-widget-mails"]')!.dataset.held
+    ).toBeUndefined()
   })
 })
 
@@ -250,14 +249,13 @@ describe('plusieurs voix parametrables pour l assistant', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     }
-    ;(window as unknown as { SpeechSynthesisUtterance: unknown }).SpeechSynthesisUtterance =
-      class {
-        voice: SpeechSynthesisVoice | null = null
-        lang = ''
-        rate = 1
-        pitch = 1
-        constructor(public text: string) {}
-      }
+    ;(window as unknown as { SpeechSynthesisUtterance: unknown }).SpeechSynthesisUtterance = class {
+      voice: SpeechSynthesisVoice | null = null
+      lang = ''
+      rate = 1
+      pitch = 1
+      constructor(public text: string) {}
+    }
   })
 
   afterEach(() => {
@@ -336,7 +334,13 @@ describe('les reglages de l assistant vivent DANS son widget', () => {
     expect(q(panneau, '[data-testid="jarvis-voix"]')).toBeNull()
     expect(panneau.textContent).not.toContain('Assistant vocal')
 
-    for (const id of ['jarvis-nom', 'jarvis-voix', 'jarvis-debit', 'jarvis-hauteur', 'jarvis-voix-test']) {
+    for (const id of [
+      'jarvis-nom',
+      'jarvis-voix',
+      'jarvis-debit',
+      'jarvis-hauteur',
+      'jarvis-voix-test'
+    ]) {
       expect(q(tuile, `[data-testid="${id}"]`)).not.toBeNull()
     }
   })
@@ -350,7 +354,7 @@ describe('le choix du fond de l accueil', () => {
    */
   // « Aucun » et non plus « Noir » (2026-10-22 : « desfois c pas noir selon le theme ») :
   // en Holographique blanc, ce choix peint un aplat BLANC. La valeur enregistree reste `noir`.
-  it('propose exactement Aucun, le Quartier, Cyberpunk, Planetes et Nier Automata (radar), sur le fond affiche par defaut', async () => {
+  it('propose exactement Aucun, le Quartier et Nier Automata (radar), sur le fond affiche par defaut', async () => {
     window.localStorage.removeItem(autowinStorageKey('home.decor.v4'))
     const container = await mount()
     await ouvrirReglages(container)
@@ -359,8 +363,6 @@ describe('le choix du fond de l accueil', () => {
     expect(Array.from(menu.options).map((o) => [o.value, o.textContent])).toEqual([
       ['noir', 'Aucun'],
       ['falaise', 'Le Quartier'],
-      ['avenue', 'Cyberpunk'],
-      ['actuel', 'Planètes'],
       ['nier', 'Nier Automata (radar)']
     ])
     // Rien d'enregistre : le menu montre le fond REELLEMENT affiche, le Quartier.
@@ -384,10 +386,10 @@ describe('le choix du fond de l accueil', () => {
       expect(prevenu).toHaveBeenCalled()
       expect(menu.value).toBe('noir')
       await act(async () => {
-        menu.value = 'actuel'
+        menu.value = 'nier'
         menu.dispatchEvent(new Event('change', { bubbles: true }))
       })
-      expect(window.localStorage.getItem(autowinStorageKey('home.decor.v4'))).toBe('actuel')
+      expect(window.localStorage.getItem(autowinStorageKey('home.decor.v4'))).toBe('nier')
     } finally {
       window.removeEventListener('autowin:fond-accueil', prevenu)
     }

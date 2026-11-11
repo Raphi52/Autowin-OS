@@ -12,7 +12,7 @@ import { CLE_FOND_ACCUEIL } from './fond-accueil'
  * LA PLAINTE (2026-10-19) : « sur ce pc le fond d'écran 3d de l'accueil défile super
  * lentement ». Cause mesurée sur ce PC : les « Effets d'animation » de Windows y sont coupés
  * (`SPI_GETCLIENTAREAANIMATION` = False), Chromium le traduit en `prefers-reduced-motion: reduce`,
- * et `DecorDeFond` multipliait alors le temps du décor par 0,25 — l'avenue avançait 4 fois moins vite.
+ * et `DecorDeFond` multipliait alors le temps du décor par 0,25 — la scène avançait 4 fois moins vite.
  *
  * DÉCISION DE L'UTILISATEUR, même jour : le fond tourne à vitesse NORMALE, quel que soit ce réglage.
  *
@@ -82,7 +82,7 @@ describe('le fond d accueil défile à vitesse normale, même quand Windows coup
     document.body.appendChild(hote)
     const root = createRoot(hote)
     monte = { root, hote }
-    window.localStorage.setItem(CLE_FOND_ACCUEIL, 'avenue')
+    window.localStorage.setItem(CLE_FOND_ACCUEIL, 'poussiere')
     await act(async () => root.render(createElement(DecorDeFond, { actif: true })))
     await act(async () => {
       await new Promise((r) => setTimeout(r, 500))

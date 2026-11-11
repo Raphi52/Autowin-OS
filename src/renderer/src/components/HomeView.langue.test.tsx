@@ -29,7 +29,7 @@ beforeEach(() => {
   // Outlook ne se lit qu'apres « Connecter Outlook » : ces tests partent connectes.
   window.localStorage.setItem('autowin.outlook.connecte', '1')
   // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(HORLOGE)
   // Sans `outlookSnapshot` : les widgets Interlocuteurs et Agenda disent la panne (texte traduit).
@@ -91,7 +91,8 @@ describe('écran Accueil — langue', () => {
     expect(tuile(ecran, 'notifications')).toContain('missed run')
     // La croix d'acquittement n'a plus de mot visible : son nom accessible se traduit.
     expect(
-      ecran.querySelector('[data-testid="home-widget-notifications"] .home-notices__acquitter')
+      ecran
+        .querySelector('[data-testid="home-widget-notifications"] .home-notices__acquitter')
         ?.getAttribute('aria-label')
     ).toBe('Acknowledge')
     expect(tuile(ecran, 'routines')).toContain('in 12 min')

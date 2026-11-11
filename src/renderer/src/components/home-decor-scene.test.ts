@@ -7,19 +7,11 @@ import {
   DECOR_VARIANTS,
   estDirectionDecor,
   FOND_DECOR,
-  NAPPE_FRAGMENT_SHADER,
-  type DirectionSpatiale
+  NAPPE_FRAGMENT_SHADER
 } from './home-decor-scene'
 
-/**
- * Les directions COMPOSEES par `home-decor-scene.ts`. L'avenue est une scene a part, aux
- * reglages d'une autre nature (metres et secondes, pas des facteurs de composition) : la comparer a
- * elles sur `parallaxe` ou `tempo` n'aurait pas de sens. Ses promesses sont tenues par
- * `home-decor-avenue.contract.test.ts`.
- */
-const SPATIALES = DECOR_VARIANTS.map((v) => v.id).filter(
-  (id): id is DirectionSpatiale => id !== 'avenue'
-)
+/** Les directions COMPOSEES par `home-decor-scene.ts`, toutes comparables sur `parallaxe` et `tempo`. */
+const SPATIALES = DECOR_VARIANTS.map((v) => v.id)
 
 /**
  * Le decor 3D est le FOND de l'accueil, pas une surcouche posee sur l'image plate.
@@ -55,16 +47,8 @@ describe('le decor efface son canevas de maniere OPAQUE', () => {
  * le fait qu'une valeur inconnue ne fasse pas tomber la vue.
  */
 describe('directions du decor', () => {
-  it('expose les six directions, chacune avec un nom et un resume', () => {
-    // `avenue` EN TETE : la direction par defaut depuis le 2026-10-17.
-    expect(DECOR_VARIANTS.map((v) => v.id)).toEqual([
-      'avenue',
-      'actuel',
-      'limbe',
-      'poussiere',
-      'orbites',
-      'nappe'
-    ])
+  it('expose les quatre directions, chacune avec un nom et un resume', () => {
+    expect(DECOR_VARIANTS.map((v) => v.id)).toEqual(['limbe', 'poussiere', 'orbites', 'nappe'])
     for (const variante of DECOR_VARIANTS) {
       expect(variante.nom.length).toBeGreaterThan(2)
       // Le resume sert a CHOISIR : une entree sans description ne serait qu'un identifiant.
@@ -72,14 +56,12 @@ describe('directions du decor', () => {
     }
   })
 
-  it('a « avenue » pour defaut — l avenue cyberpunk, demandee le 2026-10-17 (conv-301)', () => {
-    // CHANGEMENT DE DECISION, assume, le deuxieme. `poussiere` etait le defaut, puis `actuel` (les
-    // planetes, 2026-08-24). Apres les brouillons regardes dans le fil, la demande « Passe au vrai
-    // fond de l'Accueil avec ce look » fait de l'avenue le defaut. Ce test encode la nouvelle decision
-    // au lieu d'etre desserre : il doit continuer de refuser une bascule non decidee.
-    expect(DECOR_DEFAUT).toBe('avenue')
+  it('a « poussiere » pour défaut, sans l avenue ni les planètes', () => {
+    // `poussiere` redevient le defaut : il l'etait avant les planetes (2026-08-24). L'avenue, qui l'avait
+    // remplace le 2026-10-17, est retiree du catalogue ; ce test refuse toute autre bascule non decidee.
+    expect(DECOR_DEFAUT).toBe('poussiere')
     expect(DECOR_VARIANTS.some((v) => v.id === DECOR_DEFAUT)).toBe(true)
-    expect(DECOR_VARIANTS.find((v) => v.id === 'avenue')?.resume).toMatch(/cyberpunk/)
+    expect(DECOR_VARIANTS.map((v) => v.id)).not.toContain('avenue')
   })
 
   /**
@@ -93,20 +75,6 @@ describe('directions du decor', () => {
     for (const valeur of [null, undefined, '', ' avenue', 'AVENUE', 'planetes', 3, {}]) {
       expect(estDirectionDecor(valeur)).toBe(false)
     }
-  })
-
-  it('tient la promesse de « actuel » : des PLANETES annelees, ce que « poussiere » n avait pas', () => {
-    // Vise `actuel` par son NOM : ce n'est plus le defaut depuis le 2026-10-17, mais elle reste
-    // choisissable, et une direction qu'on peut choisir doit tenir sa promesse.
-    const actuel = COMPOSITIONS.actuel
-    // Ce que la demande visait : des silhouettes de planetes, pas seulement de la matiere.
-    expect(actuel.planetes.length).toBeGreaterThanOrEqual(3)
-    // Annelees : une planete sans anneau ne tiendrait pas le resume affiche.
-    for (const planete of actuel.planetes) expect(planete.rings).toBeGreaterThan(0)
-    // Etagees en profondeur, sinon la parallaxe curseur n'a rien a separer.
-    expect(new Set(actuel.planetes.map((p) => p.z)).size).toBeGreaterThan(1)
-    // Le resume affiche a l'utilisateur doit decrire CETTE image.
-    expect(DECOR_VARIANTS.find((v) => v.id === 'actuel')?.resume).toMatch(/plan[eè]tes/)
   })
 
   /**

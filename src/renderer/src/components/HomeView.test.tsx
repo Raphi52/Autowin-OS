@@ -91,7 +91,7 @@ beforeEach(() => {
   // Outlook ne se lit qu'apres « Connecter Outlook » : ces tests partent connectes.
   window.localStorage.setItem('autowin.outlook.connecte', '1')
   // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(CLOCK)
   ;(window as unknown as { api: unknown }).api = {
@@ -130,7 +130,9 @@ function tile(container: HTMLDivElement, id: string): HTMLElement {
  * gestes de deplacement. Les poignees de redimensionnement, elles, restent visees directement.
  */
 function prise(el: Element): Element {
-  return el.classList.contains('home-tile') ? (el.querySelector('.home-tile__label') as Element) : el
+  return el.classList.contains('home-tile')
+    ? (el.querySelector('.home-tile__label') as Element)
+    : el
 }
 
 /** Un geste complet : prise, déplacements, lâcher. `on` est l'élément qu'on saisit. */
@@ -254,7 +256,8 @@ describe('page d accueil', () => {
 
   it('ne lit pas le Task Manager quand la vue n est pas affichee', async () => {
     await mount(false)
-    const api = (window as unknown as { api: { taskManagerSnapshot: ReturnType<typeof vi.fn> } }).api
+    const api = (window as unknown as { api: { taskManagerSnapshot: ReturnType<typeof vi.fn> } })
+      .api
     expect(api.taskManagerSnapshot).not.toHaveBeenCalled()
   })
 })
@@ -272,7 +275,14 @@ describe('poser une tuile', () => {
     const agenda = tile(container, 'agenda')
     const before = boxOf(agenda)
     const corps = agenda.querySelector('.home-tile__scroll') as HTMLElement
-    await gesture(corps, [[560, 280], [583, 297]], [500, 250])
+    await gesture(
+      corps,
+      [
+        [560, 280],
+        [583, 297]
+      ],
+      [500, 250]
+    )
     expect(boxOf(agenda)).toEqual(before)
     expect(agenda.dataset.held).toBeUndefined()
   })
@@ -281,7 +291,15 @@ describe('poser une tuile', () => {
     const container = await mount()
     const agenda = tile(container, 'agenda')
     const before = boxOf(agenda)
-    await gesture(agenda, [[540, 260], [560, 280], [583, 297]], [500, 250])
+    await gesture(
+      agenda,
+      [
+        [540, 260],
+        [560, 280],
+        [583, 297]
+      ],
+      [500, 250]
+    )
     const posee = boxOf(agenda)
     expect(posee.x - before.x).toBe(83)
     expect(posee.y - before.y).toBe(47)
@@ -301,7 +319,15 @@ describe('poser une tuile', () => {
     const mails = tile(container, 'mails')
     await gesture(mails, [[520, 520]], [500, 500])
     const avantMails = boxOf(mails)
-    await gesture(agenda, [[900, 300], [1600, 300], [2400, 300]], [400, 300])
+    await gesture(
+      agenda,
+      [
+        [900, 300],
+        [1600, 300],
+        [2400, 300]
+      ],
+      [400, 300]
+    )
     expect(boxOf(mails)).toEqual(avantMails)
     expect(boxOf(agenda).x).toBeGreaterThan(avantMails.x)
   })
@@ -335,7 +361,14 @@ describe('poser une tuile', () => {
     const agenda = tile(container, 'agenda')
     const before = boxOf(agenda)
     const grip = container.querySelector('[data-testid="home-grip-agenda-se"]')!
-    await gesture(grip, [[500, 400], [560, 460]], [400, 300])
+    await gesture(
+      grip,
+      [
+        [500, 400],
+        [560, 460]
+      ],
+      [400, 300]
+    )
     const grandi = boxOf(agenda)
     expect(grandi.w - before.w).toBe(160)
     expect(grandi.h - before.h).toBe(160)
@@ -456,7 +489,9 @@ describe('widgets Outlook', () => {
     const container = await mount()
     const api = (window as unknown as { api: { outlookSnapshot: ReturnType<typeof vi.fn> } }).api
     expect(api.outlookSnapshot).not.toHaveBeenCalled()
-    const bouton = container.querySelector<HTMLButtonElement>('[data-testid="home-connecter-outlook"]')
+    const bouton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="home-connecter-outlook"]'
+    )
     expect(bouton).not.toBeNull()
     await act(async () => {
       bouton!.click()

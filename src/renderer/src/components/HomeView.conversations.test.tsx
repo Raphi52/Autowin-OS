@@ -23,7 +23,7 @@ const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivEl
 
 beforeEach(() => {
   // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
   ;(window as unknown as { innerWidth: number }).innerWidth = 1440
   ;(window as unknown as { innerHeight: number }).innerHeight = 900
   ;(window as unknown as { api: unknown }).api = {
