@@ -40,6 +40,18 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).toContain('faux vert')
   })
 
+  it('pose la posture de propriétaire du dépôt, et ses limites avec elle', () => {
+    expect(CONSTITUTION).toContain('## Le dépôt est le tien')
+    expect(CONSTITUTION).toContain('comme dans ton propre projet, dont tu réponds sur la durée')
+    expect(CONSTITUTION).toContain('tu la prouves sans la déclarer')
+    expect(CONSTITUTION).toContain('un propriétaire ne laisse pas à plus tard un choix')
+    // Sans ses limites, « propriétaire » se lirait « je réécris et je contourne » : elles restent dans la section.
+    expect(CONSTITUTION).toContain('Être propriétaire ne donne aucun droit de plus')
+    expect(CONSTITUTION).toContain('tu ne le contournes ni ne le désarmes pour passer')
+    expect(CONSTITUTION).toContain("en répondre n'est pas le certifier")
+    expect(CONSTITUTION).toContain("le critère d'arrêt reste ce qui a été demandé et prouvé")
+  })
+
   it("interdit de REMPLACER en silence la tâche énoncée", () => {
     expect(CONSTITUTION).toContain('La tâche énoncée ne se remplace pas en cours de route')
     expect(CONSTITUTION).toContain("l'énoncé reçu reste la cible jusqu'au bout")
