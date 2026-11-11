@@ -581,6 +581,10 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   }, [])
   useEffect(() => {
     window.localStorage.setItem(CLE_DOSSIERS_CONNUS, JSON.stringify(dossiersMemorises))
+    // Annoncé aux vues qui montrent la même liste et restent montées derrière le Chat (menu « Brain
+    // par dossier » de Knowledge) : sans cela, un dossier retiré ici y restait affiché. L'écoute de
+    // ce fichier relit alors la même liste, sans changement d'état : aucune boucle.
+    window.dispatchEvent(new Event(EVT_DOSSIERS_DU_CHAT))
     // Le Board ne montre que ces dossiers : le processus principal en garde la copie,
     // pour que sa recopie de fin de tour suive aussi un retrait fait ici, Board fermé.
     void transmettreDossiersDuChat(dossiersMemorises).catch((error) =>

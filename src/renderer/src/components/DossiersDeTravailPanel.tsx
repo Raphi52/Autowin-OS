@@ -9,14 +9,17 @@ import {
   lireDossierPersonnel,
   lireDossiersDuChat,
   lireDossiersRetires,
-  lireDossiersToujoursProposes
+  lireDossiersToujoursProposes,
+  retirerDossierDuChat,
+  transmettreDossiersDuChat
 } from './dossiers-du-chat'
 import './DossiersDeTravailPanel.css'
 
 /**
  * Brain par dossier : quel Brain reçoit les notes écrites depuis chaque dossier de travail.
- * LA LISTE EST CELLE DU CHAT (menu « Ranger dans… », la même que le Board), ni plus ni moins : un
- * dossier s'ajoute et se retire là-bas, ce menu ne tient pas une seconde liste. Chaque ligne montre
+ * LA LISTE EST CELLE DU CHAT (son choix de dossier de travail, la même que le Board), ni plus ni
+ * moins : ce menu ne tient pas une seconde liste. Un dossier s'ajoute depuis le Chat ; sa croix, ici
+ * comme là-bas, le retire de cette liste commune. Chaque ligne montre
  * le Brain qui s'applique VRAIMENT au dossier — le sien, celui d'un dossier parent, sinon l'équipe —
  * et un clic sur l'autre segment l'assigne. La réponse porte les affectations à jour, et c'est elle
  * qui remplace l'affichage.
@@ -208,6 +211,17 @@ export function DossiersDeTravailPanel(): React.JSX.Element {
     }
   }
 
+  /**
+   * La croix : retire le dossier de la liste du Chat — le même geste que la croix du Chat et du Board,
+   * qui l'annonce aux autres vues — et transmet la liste restante au processus principal, pour le
+   * Board. Le Brain assigné au dossier n'est pas touché : il revient avec lui s'il est rajouté.
+   */
+  function retirer(cwd: string): void {
+    void transmettreDossiersDuChat(retirerDossierDuChat(cwd)).catch(() => {
+      // Pont absent ou coupé : le Chat, toujours monté, retransmet la liste à son prochain changement.
+    })
+  }
+
   // Un échec de lecture passe devant tout autre message, et n'est jamais un avertissement.
   const avis = lectureEchouee ? t('dossiers.erreur.charger') : message
   const avertit = avertissement && !lectureEchouee
@@ -259,6 +273,18 @@ ${nomAffiche(cwd)}`
                     disabled={enCours}
                     onChange={(brain) => void assigner(cwd, brain)}
                   />
+                  {/* « This computer » ne se retire jamais : pas de croix, la colonne reste vide. */}
+                  {clePersonnelle && cleDeDossier(cwd) === clePersonnelle ? null : (
+                    <button
+                      type="button"
+                      className="dossiers-travail__croix"
+                      aria-label={t('dossiers.retirer.aria', { dossier: cwd })}
+                      title={t('dossiers.retirer')}
+                      onClick={() => retirer(cwd)}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

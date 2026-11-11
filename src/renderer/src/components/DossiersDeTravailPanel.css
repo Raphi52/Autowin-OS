@@ -41,7 +41,8 @@
 
 .dossiers-travail__ligne {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* Colonne de la croix à largeur fixe : sans croix (« This computer »), les segments restent alignés. */
+  grid-template-columns: minmax(0, 1fr) auto 20px;
   gap: 10px;
   align-items: center;
   padding: 8px 0;
@@ -97,6 +98,26 @@
 
 .dossiers-travail__brains button:hover:not(:disabled):not([aria-pressed='true']) {
   color: var(--text);
+}
+
+/* La croix : discrète au repos, comme celle du Chat ; elle ne prend la couleur d'alerte qu'au survol. */
+.dossiers-travail__croix {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.dossiers-travail__croix:hover,
+.dossiers-travail__croix:focus-visible {
+  color: var(--err);
+}
+
+.dossiers-travail__croix:focus-visible {
+  outline: 1px solid var(--gold);
 }
 
 .dossiers-travail button:disabled {

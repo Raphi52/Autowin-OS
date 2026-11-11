@@ -21,6 +21,7 @@ interface ApiDuPanneau {
   enregistrerBrainAffectation: Demande
   executionWorkspace: Demande
   dossierPersonnel: Demande
+  boardDossiersDuChat: Demande
 }
 
 /**
@@ -32,7 +33,8 @@ function installerApi(affectations: unknown[] = []): ApiDuPanneau {
     brainAffectations: vi.fn().mockResolvedValue({ affectations }),
     enregistrerBrainAffectation: vi.fn().mockResolvedValue({ affectations }),
     executionWorkspace: vi.fn().mockResolvedValue({ path: DEPOT }),
-    dossierPersonnel: vi.fn().mockResolvedValue(PERSONNEL)
+    dossierPersonnel: vi.fn().mockResolvedValue(PERSONNEL),
+    boardDossiersDuChat: vi.fn().mockResolvedValue(true)
   }
   ;(window as unknown as { api: ApiDuPanneau }).api = api
   return api
@@ -318,14 +320,51 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
     expect(container.textContent).toContain('Aucun dossier ne correspond.')
   })
 
-  it('n’a ni ajout d’un chemin libre ni retrait : la liste se tient depuis le Chat', async () => {
+  /** La croix d'une ligne, retrouvée par son nom. */
+  const croix = (cwd: string): HTMLButtonElement | undefined =>
+    [...container.querySelectorAll<HTMLButtonElement>('button.dossiers-travail__croix')].find(
+      (b) =>
+        b.getAttribute('aria-label') ===
+        `Retirer ${cwd} des dossiers de travail du Chat (et du Board)`
+    )
+
+  it('la croix retire le dossier de la liste du Chat : il quitte ce menu, la mémoire du Chat et part au Board', async () => {
+    const api = installerApi()
+    poserDossiersDuChat([ROTATION, JOURNAL])
+    await monter()
+    await act(async () => croix(ROTATION)?.click())
+    await flush()
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, JOURNAL])
+    expect(JSON.parse(localStorage.getItem(CLE_DOSSIERS_CONNUS) ?? '[]')).toEqual([JOURNAL])
+    expect(JSON.parse(localStorage.getItem(CLE_DOSSIERS_RETIRES) ?? '[]')).toContain(ROTATION)
+    expect(api.boardDossiersDuChat).toHaveBeenLastCalledWith([JOURNAL], [ROTATION])
+  })
+
+  it('la croix retire aussi le dépôt de la session, que le Chat propose toujours', async () => {
+    installerApi()
+    poserDossiersDuChat([ROTATION])
+    await monter()
+    await act(async () => croix(DEPOT)?.click())
+    await flush()
+    expect(chemins()).toEqual([PERSONNEL, ROTATION])
+  })
+
+  it('« This computer » n’a pas de croix : il ne se retire jamais', async () => {
+    installerApi()
+    poserDossiersDuChat([ROTATION])
+    await monter()
+    expect(croix(PERSONNEL)).toBeUndefined()
+    expect(croix(ROTATION)).toBeDefined()
+    expect(container.querySelectorAll('button.dossiers-travail__croix')).toHaveLength(2)
+  })
+
+  it('n’a pas d’ajout d’un chemin libre : un dossier s’ajoute depuis le Chat', async () => {
     installerApi([{ cwd: ROTATION, brain: 'perso' }])
     poserDossiersDuChat([ROTATION])
     await monter()
     expect(container.querySelector('form')).toBeNull()
     expect(container.querySelector('input[type="text"]')).toBeNull()
     const libelles = [...container.querySelectorAll('button')].map((b) => b.textContent)
-    expect(libelles).not.toContain('Retirer')
     expect(libelles).not.toContain('Assigner')
   })
 })

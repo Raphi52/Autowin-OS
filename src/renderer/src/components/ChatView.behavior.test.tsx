@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ChatView } from './ChatView'
-import { retirerDossierDuChat } from './dossiers-du-chat'
+import { EVT_DOSSIERS_DU_CHAT, lireDossiersDuChat, retirerDossierDuChat } from './dossiers-du-chat'
 
 // L'attente entre deux reprises après surcharge (30 s en vrai) est neutralisée : ces tests
 // vérifient la DÉCISION et le GESTE, pas la patience.
@@ -279,6 +279,34 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(document.querySelectorAll('[data-testid="conv-project-choice"]').length).toBe(0)
     // La croix RETIRE de la liste, elle ne RANGE pas : aucun classement ne doit partir.
     expect(conversationsSetProject).not.toHaveBeenCalled()
+  })
+
+  /**
+   * LE CHAT ANNONCE SON RETRAIT. Le menu « Brain par dossier » de Knowledge reste monté pendant qu'on
+   * est dans le Chat et montre la même liste : sans annonce, il gardait le dossier retiré jusqu'au
+   * redémarrage. À l'annonce, la liste mémorisée est déjà à jour.
+   */
+  it('annonce le retrait fait par sa croix, liste déjà à jour, pour les vues qui montrent la même liste', async () => {
+    window.localStorage.setItem(
+      'autowin.conv-folders.connus',
+      JSON.stringify(['C:\\Travail\\Projet Alpha'])
+    )
+    await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) }))
+    await ouvrirSelecteurDossiers('Conversation A')
+    const lusALAnnonce: string[][] = []
+    const ecouter = (): void => {
+      lusALAnnonce.push(lireDossiersDuChat())
+    }
+    window.addEventListener(EVT_DOSSIERS_DU_CHAT, ecouter)
+    try {
+      await act(async () => {
+        document.querySelector<HTMLButtonElement>('[data-testid="conv-project-forget"]')!.click()
+        await Promise.resolve()
+      })
+    } finally {
+      window.removeEventListener(EVT_DOSSIERS_DU_CHAT, ecouter)
+    }
+    expect(lusALAnnonce.at(-1)).toEqual([])
   })
 
   /**
