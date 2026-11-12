@@ -352,6 +352,11 @@
   font-size: 13px;
 }
 
+/* components/DossiersDeTravailPanel.css — tailles */
+:root[data-theme^='malvoyant-'] .dossiers-travail__croix {
+  font-size: 13px;
+}
+
 /* components/Evidence.css — tailles */
 :root[data-theme^='malvoyant-'] .evidence-item > summary,
 :root[data-theme^='malvoyant-'] .evidence-item .evidence-exit,
@@ -374,17 +379,13 @@
 }
 
 /* components/GraphView.css — tailles */
-:root[data-theme^='malvoyant-'] .graph-stage__heading span,
 :root[data-theme^='malvoyant-'] .graph-brains-filtre__ponts,
-:root[data-theme^='malvoyant-'] .graph-mode-switch__icon,
-:root[data-theme^='malvoyant-'] .graph-clean-memory,
+:root[data-theme^='malvoyant-'] .graph-plus__choix button,
+:root[data-theme^='malvoyant-'] .graph-theme-chip small,
 :root[data-theme^='malvoyant-'] .graph-toolbar__stats,
-:root[data-theme^='malvoyant-'] .sidebar-heading,
 :root[data-theme^='malvoyant-'] .settings-section__heading,
-:root[data-theme^='malvoyant-'] .sidebar-heading button,
 :root[data-theme^='malvoyant-'] .settings-section__heading button,
 :root[data-theme^='malvoyant-'] .node-search-result small,
-:root[data-theme^='malvoyant-'] .theme-sidebar__note,
 :root[data-theme^='malvoyant-'] .graph-settings-popover__heading,
 :root[data-theme^='malvoyant-'] .tree-branch-controls button,
 :root[data-theme^='malvoyant-'] .tree-branch-controls button small,
@@ -393,7 +394,6 @@
 :root[data-theme^='malvoyant-'] .graph-health-issue > span,
 :root[data-theme^='malvoyant-'] .graph-health-issue button,
 :root[data-theme^='malvoyant-'] .theme-cluster-label.is-active,
-:root[data-theme^='malvoyant-'] .graph-stage__heading small,
 :root[data-theme^='malvoyant-'] .graph-status,
 :root[data-theme^='malvoyant-'] .graph-loading__label,
 :root[data-theme^='malvoyant-'] .selected-node span,
@@ -433,8 +433,9 @@
 :root[data-theme^='malvoyant-'] .brain-budget > li,
 :root[data-theme^='malvoyant-'] .brain-bench__cut,
 :root[data-theme^='malvoyant-'] .brain-bench__local,
-:root[data-theme^='malvoyant-'] .theme-sidebar__retrieval,
-:root[data-theme^='malvoyant-'] .graph-workbench-badge,
+:root[data-theme^='malvoyant-'] .graph-search__verdict,
+:root[data-theme^='malvoyant-'] .graph-plus__badge,
+:root[data-theme^='malvoyant-'] .graph-truncation,
 :root[data-theme^='malvoyant-'] .graph-brains-retry,
 :root[data-theme^='malvoyant-'] .graph-themes-retry,
 :root[data-theme^='malvoyant-'] .graph-theme-nodes-retry,
@@ -458,26 +459,12 @@
 
 /* components/GraphView.css — gris en dur */
 :root[data-theme^='malvoyant-'] .graph-observatory,
-:root[data-theme^='malvoyant-'] .graph-stage__heading span,
 :root[data-theme^='malvoyant-'] .graph-toolbar select,
-:root[data-theme^='malvoyant-'] .theme-sidebar input,
 :root[data-theme^='malvoyant-'] .graph-brains-filtre button,
-:root[data-theme^='malvoyant-'] .graph-refresh,
 :root[data-theme^='malvoyant-'] .graph-toolbar__stats,
 :root[data-theme^='malvoyant-'] .graph-toolbar__stats strong,
-:root[data-theme^='malvoyant-'] .sidebar-heading,
 :root[data-theme^='malvoyant-'] .settings-section__heading,
-:root[data-theme^='malvoyant-'] .sidebar-heading button,
 :root[data-theme^='malvoyant-'] .settings-section__heading button,
-:root[data-theme^='malvoyant-'] .theme-filter,
-:root[data-theme^='malvoyant-'] .theme-filter:hover,
-:root[data-theme^='malvoyant-'] .theme-filter.is-active,
-:root[data-theme^='malvoyant-'] .theme-filter small,
-:root[data-theme^='malvoyant-'] .theme-sidebar__note,
-:root[data-theme^='malvoyant-'] .theme-sidebar__note strong,
-:root[data-theme^='malvoyant-'] .graph-settings-button,
-:root[data-theme^='malvoyant-'] .graph-settings-button:hover,
-:root[data-theme^='malvoyant-'] .graph-settings-button.is-active,
 :root[data-theme^='malvoyant-'] .graph-settings-popover__heading,
 :root[data-theme^='malvoyant-'] .graph-settings-popover__heading button,
 :root[data-theme^='malvoyant-'] .tree-branch-controls button,
@@ -490,8 +477,6 @@
 :root[data-theme^='malvoyant-'] .graph-health-lens p,
 :root[data-theme^='malvoyant-'] .graph-health-issue button,
 :root[data-theme^='malvoyant-'] .graph-health-issue i,
-:root[data-theme^='malvoyant-'] .graph-stage__heading strong,
-:root[data-theme^='malvoyant-'] .graph-stage__heading small,
 :root[data-theme^='malvoyant-'] .graph-status,
 :root[data-theme^='malvoyant-'] .selected-node,
 :root[data-theme^='malvoyant-'] .selected-node span,
@@ -510,9 +495,6 @@
 :root[data-theme^='malvoyant-'] .node-panel h2,
 :root[data-theme^='malvoyant-'] .node-panel__path,
 :root[data-theme^='malvoyant-'] .node-panel pre,
-:root[data-theme^='malvoyant-'] .graph-workbench-button,
-:root[data-theme^='malvoyant-'] .graph-workbench-button:hover,
-:root[data-theme^='malvoyant-'] .graph-workbench-button.is-active,
 :root[data-theme^='malvoyant-'] .knowledge-inbox__head,
 :root[data-theme^='malvoyant-'] .knowledge-inbox__head > button,
 :root[data-theme^='malvoyant-'] .knowledge-inbox__error,
@@ -537,8 +519,8 @@
 :root[data-theme^='malvoyant-'] .brain-budget-figures,
 :root[data-theme^='malvoyant-'] .brain-budget-ok,
 :root[data-theme^='malvoyant-'] .brain-bench__local,
-:root[data-theme^='malvoyant-'] .theme-sidebar__retrieval,
-:root[data-theme^='malvoyant-'] .theme-sidebar__retrieval.is-failed,
+:root[data-theme^='malvoyant-'] .graph-search__verdict,
+:root[data-theme^='malvoyant-'] .graph-search__verdict.is-failed,
 :root[data-theme^='malvoyant-'] .graph-brains-retry,
 :root[data-theme^='malvoyant-'] .graph-themes-retry,
 :root[data-theme^='malvoyant-'] .graph-theme-nodes-retry,

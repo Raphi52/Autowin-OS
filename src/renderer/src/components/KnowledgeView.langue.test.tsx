@@ -112,14 +112,17 @@ afterEach(async () => {
 })
 
 describe('écran Knowledge — langue', () => {
-  it('la vue Memory bascule en anglais sans être remontée, puis revient au français', async () => {
+  it('la vue Knowledge bascule en anglais sans être remontée, puis revient au français', async () => {
     const vue = await monter(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
-    const champ = '.theme-sidebar input'
+    const champ = '.graph-search__champ'
     expect(vue.textContent).toContain('Explore les connaissances reliées de ton Brain.')
     expect(attribut(vue, champ, 'aria-label')).toBe('Rechercher un thème ou une fiche')
-    expect(attribut(vue, champ, 'placeholder')).toBe('Thème ou fiche…')
-    expect(attribut(vue, '.graph-settings-button', 'aria-label')).toBe('Réglages de visibilité')
-    expect(vue.querySelector('.sidebar-heading')?.textContent).toBe('RechercherEffacer')
+    expect(attribut(vue, champ, 'placeholder')).toBe(
+      'Chercher un thème, une fiche — ou poser une question au savoir'
+    )
+    expect(vue.querySelector('.graph-plus__bouton')?.textContent).toMatch(/^Plus⋯/)
+    expect(vue.querySelector('.graph-plus__item--visibilite')?.textContent).toBe('Visibilité')
+    expect(attribut(vue, '.graph-plus__item--visibilite', 'title')).toBe('Réglages de visibilité')
     expect(vue.querySelector('.graph-status--empty span')?.textContent).toBe(
       'Aucun nœud disponible pour ce graphe.'
     )
@@ -128,19 +131,25 @@ describe('écran Knowledge — langue', () => {
     expect(vue.textContent).toContain('Explore the linked knowledge of your Brain.')
     expect(vue.textContent).toContain('0 nodes')
     expect(attribut(vue, champ, 'aria-label')).toBe('Search for a theme or a note')
-    expect(attribut(vue, champ, 'placeholder')).toBe('Theme or note…')
-    expect(attribut(vue, '.graph-settings-button', 'aria-label')).toBe('Visibility settings')
-    expect(attribut(vue, '.graph-workbench-button', 'aria-label')).toBe('Knowledge workbench')
-    expect(vue.querySelector('.sidebar-heading')?.textContent).toBe('SearchClear')
-    expect(vue.querySelector('.theme-filter span')?.textContent).toBe('All themes')
+    expect(attribut(vue, champ, 'placeholder')).toBe(
+      'Search a theme, a note — or ask the knowledge a question'
+    )
+    expect(vue.querySelector('.graph-plus__bouton')?.textContent).toMatch(/^More⋯/)
+    expect(attribut(vue, '.graph-plus__item--visibilite', 'title')).toBe('Visibility settings')
+    expect(vue.querySelector('.graph-plus__item--savoir')?.textContent).toMatch(
+      /^Knowledge · inbox/
+    )
+    expect(vue.querySelector('.graph-theme-chip--tous span')?.textContent).toBe('All themes')
     expect(vue.querySelector('.graph-status--empty span')?.textContent).toBe(
       'No node available for this graph.'
     )
     expect(vue.querySelector('.graph-hint')?.textContent).toMatch(/^Drag: (rotate|pan) · wheel/)
 
     await act(async () => appliquerLangue('fr'))
-    expect(attribut(vue, champ, 'placeholder')).toBe('Thème ou fiche…')
-    expect(vue.querySelector('.theme-filter span')?.textContent).toBe('Tous les thèmes')
+    expect(attribut(vue, champ, 'placeholder')).toBe(
+      'Chercher un thème, une fiche — ou poser une question au savoir'
+    )
+    expect(vue.querySelector('.graph-theme-chip--tous span')?.textContent).toBe('Tous les thèmes')
   })
 
   it('la boîte de réception et le banc d’essai suivent la langue', async () => {

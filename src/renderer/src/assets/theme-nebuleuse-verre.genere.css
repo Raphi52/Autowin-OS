@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   556 regles, 770 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   543 regles, 750 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -548,39 +548,14 @@
 }
 
 /* ---- src/renderer/src/components/GraphView.css ---- */
-:root[data-theme='nebuleuse-verre'] .graph-toolbar select, :root[data-theme='nebuleuse-verre'] .theme-sidebar input {
+:root[data-theme='nebuleuse-verre'] .graph-toolbar select {
     color: rgb(205, 198, 241)
 }
 :root[data-theme='nebuleuse-verre'] .graph-brains-filtre button.is-active {
     color: rgb(255, 184, 219)
 }
-:root[data-theme='nebuleuse-verre'] .graph-refresh {
-    color: rgb(205, 198, 241)
-}
-:root[data-theme='nebuleuse-verre'] .graph-mode-switch__track {
-    background: linear-gradient(180deg, rgb(10, 10, 10), #101722)
-}
-:root[data-theme='nebuleuse-verre'] .graph-mode-switch.is-galaxy .graph-mode-switch__thumb {
-    background: radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.92), transparent 34%),
-    conic-gradient(from 210deg, #ff5dde, #7a6bff, rgb(120, 93, 255), #ff5dde)
-}
-:root[data-theme='nebuleuse-verre'] .graph-mode-switch:focus-visible .graph-mode-switch__track {
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55),
-    0 0 0 2px rgba(157, 137, 255, 0.55)
-}
-:root[data-theme='nebuleuse-verre'] .graph-clean-memory {
-    border: 1px solid rgba(0, 255, 85, 0.52);
-    background: rgba(10, 10, 10, 0.34);
-    color: rgb(0, 255, 85)
-}
-:root[data-theme='nebuleuse-verre'] .graph-clean-memory:hover {
-    background: rgba(0, 255, 85, 0.12)
-}
 :root[data-theme='nebuleuse-verre'] .graph-toolbar__stats strong {
     color: rgb(205, 198, 241)
-}
-:root[data-theme='nebuleuse-verre'] .theme-filter:hover, :root[data-theme='nebuleuse-verre'] .theme-filter.is-active {
-    color: rgb(195, 184, 255)
 }
 :root[data-theme='nebuleuse-verre'] .search-results-heading {
     color: var(--gold-bright, rgb(253, 185, 219))
@@ -590,14 +565,6 @@
 }
 :root[data-theme='nebuleuse-verre'] .node-search-result small {
     color: var(--gold, rgb(243, 102, 173))
-}
-:root[data-theme='nebuleuse-verre'] .graph-settings-button {
-    background: rgba(10, 10, 10, 0.92)
-}
-:root[data-theme='nebuleuse-verre'] .graph-settings-button:hover, :root[data-theme='nebuleuse-verre'] .graph-settings-button.is-active {
-    border-color: rgb(157, 137, 255);
-    color: rgb(195, 184, 255);
-    box-shadow: 0 0 12px rgba(157, 137, 255, 0.2)
 }
 :root[data-theme='nebuleuse-verre'] .graph-settings-popover {
     background: rgb(10, 10, 10)
@@ -667,7 +634,7 @@
 :root[data-theme='nebuleuse-verre'] .node-panel pre {
     background: rgb(10, 10, 10)
 }
-:root[data-theme='nebuleuse-verre'] .graph-observatory--galaxy .theme-sidebar, :root[data-theme='nebuleuse-verre'] .graph-observatory--galaxy .visibility-sidebar {
+:root[data-theme='nebuleuse-verre'] .graph-observatory--galaxy .visibility-sidebar {
     background: linear-gradient(180deg, rgba(10, 10, 10, 0.98), rgba(10, 10, 10, 0.98))
 }
 :root[data-theme='nebuleuse-verre'] .graph-observatory--galaxy .graph-stage {
@@ -696,25 +663,14 @@
 :root[data-theme='nebuleuse-verre'] .graph-observatory--galaxy .node-panel pre {
     background: rgba(10, 10, 10, 0.92)
 }
-:root[data-theme='nebuleuse-verre'] .theme-sidebar, :root[data-theme='nebuleuse-verre'] .visibility-sidebar {
+:root[data-theme='nebuleuse-verre'] .visibility-sidebar {
     background: rgba(10, 10, 10, 0.97)
 }
 :root[data-theme='nebuleuse-verre'] .graph-stage {
     background: radial-gradient(circle at 52% 42%, rgb(10, 10, 10) 0, rgb(10, 10, 10) 52%, rgb(10, 10, 10) 82%)
 }
-:root[data-theme='nebuleuse-verre'] .theme-filter:hover, :root[data-theme='nebuleuse-verre'] .theme-filter.is-active {
-    background: rgba(243, 102, 173, 0.08)
-}
 :root[data-theme='nebuleuse-verre'] .graph-status, :root[data-theme='nebuleuse-verre'] .selected-node {
     background: rgba(10, 10, 10, 0.94)
-}
-:root[data-theme='nebuleuse-verre'] .graph-workbench-button {
-    background: rgba(10, 10, 10, 0.92)
-}
-:root[data-theme='nebuleuse-verre'] .graph-workbench-button:hover, :root[data-theme='nebuleuse-verre'] .graph-workbench-button.is-active {
-    border-color: rgb(157, 137, 255);
-    color: rgb(195, 184, 255);
-    box-shadow: 0 0 12px rgba(157, 137, 255, 0.2)
 }
 :root[data-theme='nebuleuse-verre'] .graph-workbench-popover {
     background: rgb(10, 10, 10)
@@ -781,11 +737,7 @@
 :root[data-theme='nebuleuse-verre'] .brain-bench__cut {
     color: rgb(255, 184, 219)
 }
-:root[data-theme='nebuleuse-verre'] .theme-sidebar__retrieval.is-unavailable {
-    color: rgb(255, 184, 219)
-}
-:root[data-theme='nebuleuse-verre'] .graph-truncation {
-    background: rgba(10, 10, 10, 0.92);
+:root[data-theme='nebuleuse-verre'] .graph-search__verdict.is-unavailable {
     color: rgb(255, 184, 219)
 }
 :root[data-theme='nebuleuse-verre'] .graph-brains-retry, :root[data-theme='nebuleuse-verre'] .graph-themes-retry, :root[data-theme='nebuleuse-verre'] .graph-theme-nodes-retry, :root[data-theme='nebuleuse-verre'] .graph-status__retry, :root[data-theme='nebuleuse-verre'] .graph-empty-reindex, :root[data-theme='nebuleuse-verre'] .graph-empty-brains, :root[data-theme='nebuleuse-verre'] .graph-truncation__extend, :root[data-theme='nebuleuse-verre'] .node-panel__retry {
@@ -1864,13 +1816,13 @@
     border-color: rgb(255, 155, 205);
     box-shadow: 0 0 18px rgba(255, 47, 151, 0.24)
 }
-:root[data-theme='nebuleuse-verre'] .theme-sidebar, :root[data-theme='nebuleuse-verre'] .visibility-sidebar, :root[data-theme='nebuleuse-verre'] .graph-stage {
+:root[data-theme='nebuleuse-verre'] .visibility-sidebar, :root[data-theme='nebuleuse-verre'] .graph-stage {
     background-color: rgba(10, 10, 10, 0.96)
 }
-:root[data-theme='nebuleuse-verre'] .theme-filter, :root[data-theme='nebuleuse-verre'] .node-search-result, :root[data-theme='nebuleuse-verre'] .settings-section, :root[data-theme='nebuleuse-verre'] .node-links button {
+:root[data-theme='nebuleuse-verre'] .node-search-result, :root[data-theme='nebuleuse-verre'] .settings-section, :root[data-theme='nebuleuse-verre'] .node-links button {
     background: rgb(10, 10, 10)
 }
-:root[data-theme='nebuleuse-verre'] .theme-filter.is-active, :root[data-theme='nebuleuse-verre'] .node-search-result:hover {
+:root[data-theme='nebuleuse-verre'] .node-search-result:hover {
     background: rgba(255, 107, 181, 0.07)
 }
 :root[data-theme='nebuleuse-verre'] .conv-item, :root[data-theme='nebuleuse-verre'] .run-row, :root[data-theme='nebuleuse-verre'] .control-row {

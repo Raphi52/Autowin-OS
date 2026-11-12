@@ -133,7 +133,7 @@ describe('GraphView — chantier 2 : la boîte de réception est visible sans ou
 
     // Popover FERMÉ : le panneau ne doit pas être monté.
     expect(container.querySelector('[aria-label="Boîte de réception du savoir"]')).toBeNull()
-    expect(container.querySelector('.graph-workbench-badge')?.textContent).toBe('2')
+    expect(container.querySelector('.graph-plus__badge')?.textContent).toBe('2')
     expect(container.querySelector('.graph-stat-inbox')?.textContent).toContain('2')
   })
 
@@ -145,28 +145,26 @@ describe('GraphView — chantier 2 : la boîte de réception est visible sans ou
     const listInbox = vi.fn().mockImplementation(async () => (drained ? [] : twelve))
     installApi({ listInbox })
     await mount()
-    expect(container.querySelector('.graph-workbench-badge')?.textContent).toBe('12')
+    expect(container.querySelector('.graph-plus__badge')?.textContent).toBe('12')
 
     drained = true // la curation tourne hors de l'écran : rien ne prévient la vue
 
     await act(async () =>
-      container
-        .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
-        ?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')?.click()
     )
     await flush()
 
-    expect(container.querySelector('[aria-label="Boîte de réception du savoir"]')?.textContent).toContain(
-      '0 candidat'
-    )
-    expect(container.querySelector('.graph-workbench-badge')).toBeNull()
+    expect(
+      container.querySelector('[aria-label="Boîte de réception du savoir"]')?.textContent
+    ).toContain('0 candidat')
+    expect(container.querySelector('.graph-plus__badge')).toBeNull()
     expect(container.querySelector('.graph-stat-inbox')).toBeNull()
   })
 
   it('sans candidat, aucun compteur parasite sur le bouton', async () => {
     installApi()
     await mount()
-    expect(container.querySelector('.graph-workbench-badge')).toBeNull()
+    expect(container.querySelector('.graph-plus__badge')).toBeNull()
   })
 })
 
@@ -196,7 +194,7 @@ describe('GraphView — chantier 4 : les états vides offrent une sortie', () =>
       root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
     )
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Rafraîchir les graphes"]')?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--actualiser')?.click()
     )
     await flush()
     expect(container.textContent).toContain('Brain')
@@ -239,7 +237,7 @@ describe('GraphView — chantier 5 : chaque canal a son réessai', () => {
     })
     await mount()
 
-    expect(container.querySelector('.theme-sidebar__error')).not.toBeNull()
+    expect(container.querySelector('.graph-search__erreur')).not.toBeNull()
     expect(container.querySelector('.graph-status--error')).toBeNull()
     expect(container.querySelector('[data-testid="force-graph"]')).not.toBeNull()
   })

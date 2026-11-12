@@ -248,9 +248,7 @@ describe('GraphView refresh', () => {
     )
     await flush()
     await act(async () =>
-      container
-        .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
-        ?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')?.click()
     )
     await flush()
     const benchQuestion = container.querySelector<HTMLInputElement>(
@@ -305,9 +303,7 @@ describe('GraphView refresh', () => {
     await flush()
     expect(loadBrainGraph).toHaveBeenCalledTimes(1)
 
-    const refresh = container.querySelector<HTMLButtonElement>(
-      '[aria-label="Rafraîchir les graphes"]'
-    )
+    const refresh = container.querySelector<HTMLButtonElement>('.graph-plus__item--actualiser')
     expect(refresh).toBeTruthy()
     await act(async () => refresh?.click())
     await flush()
@@ -353,7 +349,7 @@ describe('GraphView refresh', () => {
     )
 
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Rafraîchir les graphes"]')?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--actualiser')?.click()
     )
     await flush()
     expect(container.querySelector('[data-retrieval-status]')).toBeNull()
@@ -400,7 +396,7 @@ describe('GraphView refresh', () => {
     expect(searchBrain).toHaveBeenCalledTimes(1)
 
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Rafraîchir les graphes"]')?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--actualiser')?.click()
     )
     await act(async () => {
       oldSearch.resolve({ status: 'found', note: 'ANCIEN-PRINCIPAL', results: [] })
@@ -500,9 +496,7 @@ describe('GraphView refresh', () => {
     )
     await flush()
     await act(async () =>
-      container
-        .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
-        ?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')?.click()
     )
     await flush()
     await act(async () => container.querySelector<HTMLButtonElement>('button.is-promote')?.click())
@@ -574,9 +568,7 @@ describe('GraphView refresh', () => {
     )
     await flush()
     await act(async () =>
-      container
-        .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
-        ?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')?.click()
     )
     await flush()
     const question = container.querySelector<HTMLInputElement>(
@@ -589,7 +581,7 @@ describe('GraphView refresh', () => {
     expect(container.textContent).toContain('ANCIEN-BANC')
 
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Rafraîchir les graphes"]')?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--actualiser')?.click()
     )
     await flush()
     expect(container.textContent).not.toContain('ANCIEN-BANC')
@@ -755,14 +747,14 @@ describe('GraphView refresh', () => {
     )
     await flush()
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Réglages de visibilité"]')?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--visibilite')?.click()
     )
     const lod = [...container.querySelectorAll<HTMLInputElement>('input[type="range"]')].at(-1)
     if (!lod) throw new Error('réglage LOD absent')
     await act(async () => changeRange(lod, '400'))
     await flush()
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Rafraîchir les graphes"]')?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--actualiser')?.click()
     )
     await flush()
     const currentLod = [...container.querySelectorAll<HTMLInputElement>('input[type="range"]')].at(
@@ -790,10 +782,10 @@ describe('GraphView refresh', () => {
     )
     await flush()
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('.graph-layout-switch')?.click()
+      container.querySelector<HTMLButtonElement>('[data-disposition="tree"]')?.click()
     )
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Réglages de visibilité"]')?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--visibilite')?.click()
     )
 
     const settings = container.querySelector('.graph-settings-popover')?.textContent ?? ''
@@ -824,7 +816,7 @@ describe('GraphView refresh', () => {
     )
     await flush()
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('.graph-layout-switch')?.click()
+      container.querySelector<HTMLButtonElement>('[data-disposition="tree"]')?.click()
     )
     expect(
       container.querySelector('[role="toolbar"][aria-label="Branches du Brain"] button')
@@ -990,7 +982,7 @@ describe('GraphView refresh', () => {
     )
     await flush()
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Réglages de visibilité"]')?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--visibilite')?.click()
     )
     const healthToggle = [...container.querySelectorAll<HTMLLabelElement>('.toggle-row')]
       .find((label) => label.textContent?.includes('Relations à vérifier'))

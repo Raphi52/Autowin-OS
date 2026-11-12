@@ -613,18 +613,18 @@
 
 /* ---- 11. DERNIERE PASSE : Knowledge, Agent Studio, Task Manager, Tests, menu ------------------- */
 /* Knowledge : boutons noirs de l'atelier, pastille orange du compteur. */
-:root[data-theme='nier-automata'][data-base='clair'] :is(.graph-workbench-button, .graph-refresh, .graph-settings-button) {
+:root[data-theme='nier-automata'][data-base='clair'] :is(.graph-plus__bouton) {
   border: 1px solid rgba(78, 75, 66, 0.4);
   border-radius: 0;
   background: #cdc8b0;
   box-shadow: none;
   color: #4e4b42;
 }
-:root[data-theme='nier-automata'][data-base='clair'] :is(.graph-workbench-button, .graph-refresh, .graph-settings-button):hover:not(:disabled) {
+:root[data-theme='nier-automata'][data-base='clair'] :is(.graph-plus__bouton):hover:not(:disabled) {
   background: #4e4b42;
   color: #dad4bb;
 }
-:root[data-theme='nier-automata'][data-base='clair'] .graph-workbench-badge {
+:root[data-theme='nier-automata'][data-base='clair'] .graph-plus__badge {
   border-radius: 0;
   background: #4e4b42;
   box-shadow: none;

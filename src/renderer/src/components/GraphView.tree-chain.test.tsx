@@ -133,9 +133,7 @@ describe('graphe en arbre — tout est visible d’emblée, le pliage reste poss
     )
     await flush()
 
-    const bascule = container.querySelector<HTMLButtonElement>(
-      '[aria-label="Disposition du graphe"]'
-    )
+    const bascule = container.querySelector<HTMLButtonElement>('[data-disposition="tree"]')
     if (!bascule) throw new Error('bascule de disposition absente')
     await act(async () => bascule.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     await flush()

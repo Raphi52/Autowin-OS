@@ -156,12 +156,6 @@ export function loadGraphLayoutMode(storage: StorageLike): GraphLayoutMode {
   return MODES_CONNUS.includes(brut as GraphLayoutMode) ? (brut as GraphLayoutMode) : 'force'
 }
 
-/** L'ordre de bascule du bouton : libre → arbre → libre. */
-export function nextGraphLayoutMode(mode: GraphLayoutMode): GraphLayoutMode {
-  const index = MODES_CONNUS.indexOf(mode)
-  return MODES_CONNUS[(index + 1) % MODES_CONNUS.length]
-}
-
 export function saveGraphLayoutMode(storage: StorageLike, mode: GraphLayoutMode): void {
   storage.setItem(autowinStorageKey(GRAPH_LAYOUT_MODE_SUFFIX), mode)
 }

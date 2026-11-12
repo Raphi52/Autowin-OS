@@ -353,7 +353,7 @@ describe('theme Holographique blanc — couche generee des composants', () => {
       expect(i, `${selecteur} absent de la couche`).toBeGreaterThan(0)
       return couche.slice(i, couche.indexOf('}', i))
     }
-    expect(fond('.graph-refresh')).toMatch(/rgba\(253, 253, 255, 0\.95\)/)
+    expect(fond('.graph-toolbar select')).toMatch(/rgba\(253, 253, 255, 0\.95\)/)
     expect(fond('.theme-cluster-label')).toMatch(/rgba\(253, 253, 255, 0\.9\)/)
   })
 })

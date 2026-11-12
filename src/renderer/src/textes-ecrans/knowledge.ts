@@ -3,7 +3,7 @@ import { tableDeTextes } from '../textes'
 /**
  * TEXTES — ÉCRAN KNOWLEDGE (traduction anglaise, 2026-10-27).
  *
- * Écrans couverts : GraphView et ses panneaux (graphe Memory, catégories du Brain), KnowledgeInboxPanel,
+ * Écrans couverts : GraphView et ses panneaux (graphe Knowledge, catégories du Brain), KnowledgeInboxPanel,
  * BrainRetrievalBench.
  *
  * Une table par groupe d'écrans pour que les lots de traduction, menés en même temps, n'écrivent
@@ -14,8 +14,8 @@ import { tableDeTextes } from '../textes'
  * `IDENTIQUES_AU_FRANCAIS`, avec sa raison.
  *
  * RESTENT EN DUR, hors de cette table (lot « Knowledge ») :
- *  - les mots déjà identiques dans les deux langues, écrits une fois dans le composant : « Memory »,
- *    « Clean memory », « relations » et « · N relation(s) », « Contradiction », « via », « Source »,
+ *  - les mots déjà identiques dans les deux langues, écrits une fois dans le composant : « Knowledge »,
+ *    « Clean memory », « Galaxy », « relations » et « · N relation(s) », « Contradiction », « via », « Source »,
  *    « Question », les noms de canaux « dense », « lexical », « fusion », les dossiers `knowledge/`,
  *    `inbox`, `.trash/` ;
  *  - `'brain actif'` (GraphView) et les deux commandes `/curate — …` (KnowledgeInboxPanel) : ils
@@ -35,7 +35,7 @@ export const TEXTES_FR = {
   'commun.liens': 'Liens',
   'commun.themes': 'Thèmes',
 
-  // — Vue Memory : barre d'outils (GraphView) —
+  // — Vue Knowledge : barre d'outils (GraphView) —
   'graphe.eyebrow': 'Connaissances connectées',
   'graphe.description': 'Explore les connaissances reliées de ton Brain.',
   'graphe.selecteur': 'Graphe de connaissances',
@@ -69,28 +69,31 @@ export const TEXTES_FR = {
   'graphe.stats.noeuds': 'nœuds',
   'graphe.stats.themes': 'thèmes',
   'graphe.stats.enAttente': 'en attente de revue',
+  // Menu « Plus » : tout ce qui n'est ni la recherche, ni les thèmes, ni le graphe.
+  'graphe.plus': 'Plus',
+  'graphe.plus.titre': 'Dossiers, savoir, visibilité, disposition et ambiance du graphe',
+  'graphe.plus.dossiers': 'Dossiers du Brain',
+  'graphe.plus.savoir': 'Savoir · boîte de réception',
+  'graphe.plus.libre': 'Libre',
+  'graphe.plus.arbre': 'Arbre',
+  'graphe.plus.ambiance': 'Ambiance',
+  'graphe.plus.sombre': 'Sombre',
+  'graphe.plus.actualiser': 'Actualiser',
 
-  // — Vue Memory : colonne des thèmes et recherche —
+  // — Vue Knowledge : recherche et thèmes —
   'graphe.filtres': 'Filtres de thèmes',
-  'graphe.rechercher': 'Rechercher',
-  'graphe.effacer': 'Effacer',
   'graphe.recherche.aria': 'Rechercher un thème ou une fiche',
-  'graphe.recherche.placeholder': 'Thème ou fiche…',
+  'graphe.recherche.placeholder': 'Chercher un thème, une fiche — ou poser une question au savoir',
   'graphe.tousLesThemes': 'Tous les thèmes',
+  'graphe.themes.plus': '+ {n} thèmes',
+  'graphe.themes.moins': 'Moins de thèmes',
   'graphe.fichesTrouvees': 'Fiches trouvées',
   'graphe.fiches': 'Fiches',
   'graphe.pertinence': 'pertinence locale {score}',
   'graphe.pertinence.aucune': 'pertinence locale —',
-  'graphe.surbrillance': 'Mode surbrillance',
-  'graphe.surbrillance.tous': 'Tous les nœuds sont actifs.',
-  'graphe.surbrillance.actifs': '{n} nœuds actifs. Le reste demeure visible comme contexte.',
-  'graphe.redimensionner.themes': 'Redimensionner la colonne Thèmes',
   'graphe.redimensionner.detail': 'Redimensionner la colonne de droite',
 
-  // — Vue Memory : scène, états et lentille des relations —
-  'graphe.themesActifs': 'Thèmes actifs',
-  'graphe.vueEnsemble': 'Vue d’ensemble',
-  'graphe.miseEnEvidence': '{n} nœuds mis en évidence · {contexte} de contexte',
+  // — Vue Knowledge : scène, états et lentille des relations —
   'graphe.chargement': 'Chargement du graphe…',
   'graphe.chargementConnexions': 'Chargement des connexions…',
   'graphe.vide': 'Aucun nœud disponible pour ce graphe.',
@@ -110,7 +113,7 @@ export const TEXTES_FR = {
   'graphe.aide.arbre': 'Glisser : déplacer · molette : zoomer · clic : sélectionner',
   'graphe.aide.libre': 'Glisser : pivoter · molette : zoomer · clic : sélectionner',
 
-  // — Vue Memory : poste de travail du savoir et réglages de visibilité —
+  // — Vue Knowledge : poste de travail du savoir et réglages de visibilité —
   'graphe.poste': 'Poste de travail du savoir',
   'graphe.poste.candidat': '{n} candidat en attente de revue',
   'graphe.poste.candidats': '{n} candidats en attente de revue',
@@ -136,7 +139,7 @@ export const TEXTES_FR = {
   'graphe.nombre.affiches': 'Nœuds affichés',
   'graphe.nombre.aide': 'Affiche en priorité les nœuds les plus connectés du graphe.',
 
-  // — Vue Memory : erreurs et invite (GraphView) —
+  // — Vue Knowledge : erreurs et invite (GraphView) —
   'graphe.erreur.listerGraphes': 'Impossible de lister les graphes de connaissances.',
   'graphe.erreur.rafraichir': 'Impossible de rafraîchir le graphe de connaissances.',
   'graphe.erreur.themes': 'Impossible de charger les thèmes du workspace.',
@@ -316,26 +319,28 @@ export const TEXTES_EN: Record<CleKnowledge, string> = {
   'graphe.stats.noeuds': 'nodes',
   'graphe.stats.themes': 'themes',
   'graphe.stats.enAttente': 'awaiting review',
+  'graphe.plus': 'More',
+  'graphe.plus.titre': 'Folders, knowledge, visibility, layout and look of the graph',
+  'graphe.plus.dossiers': 'Brain folders',
+  'graphe.plus.savoir': 'Knowledge · inbox',
+  'graphe.plus.libre': 'Free',
+  'graphe.plus.arbre': 'Tree',
+  'graphe.plus.ambiance': 'Look',
+  'graphe.plus.sombre': 'Dark',
+  'graphe.plus.actualiser': 'Refresh',
 
   'graphe.filtres': 'Theme filters',
-  'graphe.rechercher': 'Search',
-  'graphe.effacer': 'Clear',
   'graphe.recherche.aria': 'Search for a theme or a note',
-  'graphe.recherche.placeholder': 'Theme or note…',
+  'graphe.recherche.placeholder': 'Search a theme, a note — or ask the knowledge a question',
   'graphe.tousLesThemes': 'All themes',
+  'graphe.themes.plus': '+ {n} themes',
+  'graphe.themes.moins': 'Fewer themes',
   'graphe.fichesTrouvees': 'Notes found',
   'graphe.fiches': 'Notes',
   'graphe.pertinence': 'local relevance {score}',
   'graphe.pertinence.aucune': 'local relevance —',
-  'graphe.surbrillance': 'Highlight mode',
-  'graphe.surbrillance.tous': 'All nodes are active.',
-  'graphe.surbrillance.actifs': '{n} active nodes. The rest stays visible as context.',
-  'graphe.redimensionner.themes': 'Resize the Themes column',
   'graphe.redimensionner.detail': 'Resize the right column',
 
-  'graphe.themesActifs': 'Active themes',
-  'graphe.vueEnsemble': 'Overview',
-  'graphe.miseEnEvidence': '{n} highlighted nodes · {contexte} for context',
   'graphe.chargement': 'Loading the graph…',
   'graphe.chargementConnexions': 'Loading connections…',
   'graphe.vide': 'No node available for this graph.',

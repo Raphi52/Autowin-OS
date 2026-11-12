@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   978 regles, 1366 declarations. Voir genererNinjaClaude.
+   943 regles, 1315 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -983,10 +983,7 @@
 :root[data-theme='ninja-claude'] .graph-observatory {
     color: rgb(239, 239, 237)
 }
-:root[data-theme='ninja-claude'] .graph-stage__heading span {
-    color: rgb(129, 126, 114)
-}
-:root[data-theme='ninja-claude'] .graph-toolbar select, :root[data-theme='ninja-claude'] .theme-sidebar input {
+:root[data-theme='ninja-claude'] .graph-toolbar select {
     border: 1px solid rgb(57, 56, 51);
     background: rgba(38, 38, 36, 0.95);
     color: rgb(233, 232, 230)
@@ -999,79 +996,23 @@
 :root[data-theme='ninja-claude'] .graph-brains-filtre button.is-active {
     color: rgb(234, 181, 163)
 }
-:root[data-theme='ninja-claude'] .graph-refresh {
-    border: 1px solid rgb(57, 56, 51);
-    background: rgba(38, 38, 36, 0.95);
-    color: rgb(233, 232, 230)
-}
-:root[data-theme='ninja-claude'] .graph-mode-switch__track {
-    border: 1px solid rgb(61, 60, 54);
-    background: linear-gradient(180deg, rgb(38, 38, 36), rgb(38, 38, 36))
-}
-:root[data-theme='ninja-claude'] .graph-mode-switch__thumb {
-    background: radial-gradient(circle at 32% 30%, rgb(81, 79, 71), rgb(36, 35, 31) 68%)
-}
-:root[data-theme='ninja-claude'] .graph-mode-switch.is-galaxy .graph-mode-switch__track {
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5),
-    0 0 16px rgba(255, 93, 222, 0.28),
-    0 0 34px rgba(176, 174, 166, 0.18)
-}
-:root[data-theme='ninja-claude'] .graph-mode-switch.is-galaxy .graph-mode-switch__track {
-    background: linear-gradient(120deg, #1b1038, #3d1150 55%, #131c3f)
-}
-:root[data-theme='ninja-claude'] .graph-mode-switch.is-galaxy .graph-mode-switch__thumb {
-    background: radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.92), transparent 34%),
-    conic-gradient(from 210deg, #ff5dde, rgb(185, 184, 177), rgb(169, 167, 159), #ff5dde);
-    box-shadow: 0 0 10px rgba(255, 93, 222, 0.65),
-    0 0 22px rgba(185, 184, 177, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3)
-}
-:root[data-theme='ninja-claude'] .graph-mode-switch:hover .graph-mode-switch__track {
-    border-color: rgb(104, 102, 93)
-}
-:root[data-theme='ninja-claude'] .graph-mode-switch.is-galaxy:hover .graph-mode-switch__track {
-    border-color: #ff8fe9
-}
-:root[data-theme='ninja-claude'] .graph-mode-switch:focus-visible .graph-mode-switch__track {
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55),
-    0 0 0 2px rgba(190, 188, 182, 0.55)
-}
-:root[data-theme='ninja-claude'] .graph-clean-memory {
-    background: rgba(31, 30, 29, 0.34)
-}
-:root[data-theme='ninja-claude'] .graph-clean-memory:hover {
-    background: rgba(103, 225, 178, 0.12)
-}
 :root[data-theme='ninja-claude'] .graph-toolbar__stats {
     color: rgb(127, 124, 113)
 }
 :root[data-theme='ninja-claude'] .graph-toolbar__stats strong {
     color: rgb(232, 231, 229)
 }
-:root[data-theme='ninja-claude'] .sidebar-heading, :root[data-theme='ninja-claude'] .settings-section__heading {
+:root[data-theme='ninja-claude'] .settings-section__heading {
     color: rgb(138, 135, 123)
 }
-:root[data-theme='ninja-claude'] .sidebar-heading button, :root[data-theme='ninja-claude'] .settings-section__heading button {
+:root[data-theme='ninja-claude'] .settings-section__heading button {
     color: rgb(107, 104, 94)
 }
-:root[data-theme='ninja-claude'] .theme-list::-webkit-scrollbar-thumb, :root[data-theme='ninja-claude'] .visibility-sidebar::-webkit-scrollbar-thumb, :root[data-theme='ninja-claude'] .node-panel pre::-webkit-scrollbar-thumb {
+:root[data-theme='ninja-claude'] .node-search-results::-webkit-scrollbar-thumb, :root[data-theme='ninja-claude'] .visibility-sidebar::-webkit-scrollbar-thumb, :root[data-theme='ninja-claude'] .node-panel pre::-webkit-scrollbar-thumb {
     background: rgb(107, 104, 94)
 }
-:root[data-theme='ninja-claude'] .theme-list::-webkit-scrollbar-track, :root[data-theme='ninja-claude'] .visibility-sidebar::-webkit-scrollbar-track, :root[data-theme='ninja-claude'] .node-panel pre::-webkit-scrollbar-track {
+:root[data-theme='ninja-claude'] .node-search-results::-webkit-scrollbar-track, :root[data-theme='ninja-claude'] .visibility-sidebar::-webkit-scrollbar-track, :root[data-theme='ninja-claude'] .node-panel pre::-webkit-scrollbar-track {
     background: rgba(38, 38, 36, 0.95)
-}
-:root[data-theme='ninja-claude'] .theme-filter {
-    color: rgb(153, 150, 139)
-}
-:root[data-theme='ninja-claude'] .theme-filter:hover, :root[data-theme='ninja-claude'] .theme-filter.is-active {
-    border-color: rgb(75, 74, 67);
-    color: rgb(247, 247, 246)
-}
-:root[data-theme='ninja-claude'] .theme-filter small {
-    color: rgb(105, 103, 93)
-}
-:root[data-theme='ninja-claude'] .node-search-results {
-    border-bottom: 1px solid var(--line, rgb(58, 57, 52))
 }
 :root[data-theme='ninja-claude'] .search-results-heading {
     color: var(--gold-bright, rgb(232, 174, 155))
@@ -1091,23 +1032,6 @@
 }
 :root[data-theme='ninja-claude'] .node-search-result small {
     color: var(--gold, rgb(215, 112, 79))
-}
-:root[data-theme='ninja-claude'] .theme-sidebar__note {
-    border-top: 1px solid rgb(42, 41, 38);
-    color: rgb(127, 124, 113)
-}
-:root[data-theme='ninja-claude'] .theme-sidebar__note strong {
-    color: rgb(168, 166, 157)
-}
-:root[data-theme='ninja-claude'] .graph-settings-button {
-    border: 1px solid rgb(68, 67, 61);
-    background: rgba(38, 38, 36, 0.92);
-    color: rgb(168, 166, 157)
-}
-:root[data-theme='ninja-claude'] .graph-settings-button:hover, :root[data-theme='ninja-claude'] .graph-settings-button.is-active {
-    border-color: rgb(190, 188, 182);
-    color: rgb(237, 237, 235);
-    box-shadow: 0 0 12px rgba(190, 188, 182, 0.2)
 }
 :root[data-theme='ninja-claude'] .graph-settings-popover {
     border: 1px solid rgb(68, 67, 61);
@@ -1174,12 +1098,6 @@
 }
 :root[data-theme='ninja-claude'] .theme-cluster-label:hover, :root[data-theme='ninja-claude'] .theme-cluster-label:focus-visible, :root[data-theme='ninja-claude'] .theme-cluster-label.is-active {
     background: color-mix(in srgb, var(--theme-color) 16%, rgba(31, 30, 29, 0.94))
-}
-:root[data-theme='ninja-claude'] .graph-stage__heading strong {
-    color: rgb(238, 238, 236)
-}
-:root[data-theme='ninja-claude'] .graph-stage__heading small {
-    color: rgb(126, 123, 111)
 }
 :root[data-theme='ninja-claude'] .graph-status {
     border: 1px solid rgb(60, 59, 54);
@@ -1271,14 +1189,11 @@
     background: rgb(38, 38, 36);
     color: rgb(175, 173, 165)
 }
-:root[data-theme='ninja-claude'] .graph-observatory--galaxy .graph-stage__heading span, :root[data-theme='ninja-claude'] .graph-observatory--galaxy .sidebar-heading, :root[data-theme='ninja-claude'] .graph-observatory--galaxy .settings-section__heading {
+:root[data-theme='ninja-claude'] .graph-observatory--galaxy .settings-section__heading {
     color: rgb(189, 188, 181)
 }
-:root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-sidebar, :root[data-theme='ninja-claude'] .graph-observatory--galaxy .visibility-sidebar {
+:root[data-theme='ninja-claude'] .graph-observatory--galaxy .visibility-sidebar {
     background: linear-gradient(180deg, rgba(38, 38, 36, 0.98), rgba(38, 38, 36, 0.98))
-}
-:root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-sidebar {
-    border-right-color: rgb(62, 61, 55)
 }
 :root[data-theme='ninja-claude'] .graph-observatory--galaxy .visibility-sidebar {
     border-left-color: rgb(62, 61, 55)
@@ -1302,16 +1217,6 @@
     radial-gradient(circle, rgba(255, 135, 230, 0.78) 0 0.8px, transparent 1.5px),
     radial-gradient(circle, rgba(228, 160, 138, 0.72) 0 0.7px, transparent 1.4px)
 }
-:root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-filter:hover, :root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-filter.is-active {
-    background: linear-gradient(90deg, rgba(92, 90, 82, 0.5), rgba(24, 33, 73, 0.58));
-    box-shadow: inset 2px 0 rgb(182, 180, 172)
-}
-:root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-filter:hover {
-    border-color: #654995
-}
-:root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-filter.is-active {
-    border-color: #654995
-}
 :root[data-theme='ninja-claude'] .graph-observatory--galaxy .toggle-row input:checked + i {
     background: linear-gradient(90deg, rgb(113, 111, 101), rgb(114, 112, 102))
 }
@@ -1329,37 +1234,14 @@
     border-color: rgb(69, 68, 62);
     background: rgba(31, 30, 29, 0.92)
 }
-@media (max-width: 760px) {
-    :root[data-theme='ninja-claude'] .graph-observatory .visibility-sidebar {
-        border-top: 1px solid rgb(46, 45, 40)
-    }
-}
-@media (max-width: 760px) {
-    :root[data-theme='ninja-claude'] .graph-observatory--galaxy .visibility-sidebar {
-        border-top-color: rgb(62, 61, 55)
-    }
-}
-:root[data-theme='ninja-claude'] .theme-sidebar, :root[data-theme='ninja-claude'] .visibility-sidebar {
+:root[data-theme='ninja-claude'] .visibility-sidebar {
     background: rgba(31, 30, 29, 0.97)
 }
 :root[data-theme='ninja-claude'] .graph-stage {
     background: radial-gradient(circle at 52% 42%, rgb(38, 38, 36) 0, rgb(31, 30, 29) 52%, rgb(31, 30, 29) 82%)
 }
-:root[data-theme='ninja-claude'] .theme-filter:hover, :root[data-theme='ninja-claude'] .theme-filter.is-active {
-    background: rgba(215, 112, 79, 0.08)
-}
 :root[data-theme='ninja-claude'] .graph-status, :root[data-theme='ninja-claude'] .selected-node {
     background: rgba(38, 38, 36, 0.94)
-}
-:root[data-theme='ninja-claude'] .graph-workbench-button {
-    border: 1px solid rgb(68, 67, 61);
-    background: rgba(38, 38, 36, 0.92);
-    color: rgb(168, 166, 157)
-}
-:root[data-theme='ninja-claude'] .graph-workbench-button:hover, :root[data-theme='ninja-claude'] .graph-workbench-button.is-active {
-    border-color: rgb(190, 188, 182);
-    color: rgb(237, 237, 235);
-    box-shadow: 0 0 12px rgba(190, 188, 182, 0.2)
 }
 :root[data-theme='ninja-claude'] .graph-workbench-popover {
     border: 1px solid rgb(68, 67, 61);
@@ -1473,22 +1355,18 @@
 :root[data-theme='ninja-claude'] .brain-bench__local {
     color: rgb(138, 135, 123)
 }
-:root[data-theme='ninja-claude'] .theme-sidebar__retrieval {
+:root[data-theme='ninja-claude'] .graph-search__verdict {
     border: 1px solid rgb(46, 45, 40);
     color: rgb(168, 166, 157)
 }
-:root[data-theme='ninja-claude'] .theme-sidebar__retrieval.is-unavailable {
+:root[data-theme='ninja-claude'] .graph-search__verdict.is-unavailable {
     color: rgb(234, 181, 163)
 }
-:root[data-theme='ninja-claude'] .theme-sidebar__retrieval.is-failed {
+:root[data-theme='ninja-claude'] .graph-search__verdict.is-failed {
     color: #ffc4cd
 }
-:root[data-theme='ninja-claude'] .graph-workbench-badge {
+:root[data-theme='ninja-claude'] .graph-plus__badge {
     color: rgb(25, 24, 22)
-}
-:root[data-theme='ninja-claude'] .graph-truncation {
-    background: rgba(38, 38, 36, 0.92);
-    color: rgb(234, 181, 163)
 }
 :root[data-theme='ninja-claude'] .graph-brains-retry, :root[data-theme='ninja-claude'] .graph-themes-retry, :root[data-theme='ninja-claude'] .graph-theme-nodes-retry, :root[data-theme='ninja-claude'] .graph-status__retry, :root[data-theme='ninja-claude'] .graph-empty-reindex, :root[data-theme='ninja-claude'] .graph-empty-brains, :root[data-theme='ninja-claude'] .graph-truncation__extend, :root[data-theme='ninja-claude'] .node-panel__retry {
     border: 1px solid rgb(57, 56, 51);
@@ -3236,13 +3114,13 @@
     border-color: rgb(234, 181, 163);
     box-shadow: 0 0 18px rgba(217, 118, 85, 0.24)
 }
-:root[data-theme='ninja-claude'] .theme-sidebar, :root[data-theme='ninja-claude'] .visibility-sidebar, :root[data-theme='ninja-claude'] .graph-stage {
+:root[data-theme='ninja-claude'] .visibility-sidebar, :root[data-theme='ninja-claude'] .graph-stage {
     background-color: rgba(31, 30, 29, 0.96)
 }
-:root[data-theme='ninja-claude'] .theme-filter, :root[data-theme='ninja-claude'] .node-search-result, :root[data-theme='ninja-claude'] .settings-section, :root[data-theme='ninja-claude'] .node-links button {
+:root[data-theme='ninja-claude'] .node-search-result, :root[data-theme='ninja-claude'] .settings-section, :root[data-theme='ninja-claude'] .node-links button {
     background: rgb(31, 30, 29)
 }
-:root[data-theme='ninja-claude'] .theme-filter.is-active, :root[data-theme='ninja-claude'] .node-search-result:hover {
+:root[data-theme='ninja-claude'] .node-search-result:hover {
     background: rgba(218, 124, 93, 0.07)
 }
 :root[data-theme='ninja-claude'] .conv-item, :root[data-theme='ninja-claude'] .run-row, :root[data-theme='ninja-claude'] .control-row {
@@ -3253,9 +3131,6 @@
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .graph-stage {
     background: transparent
-}
-:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .theme-sidebar {
-    background: var(--surface-panel)
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .visibility-sidebar {
     background: var(--surface-panel)
@@ -3270,9 +3145,6 @@
     filter: saturate(1.12) contrast(1.04)
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .toggle-row input:checked + i::after {
-    box-shadow: none
-}
-:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .theme-filter.is-active {
     box-shadow: none
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .theme-cluster-label {
@@ -3376,9 +3248,6 @@
     color: rgb(231, 169, 149)
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory .graph-stage {
-    background: var(--surface-panel)
-}
-:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory .theme-sidebar {
     background: var(--surface-panel)
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory .visibility-sidebar {

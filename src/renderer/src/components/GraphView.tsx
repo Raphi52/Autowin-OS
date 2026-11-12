@@ -35,7 +35,6 @@ import {
   loadGraphVisibilitySettings,
   saveGraphVisibilitySettings,
   loadGraphLayoutMode,
-  nextGraphLayoutMode,
   saveGraphLayoutMode,
   loadGraphVisualMode,
   saveGraphVisualMode,
@@ -45,12 +44,7 @@ import {
   type GraphVisibilitySettings,
   type MemoryDetailWidths
 } from './graph-settings'
-import {
-  fitDetailColumnWidth,
-  fitNormalColumnWidths,
-  GRAPH_COLUMN_LIMITS,
-  type GraphColumnWidths
-} from './graph-column-layout'
+import { fitDetailColumnWidth, GRAPH_COLUMN_LIMITS } from './graph-column-layout'
 import {
   buildThemeSummaries,
   COULEUR_NOEUD_PERSO,
@@ -114,8 +108,6 @@ import './GraphView.css'
 import { Spinner } from './Spinner'
 
 type PanelTab = 'visibility' | 'node' | 'workbench' | 'dossiers'
-type ResizableColumn = 'theme' | 'visibility' | 'detail'
-type ColumnWidths = GraphColumnWidths
 const EMPTY_THEME_SELECTION = new Set<string>()
 /** Couleurs des BANDES radiales — une teinte par famille, du centre vers l'extérieur. */
 /** Écart vertical minimal entre deux libellés de couronne, en unités de scène. Calé sur la hauteur
@@ -125,22 +117,14 @@ const MIN_LABEL_GAP = 34
 /** Hauteur d'une etiquette, en FRACTION de la hauteur du viewport — c'est l'unite des sprites. */
 const LABEL_SCREEN_HEIGHT = 0.035
 
-/** Ce que fera le PROCHAIN clic — un bouton doit annoncer sa destination, pas son état. */
-const LIBELLE_BASCULE: Record<GraphLayoutMode, CleKnowledge> = {
-  force: 'graphe.bascule.versArbre',
-  tree: 'graphe.bascule.versLibre'
-}
-
 /**
  * Un message posé dans un état (erreur, invite) hors du rendu : il prend la langue du moment où il
  * naît, comme le reste du message d'erreur.
  */
 const texteDuMoment = (cle: CleKnowledge): string => traduireKnowledge(cle, langueCourante())
 
-const ICONE_BASCULE: Record<GraphLayoutMode, string> = {
-  force: '⁘',
-  tree: '⁂'
-}
+/** Pastilles de thèmes visibles avant « + N thèmes » : une ou deux lignes dans la largeur courante. */
+const PASTILLES_REPLIEES = 8
 
 const BAND_COLORS = [
   '#8b5cf6',
@@ -154,15 +138,6 @@ const BAND_COLORS = [
 
 function initialVisibilitySettings(): GraphVisibilitySettings {
   return loadGraphVisibilitySettings(localStorage)
-}
-
-function initialColumnWidths(): ColumnWidths {
-  const compact = window.matchMedia('(max-width: 1050px)').matches
-  return {
-    theme: compact ? 190 : 210,
-    visibility: compact ? 220 : 290,
-    detail: null
-  }
 }
 
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
@@ -217,12 +192,18 @@ export function GraphView({
   const [themeNodes, setThemeNodes] = useState<GraphNode[]>([])
   const [settings, setSettings] = useState<GraphVisibilitySettings>(initialVisibilitySettings)
   const [panelTab, setPanelTab] = useState<PanelTab>('node')
-  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(initialColumnWidths)
   // Largeurs de la colonne détail mémorisées PAR MODE (thème vs nœud), persistées entre lancements.
   const [detailWidths, setDetailWidths] = useState<MemoryDetailWidths>(() =>
     loadMemoryDetailWidths(localStorage)
   )
-  const [resizingColumn, setResizingColumn] = useState<ResizableColumn | null>(null)
+  const [resizingDetail, setResizingDetail] = useState(false)
+  // Menu « Plus » : tout ce qui n'est ni la recherche, ni les thèmes, ni le graphe.
+  const [plusOuvert, setPlusOuvert] = useState(false)
+  const plusRef = useRef<HTMLDivElement>(null)
+  // Pastilles de thèmes : les plus gros d'abord, le reste derrière « + N thèmes ».
+  const [themesDeplies, setThemesDeplies] = useState(false)
+  // Les fiches trouvées se replient quand on en ouvre une, pour rendre le graphe visible.
+  const [fichesOuvertes, setFichesOuvertes] = useState(true)
   const [node, setNode] = useState<GraphNode | null>(null)
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null)
   const [vaultSearch, setVaultSearch] = useState<GraphNode[]>([])
@@ -248,7 +229,8 @@ export function GraphView({
   // le compte de la boîte, les anciens résultats de recherche et leur verdict de retrieval sont
   // retirés immédiatement — sans effet, donc sans rendu intermédiaire avec les valeurs périmées.
   const brainDuMoment = brains.find((candidate) => candidate.path === selected)
-  const inboxApplicable = Boolean(selected) && brainDuMoment?.kind === 'vault' && !brainDuMoment.perso
+  const inboxApplicable =
+    Boolean(selected) && brainDuMoment?.kind === 'vault' && !brainDuMoment.perso
   const rechercheApplicable = themeQuery.trim() !== '' && brainDuMoment?.kind === 'vault'
   const [inboxApplicableVu, setInboxApplicableVu] = useState(inboxApplicable)
   if (inboxApplicableVu !== inboxApplicable) {
@@ -266,7 +248,6 @@ export function GraphView({
   const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<HTMLElement>(null)
-  const themeSidebarRef = useRef<HTMLElement>(null)
   const visibilitySidebarRef = useRef<HTMLElement>(null)
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphLink> | undefined>(undefined)
   const graphCacheRef = useRef(new Map<string, GraphData>())
@@ -1024,7 +1005,6 @@ export function GraphView({
     () => highlightedNodeIdsForThemes(graph.nodes, activeThemes),
     [activeThemes, graph.nodes]
   )
-  const highlightedCount = highlightedNodeIds.size
   const activeThemeNodes = useMemo(
     () => nodesForThemesAlphabetically(themeNodes, activeThemes),
     [activeThemes, themeNodes]
@@ -1347,36 +1327,20 @@ export function GraphView({
   }, [active, showThemeClusterLabels, synchroniserSiPoseChange])
 
   useEffect(() => {
-    if (resizingColumn) return
-    const layout = layoutRef.current
-    if (!layout) return
-    let frame = 0
-    const reconcileWidths = (): void => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        const contentWidth = layout.clientWidth
-        if (!contentWidth || window.matchMedia('(max-width: 760px)').matches) return
-        setColumnWidths((current) => {
-          if (detailOpen) {
-            if (current.detail === null) return current
-            const detail = fitDetailColumnWidth(current.detail, contentWidth, current.theme)
-            return detail === current.detail ? current : { ...current, detail }
-          }
-          const fitted = fitNormalColumnWidths(current, contentWidth)
-          return fitted.theme === current.theme && fitted.visibility === current.visibility
-            ? current
-            : { ...current, ...fitted }
-        })
-      })
+    if (!plusOuvert) return
+    const fermerDehors = (event: PointerEvent): void => {
+      if (!plusRef.current?.contains(event.target as Node)) setPlusOuvert(false)
     }
-    reconcileWidths()
-    const observer = new ResizeObserver(reconcileWidths)
-    observer.observe(layout)
+    const fermerAuClavier = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setPlusOuvert(false)
+    }
+    document.addEventListener('pointerdown', fermerDehors)
+    document.addEventListener('keydown', fermerAuClavier)
     return () => {
-      cancelAnimationFrame(frame)
-      observer.disconnect()
+      document.removeEventListener('pointerdown', fermerDehors)
+      document.removeEventListener('keydown', fermerAuClavier)
     }
-  }, [detailOpen, resizingColumn])
+  }, [plusOuvert])
 
   function patchSettings(patch: Partial<GraphVisibilitySettings>): void {
     setSettings((current) => ({ ...current, ...patch }))
@@ -1387,50 +1351,32 @@ export function GraphView({
     initialFitTimeoutRef.current = null
   }
 
-  function resizeColumn(column: ResizableColumn, clientX: number): void {
+  function resizeDetailColumn(clientX: number): void {
     const layout = layoutRef.current
     if (!layout) return
-    const bounds = layout.getBoundingClientRect()
-    const contentWidth = layout.clientWidth
-    const themeWidth = themeSidebarRef.current?.getBoundingClientRect().width ?? columnWidths.theme
-    const visibilityWidth =
-      visibilitySidebarRef.current?.getBoundingClientRect().width ?? columnWidths.visibility
-    const rawWidth = column === 'theme' ? clientX - bounds.left : bounds.right - clientX
-    const limits = GRAPH_COLUMN_LIMITS[column]
-    const availableWidth =
-      column === 'theme'
-        ? contentWidth - visibilityWidth - GRAPH_COLUMN_LIMITS.graph
-        : column === 'visibility'
-          ? contentWidth - themeWidth - GRAPH_COLUMN_LIMITS.graph
-          : contentWidth - themeWidth - GRAPH_COLUMN_LIMITS.detailGraph
-    const maxWidth = Math.max(limits.min, Math.min(limits.max, availableWidth))
-    const width = Math.round(Math.min(maxWidth, Math.max(limits.min, rawWidth)))
-    if (column === 'detail') {
-      // Sauve dans le slot du mode courant (thème/nœud) → persistance par mode, zéro conflit.
-      const mode = node ? 'node' : activeThemes.size > 0 ? 'theme' : null
-      if (mode) setDetailWidths((current) => ({ ...current, [mode]: width }))
-      return
-    }
-    setColumnWidths((current) => ({ ...current, [column]: width }))
+    const width = fitDetailColumnWidth(
+      layout.getBoundingClientRect().right - clientX,
+      layout.clientWidth
+    )
+    // Sauve dans le slot du mode courant (thème/nœud) → persistance par mode, zéro conflit.
+    const mode = node ? 'node' : activeThemes.size > 0 ? 'theme' : null
+    if (mode) setDetailWidths((current) => ({ ...current, [mode]: width }))
   }
 
-  function startColumnResize(
-    column: ResizableColumn,
-    event: React.PointerEvent<HTMLDivElement>
-  ): void {
+  function startDetailResize(event: React.PointerEvent<HTMLDivElement>): void {
     if (event.pointerType === 'mouse' && event.button !== 0) return
     event.preventDefault()
     columnResizeCleanupRef.current?.()
     event.currentTarget.setPointerCapture(event.pointerId)
-    setResizingColumn(column)
-    resizeColumn(column, event.clientX)
-    const move = (moveEvent: PointerEvent): void => resizeColumn(column, moveEvent.clientX)
+    setResizingDetail(true)
+    resizeDetailColumn(event.clientX)
+    const move = (moveEvent: PointerEvent): void => resizeDetailColumn(moveEvent.clientX)
     const finish = (): void => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', finish)
       columnResizeCleanupRef.current = null
-      setResizingColumn(null)
+      setResizingDetail(false)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', finish)
@@ -1438,45 +1384,32 @@ export function GraphView({
     columnResizeCleanupRef.current = finish
   }
 
-  function resizeColumnWithKeyboard(
-    column: ResizableColumn,
-    event: React.KeyboardEvent<HTMLDivElement>
-  ): void {
+  function resizeDetailWithKeyboard(event: React.KeyboardEvent<HTMLDivElement>): void {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
     const layout = layoutRef.current
-    if (!layout) return
-    const bounds = layout.getBoundingClientRect()
-    const currentWidth =
-      column === 'theme'
-        ? (themeSidebarRef.current?.getBoundingClientRect().width ?? columnWidths.theme)
-        : (visibilitySidebarRef.current?.getBoundingClientRect().width ??
-          columnWidths[column] ??
-          columnWidths.visibility)
-    const boundaryDelta = event.key === 'ArrowRight' ? 16 : -16
-    const clientX =
-      column === 'theme'
-        ? bounds.left + currentWidth + boundaryDelta
-        : bounds.right - currentWidth + boundaryDelta
-    resizeColumn(column, clientX)
+    const aside = visibilitySidebarRef.current
+    if (!layout || !aside) return
+    const delta = event.key === 'ArrowRight' ? 16 : -16
+    resizeDetailColumn(
+      layout.getBoundingClientRect().right - aside.getBoundingClientRect().width + delta
+    )
   }
 
-  function columnResizer(column: ResizableColumn, label: string): React.JSX.Element {
-    const value = columnWidths[column] ?? columnWidths.visibility
-    return (
-      <div
-        className={`column-resizer column-resizer--${column}`}
-        role="separator"
-        aria-label={label}
-        aria-orientation="vertical"
-        aria-valuemin={GRAPH_COLUMN_LIMITS[column].min}
-        aria-valuemax={GRAPH_COLUMN_LIMITS[column].max}
-        aria-valuenow={value}
-        tabIndex={0}
-        onPointerDown={(event) => startColumnResize(column, event)}
-        onKeyDown={(event) => resizeColumnWithKeyboard(column, event)}
-      />
-    )
+  /** Ouvre (ou referme) un panneau du menu « Plus », et referme le menu. */
+  function basculerPanneau(tab: Exclude<PanelTab, 'node'>): void {
+    setPanelTab((current) => (current === tab ? 'node' : tab))
+    setPlusOuvert(false)
+  }
+
+  function choisirDisposition(mode: GraphLayoutMode): void {
+    setLayoutMode(mode)
+    saveGraphLayoutMode(localStorage, mode)
+  }
+
+  function choisirAmbiance(mode: 'serious' | 'galaxy'): void {
+    setVisualMode(mode)
+    saveGraphVisualMode(localStorage, mode)
   }
 
   function toggleTheme(theme: string): void {
@@ -1846,24 +1779,34 @@ export function GraphView({
   // Mode détail courant → largeur persistée de CE mode (sinon défaut CSS 20%/88% via la classe).
   const detailMode: 'node' | 'theme' | null = node ? 'node' : activeThemes.size > 0 ? 'theme' : null
   const activeDetailWidth = detailMode ? detailWidths[detailMode] : null
+  // Repliées, les pastilles montrent les plus gros thèmes et tout thème actif ; une recherche montre
+  // ses thèmes trouvés dans leur ordre de pertinence.
+  const recherche = themeQuery.trim()
+  const themesParTaille = recherche
+    ? catalogSearch.themes
+    : [...catalogSearch.themes].sort((a, b) => b.count - a.count)
+  const pastilles =
+    recherche || themesDeplies
+      ? themesParTaille
+      : themesParTaille.filter(
+          (theme, rang) => rang < PASTILLES_REPLIEES || activeThemes.has(theme.id)
+        )
+  const themesCaches = themesParTaille.length - pastilles.length
+  const savoirDisponible = selectedBrain?.kind === 'vault' && !persoOuvert
   return (
     <section
       ref={layoutRef}
-      className={`graph-observatory ${visualProfile.modeClass} ${detailOpen ? 'is-detail-open' : ''} ${node ? 'is-node-detail' : activeThemes.size > 0 ? 'is-theme-detail' : ''} ${resizingColumn ? 'is-column-resizing' : ''}`}
+      className={`graph-observatory ${visualProfile.modeClass} ${detailOpen ? 'is-detail-open' : ''} ${node ? 'is-node-detail' : activeThemes.size > 0 ? 'is-theme-detail' : ''} ${resizingDetail ? 'is-column-resizing' : ''}`}
       style={
-        {
-          '--theme-column-width': `${columnWidths.theme}px`,
-          '--visibility-column-width': `${columnWidths.visibility}px`,
-          ...(activeDetailWidth == null
-            ? {}
-            : { '--detail-column-width': `${activeDetailWidth}px` })
-        } as React.CSSProperties
+        (activeDetailWidth == null
+          ? {}
+          : { '--detail-column-width': `${activeDetailWidth}px` }) as React.CSSProperties
       }
     >
       <header className="graph-toolbar">
         <ModuleHeader
           eyebrow={t('graphe.eyebrow')}
-          title="Memory"
+          title="Knowledge"
           description={t('graphe.description')}
         />
         <select
@@ -1941,65 +1884,6 @@ export function GraphView({
             </button>
           </span>
         )}
-        <button
-          type="button"
-          className="graph-refresh"
-          onClick={refreshGraph}
-          disabled={loading}
-          aria-label={t('graphe.rafraichir')}
-          title={t('graphe.rafraichir')}
-        >
-          ↻
-        </button>
-        <button
-          type="button"
-          role="switch"
-          className={`graph-layout-switch${layoutMode === 'tree' ? ' is-tree' : ''}`}
-          onClick={() => {
-            const next = nextGraphLayoutMode(layoutMode)
-            setLayoutMode(next)
-            saveGraphLayoutMode(localStorage, next)
-          }}
-          // Le bouton a TROIS états, donc `aria-checked` ne peut plus valoir « radial ou rien » : en
-          // arborescence il aurait annoncé « éteint » à un lecteur d'écran alors qu'un agencement est
-          // bien actif. `mixed` est la valeur prévue par ARIA pour un troisième état.
-          aria-checked={layoutMode === 'tree'}
-          aria-label={t('graphe.disposition')}
-          data-layout-mode={layoutMode}
-          title={t(LIBELLE_BASCULE[layoutMode])}
-        >
-          {ICONE_BASCULE[layoutMode]}
-        </button>
-        <button
-          type="button"
-          role="switch"
-          className={`graph-mode-switch${visualMode === 'galaxy' ? ' is-galaxy' : ''}`}
-          onClick={() => {
-            const next = visualMode === 'galaxy' ? 'serious' : 'galaxy'
-            setVisualMode(next)
-            saveGraphVisualMode(localStorage, next)
-          }}
-          aria-checked={visualMode === 'galaxy'}
-          title={t(visualMode === 'galaxy' ? 'graphe.mode.versSombre' : 'graphe.mode.versGalaxy')}
-        >
-          <span className="graph-mode-switch__track" aria-hidden="true">
-            <span className="graph-mode-switch__icon">🌑</span>
-            <span className="graph-mode-switch__icon">🌌</span>
-            <span className="graph-mode-switch__thumb" />
-          </span>
-        </button>
-        <button
-          type="button"
-          className="graph-clean-memory"
-          onClick={() =>
-            // « brain actif » part dans la consigne de l'agent brainwash (App.tsx), en français.
-            onCleanMemory(brains.find((brain) => brain.path === selected)?.label ?? 'brain actif')
-          }
-          disabled={!selected || loading}
-          title={t('graphe.cleanMemory.titre')}
-        >
-          Clean memory
-        </button>
         <div className="graph-toolbar__stats" aria-live="polite">
           <span>
             <strong>
@@ -2022,41 +1906,200 @@ export function GraphView({
             </span>
           )}
         </div>
+        {/* MENU « PLUS » : les commandes qu'on ouvre rarement, rangées hors de la vue. Le menu reste
+            dans le document quand il est fermé (`hidden`) : ses entrées gardent leur place et leur
+            nom pour le clavier et les lecteurs d'écran. */}
+        <div ref={plusRef} className="graph-plus">
+          <button
+            type="button"
+            className={`graph-plus__bouton${plusOuvert ? ' is-active' : ''}`}
+            aria-haspopup="true"
+            aria-expanded={plusOuvert}
+            title={t('graphe.plus.titre')}
+            onClick={() => setPlusOuvert((ouvert) => !ouvert)}
+          >
+            {t('graphe.plus')}
+            <span aria-hidden="true">⋯</span>
+            {inboxPending > 0 && (
+              <span className="graph-plus__badge" aria-hidden="true">
+                {inboxPending}
+              </span>
+            )}
+          </button>
+          <div className="graph-plus__menu" hidden={!plusOuvert}>
+            <button
+              type="button"
+              className="graph-plus__item graph-plus__item--dossiers"
+              aria-expanded={panelTab === 'dossiers'}
+              title={t('dossiers.bouton.titre')}
+              onClick={() => basculerPanneau('dossiers')}
+            >
+              {t('graphe.plus.dossiers')}
+            </button>
+            {/* POSTE DE TRAVAIL du savoir : la revue de `inbox/` et le banc d'essai de récupération.
+                Réservé aux brains de type vault, qui ont une boîte de réception et une récupération. */}
+            {savoirDisponible && (
+              <button
+                type="button"
+                className="graph-plus__item graph-plus__item--savoir"
+                aria-expanded={panelTab === 'workbench'}
+                title={
+                  inboxPending > 0
+                    ? t(inboxPending === 1 ? 'graphe.poste.candidat' : 'graphe.poste.candidats', {
+                        n: inboxPending
+                      })
+                    : t('graphe.poste.titre')
+                }
+                onClick={() => basculerPanneau('workbench')}
+              >
+                {t('graphe.plus.savoir')}
+                {inboxPending > 0 && <strong>{inboxPending}</strong>}
+              </button>
+            )}
+            <button
+              type="button"
+              className="graph-plus__item graph-plus__item--visibilite"
+              aria-expanded={panelTab === 'visibility'}
+              title={t('graphe.visibilite.reglages')}
+              onClick={() => basculerPanneau('visibility')}
+            >
+              {t('graphe.visibilite')}
+            </button>
+            <div className="graph-plus__ligne">
+              <span>{t('graphe.disposition')}</span>
+              <span
+                className="graph-plus__choix"
+                role="radiogroup"
+                aria-label={t('graphe.disposition')}
+              >
+                {(['force', 'tree'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={layoutMode === mode}
+                    className={layoutMode === mode ? 'is-active' : undefined}
+                    data-disposition={mode}
+                    title={t(
+                      mode === 'tree' ? 'graphe.bascule.versArbre' : 'graphe.bascule.versLibre'
+                    )}
+                    onClick={() => choisirDisposition(mode)}
+                  >
+                    {t(mode === 'tree' ? 'graphe.plus.arbre' : 'graphe.plus.libre')}
+                  </button>
+                ))}
+              </span>
+            </div>
+            <div className="graph-plus__ligne">
+              <span>{t('graphe.plus.ambiance')}</span>
+              <span
+                className="graph-plus__choix"
+                role="radiogroup"
+                aria-label={t('graphe.plus.ambiance')}
+              >
+                {(['serious', 'galaxy'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={visualMode === mode}
+                    className={visualMode === mode ? 'is-active' : undefined}
+                    data-ambiance={mode}
+                    title={t(
+                      mode === 'galaxy' ? 'graphe.mode.versGalaxy' : 'graphe.mode.versSombre'
+                    )}
+                    onClick={() => choisirAmbiance(mode)}
+                  >
+                    {mode === 'galaxy' ? 'Galaxy' : t('graphe.plus.sombre')}
+                  </button>
+                ))}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="graph-plus__item graph-plus__item--actualiser"
+              onClick={() => {
+                setPlusOuvert(false)
+                void refreshGraph()
+              }}
+              disabled={loading}
+              title={t('graphe.rafraichir')}
+            >
+              {t('graphe.plus.actualiser')}
+            </button>
+            <button
+              type="button"
+              className="graph-plus__item graph-plus__item--clean"
+              onClick={() => {
+                setPlusOuvert(false)
+                // « brain actif » part dans la consigne de l'agent brainwash (App.tsx), en français.
+                onCleanMemory(
+                  brains.find((brain) => brain.path === selected)?.label ?? 'brain actif'
+                )
+              }}
+              disabled={!selected || loading}
+              title={t('graphe.cleanMemory.titre')}
+            >
+              Clean memory
+            </button>
+          </div>
+        </div>
       </header>
 
-      <aside ref={themeSidebarRef} className="theme-sidebar" aria-label={t('graphe.filtres')}>
-        <div className="sidebar-heading">
-          <span>{t('graphe.rechercher')}</span>
-          <button onClick={() => setActiveThemes(new Set())}>{t('graphe.effacer')}</button>
-        </div>
+      {/* RECHERCHE AU CENTRE : une seule entrée pour un thème, une fiche ou une question au savoir ;
+          les thèmes deviennent des pastilles qui filtrent le graphe. */}
+      <div className="graph-search" aria-label={t('graphe.filtres')} role="search">
         <input
+          className="graph-search__champ"
           aria-label={t('graphe.recherche.aria')}
           placeholder={t('graphe.recherche.placeholder')}
           value={themeQuery}
+          onFocus={() => setFichesOuvertes(true)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') setFichesOuvertes(false)
+          }}
           onChange={(event) => {
             // Retire A dans le même rendu qui affiche la saisie B : aucun verdict/résultat
             // d'une question précédente ne doit survivre pendant le debounce de la suivante.
             resetPrimaryBrainSearchResults()
+            setFichesOuvertes(true)
             setThemeQuery(event.target.value)
           }}
         />
-        <button
-          className={`theme-filter ${activeThemes.size === 0 ? 'is-active' : ''}`}
-          onClick={() => setActiveThemes(new Set())}
-        >
-          <i style={{ background: visualProfile.palette[0] }} />
-          <span>{t('graphe.tousLesThemes')}</span>
-          <small>
-            {graph.totalNodes && graph.totalNodes !== graph.nodes.length
-              ? `${graph.nodes.length} / ${graph.totalNodes}`
-              : graph.nodes.length}
-          </small>
-        </button>
+        {recherche && fichesOuvertes && visibleSearchNodes.length > 0 && (
+          <div className="node-search-results" aria-label={t('graphe.fichesTrouvees')}>
+            <span className="search-results-heading">{t('graphe.fiches')}</span>
+            {visibleSearchNodes.map((resultNode) => (
+              <button
+                key={resultNode.id}
+                className="node-search-result"
+                onClick={() => {
+                  setFichesOuvertes(false)
+                  void openNode(resultNode)
+                }}
+              >
+                <i aria-hidden="true">✦</i>
+                <span>{resultNode.label}</span>
+                {persoOuvert && <MarquePerso />}
+                <small className="node-search-result__meta">
+                  {brainScoreChannelLabel(resultNode)}
+                  {' · '}
+                  {resultNode.score !== undefined
+                    ? t('graphe.pertinence', { score: Math.round(resultNode.score) })
+                    : t('graphe.pertinence.aucune')}
+                  {(resultNode.relations?.length ?? 0) > 0
+                    ? ` · ${resultNode.relations?.length} relation${resultNode.relations?.length === 1 ? '' : 's'}`
+                    : ''}
+                </small>
+              </button>
+            ))}
+          </div>
+        )}
         {/* Le verdict du Brain, DISTINCT du nombre de fiches locales : un serveur éteint et « le savoir
             ne couvre pas la question » ne se disaient pas, ils se taisaient tous les deux. */}
         {searchRetrieval && (
           <p
-            className={`theme-sidebar__retrieval is-${searchRetrieval.status}`}
+            className={`graph-search__verdict is-${searchRetrieval.status}`}
             data-retrieval-status={searchRetrieval.status}
             role={searchRetrieval.status === 'failed' ? 'alert' : undefined}
           >
@@ -2064,7 +2107,7 @@ export function GraphView({
           </p>
         )}
         {themesErr && (
-          <p className="theme-sidebar__error" role="alert">
+          <p className="graph-search__erreur" role="alert">
             <span>{themesErr}</span>
             <button
               type="button"
@@ -2076,7 +2119,7 @@ export function GraphView({
           </p>
         )}
         {themeNodesErr && (
-          <p className="theme-sidebar__error" role="alert">
+          <p className="graph-search__erreur" role="alert">
             <span>{themeNodesErr}</span>
             <button
               type="button"
@@ -2087,43 +2130,23 @@ export function GraphView({
             </button>
           </p>
         )}
-        <div className="theme-list">
-          {themeQuery.trim() && visibleSearchNodes.length > 0 && (
-            <div className="node-search-results" aria-label={t('graphe.fichesTrouvees')}>
-              <span className="search-results-heading">{t('graphe.fiches')}</span>
-              {visibleSearchNodes.map((resultNode) => (
-                <button
-                  key={resultNode.id}
-                  className="node-search-result"
-                  onClick={() => void openNode(resultNode)}
-                >
-                  <i aria-hidden="true">✦</i>
-                  <span>{resultNode.label}</span>
-                  {persoOuvert && <MarquePerso />}
-                  <small className="node-search-result__meta">
-                    {brainScoreChannelLabel(resultNode)}
-                    {' · '}
-                    {resultNode.score !== undefined
-                      ? t('graphe.pertinence', { score: Math.round(resultNode.score) })
-                      : t('graphe.pertinence.aucune')}
-                    {(resultNode.relations?.length ?? 0) > 0
-                      ? ` · ${resultNode.relations?.length} relation${resultNode.relations?.length === 1 ? '' : 's'}`
-                      : ''}
-                  </small>
-                </button>
-              ))}
-            </div>
-          )}
-          {themeQuery.trim() && catalogSearch.themes.length > 0 && (
-            <span className="search-results-heading">{t('commun.themes')}</span>
-          )}
-          {catalogSearch.themes.map((theme) => {
+        <div className="graph-themes">
+          <button
+            type="button"
+            className={`graph-theme-chip graph-theme-chip--tous ${activeThemes.size === 0 ? 'is-active' : ''}`}
+            aria-pressed={activeThemes.size === 0}
+            onClick={() => setActiveThemes(new Set())}
+          >
+            <span>{t('graphe.tousLesThemes')}</span>
+          </button>
+          {pastilles.map((theme) => {
             const colorIndex = themeSummaries.findIndex((item) => item.id === theme.id)
             return (
               <button
                 key={theme.id}
+                type="button"
                 data-theme-id={theme.id}
-                className={`theme-filter ${activeThemes.has(theme.id) ? 'is-active' : ''}`}
+                className={`graph-theme-chip ${activeThemes.has(theme.id) ? 'is-active' : ''}`}
                 aria-pressed={activeThemes.has(theme.id)}
                 onClick={() => toggleTheme(theme.id)}
               >
@@ -2137,34 +2160,22 @@ export function GraphView({
               </button>
             )
           })}
+          {!recherche && (themesCaches > 0 || themesDeplies) && (
+            <button
+              type="button"
+              className="graph-theme-chip graph-theme-chip--plus"
+              aria-expanded={themesDeplies}
+              onClick={() => setThemesDeplies((deplies) => !deplies)}
+            >
+              {themesDeplies
+                ? t('graphe.themes.moins')
+                : t('graphe.themes.plus', { n: themesCaches })}
+            </button>
+          )}
         </div>
-        <p className="theme-sidebar__note">
-          <strong>{t('graphe.surbrillance')}</strong>
-          {activeThemes.size === 0
-            ? ` ${t('graphe.surbrillance.tous')}`
-            : ` ${t('graphe.surbrillance.actifs', { n: highlightedCount })}`}
-        </p>
-      </aside>
-
-      {columnResizer('theme', t('graphe.redimensionner.themes'))}
+      </div>
 
       <main className="graph-stage">
-        <div className="graph-stage__heading">
-          <span>{t(activeThemes.size === 0 ? 'graphe.tousLesThemes' : 'graphe.themesActifs')}</span>
-          <strong>
-            {activeThemes.size === 0
-              ? t('graphe.vueEnsemble')
-              : [...activeThemes]
-                  .map((theme) => themeSummaries.find((item) => item.id === theme)?.label ?? theme)
-                  .join(' + ')}
-          </strong>
-          <small>
-            {t('graphe.miseEnEvidence', {
-              n: highlightedCount,
-              contexte: graph.nodes.length - highlightedCount
-            })}
-          </small>
-        </div>
         {loading && (
           <div className="graph-loading" role="status" aria-live="polite">
             <Spinner lg />
@@ -2377,34 +2388,8 @@ export function GraphView({
             <span>{t('graphe.ouvrirDetail')}</span>
           </button>
         )}
-        {/* POSTE DE TRAVAIL du savoir : la revue de `inbox/` et le banc d'essai de récupération. Réservé
-            aux brains de type vault, qui ont une boîte de réception et une récupération. */}
-        {selectedBrain?.kind === 'vault' && !persoOuvert && (
-          <button
-            type="button"
-            className={`graph-workbench-button ${panelTab === 'workbench' ? 'is-active' : ''}`}
-            aria-label={t('graphe.poste')}
-            aria-expanded={panelTab === 'workbench'}
-            title={
-              inboxPending > 0
-                ? t(inboxPending === 1 ? 'graphe.poste.candidat' : 'graphe.poste.candidats', {
-                    n: inboxPending
-                  })
-                : t('graphe.poste.titre')
-            }
-            onClick={() =>
-              setPanelTab((current) => (current === 'workbench' ? 'node' : 'workbench'))
-            }
-          >
-            ✦
-            {inboxPending > 0 && (
-              <span className="graph-workbench-badge" aria-hidden="true">
-                {inboxPending}
-              </span>
-            )}
-          </button>
-        )}
-        {panelTab === 'workbench' && selectedBrain?.kind === 'vault' && !persoOuvert && (
+        {/* Les trois panneaux du menu « Plus » s'ouvrent en haut à droite de la scène. */}
+        {panelTab === 'workbench' && savoirDisponible && (
           <div className="graph-workbench-popover">
             <div className="graph-settings-popover__heading">
               <strong>{t('graphe.poste.savoir')}</strong>
@@ -2429,18 +2414,6 @@ export function GraphView({
             />
           </div>
         )}
-        <button
-          type="button"
-          className={`graph-settings-button ${panelTab === 'visibility' ? 'is-active' : ''}`}
-          aria-label={t('graphe.visibilite.reglages')}
-          aria-expanded={panelTab === 'visibility'}
-          title={t('graphe.visibilite.reglages')}
-          onClick={() =>
-            setPanelTab((current) => (current === 'visibility' ? 'node' : 'visibility'))
-          }
-        >
-          ⚙
-        </button>
         {panelTab === 'visibility' && (
           <div className="graph-settings-popover">
             <div className="graph-settings-popover__heading">
@@ -2554,20 +2527,6 @@ export function GraphView({
             </div>
           </div>
         )}
-        {/* Le menu des dossiers de travail a son bouton ici : rangé dans les réglages ⚙, il restait
-            introuvable. Visible en permanence : la bascule « Brains affichés » n'apparaît qu'avec deux
-            Brains détectés, et ce menu doit se trouver sans attendre cette détection. Le bouton est
-            placé APRÈS ⚙ : `.graph-settings-button` désigne toujours ⚙ en premier. */}
-        <button
-          type="button"
-          className={`graph-settings-button graph-dossiers-button ${panelTab === 'dossiers' ? 'is-active' : ''}`}
-          aria-label={t('dossiers.titre')}
-          aria-expanded={panelTab === 'dossiers'}
-          title={t('dossiers.bouton.titre')}
-          onClick={() => setPanelTab((current) => (current === 'dossiers' ? 'node' : 'dossiers'))}
-        >
-          {t('dossiers.bouton')}
-        </button>
         {panelTab === 'dossiers' && (
           <div className="graph-settings-popover graph-dossiers-popover">
             <div className="graph-settings-popover__heading">
@@ -2592,7 +2551,18 @@ export function GraphView({
 
       {detailOpen && (
         <>
-          {columnResizer('detail', t('graphe.redimensionner.detail'))}
+          <div
+            className="column-resizer column-resizer--detail"
+            role="separator"
+            aria-label={t('graphe.redimensionner.detail')}
+            aria-orientation="vertical"
+            aria-valuemin={GRAPH_COLUMN_LIMITS.detail.min}
+            aria-valuemax={GRAPH_COLUMN_LIMITS.detail.max}
+            aria-valuenow={activeDetailWidth ?? undefined}
+            tabIndex={0}
+            onPointerDown={startDetailResize}
+            onKeyDown={resizeDetailWithKeyboard}
+          />
           <aside ref={visibilitySidebarRef} className="visibility-sidebar is-detail-open">
             {node ? (
               <NodePanel

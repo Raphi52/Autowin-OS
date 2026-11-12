@@ -1,6 +1,6 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nier-automata -- ne pas modifier a la main.
    Theme « NieR:Automata » : les regles de la base claire qui ecrivent une couleur en dur, transposees
-   vers le papier beige et l'encre brune du jeu. 59 regles, 121 declarations. */
+   vers le papier beige et l'encre brune du jeu. 55 regles, 112 declarations. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nier-automata'][data-base='clair'] .topology-runtime-limit {
@@ -28,26 +28,6 @@
 }
 :root[data-theme='nier-automata'][data-base='clair'] .activity-step-pipeline {
     background: rgba(27, 26, 23, 0.04)
-}
-
-/* ---- src/renderer/src/components/GraphView.css ---- */
-:root[data-theme='nier-automata'][data-base='clair'] .graph-mode-switch__track {
-    border-color: rgba(32, 30, 26, 0.28);
-    background: linear-gradient(180deg, rgb(244, 243, 239), rgb(237, 234, 227));
-    box-shadow: inset 0 2px 5px rgba(32, 30, 26, 0.12)
-}
-:root[data-theme='nier-automata'][data-base='clair'] .graph-mode-switch__thumb {
-    background: radial-gradient(circle at 32% 30%, #ffffff, rgb(229, 226, 216) 68%);
-    box-shadow: 0 2px 5px rgba(32, 30, 26, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9)
-}
-:root[data-theme='nier-automata'][data-base='clair'] .graph-mode-switch__track {
-    background: linear-gradient(180deg, rgb(235, 232, 224), rgb(222, 218, 205));
-    border-color: rgba(32, 30, 26, 0.34)
-}
-:root[data-theme='nier-automata'][data-base='clair'] .graph-mode-switch__thumb {
-    border: 1px solid rgba(32, 30, 26, 0.45);
-    box-shadow: 0 1px 3px rgba(32, 30, 26, 0.35)
 }
 
 /* ---- src/renderer/src/components/JugesPanel.css ---- */

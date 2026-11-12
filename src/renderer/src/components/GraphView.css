@@ -1,15 +1,12 @@
 .graph-observatory {
-  --theme-column-width: 210px;
-  --visibility-column-width: 290px;
   --detail-column-width: 58%;
 
   position: relative;
   display: grid;
-  grid-template-columns: var(--theme-column-width) minmax(0, 1fr);
-  /* La hauteur figee a 64 px coupait l'en-tete : le bloc titre (surtitre + titre + description) est
-     plus haut, sa derniere ligne passait donc SOUS la barre de separation et chevauchait les
-     colonnes. La ligne se dimensionne desormais sur son contenu. */
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  /* En-tete, recherche, puis le graphe. Les deux premieres lignes se dimensionnent sur leur contenu :
+     une hauteur figee coupait l'en-tete (surtitre + titre + description). */
+  grid-template-rows: auto auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -27,9 +24,7 @@
 }
 
 .graph-observatory.is-detail-open {
-  grid-template-columns:
-    var(--theme-column-width) minmax(96px, 1fr)
-    minmax(160px, var(--detail-column-width));
+  grid-template-columns: minmax(96px, 1fr) minmax(160px, var(--detail-column-width));
 }
 /* Largeur de la colonne détail pilotée par le mode (le resize manuel, en px inline, prime). */
 /* Clic sur un TAG de thème → colonne étroite (~3× moins que le défaut 58%). */
@@ -52,7 +47,8 @@
   /* Aligne en HAUT comme `ViewTopBar` : cale en bas ou au centre, le titre descendait des que les
      controles voisins etaient plus hauts que lui — mesure : 76 px du bord contre 49 ailleurs. */
   align-items: flex-start;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   /* Etait `0 18px` : le titre montait de 9 px par rapport aux autres vues. */
   padding: var(--view-head-pad, 18px 20px 0);
   /* Pose a meme le cadre, comme `ViewTopBar` : ni bande peinte, ni trait de separation — la
@@ -60,16 +56,7 @@
   background: transparent;
 }
 
-.graph-stage__heading span {
-  display: block;
-  color: #68788b;
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.graph-toolbar select,
-.theme-sidebar input {
+.graph-toolbar select {
   border: 1px solid #293543;
   border-radius: 6px;
   outline: none;
@@ -114,169 +101,205 @@
   font-size: 11px;
 }
 
-.graph-refresh {
-  width: 32px;
-  height: 32px;
-  border: 1px solid #293543;
-  border-radius: 7px;
-  background: rgba(16, 23, 34, 0.95);
-  color: #dce7f3;
-  cursor: pointer;
-  font-size: 19px;
-  line-height: 1;
+/* MENU « PLUS » : les commandes rares (dossiers, savoir, visibilité, disposition, ambiance,
+   actualiser, Clean memory) rangées hors de la vue. Couleurs par jetons : les thèmes les suivent. */
+.graph-plus {
+  position: relative;
+  flex: 0 0 auto;
 }
-.graph-refresh:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-/* Switch de mode visuel (sombre ↔ galaxy) : pilule à pouce glissant, halo nébuleuse en galaxy. */
-.graph-mode-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.graph-mode-switch__track {
+
+.graph-plus__bouton {
   position: relative;
   display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  width: 46px;
-  height: 24px;
-  padding: 0 5px;
-  border: 1px solid #2c3947;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #0a1018, #101722);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
-  transition:
-    border-color 320ms ease,
-    background 320ms ease,
-    box-shadow 320ms ease;
-}
-.graph-mode-switch__icon {
-  z-index: 1;
-  font-size: 9px;
-  line-height: 1;
-  filter: grayscale(0.6) brightness(0.75);
-  transition: filter 320ms ease;
-}
-.graph-mode-switch.is-galaxy .graph-mode-switch__icon:last-of-type,
-.graph-mode-switch:not(.is-galaxy) .graph-mode-switch__icon:first-of-type {
-  filter: none;
-}
-.graph-mode-switch__thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  z-index: 2;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 32% 30%, #3a4a5e, #16202d 68%);
-  box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  transition:
-    transform 320ms cubic-bezier(0.22, 1.4, 0.36, 1),
-    background 320ms ease,
-    box-shadow 320ms ease;
-}
-/* MODE CLAIR — cet interrupteur est illisible : sa piste est un dégradé quasi noir
-   (#0a1018 → #101722, l.125) et ses DEUX icônes — celles qui disent justement dans
-   quel mode on est — sont assombries par `filter: grayscale(.6) brightness(.75)`
-   (l.136). Sur fond clair on ne voit qu'une pastille noire au contenu indevinable.
-   Signalé le 2026-09-03 : « on ne voit pas ce qu'il y a dans la zone ».
-   La piste passe en gris très clair, le pouce en blanc, et les icônes cessent
-   d'être ternies — celle du mode ACTIF était déjà en pleine couleur, c'est
-   l'inactive qui reste discrète, sans disparaître. */
-:root[data-base='clair'] .graph-mode-switch__track {
-  border-color: rgba(18, 24, 40, 0.28);
-  background: linear-gradient(180deg, #eef1f5, #e2e7ee);
-  box-shadow: inset 0 2px 5px rgba(18, 24, 40, 0.12);
-}
-:root[data-base='clair'] .graph-mode-switch__thumb {
-  background: radial-gradient(circle at 32% 30%, #ffffff, #d7dde6 68%);
-  box-shadow:
-    0 2px 5px rgba(18, 24, 40, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-/* Les icônes sont les emojis 🌑 (disque noir) et 🌌 (rectangle sombre) : rendus
-   à égalité, ils forment un « carré » parasite à côté du pouce rond — constat
-   utilisateur du 2026-09-03. En clair, l'INACTIVE s'efface presque entièrement,
-   l'ACTIVE reste nette : l'œil ne voit qu'un seul symbole, celui du mode courant. */
-:root[data-base='clair'] .graph-mode-switch__icon {
-  filter: grayscale(1) brightness(1.35);
-  opacity: 0.28;
-}
-:root[data-base='clair'] .graph-mode-switch.is-galaxy .graph-mode-switch__icon:last-of-type,
-:root[data-base='clair'] .graph-mode-switch:not(.is-galaxy) .graph-mode-switch__icon:first-of-type {
-  filter: none;
-  opacity: 1;
-}
-/* Le pouce manquait de contraste : blanc sur gris très clair. Il devient un
-   disque BLANC cerclé de sombre, franchement détaché de sa piste. */
-:root[data-base='clair'] .graph-mode-switch__track {
-  background: linear-gradient(180deg, #dfe4ec, #ccd4df);
-  border-color: rgba(18, 24, 40, 0.34);
-}
-:root[data-base='clair'] .graph-mode-switch__thumb {
-  background: #ffffff;
-  border: 1px solid rgba(18, 24, 40, 0.45);
-  box-shadow: 0 1px 3px rgba(18, 24, 40, 0.35);
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
 }
 
-.graph-mode-switch.is-galaxy .graph-mode-switch__track {
-  border-color: rgba(255, 93, 222, 0.6);
-  background: linear-gradient(120deg, #1b1038, #3d1150 55%, #131c3f);
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.5),
-    0 0 16px rgba(255, 93, 222, 0.28),
-    0 0 34px rgba(97, 87, 255, 0.18);
+.graph-plus__bouton:hover,
+.graph-plus__bouton.is-active {
+  border-color: var(--gold);
+  color: var(--gold);
 }
-.graph-mode-switch.is-galaxy .graph-mode-switch__thumb {
-  transform: translateX(22px);
-  background:
-    radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.92), transparent 34%),
-    conic-gradient(from 210deg, #ff5dde, #7a6bff, #49cfff, #ff5dde);
-  box-shadow:
-    0 0 10px rgba(255, 93, 222, 0.65),
-    0 0 22px rgba(122, 107, 255, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+
+.graph-plus__menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  gap: 2px;
+  width: 260px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--container-radius-panel);
+  /* Flottant au-dessus du graphe : fond de base OPAQUE sous la teinte du panneau, sinon les thèmes
+     de verre laissent voir la recherche et le graphe au travers. */
+  background: linear-gradient(var(--surface-panel), var(--surface-panel)), var(--bg-0);
 }
-.graph-mode-switch:hover .graph-mode-switch__track {
-  border-color: #47617e;
+
+.graph-plus__menu[hidden] {
+  display: none;
 }
-.graph-mode-switch.is-galaxy:hover .graph-mode-switch__track {
-  border-color: #ff8fe9;
+
+.graph-plus__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
 }
-.graph-mode-switch:focus-visible {
+
+.graph-plus__item:hover,
+.graph-plus__item:focus-visible,
+.graph-plus__item[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  color: var(--gold);
   outline: none;
 }
-.graph-mode-switch:focus-visible .graph-mode-switch__track {
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.55),
-    0 0 0 2px rgba(117, 215, 255, 0.55);
-}
-.graph-clean-memory {
-  padding: 8px 11px;
-  border: 1px solid rgba(103, 225, 178, 0.52);
-  border-radius: 7px;
-  background: rgba(0, 0, 0, 0.34);
-  color: #8de9c4;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 750;
-}
-.graph-clean-memory:hover {
-  background: rgba(103, 225, 178, 0.12);
-}
-.graph-clean-memory:disabled {
+
+.graph-plus__item:disabled {
   cursor: wait;
-  opacity: 0.48;
+  opacity: 0.5;
+}
+
+.graph-plus__item strong {
+  color: var(--gold);
+}
+
+.graph-plus__ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.graph-plus__choix {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.graph-plus__choix button {
+  padding: 3px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.graph-plus__choix button + button {
+  border-left: 1px solid var(--line);
+}
+
+.graph-plus__choix button.is-active {
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* RECHERCHE AU CENTRE : la grande entrée, ses fiches, son verdict, puis les pastilles de thèmes. */
+.graph-search {
+  position: relative;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.graph-search__champ {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, var(--gold) 50%, transparent);
+  border-radius: 10px;
+  outline: none;
+  background: var(--surface-panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.graph-search__champ::placeholder {
+  color: var(--text-dim);
+}
+
+.graph-search__champ:focus-visible {
+  border-color: var(--gold);
+}
+
+.graph-themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.graph-theme-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.graph-theme-chip:hover,
+.graph-theme-chip:focus-visible {
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+  outline: none;
+}
+
+.graph-theme-chip.is-active {
+  border-color: var(--gold);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.graph-theme-chip i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.graph-theme-chip small {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.graph-theme-chip--plus {
+  border-style: dashed;
+  color: var(--text-dim);
 }
 
 .graph-toolbar__stats {
@@ -295,7 +318,6 @@
   font-size: 13px;
 }
 
-.theme-sidebar,
 .visibility-sidebar {
   min-height: 0;
   /* Des PANNEAUX du gabarit : rayon de panneau, jamais celui de la page. */
@@ -303,16 +325,6 @@
   background: var(--surface-panel);
 }
 
-.theme-sidebar {
-  grid-column: 1;
-  grid-row: 2;
-  display: flex;
-  flex-direction: column;
-  padding: 15px 11px;
-  overflow: hidden;
-}
-
-.sidebar-heading,
 .settings-section__heading {
   display: flex;
   align-items: center;
@@ -323,7 +335,6 @@
   text-transform: uppercase;
 }
 
-.sidebar-heading button,
 .settings-section__heading button {
   padding: 0;
   border: 0;
@@ -333,83 +344,55 @@
   font-size: 9px;
 }
 
-.theme-sidebar input {
-  width: 100%;
-  margin: 11px 0 12px;
-  padding: 8px 9px;
-}
-
-.theme-list {
-  min-height: 0;
-  overflow: auto;
-}
-
-.theme-list,
+.node-search-results,
 .visibility-sidebar,
 .node-panel pre {
   scrollbar-color: #536376 #101722;
   scrollbar-width: thin;
 }
 
-.theme-list::-webkit-scrollbar,
+.node-search-results::-webkit-scrollbar,
 .visibility-sidebar::-webkit-scrollbar,
 .node-panel pre::-webkit-scrollbar {
   width: 6px;
 }
 
-.theme-list::-webkit-scrollbar-thumb,
+.node-search-results::-webkit-scrollbar-thumb,
 .visibility-sidebar::-webkit-scrollbar-thumb,
 .node-panel pre::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: #536376;
 }
 
-.theme-list::-webkit-scrollbar-track,
+.node-search-results::-webkit-scrollbar-track,
 .visibility-sidebar::-webkit-scrollbar-track,
 .node-panel pre::-webkit-scrollbar-track {
   background: rgba(16, 23, 34, 0.95);
 }
 
-.theme-filter {
-  display: grid;
-  grid-template-columns: 10px 1fr auto;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin: 2px 0;
-  padding: 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: #8190a3;
-  cursor: pointer;
-  text-align: left;
-}
-
-.theme-filter:hover,
-.theme-filter.is-active {
-  border-color: #285066;
-  background: #102634;
-  color: #eef9ff;
-}
-
-.theme-filter i,
 .selected-node i {
   width: 8px;
   height: 8px;
   border-radius: 50%;
 }
 
-.theme-filter small {
-  color: #526174;
-}
-
+/* Les fiches trouvées se déroulent SOUS la recherche, par-dessus le graphe : la page ne saute pas. */
 .node-search-results {
+  position: absolute;
+  z-index: 25;
+  top: 46px;
+  left: 0;
   display: grid;
   gap: 3px;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line, #2d3541);
+  width: min(560px, 100%);
+  max-height: min(52vh, 460px);
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--container-radius-panel);
+  /* Flottant au-dessus du graphe : fond de base OPAQUE sous la teinte du panneau, sinon les thèmes
+     de verre laissent voir la recherche et le graphe au travers. */
+  background: linear-gradient(var(--surface-panel), var(--surface-panel)), var(--bg-0);
 }
 
 .search-results-heading {
@@ -471,23 +454,9 @@
   white-space: normal;
 }
 
-.theme-sidebar__note {
-  margin: 12px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid #1e2732;
-  color: #66768a;
-  font-size: 10px;
-  line-height: 1.5;
-}
-
-.theme-sidebar__note strong {
-  display: block;
-  color: #91a1b4;
-}
-
 .graph-stage {
-  grid-column: 2;
-  grid-row: 2;
+  grid-column: 1;
+  grid-row: 3;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -496,48 +465,13 @@
   background: var(--surface-inset);
 }
 
-.graph-settings-button {
-  position: absolute;
-  z-index: 15;
-  top: 14px;
-  right: 14px;
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid #34404d;
-  border-radius: 7px;
-  background: rgba(8, 13, 20, 0.92);
-  color: #91a1b4;
-  cursor: pointer;
-  font-size: 16px;
-}
-
-.graph-settings-button:hover,
-.graph-settings-button.is-active {
-  border-color: #75d7ff;
-  color: #d9f5ff;
-  box-shadow: 0 0 12px rgba(117, 215, 255, 0.2);
-}
-
-/* « Dossiers » partage l'habillage de ⚙ (classe commune, thèmes compris) : seule la place change,
-   il se range à gauche de ✦ (32 px + 6 px d'écart). */
-.graph-dossiers-button {
-  right: 92px;
-  width: auto;
-  padding: 0 10px;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
 .graph-settings-popover {
   position: absolute;
   z-index: 14;
-  top: 53px;
+  top: 14px;
   right: 14px;
   width: 290px;
-  max-height: calc(100% - 72px);
+  max-height: calc(100% - 28px);
   overflow: auto;
   border: 1px solid #34404d;
   border-radius: 9px;
@@ -597,7 +531,7 @@
 .graph-health-lens {
   position: absolute;
   z-index: 7;
-  top: 54px;
+  top: 14px;
   right: 16px;
   display: grid;
   gap: 7px;
@@ -614,10 +548,8 @@
 .tree-branch-controls {
   position: absolute;
   z-index: 7;
-  /* Sous le titre de la scene (top 17px + ~55px de haut) : a 54px les pastilles
-     de branches chevauchaient "Vue d ensemble". */
-  top: 82px;
-  left: 20px;
+  top: 14px;
+  left: 16px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -786,35 +718,11 @@
   box-shadow: 0 0 7px var(--theme-color);
 }
 
-.graph-stage__heading {
-  position: absolute;
-  z-index: 2;
-  top: 17px;
-  left: 20px;
-  pointer-events: none;
-}
-
-.graph-stage__heading strong {
-  display: block;
-  max-width: 520px;
-  margin-top: 3px;
-  overflow: hidden;
-  color: #e5edf5;
-  font-size: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.graph-stage__heading small {
-  color: #657588;
-  font-size: 10px;
-}
-
 .graph-status {
   position: absolute;
   z-index: 4;
-  top: 70px;
-  left: 20px;
+  top: 14px;
+  left: 16px;
   padding: 8px 10px;
   border: 1px solid #2b3a47;
   border-radius: 6px;
@@ -826,7 +734,7 @@
 .graph-loading {
   position: absolute;
   z-index: 6;
-  inset: 54px 0 0;
+  inset: 0;
   display: grid;
   place-content: center;
   justify-items: center;
@@ -877,22 +785,14 @@
 }
 
 .visibility-sidebar {
-  grid-column: 3;
-  grid-row: 2;
-  overflow: auto;
-}
-
-.graph-observatory.is-detail-open .graph-stage {
   grid-column: 2;
-}
-
-.graph-observatory.is-detail-open .visibility-sidebar {
-  grid-column: 3;
+  grid-row: 3;
+  overflow: auto;
 }
 
 .column-resizer {
   z-index: 12;
-  grid-row: 2;
+  grid-row: 3;
   width: 12px;
   min-width: 12px;
   height: 100%;
@@ -923,21 +823,10 @@
   box-shadow: 0 0 9px rgba(117, 215, 255, 0.65);
 }
 
-.column-resizer--theme {
-  grid-column: 1;
-  justify-self: end;
-  transform: translateX(50%);
-}
-
-.column-resizer--visibility,
 .column-resizer--detail {
-  grid-column: 3;
+  grid-column: 2;
   justify-self: start;
   transform: translateX(-50%);
-}
-
-.graph-observatory.is-detail-open .column-resizer--detail {
-  grid-column: 3;
 }
 
 .visibility-sidebar.is-detail-open {
@@ -1190,19 +1079,12 @@
   white-space: pre-wrap;
 }
 
-.graph-observatory--galaxy .graph-stage__heading span,
-.graph-observatory--galaxy .sidebar-heading,
 .graph-observatory--galaxy .settings-section__heading {
   color: #ad83ef;
 }
 
-.graph-observatory--galaxy .theme-sidebar,
 .graph-observatory--galaxy .visibility-sidebar {
   background: linear-gradient(180deg, rgba(11, 7, 29, 0.98), rgba(5, 7, 21, 0.98));
-}
-
-.graph-observatory--galaxy .theme-sidebar {
-  border-right-color: #2b2550;
 }
 
 .graph-observatory--galaxy .visibility-sidebar {
@@ -1256,13 +1138,6 @@
   animation: galaxy-drift 34s linear infinite;
 }
 
-.graph-observatory--galaxy .theme-filter:hover,
-.graph-observatory--galaxy .theme-filter.is-active {
-  border-color: #654995;
-  background: linear-gradient(90deg, rgba(82, 42, 132, 0.5), rgba(24, 33, 73, 0.58));
-  box-shadow: inset 2px 0 #d263ff;
-}
-
 .graph-observatory--galaxy .toggle-row input:checked + i {
   background: linear-gradient(90deg, #4c3c9a, #913e9a);
 }
@@ -1305,76 +1180,31 @@
 }
 
 @media (max-width: 1050px) {
-  .graph-observatory {
-    --theme-column-width: 190px;
-    --visibility-column-width: 220px;
-  }
-
   .graph-toolbar__stats {
     gap: 10px;
   }
 }
 
 @media (max-width: 760px) {
-  .graph-observatory,
   .graph-observatory.is-detail-open {
-    grid-template-columns: 132px minmax(0, 1fr);
-  }
-
-  .graph-observatory {
-    grid-template-rows: 64px minmax(180px, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(180px, 1fr) 230px;
   }
 
   .column-resizer {
     display: none;
   }
 
-  .graph-observatory .theme-sidebar {
-    display: flex;
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .graph-observatory .graph-stage {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .graph-observatory .visibility-sidebar {
-    grid-column: 2;
-    grid-row: 3;
-    border-top: 1px solid #202936;
-    border-left: 0;
-  }
-
-  .graph-observatory.is-detail-open {
-    grid-template-columns: 132px minmax(0, 1fr);
-    grid-template-rows: 64px minmax(180px, 1fr) 230px;
-  }
-
-  .graph-observatory.is-detail-open .theme-sidebar {
-    display: flex;
-    grid-column: 1;
-    grid-row: 2 / 4;
-  }
-
-  .graph-observatory.is-detail-open .graph-stage {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
   .graph-observatory.is-detail-open .visibility-sidebar {
-    grid-column: 2;
-    grid-row: 3;
-  }
-
-  .graph-observatory--galaxy .visibility-sidebar {
-    border-top-color: #2b2550;
+    grid-column: 1;
+    grid-row: 4;
+    border-top: 1px solid var(--line);
+    border-left: 0;
   }
 
   .graph-toolbar {
     gap: 8px;
-    /* Etait `0 10px` : en ecran etroit, le titre de Memory sortait du retrait commun des en-tetes. */
+    /* Etait `0 10px` : en ecran etroit, le titre sortait du retrait commun des en-tetes. */
     padding: 0 var(--view-head-retrait);
   }
 
@@ -1387,10 +1217,6 @@
     display: none;
   }
 
-  .theme-sidebar {
-    padding-inline: 8px;
-  }
-
   .visibility-settings,
   .node-panel {
     padding: 10px 12px;
@@ -1401,46 +1227,30 @@
 .graph-observatory {
   color: var(--text);
 }
-.theme-sidebar,
 .visibility-sidebar {
   background: rgba(8, 8, 7, 0.97);
   border-color: var(--line);
 }
-.graph-toolbar select,
-.theme-sidebar input {
+.graph-toolbar select {
   border-color: var(--line-strong);
   border-radius: var(--r1);
   background: var(--bg-1);
   color: var(--text);
 }
-.graph-stage__heading span,
-.sidebar-heading,
 .settings-section__heading,
-.graph-toolbar__stats,
-.graph-stage__heading small {
+.graph-toolbar__stats {
   color: var(--text-faint);
 }
-.graph-toolbar__stats strong,
-.graph-stage__heading strong {
+.graph-toolbar__stats strong {
   color: var(--text);
 }
 .graph-stage {
   background: radial-gradient(circle at 52% 42%, #17140f 0, #0b0b09 52%, #070706 82%);
 }
-.theme-list,
+.node-search-results,
 .visibility-sidebar,
 .node-panel pre {
   scrollbar-color: var(--line-strong) var(--bg-inset);
-}
-.theme-filter {
-  border-radius: var(--r1);
-  color: var(--text-dim);
-}
-.theme-filter:hover,
-.theme-filter.is-active {
-  border-color: var(--gold);
-  background: rgba(201, 167, 93, 0.08);
-  color: var(--text);
 }
 .graph-status,
 .selected-node {
@@ -1452,46 +1262,21 @@
 
 /* ==========================================================================
    POSTE DE TRAVAIL DU SAVOIR — boîte de réception de `inbox/` et banc d'essai
-   de récupération. Ouvert par le bouton en pendant du réglage de visibilité,
-   dont il reprend la géométrie pour rester dans le même vocabulaire visuel.
+   de récupération. Ouvert depuis le menu « Plus », à la place des réglages de
+   visibilité, dont il reprend la géométrie pour rester dans le même vocabulaire.
    La carte « Navigation Brain » réutilisée par le banc apporte ses propres
    styles (ObservatoryView.css, classes globales) : rien n'est redéclaré ici.
    ========================================================================== */
 
-.graph-workbench-button {
-  position: absolute;
-  z-index: 15;
-  top: 14px;
-  right: 54px;
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid #34404d;
-  border-radius: 7px;
-  background: rgba(8, 13, 20, 0.92);
-  color: #91a1b4;
-  cursor: pointer;
-  font-size: 15px;
-}
-
-.graph-workbench-button:hover,
-.graph-workbench-button.is-active {
-  border-color: #75d7ff;
-  color: #d9f5ff;
-  box-shadow: 0 0 12px rgba(117, 215, 255, 0.2);
-}
-
 .graph-workbench-popover {
   position: absolute;
   z-index: 14;
-  top: 53px;
+  top: 14px;
   right: 14px;
   display: flex;
   width: 430px;
   max-width: calc(100% - 28px);
-  max-height: calc(100% - 72px);
+  max-height: calc(100% - 28px);
   flex-direction: column;
   gap: 12px;
   overflow: auto;
@@ -1901,10 +1686,9 @@
   font-size: 10px;
 }
 
-/* Verdict du retrieval dans la colonne de recherche : la note qui manquait au
-   setVaultSearch([]) muet. */
-.theme-sidebar__retrieval {
-  margin: 6px 0 0;
+/* Verdict du retrieval sous la recherche : la note qui manquait au setVaultSearch([]) muet. */
+.graph-search__verdict {
+  margin: 0;
   padding: 6px 8px;
   border: 1px solid #202936;
   border-radius: 6px;
@@ -1913,18 +1697,18 @@
   font-size: 10px;
 }
 
-.theme-sidebar__retrieval.is-unavailable {
+.graph-search__verdict.is-unavailable {
   border-color: #8a6a2a;
   color: #ffd79a;
 }
 
-.theme-sidebar__retrieval.is-failed {
+.graph-search__verdict.is-failed {
   border-color: #7a3340;
   color: #ffc4cd;
 }
 
-/* Compteur de candidats en attente : la revue humaine se voit SANS ouvrir le poste de travail. */
-.graph-workbench-badge {
+/* Compteur de candidats en attente : la revue humaine se voit SANS ouvrir le menu « Plus ». */
+.graph-plus__badge {
   position: absolute;
   top: -6px;
   right: -6px;
@@ -1945,7 +1729,7 @@
 
 /* Sorties concrètes : réessais par canal, état vide actionnable, troncature dite. */
 .graph-brains-recovery,
-.theme-sidebar__error,
+.graph-search__erreur,
 .graph-empty-actions,
 .graph-truncation,
 .node-panel__error {
@@ -1959,15 +1743,10 @@
   position: absolute;
   z-index: 12;
   bottom: 14px;
-  left: 50%;
-  max-width: 520px;
-  padding: 8px 12px;
-  border: 1px solid #6d5a2f;
-  border-radius: 8px;
-  background: rgba(24, 19, 8, 0.92);
-  color: #f0d9a8;
-  font-size: 12px;
-  transform: translateX(-50%);
+  left: 16px;
+  max-width: min(520px, calc(100% - 32px));
+  color: var(--text-dim);
+  font-size: 11px;
 }
 
 /**
@@ -1982,8 +1761,8 @@
  * jamais au moment où ils comptent le plus.
  *
  * Un bouton de reprise est la SORTIE d'un cul-de-sac : il doit se voir et être cliquable au clavier.
- * L'idiome est celui de `.graph-refresh`, la seule commande déjà habillée de cette vue — mêmes bord,
- * fond et couleur, pour ne pas inventer un troisième vocabulaire.
+ * Toutes les reprises partagent les mêmes bord, fond et couleur, pour ne pas inventer un vocabulaire
+ * par état.
  */
 .graph-brains-retry,
 .graph-themes-retry,

@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   549 regles, 830 declarations. Voir genererCoucheClaire. */
+   530 regles, 797 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -550,7 +550,7 @@
 }
 
 /* ---- src/renderer/src/components/GraphView.css ---- */
-:root[data-theme='holographique-clair'] .graph-toolbar select, :root[data-theme='holographique-clair'] .theme-sidebar input {
+:root[data-theme='holographique-clair'] .graph-toolbar select {
     border: 1px solid rgba(20, 15, 40, 0.2);
     background: rgba(253, 253, 255, 0.95);
     color: #0e31aa
@@ -563,42 +563,11 @@
 :root[data-theme='holographique-clair'] .graph-brains-filtre button.is-active {
     color: #aa0e5f
 }
-:root[data-theme='holographique-clair'] .graph-refresh {
-    border: 1px solid rgba(20, 15, 40, 0.2);
-    background: rgba(253, 253, 255, 0.95);
-    color: #0e31aa
-}
-:root[data-theme='holographique-clair'] .graph-mode-switch__track {
-    border: 1px solid rgba(20, 15, 40, 0.2);
-    background: linear-gradient(180deg, #fdfdff, #fdfdff)
-}
-:root[data-theme='holographique-clair'] .graph-mode-switch__thumb {
-    background: radial-gradient(circle at 32% 30%, #3a4a5e, #fdfdff 68%)
-}
-:root[data-theme='holographique-clair'] .graph-mode-switch.is-galaxy .graph-mode-switch__track {
-    border-color: rgba(20, 15, 40, 0.16);
-    background: linear-gradient(120deg, #fdfdff, #3d1150 55%, #131c3f)
-}
-:root[data-theme='holographique-clair'] .graph-clean-memory {
-    border: 1px solid rgba(9, 113, 44, 0.52);
-    background: rgba(20, 15, 40, 0.051);
-    color: #09712c
-}
-:root[data-theme='holographique-clair'] .graph-clean-memory:hover {
-    background: rgba(0, 190, 70, 0.12)
-}
 :root[data-theme='holographique-clair'] .graph-toolbar__stats strong {
     color: #0e31aa
 }
-:root[data-theme='holographique-clair'] .theme-list::-webkit-scrollbar-track, :root[data-theme='holographique-clair'] .visibility-sidebar::-webkit-scrollbar-track, :root[data-theme='holographique-clair'] .node-panel pre::-webkit-scrollbar-track {
+:root[data-theme='holographique-clair'] .node-search-results::-webkit-scrollbar-track, :root[data-theme='holographique-clair'] .visibility-sidebar::-webkit-scrollbar-track, :root[data-theme='holographique-clair'] .node-panel pre::-webkit-scrollbar-track {
     background: rgba(253, 253, 255, 0.95)
-}
-:root[data-theme='holographique-clair'] .theme-filter:hover, :root[data-theme='holographique-clair'] .theme-filter.is-active {
-    background: #fdfdff;
-    color: #0e31aa
-}
-:root[data-theme='holographique-clair'] .node-search-results {
-    border-bottom: 1px solid var(--line, rgba(20, 15, 40, 0.2))
 }
 :root[data-theme='holographique-clair'] .search-results-heading {
     color: var(--gold-bright, #aa0e5f)
@@ -608,18 +577,6 @@
 }
 :root[data-theme='holographique-clair'] .node-search-result small {
     color: var(--gold, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] .theme-sidebar__note {
-    border-top: 1px solid rgba(20, 15, 40, 0.2)
-}
-:root[data-theme='holographique-clair'] .graph-settings-button {
-    border: 1px solid rgba(20, 15, 40, 0.2);
-    background: rgba(253, 253, 255, 0.92);
-    color: #1c172b
-}
-:root[data-theme='holographique-clair'] .graph-settings-button:hover, :root[data-theme='holographique-clair'] .graph-settings-button.is-active {
-    border-color: #0e31aa;
-    color: #0e31aa
 }
 :root[data-theme='holographique-clair'] .graph-settings-popover {
     border: 1px solid rgba(20, 15, 40, 0.2);
@@ -695,11 +652,8 @@
     background: #fdfdff;
     color: #1c172b
 }
-:root[data-theme='holographique-clair'] .graph-observatory--galaxy .theme-sidebar, :root[data-theme='holographique-clair'] .graph-observatory--galaxy .visibility-sidebar {
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .visibility-sidebar {
     background: linear-gradient(180deg, rgba(253, 253, 255, 0.98), rgba(253, 253, 255, 0.98))
-}
-:root[data-theme='holographique-clair'] .graph-observatory--galaxy .theme-sidebar {
-    border-right-color: rgba(20, 15, 40, 0.2)
 }
 :root[data-theme='holographique-clair'] .graph-observatory--galaxy .visibility-sidebar {
     border-left-color: rgba(20, 15, 40, 0.2)
@@ -726,36 +680,14 @@
     border-color: rgba(20, 15, 40, 0.2);
     background: rgba(253, 253, 255, 0.92)
 }
-@media (max-width: 760px) {
-    :root[data-theme='holographique-clair'] .graph-observatory .visibility-sidebar {
-        border-top: 1px solid rgba(20, 15, 40, 0.2)
-    }
-}
-@media (max-width: 760px) {
-    :root[data-theme='holographique-clair'] .graph-observatory--galaxy .visibility-sidebar {
-        border-top-color: rgba(20, 15, 40, 0.2)
-    }
-}
-:root[data-theme='holographique-clair'] .theme-sidebar, :root[data-theme='holographique-clair'] .visibility-sidebar {
+:root[data-theme='holographique-clair'] .visibility-sidebar {
     background: rgba(253, 253, 255, 0.97)
 }
 :root[data-theme='holographique-clair'] .graph-stage {
     background: radial-gradient(circle at 52% 42%, #fdfdff 0, #fdfdff 52%, #fdfdff 82%)
 }
-:root[data-theme='holographique-clair'] .theme-filter:hover, :root[data-theme='holographique-clair'] .theme-filter.is-active {
-    background: rgba(208, 43, 140, 0.08)
-}
 :root[data-theme='holographique-clair'] .graph-status, :root[data-theme='holographique-clair'] .selected-node {
     background: rgba(253, 253, 255, 0.94)
-}
-:root[data-theme='holographique-clair'] .graph-workbench-button {
-    border: 1px solid rgba(20, 15, 40, 0.2);
-    background: rgba(253, 253, 255, 0.92);
-    color: #1c172b
-}
-:root[data-theme='holographique-clair'] .graph-workbench-button:hover, :root[data-theme='holographique-clair'] .graph-workbench-button.is-active {
-    border-color: #0e31aa;
-    color: #0e31aa
 }
 :root[data-theme='holographique-clair'] .graph-workbench-popover {
     border: 1px solid rgba(20, 15, 40, 0.2);
@@ -836,14 +768,10 @@
 :root[data-theme='holographique-clair'] .brain-bench__cut {
     color: #aa0e5f
 }
-:root[data-theme='holographique-clair'] .theme-sidebar__retrieval {
+:root[data-theme='holographique-clair'] .graph-search__verdict {
     border: 1px solid rgba(20, 15, 40, 0.2)
 }
-:root[data-theme='holographique-clair'] .theme-sidebar__retrieval.is-unavailable {
-    color: #aa0e5f
-}
-:root[data-theme='holographique-clair'] .graph-truncation {
-    background: rgba(253, 253, 255, 0.92);
+:root[data-theme='holographique-clair'] .graph-search__verdict.is-unavailable {
     color: #aa0e5f
 }
 :root[data-theme='holographique-clair'] .graph-brains-retry, :root[data-theme='holographique-clair'] .graph-themes-retry, :root[data-theme='holographique-clair'] .graph-theme-nodes-retry, :root[data-theme='holographique-clair'] .graph-status__retry, :root[data-theme='holographique-clair'] .graph-empty-reindex, :root[data-theme='holographique-clair'] .graph-empty-brains, :root[data-theme='holographique-clair'] .graph-truncation__extend, :root[data-theme='holographique-clair'] .node-panel__retry {
@@ -1907,19 +1835,16 @@
 :root[data-theme='holographique-clair'] .cosmic-outline .btn-accent {
     border-color: #aa0e5f
 }
-:root[data-theme='holographique-clair'] .theme-sidebar, :root[data-theme='holographique-clair'] .visibility-sidebar, :root[data-theme='holographique-clair'] .graph-stage {
+:root[data-theme='holographique-clair'] .visibility-sidebar, :root[data-theme='holographique-clair'] .graph-stage {
     background-color: rgba(253, 253, 255, 0.96)
-}
-:root[data-theme='holographique-clair'] .graph-observatory--galaxy .theme-sidebar {
-    border-right-color: rgba(20, 15, 40, 0.2)
 }
 :root[data-theme='holographique-clair'] .graph-observatory--galaxy .visibility-sidebar {
     border-left-color: rgba(20, 15, 40, 0.2)
 }
-:root[data-theme='holographique-clair'] .theme-filter, :root[data-theme='holographique-clair'] .node-search-result, :root[data-theme='holographique-clair'] .settings-section, :root[data-theme='holographique-clair'] .node-links button {
+:root[data-theme='holographique-clair'] .node-search-result, :root[data-theme='holographique-clair'] .settings-section, :root[data-theme='holographique-clair'] .node-links button {
     background: #fdfdff
 }
-:root[data-theme='holographique-clair'] .theme-filter.is-active, :root[data-theme='holographique-clair'] .node-search-result:hover {
+:root[data-theme='holographique-clair'] .node-search-result:hover {
     background: rgba(208, 43, 140, 0.07)
 }
 :root[data-theme='holographique-clair'] .conv-item, :root[data-theme='holographique-clair'] .run-row, :root[data-theme='holographique-clair'] .control-row {

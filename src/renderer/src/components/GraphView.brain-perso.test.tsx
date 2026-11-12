@@ -178,7 +178,7 @@ describe('vue Knowledge — Brain perso à côté du Brain d’équipe', () => {
     expect(resultat?.textContent).toContain('Vélo du dimanche')
     expect(resultat?.querySelector('[data-testid="note-perso"]')?.textContent).toBe('perso')
     // Ses faits sont promus seuls : ni revue de la boîte de réception, ni compteur d'attente.
-    expect(container.querySelector('.graph-workbench-button')).toBeNull()
+    expect(container.querySelector('.graph-plus__item--savoir')).toBeNull()
     expect(api.listInbox).not.toHaveBeenCalledWith(PERSO)
   })
 
@@ -188,7 +188,7 @@ describe('vue Knowledge — Brain perso à côté du Brain d’équipe', () => {
     await chercher('pneus')
     expect(container.querySelector('.node-search-result')?.textContent).toContain('Note d’équipe')
     expect(container.querySelector('[data-testid="note-perso"]')).toBeNull()
-    expect(container.querySelector('.graph-workbench-button')).not.toBeNull()
+    expect(container.querySelector('.graph-plus__item--savoir')).not.toBeNull()
   })
 
   it('la liste d’un thème marque chaque note perso', async () => {
@@ -340,12 +340,12 @@ describe('vue Knowledge — menu des dossiers de travail', () => {
     return api
   }
   const boutonDossiers = (): HTMLButtonElement | null =>
-    container.querySelector<HTMLButtonElement>('[aria-label="Dossiers de travail"]')
+    container.querySelector<HTMLButtonElement>('.graph-plus__item--dossiers')
 
-  it('un bouton « Dossiers » ouvre le menu d’affectation directement', async () => {
+  it('l’entrée « Dossiers du Brain » du menu Plus ouvre le menu d’affectation', async () => {
     const api = installerAvecDossiers()
     await monter()
-    expect(boutonDossiers()?.textContent).toBe('Dossiers')
+    expect(boutonDossiers()?.textContent).toBe('Dossiers du Brain')
     await act(async () => boutonDossiers()?.click())
     await flush()
     expect(api.brainAffectations).toHaveBeenCalled()
@@ -357,14 +357,14 @@ describe('vue Knowledge — menu des dossiers de travail', () => {
     installerAvecDossiers()
     await monter()
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Réglages de visibilité"]')?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--visibilite')?.click()
     )
     await flush()
     expect(container.querySelector('.graph-settings-popover')).not.toBeNull()
     expect(container.querySelector('.dossiers-travail')).toBeNull()
   })
 
-  it('le bouton reste sans Brain perso détecté : seule la bascule disparaît', async () => {
+  it('l’entrée reste sans Brain perso détecté : seule la bascule disparaît', async () => {
     const api = installerAvecDossiers()
     api.listBrains = vi
       .fn()

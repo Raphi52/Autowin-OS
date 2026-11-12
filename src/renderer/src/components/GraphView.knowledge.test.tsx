@@ -533,9 +533,7 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
       ])
     })
     await mount()
-    const toggle = container.querySelector<HTMLButtonElement>(
-      '[aria-label="Poste de travail du savoir"]'
-    )
+    const toggle = container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')
     expect(toggle).not.toBeNull()
     await act(async () => toggle?.click())
     await flush()
@@ -563,9 +561,7 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
     await mount()
     const graphCallsBefore = (api.loadBrainGraph as ReturnType<typeof vi.fn>).mock.calls.length
     await act(async () =>
-      container
-        .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
-        ?.click()
+      container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')?.click()
     )
     await flush()
     await act(async () => container.querySelector<HTMLButtonElement>('button.is-promote')?.click())
@@ -606,9 +602,7 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
       })
       await mount()
       await act(async () =>
-        container
-          .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
-          ?.click()
+        container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')?.click()
       )
       await flush()
 
@@ -671,9 +665,7 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
       })
       await mount()
       await act(async () =>
-        container
-          .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
-          ?.click()
+        container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')?.click()
       )
       await flush()
       const question = container.querySelector<HTMLInputElement>(
@@ -727,9 +719,7 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
       })
       await mount()
       await act(async () =>
-        container
-          .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
-          ?.click()
+        container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')?.click()
       )
       await flush()
       await search('promotion')
@@ -787,9 +777,7 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
       })
       await mount()
       await act(async () =>
-        container
-          .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
-          ?.click()
+        container.querySelector<HTMLButtonElement>('.graph-plus__item--savoir')?.click()
       )
       await flush()
       await search('promotion')

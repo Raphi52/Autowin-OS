@@ -23,35 +23,27 @@
   box-shadow: 0 0 18px rgba(239, 63, 145, 0.24);
 }
 
-/* Memory : la racine et l'en-tete ne peignent rien (gabarit des vues) ; les colonnes
-   sont des panneaux. */
-.theme-sidebar,
+/* Knowledge : la racine et l'en-tete ne peignent rien (gabarit des vues) ; le graphe et la
+   colonne de droite sont des panneaux. */
 .visibility-sidebar,
 .graph-stage {
   background-color: rgba(0, 0, 0, 0.96);
   border-color: var(--line-strong);
 }
 
-.graph-observatory--galaxy .theme-sidebar,
 .graph-observatory--galaxy .visibility-sidebar,
 .graph-observatory--galaxy .graph-stage {
   border-color: var(--line-strong);
 }
 
-.graph-observatory--galaxy .theme-sidebar,
 .graph-observatory--galaxy .visibility-sidebar {
   background: var(--bg-0);
-}
-
-.graph-observatory--galaxy .theme-sidebar {
-  border-right-color: #000;
 }
 
 .graph-observatory--galaxy .visibility-sidebar {
   border-left-color: #000;
 }
 
-.theme-filter,
 .node-search-result,
 .settings-section,
 .node-links button {
@@ -59,7 +51,6 @@
   border-color: var(--line);
 }
 
-.theme-filter.is-active,
 .node-search-result:hover {
   border-color: var(--gold);
   background: rgba(233, 189, 78, 0.07);
@@ -109,7 +100,6 @@
   :where(
     .conv-item,
     .run-row,
-    .theme-filter,
     .node-search-result,
     .settings-section,
     .node-links button
@@ -140,7 +130,6 @@
   background: transparent;
   box-shadow: none;
 }
-.cosmic-outline .graph-observatory--galaxy .theme-sidebar,
 .cosmic-outline .graph-observatory--galaxy .visibility-sidebar {
   background: var(--surface-panel);
   box-shadow: none;
@@ -161,7 +150,6 @@
 }
 
 .cosmic-outline .graph-observatory--galaxy .toggle-row input:checked + i::after,
-.cosmic-outline .graph-observatory--galaxy .theme-filter.is-active,
 .cosmic-outline .graph-observatory--galaxy .theme-cluster-label,
 .cosmic-outline .graph-observatory--galaxy .theme-cluster-label:hover,
 .cosmic-outline .graph-observatory--galaxy .theme-cluster-label:focus-visible,
@@ -718,7 +706,6 @@
   backdrop-filter: none;
 }
 .cosmic-outline .graph-observatory .graph-stage,
-.cosmic-outline .graph-observatory .theme-sidebar,
 .cosmic-outline .graph-observatory .visibility-sidebar {
   background: var(--surface-panel);
   backdrop-filter: none;
