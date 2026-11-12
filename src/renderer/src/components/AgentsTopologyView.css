@@ -311,9 +311,33 @@
   gap: 0;
 }
 
+/* Deux cartes côte à côte (petites tâches, orchestrateur), puis les sous-agents sur toute la
+   largeur, comme la grande carte de l'image de référence ; la note du fonctionnement suit. */
+.studio-modeles {
+  container: studio-modeles / inline-size;
+}
+
 .studio-modeles .topology-workspace {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   padding-top: 12px;
+}
+
+.studio-modeles .topology-workspace > * {
+  grid-column: 1 / -1;
+}
+
+.studio-modeles .topology-workspace > .router-default:not([data-target='subagents']) {
+  grid-column: auto;
+}
+
+/* Fenêtre étroite : sous ~595 px, une demi-carte tronquait le nom du modèle (« Fable … ») ;
+   les deux cartes s'empilent alors, chacune sur toute la largeur. */
+@container studio-modeles (max-width: 595px) {
+  .studio-modeles .topology-workspace > .router-default:not([data-target='subagents']) {
+    grid-column: 1 / -1;
+  }
 }
 
 .studio-modeles .topology-toolbar {
@@ -378,9 +402,10 @@
 
 /*
  * CARTES ÉTOILÉES — choix de l'utilisateur sur image de référence : chaque rôle est une carte
- * sombre aux coins très arrondis, baignée d'un halo violet semé d'étoiles, avec un grand titre
- * fin. Le contenu et l'ordre ne changent pas : le nom à gauche, les modèles au milieu, « ce que
- * ça couvre » au bout ; l'en-tête et ce bloc se dissolvent dans la carte (`display: contents`).
+ * sombre aux coins très arrondis, baignée d'un halo violet semé d'étoiles. Comme sur l'image,
+ * la pastille se pose en haut et le grand titre fin en bas : en haut, le ou les modèles à
+ * gauche et « ce que ça couvre » à droite ; en bas, le nom du rôle, puis sa phrase en petit.
+ * L'en-tête et le bloc « ce que ça couvre » se dissolvent dans la grille (`display: contents`).
  * Tout vient des jetons du thème — `--violet` et `--rose` pour le halo, `--text` pour les étoiles,
  * `--bg-0` pour le fond — pour que la carte suive le thème choisi.
  */
@@ -389,16 +414,31 @@
   --studio-halo-x: 72%;
   /* La couleur des étoiles : celle du texte sur fond sombre, le violet sur fond clair (plus bas). */
   --studio-etoile: var(--text);
-  /* Les deux grandes étoiles (::before, ::after) se posent sous le contenu, dans la carte. */
+  /* Les deux grandes étoiles (::before, ::after) se posent sous le contenu, dans la carte. La
+     carte ne coupe RIEN de ce qui dépasse : la bulle d'état du menu de modèle (erreur,
+     enregistrement) s'affiche au-dessus du bouton, hors de la carte. */
   position: relative;
   isolation: isolate;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  /* En haut : les modèles, le bouton « + Ajouter un modèle » (sous-agents seuls), un vide
+     souple, puis « ce que ça couvre ». Quand la place manque, la colonne des modèles cède (ses
+     pastilles passent à la ligne). Le vide souple est une colonne `fr` exprès : le grand titre
+     qui enjambe toute la carte ne peut alors élargir que lui, jamais les colonnes des boutons
+     — sans elle, le titre forçait sa largeur sur une ligne et écrasait les pastilles. */
+  grid-template-columns: minmax(0, max-content) max-content 1fr auto;
+  /* La ligne vide pousse le titre au bas de la carte. */
+  grid-template-rows: auto minmax(18px, 1fr) auto auto auto;
+  grid-template-areas:
+    'modele ajout . couvre'
+    '. . . .'
+    'titre titre titre titre'
+    'phrase phrase phrase phrase'
+    'detail detail detail detail';
   align-items: center;
-  gap: 8px 12px;
+  gap: 0 12px;
+  min-height: 150px;
   margin: 0;
-  padding: 18px var(--view-head-retrait);
-  overflow: hidden;
+  padding: 16px var(--view-head-retrait) 18px;
   border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   border-radius: 18px;
   background:
@@ -478,9 +518,10 @@
       center / 1px 100% no-repeat;
 }
 
+/* La grande étoile se pose dans le vide entre la ligne des boutons et le titre. */
 .studio-modeles .router-default::before {
-  top: 16%;
-  left: 56%;
+  top: 38%;
+  left: 62%;
 }
 
 /* La petite étoile reste dans la bande basse, à l'écart des pastilles et de « ce que ça couvre ». */
@@ -510,8 +551,8 @@
 }
 
 .studio-modeles .router-default[data-target='orchestrator']::before {
-  top: 24%;
-  left: 40%;
+  top: 40%;
+  left: 74%;
 }
 
 .studio-modeles .router-default[data-target='subagents'] {
@@ -544,35 +585,52 @@
   display: contents;
 }
 
-/* Le grand titre fin de l'image : le nom du rôle se lit en premier. */
+/* Le grand titre fin de l'image, au bas de la carte : le nom du rôle se lit en premier. */
 .studio-modeles .router-default > header h3 {
-  flex: 0 0 210px;
-  order: 0;
+  grid-area: titre;
+  align-self: end;
+  margin: 0;
   color: var(--text);
-  font-size: 19px;
+  font-size: 28px;
   font-weight: 300;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
 }
 
-/* Seul l'orchestrateur garde sa phrase, après son modèle ; les autres lignes parlent d'elles-mêmes. */
+/* La carte pleine largeur, comme la grande carte de l'image : un titre encore plus grand. */
+.studio-modeles .router-default[data-target='subagents'] {
+  min-height: 170px;
+}
+
+.studio-modeles .router-default[data-target='subagents'] > header h3 {
+  font-size: 36px;
+}
+
+/* Seul l'orchestrateur garde sa phrase, sous son titre, comme le montant sous le chiffre de
+   l'image ; les autres cartes parlent d'elles-mêmes. */
 .studio-modeles .router-default > header small {
   display: none;
 }
 
 .studio-modeles .router-default[data-target='orchestrator'] > header small {
-  display: inline;
-  order: 2;
+  display: block;
+  grid-area: phrase;
+  margin-top: 4px;
   color: var(--text-dim);
   font-size: 12px;
   opacity: 1;
 }
 
 .studio-modeles .router-default > .model-select-shell,
-.studio-modeles .router-default > .router-hint,
 .studio-modeles .router-default > .topology-lignes {
-  order: 1;
+  grid-area: modele;
   margin: 0;
+}
+
+/* « Non réglé » des petites tâches : la petite ligne sous le titre, à la place de la phrase. */
+.studio-modeles .router-default > .router-hint {
+  grid-area: phrase;
+  margin: 4px 0 0;
 }
 
 .studio-modeles .topology-lignes {
@@ -594,6 +652,16 @@
   background: color-mix(in srgb, var(--bg-0) 45%, transparent);
 }
 
+/* La bulle d'état (erreur, enregistrement, modèle introuvable) se cale d'ordinaire sur le bord
+   DROIT du bouton. Ici le bouton ouvre la carte sur la gauche : elle sortait de la page. Elle
+   part donc du bord gauche du bouton, jamais plus large qu'une demi-carte. */
+.studio-modeles .router-default .model-select-status:not(:empty) {
+  right: auto;
+  left: 0;
+  width: max-content;
+  max-width: min(320px, calc(50cqi - 50px));
+}
+
 .studio-modeles .topology-ligne-retirer {
   width: 18px;
   height: 18px;
@@ -602,7 +670,9 @@
 }
 
 .studio-modeles .router-default > .topology-ajouter {
-  order: 1;
+  grid-area: ajout;
+  justify-self: start;
+  white-space: nowrap;
   margin: 0;
   padding: 3px 10px;
   border: 1px dashed var(--line);
@@ -617,14 +687,13 @@
 }
 
 .studio-modeles .router-default > .ce-que-ca-couvre > .ce-que-ca-couvre-titre {
-  order: 3;
-  margin-left: auto;
+  grid-area: couvre;
+  justify-self: end;
 }
 
 .studio-modeles .router-default > .ce-que-ca-couvre > dl {
-  flex: 0 0 100%;
-  order: 4;
-  margin: 2px 0 0;
+  grid-area: detail;
+  margin: 10px 0 0;
   padding: 2px 0 2px 10px;
   border-left: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
 }
