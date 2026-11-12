@@ -94,4 +94,19 @@ describe('le liseré du bloc de clôture s’ouvre et se ferme au bon endroit', 
     const recoLongue = [trio('✅ Fait'), 'Suite immédiate de la recommandation.'].join('\n')
     expect(rendre(recoLongue)?.textContent).toContain('Suite immédiate')
   })
+
+  it('garde dans le cadre la rubrique facultative « ❓ À éclaircir », posée avant la recommandation', () => {
+    const avecQuestions = [
+      '✅ Fait',
+      '1. Corrigé le défaut.',
+      '📍 Maintenant — état courant.',
+      '⏳ Reste à faire — rien.',
+      '❓ À éclaircir',
+      '1. Le tri doit-il aussi valoir pour les archives ?',
+      '👉 Recommandé — relancer.'
+    ].join('\n')
+    const cadre = rendre(avecQuestions)
+    expect(cadre?.textContent).toContain('archives')
+    expect(cadre?.textContent).toContain('Recommandé')
+  })
 })

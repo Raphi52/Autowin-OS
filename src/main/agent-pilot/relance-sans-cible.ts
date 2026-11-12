@@ -12,7 +12,7 @@ import { estRelanceSansObjet } from '../../shared/relance-sans-objet'
  */
 const RUBRIQUE_RECOMMANDE = /👉\s*\**\s*Recommand[ée]\s*\**\s*:?\s*\**/gu
 /** Ce qui suit la rubrique sans en faire partie : ligne technique, autre rubrique, titre, bloc. */
-const FIN_DE_RUBRIQUE = /^\s*(?:AUTOWIN_[A-Z_]+V1\b|#{1,6}\s|[✅📍⏳]|```)/u
+const FIN_DE_RUBRIQUE = /^\s*(?:AUTOWIN_[A-Z_]+V1\b|#{1,6}\s|[✅📍⏳❓]|```)/u
 
 /** Le texte de la DERNIÈRE rubrique « 👉 Recommandé » d'une réponse, sans son intitulé. */
 export function recommandationDe(reponse: string): string | undefined {

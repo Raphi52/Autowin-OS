@@ -156,10 +156,14 @@ function estUneFinRedigee(ligne: string): boolean {
   return !OFFRE_DE_SUITE.test(nu)
 }
 
-/** Les quatre en-têtes du bloc de clôture : ils bornent la rubrique qu'on veut lire. */
+/**
+ * Les en-têtes du bloc de clôture : ils bornent la rubrique qu'on veut lire. « ❓ À éclaircir »,
+ * facultative, se glisse entre « Reste à faire » et « Recommandé » : sans elle ici, ses questions
+ * seraient lues comme du travail restant.
+ */
 const EN_TETES_CLOTURE =
   // `\**` en tête : les réponses réelles titrent en gras (« **✅ Fait** »).
-  /^\s*\**\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)\b/u
+  /^\s*\**\s*(?:✅|⚠️?|📍|⏳|❓️?|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|À éclaircir|Recommandé)\b/u
 
 /*
  * DÉFAUT CONNU DE LA LECTURE CI-DESSUS, LAISSÉ EN PLACE EXPRÈS (2026-10-21).
@@ -173,7 +177,7 @@ const EN_TETES_CLOTURE =
  * fix-ok: cause mesurée — `/Recommandé\b/u.test('👉 Recommandé : x')` rend false : `\b` ne connaît que [A-Za-z0-9_], même avec `u` ; `(?![\p{L}\p{N}_])` borne le mot, rouge→vert dans chat-auto-mode.rubrique-bornee.test.ts.
  */
 const EN_TETES_CLOTURE_EXACTS =
-  /^\s*\**\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)(?![\p{L}\p{N}_])/u
+  /^\s*\**\s*(?:✅|⚠️?|📍|⏳|❓️?|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|À éclaircir|Recommandé)(?![\p{L}\p{N}_])/u
 
 /**
  * Contenu de la rubrique « ✅ Fait » : le reste de sa ligne d'en-tête ET les lignes qui la suivent,
