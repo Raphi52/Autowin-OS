@@ -683,13 +683,17 @@ def main() -> int:
         return {"ELECTRON_EXEC_PATH": str(exe)}
 
     def liberer_port_interface() -> None:
-        """Attend que l'ancienne app lache le port de l'interface (conv-1329, voir
-        `attendre_port_libre`) : sinon Vite en prend un autre et la vue repart sans sa memoire."""
+        """Attend que l'ancienne app lache le port de l'interface (voir `attendre_port_libre`) :
+        sinon Vite en prend un autre et la vue repart sans sa memoire. « Vivante » = un Electron du
+        depot tourne encore (`electron_verrouille`) : c'est elle qui quitte, on lui laisse le temps."""
         if not port_occupe(PORT_INTERFACE_DEV):
             return
         journaliser(f"port {PORT_INTERFACE_DEV} tenu — attente de la fermeture de l'ancienne app")
         splash.pousser(f"[demarrage] port {PORT_INTERFACE_DEV} encore tenu : attente de la fermeture de l'ancienne app\n")
-        if attendre_port_libre(signe_de_vie=lambda: parole.__setitem__("dernier", time.monotonic())):
+        if attendre_port_libre(
+            ancienne_app_vivante=lambda: electron_verrouille(RACINE),
+            signe_de_vie=lambda: parole.__setitem__("dernier", time.monotonic()),
+        ):
             journaliser(f"port {PORT_INTERFACE_DEV} libre")
             return
         journaliser(

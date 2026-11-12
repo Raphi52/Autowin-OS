@@ -181,6 +181,39 @@ verifie(
     "port libre : aucune attente",
 )
 
+# L'ANCIENNE APP MET PLUS DE 20 S A QUITTER (2026-11-12, 12:01:28 -> 12:02:06 : 38 s ; jusqu'a
+# 76 s sur les cas precedents d'app-exits.log). Partir a 20 s lancait la nouvelle app A COTE de
+# l'ancienne : Vite prenait 5174 (memoire locale d'une autre origine) et Chromium, trouvant la base
+# « Local Storage » tenue, l'effacait (« Creating DB ... since it was missing ») — les fils deja vus
+# redevenaient roses. Tant que l'ancienne app vit, on l'attend.
+instant[0] = 0.0
+QUITTE_A = 38.0
+verifie(
+    attendre_port_libre(5173, 20.0, occupe=lambda _p: instant[0] < QUITTE_A, dormir=avancer,
+                        horloge=lambda: instant[0],
+                        ancienne_app_vivante=lambda: instant[0] < QUITTE_A) is True,
+    "ancienne app encore vivante a 20 s : on attend qu'elle lache le port au lieu de partir sur 5174",
+)
+verifie(instant[0] >= QUITTE_A, "aucun lancement tant que l'ancienne app tient le port")
+
+# Une app qui ne quitte JAMAIS ne bloque pas le lancement indefiniment : plafond, puis Faux.
+instant[0] = 0.0
+verifie(
+    attendre_port_libre(5173, 20.0, occupe=lambda _p: True, dormir=avancer, horloge=lambda: instant[0],
+                        ancienne_app_vivante=lambda: True, delai_ancienne_app_s=120.0) is False,
+    "ancienne app figee : l'attente reste bornee par son plafond",
+)
+verifie(20.5 < instant[0] <= 120.5, f"plafond de l'ancienne app respecte ({instant[0]} s)")
+
+# Port tenu par AUTRE CHOSE que notre app (plus aucun Electron du depot) : le delai court vaut.
+instant[0] = 0.0
+verifie(
+    attendre_port_libre(5173, 20.0, occupe=lambda _p: True, dormir=avancer, horloge=lambda: instant[0],
+                        ancienne_app_vivante=lambda: False) is False,
+    "port tenu par un tiers : on ne l'attend pas plus que le delai court",
+)
+verifie(instant[0] <= 20.5, f"tiers : delai court respecte ({instant[0]} s)")
+
 # Le vrai depot, si l'app tourne : electron.exe DOIT etre vu verrouille (sonde reelle, pas un faux).
 depot = Path(__file__).resolve().parent.parent
 if "--app-ouverte" in sys.argv:

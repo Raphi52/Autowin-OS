@@ -106,6 +106,11 @@ def attendre_electron_libre(
 # fixe aucun). L'ORIGINE de la vue en depend (`http://localhost:5173`), donc toute sa memoire locale.
 PORT_INTERFACE_DEV = 5173
 
+# Plafond d'attente d'une ancienne app QUI QUITTE ENCORE. Mesure dans app-exits.log : entre la
+# demande de fermeture et la mort du dernier processus, 38 s le 2026-11-12, jusqu'a 76 s le
+# 2026-11-02. Au-dela, on la tient pour figee : lancer quand meme vaut mieux que pas de fenetre.
+DELAI_FERMETURE_ANCIENNE_APP_S = 120.0
+
 
 def port_occupe(port: int, delai_s: float = 0.3) -> bool:
     """Vrai si un serveur ecoute deja sur `port` en local, en IPv4 ou en IPv6 (Vite ecoute sur
@@ -127,25 +132,31 @@ def attendre_port_libre(
     delai_s: float = 20.0,
     pause_s: float = 0.5,
     *,
+    ancienne_app_vivante: Callable[[], bool] = lambda: False,
+    delai_ancienne_app_s: float = DELAI_FERMETURE_ANCIENNE_APP_S,
     occupe: Callable[[int], bool] = port_occupe,
     dormir: Callable[[float], None] = time.sleep,
     horloge: Callable[[], float] = time.monotonic,
     signe_de_vie: Callable[[], None] | None = None,
 ) -> bool:
-    """Vrai des que `port` est libre ; Faux s'il est encore pris apres `delai_s`.
+    """Vrai des que `port` est libre ; Faux s'il est encore pris apres le delai qui s'applique.
 
-    LA MEME COURSE DU REDEMARRAGE que `attendre_electron_libre`, sur le port de l'interface (mesure
-    du 2026-10-30, conv-1329) : `restart_app` lance le lanceur PUIS quitte l'app, dont le serveur
-    Vite tient encore 5173. Le nouveau Vite ecrit « Port 5173 is in use, trying another one » et
-    prend 5174 (launch-dev.log) : la vue change d'ORIGINE, donc de memoire locale. L'app repart
-    alors sans les dossiers retires du Chat, sans la langue, le zoom ni les etats poses a la main
-    sur le Board — tout est reste sous l'autre origine. On attend donc que l'ancienne app lache le
-    port. Un serveur qui le garde VRAIMENT ne le lache pas : au bout du delai, Faux, et Vite
-    prendra le suivant comme avant (l'appelant le journalise).
+    LA MEME COURSE DU REDEMARRAGE que `attendre_electron_libre`, sur le port de l'interface : le
+    lanceur demarre pendant que l'ancienne app quitte, et son serveur Vite tient encore 5173. Le
+    nouveau Vite ecrit « Port 5173 is in use, trying another one » et prend 5174 : la vue change
+    d'ORIGINE, donc de memoire locale (dossiers retires du Chat, langue, zoom, etats du Board, fils
+    deja vus). Pire, les deux Electron partagent alors le meme profil : le 2026-11-12, le nouveau a
+    trouve la base « Local Storage » tenue par l'ancien et l'a recreee vide.
+
+    Deux delais, parce que deux causes : tant que `ancienne_app_vivante()` (notre Electron tourne
+    encore), elle est en train de quitter et on l'attend jusqu'a `delai_ancienne_app_s` — elle met
+    couramment 30 a 80 s. Une fois partie, un port encore pris l'est par un TIERS qui ne le lachera
+    pas : au bout de `delai_s`, Faux, et Vite prendra le suivant (l'appelant le journalise).
     """
-    limite = horloge() + delai_s
+    debut = horloge()
     while occupe(port):
-        if horloge() >= limite:
+        plafond = delai_ancienne_app_s if ancienne_app_vivante() else delai_s
+        if horloge() - debut >= plafond:
             return False
         if signe_de_vie is not None:
             signe_de_vie()
