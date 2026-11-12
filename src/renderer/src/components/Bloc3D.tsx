@@ -15,6 +15,8 @@ import { useEffect, useRef, useState } from 'react'
 import { NOM_PAGE_SCENE_3D, TYPE_MESSAGE_SCENE_3D } from '../../../shared/scene-3d'
 import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 import { codeSceneDuCarrousel } from '../../scene-3d/choix-scene.mjs'
+// L'anneau prisme de son bord est partagé par tous les blocs du fil : il vit dans anneau-activite.css.
+import './anneau-activite.css'
 import './Bloc3D.css'
 
 // `message` absent : la scène n'a rien dit, « Erreur inconnue » est traduit au rendu.

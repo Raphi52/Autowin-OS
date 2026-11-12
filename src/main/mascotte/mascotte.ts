@@ -614,7 +614,13 @@ function reglesDeLaMachine(
 // PROPRES à chaque état : un nom qui survit au changement de feuille continue sa course au lieu de
 // repartir, et l'entrée ne se jouerait pas. Le repos dure 4,4 s (le temps de s'assoupir et de se
 // redresser), l'échec 2,4 s (le temps de jeter un œil entre ses pattes).
-const GESTES_DU_PANDA: Record<NomEtatMascotte, { cle: string; planche: string; boucle: number }> = {
+type PlancheDuPanda = 'REPOS' | 'TRAVAIL' | 'ATTENTE' | 'SOUCI'
+/** Les variables CSS qui portent les planches : la boucle de chaque geste, puis son entrée. */
+type VariableDePlanche = `--${Lowercase<PlancheDuPanda>}` | `--e-${Lowercase<PlancheDuPanda>}`
+const GESTES_DU_PANDA: Record<
+  NomEtatMascotte,
+  { cle: string; planche: PlancheDuPanda; boucle: number }
+> = {
   calme: { cle: 'r', planche: 'REPOS', boucle: 4.4 },
   travail: { cle: 't', planche: 'TRAVAIL', boucle: 1.6 },
   attente: { cle: 'a', planche: 'ATTENTE', boucle: 1.6 },
@@ -664,7 +670,7 @@ function imagesClesDuPanda(): string {
   return (Object.keys(GESTES_DU_PANDA) as NomEtatMascotte[])
     .map((etat) => {
       const { cle, planche } = GESTES_DU_PANDA[etat]
-      const entree = `var(--e-${planche.toLowerCase()})`
+      const entree = `var(${variableDEntree(planche)})`
       return [
         `@keyframes e${cle}{from{background-image:${entree};background-position:0 0}to{background-image:${entree};background-position:-2000px 0}}`,
         `@keyframes b${cle}{to{background-position:-2000px 0}}`,
@@ -675,21 +681,35 @@ function imagesClesDuPanda(): string {
     .join('\n')
 }
 
+/** La variable de la planche d'entrée d'un geste, celle que joue son image clé `e…`. */
+function variableDEntree(planche: PlancheDuPanda): VariableDePlanche {
+  return `--e-${planche.toLowerCase() as Lowercase<PlancheDuPanda>}`
+}
+
+/**
+ * Chaque clé EST le nom de la variable, écrit en entier : la garde des variables CSS
+ * (css-variables-definies.test.ts) en lit ainsi la définition, qu'un nom calculé (`--${nom}`) lui
+ * cachait. Le type exige une image pour chaque variable appelée : une planche oubliée ne compile pas.
+ */
+function planchesDuPanda(): Record<VariableDePlanche, string> {
+  return {
+    '--repos': PANDA_REPOS,
+    '--travail': PANDA_TRAVAIL,
+    '--attente': PANDA_ATTENTE,
+    '--souci': PANDA_SOUCI,
+    '--e-repos': PANDA_ENTREE_REPOS,
+    '--e-travail': PANDA_ENTREE_TRAVAIL,
+    '--e-attente': PANDA_ENTREE_ATTENTE,
+    '--e-souci': PANDA_ENTREE_SOUCI
+  }
+}
+
 function htmlDuPanda(): string {
   const pluie = [0, 1, 2, 3, 4, 5, 6].map((i) => `<i class="pl" style="--i:${i}"></i>`).join('')
   const paillettes = [0, 1].map((i) => `<i class="ps" style="--i:${i}"></i>`).join('')
-  const planches = [
-    ['repos', PANDA_REPOS],
-    ['travail', PANDA_TRAVAIL],
-    ['attente', PANDA_ATTENTE],
-    ['souci', PANDA_SOUCI],
-    ['e-repos', PANDA_ENTREE_REPOS],
-    ['e-travail', PANDA_ENTREE_TRAVAIL],
-    ['e-attente', PANDA_ENTREE_ATTENTE],
-    ['e-souci', PANDA_ENTREE_SOUCI]
-  ]
-  const variables = planches.map(([nom, url]) => `--${nom}:url("${url}")`).join(';')
-  const precharge = planches.map(([nom]) => `var(--${nom})`).join(',')
+  const planches = Object.entries(planchesDuPanda())
+  const variables = planches.map(([nom, url]) => `${nom}:url("${url}")`).join(';')
+  const precharge = planches.map(([nom]) => `var(${nom})`).join(',')
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><title>Autowin — mascotte</title><style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
 body{font-family:ui-sans-serif,system-ui,sans-serif;user-select:none}

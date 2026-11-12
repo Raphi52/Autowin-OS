@@ -251,6 +251,41 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
   // Ce qui est interdit : une regle dont la CIBLE est le cadre (son fond, son bord). Une copie de
   // theme qui vise un element DANS le cadre (la pastille de duree, recolorée comme celles des
   // capsules) est legitime : elle suit le theme sans toucher au cadre.
+  /**
+   * ANNEAU PRISME : un seul dessin pour le bord de tous les blocs encadres du fil, et un eclat qui
+   * ne tourne que la ou il dit quelque chose. ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer un bloc
+   * de la liste, ecrire une couleur du spectre en dur, ou faire tourner l'anneau des blocs au repos
+   * (une animation de l'angle repeint le calque a chaque image).
+   */
+  it('pose l anneau prisme sur chaque bloc encadre, a partir des jetons du theme', () => {
+    const debut = css.indexOf(':is(.cadre-anneau, .look-decode-block, .bloc-3d)::before {')
+    expect(debut).toBeGreaterThan(-1)
+    const regle = css.slice(debut, css.indexOf('\n}', debut))
+    // Ses propres jetons, pas ceux des statuts : en Nebuleuse, l'or et le cyan sont roses et le
+    // spectre retombait dans le degrade rose -> bleu du theme.
+    for (const jeton of ['rouge', 'or', 'cyan', 'bleu', 'magenta'])
+      expect(regle).toContain(`var(--prisme-${jeton})`)
+    expect(regle).toMatch(/conic-gradient\(\s*from var\(--prisme-angle\)/)
+    expect(regle).not.toMatch(/animation/)
+  })
+
+  it('ne fait tourner l eclat que sur un bloc en cours ou survole', () => {
+    const regles = [...css.matchAll(/([^{}]+)\{[^{}]*animation:\s*prisme-tour[^{}]*\}/g)].map((m) =>
+      m[1]!
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .split(',')
+        .map((s) => s.replace(/\s+/g, ' ').trim())
+    )
+    expect(regles).toEqual([
+      [
+        '.cadre-anneau.is-live::before',
+        ':is(.cadre-anneau',
+        '.look-decode-block',
+        '.bloc-3d):hover::before'
+      ]
+    ])
+  })
+
   it('aucune feuille de theme ne repeint le cadre', () => {
     const assets = join(ICI, '..', 'assets')
     const cibleLeCadre = /\.(activity-anneau|cadre-anneau)[\w\-.[\]='"():]*\s*[,{]/

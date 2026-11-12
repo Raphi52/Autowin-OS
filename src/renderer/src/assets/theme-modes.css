@@ -72,6 +72,12 @@
   --err: #b23a34;
   --info: #0f6f9c;
   --violet: #5a48c8;
+  /* Le prisme plus soutenu : sur fond pale, les teintes de nuit se delavent. */
+  --prisme-rouge: #d43a1a;
+  --prisme-or: #b98600;
+  --prisme-cyan: #0a91c4;
+  --prisme-bleu: #2f4bd8;
+  --prisme-magenta: #a32fd1;
 
   /* --------------------------------------------------------------------------
      LE CHAT SUIT ENFIN LE THEME. Les 116 jetons `--chat-*` valent, dans theme.css, la couleur

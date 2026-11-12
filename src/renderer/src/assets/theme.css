@@ -64,6 +64,15 @@
   --info: var(--cyan);
   --violet: #8f7cff;
 
+  /* Anneau prisme des blocs du fil (anneau-activite.css) : une lumiere decomposee par un prisme.
+     Ses jetons a part, parce que l'effet EST l'ecart des teintes : pris aux statuts, il tombait dans
+     la palette du theme (rose et lavande en Nebuleuse, ou l'or et le cyan sont roses). */
+  --prisme-rouge: #ff5a3c;
+  --prisme-or: #ffc93c;
+  --prisme-cyan: #3cd8ff;
+  --prisme-bleu: #4a6cff;
+  --prisme-magenta: #d44cff;
+
   /* Espacement (échelle 4px) */
   --s1: 4px;
   --s2: 8px;

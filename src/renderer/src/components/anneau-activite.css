@@ -40,16 +40,35 @@
     var(--chat-capsule-reflet-fin) 100%
   );
 }
-/* BORD DEGRADE de 2 px : un calque evide par masque, comme les capsules — `border-image` ignore
-   l'arrondi, et un fond `border-box` masquerait le fil sous le cadre.
-   LAMPE A LAVE (2026-10-27 : « les borders bleu rose partout ou yen a », sur la capture
-   des blocs Raisonnement / Actions / Etapes) : trois gouttes posees sur le degrade du bord, aux
-   couleurs que le THEME donne (`--thinking-capsule-lave-*`). Gouttes FIGEES
-   (2026-11-05, « refais une version tres peu gourmande, enleve toute l'ancienne lave couteuse ») :
-   leur position animee faisait repeindre ce calque a chaque image. Le cadre reste dessine ICI
-   seul : un theme ne fait que fournir ces jetons. Sans eux, gouttes transparentes : le bord est le
-   degrade fixe d'avant. */
-.cadre-anneau::before {
+/* ANNEAU PRISME — le bord de 2 px de TOUS les blocs encadres du fil : ce cadre (Raisonnement,
+   Actions, Etapes, Chantier, Orchestration, barre d'activite, capsule d'image), le decodage d'une
+   image (LookDecodeBlock.css) et la scene 3D (Bloc3D.css). Un anneau fin aux couleurs du spectre,
+   un ECLAT de lumiere a un endroit du tour et le cote oppose dans l'ombre : l'anneau irise d'un
+   bouton de verre. Les blocs le partagent ici pour qu'une retouche les suive tous.
+   Calque EVIDE par masque : `border-image` ignore l'arrondi, et un fond `border-box` masquerait le
+   fil sous le cadre.
+   LE SPECTRE A SES PROPRES JETONS (`--prisme-*`, theme.css et theme-modes.css) : un arc-en-ciel dans
+   tous les themes, plus soutenu en clair pour rester lisible sur fond pale. L'eclat est le reflet des
+   capsules, pose deux fois (un coeur etroit dans un halo plus large) ; l'ombre est la couleur du
+   fond, qui eteint le cote oppose en sombre comme en clair.
+   L'ECLAT NE TOURNE QUE SUR UN BLOC EN COURS OU SURVOLE (regle suivante) : animer cet angle repeint
+   le calque a chaque image, le cout de l'ancienne lave animee qu'on avait retiree pour la carte
+   graphique. On ne le paie que pour les un a trois blocs vivants du tour, ou celui sous la souris ;
+   au repos, l'anneau est fige. */
+@property --prisme-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 300deg;
+}
+@keyframes prisme-tour {
+  to {
+    --prisme-angle: 660deg;
+  }
+}
+:is(.cadre-anneau, .look-decode-block, .bloc-3d)::before {
+  --prisme-eclat: var(--chat-capsule-reflet-haut);
+  --prisme-ombre: color-mix(in srgb, var(--bg-0) 70%, transparent);
+
   content: '';
   position: absolute;
   inset: 0;
@@ -57,24 +76,33 @@
   padding: 2px;
   border-radius: inherit;
   background:
-    radial-gradient(
-      ellipse 60% 120% at 85% 30%,
-      var(--thinking-capsule-lave-chaud, transparent) 0%,
-      color-mix(in srgb, var(--thinking-capsule-lave-chaud, transparent) 80%, transparent) 35%,
-      transparent 100%
+    conic-gradient(
+      from var(--prisme-angle),
+      var(--prisme-eclat),
+      transparent 14deg 346deg,
+      var(--prisme-eclat)
     ),
-    radial-gradient(
-      ellipse 65% 130% at 12% 70%,
-      var(--thinking-capsule-lave-froid, transparent) 0%,
-      var(--thinking-capsule-lave-froid, transparent) 35%,
-      transparent 100%
+    conic-gradient(
+      from var(--prisme-angle),
+      var(--prisme-eclat),
+      transparent 40deg 320deg,
+      var(--prisme-eclat)
     ),
-    radial-gradient(
-      ellipse 45% 110% at 50% 100%,
-      var(--thinking-capsule-lave-milieu, transparent) 0%,
-      transparent 100%
+    conic-gradient(
+      from var(--prisme-angle),
+      transparent 70deg,
+      var(--prisme-ombre) 140deg 220deg,
+      transparent 290deg
     ),
-    linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+    conic-gradient(
+      from calc(var(--prisme-angle) - 50deg),
+      var(--prisme-rouge),
+      var(--prisme-or),
+      var(--prisme-cyan),
+      var(--prisme-bleu),
+      var(--prisme-magenta),
+      var(--prisme-rouge)
+    );
   background-origin: border-box;
   background-repeat: no-repeat;
   pointer-events: none;
@@ -83,6 +111,21 @@
     linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+}
+/* Pas de neutralisation sous `prefers-reduced-motion` : en cours, c'est le signe de vie du bloc
+   (meme regle que l'atterrissage du verdict, plus bas), et ce poste a le mouvement reduit actif. */
+.cadre-anneau.is-live::before,
+:is(.cadre-anneau, .look-decode-block, .bloc-3d):hover::before {
+  animation: prisme-tour 4s linear infinite;
+}
+/* Ces deux blocs gardent leur bord d'1 px, devenu transparent dans leur feuille : l'anneau se pose
+   SUR lui pour le decodage. La scene 3D coupe ce qui depasse (`overflow: hidden`) et son cadre de
+   scene est opaque : l'anneau y reste dedans, et passe AU-DESSUS de la scene. */
+.look-decode-block::before {
+  inset: -1px;
+}
+.bloc-3d::before {
+  z-index: 2;
 }
 /* EN COURS : reflet ALLUME et la seule lueur du cadre, dans la couleur chaude (« rose = en cours,
    seule lueur qui bat » dans Holographique). */

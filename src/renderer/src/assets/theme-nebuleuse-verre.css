@@ -4657,21 +4657,12 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0) 64%),
     var(--nv-lave-fond);
 }
-/* Le CADRE des blocs Raisonnement / Actions / Etapes et de la barre d'activite n'a qu'une source,
-   anneau-activite.css (aucune feuille de theme ne le repeint, test « le cadre est dessine par les
-   jetons du theme ») : ce theme ne lui fournit que les couleurs des gouttes, figees
-   (un cadre de 2 px n'a pas de surface ou faire passer le calque en fondu). */
-:root[data-theme='nebuleuse-verre'] {
-  --thinking-capsule-lave-chaud: #e63ca0;
-  --thinking-capsule-lave-froid: #3c6eeb;
-  --thinking-capsule-lave-milieu: #9150dc;
-}
 /* LES TOURS PRECEDENTS NE COULENT PLUS (meme fil : « Limite la lampe a lave des capsules
    Raisonnement / Actions au dernier tour du fil, pour alleger la carte graphique »). Une reponse
    suivie d'une autre reponse est un tour fini : ses capsules reprennent le degrade FIXE d'avant
    la lave. Seule la derniere reponse du fil garde les gouttes.
-   - le cadre (anneau-activite.css, seul a le dessiner) : jetons des gouttes vides, il retombe sur
-     son degrade de base ;
+   Le cadre des blocs (anneau-activite.css) n'a plus de gouttes : son anneau prisme est fige au
+   repos. Restent :
    - les pastilles et les tranches de la pile d'images : le degrade de ChatView.css et
      ArtifactPreview.css, recopie tel quel.
    `.msg--rail` ne marque que les reponses du fil : la TV du bureau cache, qui porte aussi
@@ -4680,11 +4671,6 @@
    cible finale de TOUTES les regles `:has()` dans un seul ensemble d'invalidation, et `span` y
    faisait restyler tous les `span` de l'app a chaque frappe dans la saisie (≈ 220 ms par lettre,
    gel de 15 s puis rechargement de la fenetre le 28/10 a 18:31). Garde : has-cible-nue.test.ts. */
-:root[data-theme='nebuleuse-verre'] .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail) {
-  --thinking-capsule-lave-chaud: transparent;
-  --thinking-capsule-lave-froid: transparent;
-  --thinking-capsule-lave-milieu: transparent;
-}
 :root[data-theme='nebuleuse-verre']
   .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)
   :is(
