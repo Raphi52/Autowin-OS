@@ -363,6 +363,23 @@ describe('le jumeau : sans double lecture, rien ne change', () => {
     expect(b.executees()).not.toContain('ask')
   })
 
+  /*
+   * UN ENVOI DU MODE AUTO : l'agent a écrit ce texte, personne n'a de lecture à départager. Mesuré
+   * sur les 47 envois automatiques retrouvés (12/11) : 3 se sont arrêtés sur « Ta demande peut se lire
+   * de deux façons », un tour perdu chacun, et le mode auto a ensuite répondu SEUL à la question — une
+   * fois à l'opposé de la demande de l'utilisateur. La ligne de compréhension reste (le fil montre ce
+   * que l'agent va faire) ; seule la question disparaît, la lecture dominante part.
+   */
+  it('un envoi du mode auto ne pose aucune question : la lecture dominante part, annoncée', async () => {
+    const envoiAuto = `${DEMANDE_767}\n\n(Mode auto — dernière demande de l'utilisateur : « trouve une task pour /arena ». Ce message n'a PAS été tapé par l'utilisateur : l'agent l'a écrit et le mode auto l'a envoyé seul. Si cette suite s'en éloigne, dis-le et\narrête la chaîne au lieu de dériver.)`
+    const b = banc(LECTURES_767)
+    await b.jouer([{ role: 'user', content: envoiAuto }])
+    expect(b.lecteur).toHaveBeenCalledTimes(1)
+    expect(b.executees()).toContain('orchestrate')
+    expect(b.executees()).not.toContain('ask')
+    expect(b.fin()?.text).not.toBe(AVIS_DEUX_LECTURES)
+  })
+
   it('une lecture qui DOMINE (70/30) ne pose aucune question : le run part, annoncé et sur ELLE (conv-1123)', async () => {
     const b = banc(reponse([LECTURE_ARENA_767, 70], [LECTURE_CODE_767, 30]))
     await b.jouer([{ role: 'user', content: DEMANDE_767 }])

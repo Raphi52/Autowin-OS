@@ -26,6 +26,7 @@ import { langueCourante } from '../langue'
 import { TEXTES_EN, TEXTES_FR, traduireChatFil } from '../textes-ecrans/chat-fil'
 import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
 import { estUneRepriseApresQuota } from '../../../shared/reprise-quota'
+import { ANCRE_DU_MODE_AUTO } from '../../../shared/envoi-du-mode-auto'
 import type { ChatPart } from './chat-view-model'
 import {
   extrairePropositionsSuite,
@@ -159,7 +160,8 @@ function estUneFinRedigee(ligne: string): boolean {
 /**
  * Les en-têtes du bloc de clôture : ils bornent la rubrique qu'on veut lire. « ❓ À éclaircir »,
  * facultative, se glisse entre « Reste à faire » et « Recommandé » : sans elle ici, ses questions
- * seraient lues comme du travail restant.
+ * seraient lues comme du travail restant. Elles n'arrêtent pas non plus le mode auto : choix de
+ * l'utilisateur, qui préfère voir la suite partir et répondre aux questions quand il le veut.
  */
 const EN_TETES_CLOTURE =
   // `\**` en tête : les réponses réelles titrent en gras (« **✅ Fait** »).
@@ -174,6 +176,10 @@ const EN_TETES_CLOTURE =
  * passe de 37 à 53 — « Reste : rien » suivi d'une vraie recommandation arrêterait la chaîne au lieu
  * de l'enchaîner. C'est un réglage du mode auto à trancher à part, pas un effet de bord du carnet.
  * La lecture EXACTE ci-dessous sert au carnet du fil ; le mode auto garde la sienne.
+ * TRANCHÉ LE 2026-11-12 : on garde. Les 16 clôtures qui changeraient ont été relues : 7 n'envoyaient
+ * déjà rien, et 9 enverraient moins, dont la moitié portaient une vraie suite écrite en ligne de
+ * prompt (corriger un fichier de configuration resté rouge, marquer des travaux triés, retenir une
+ * préférence) sous un « Reste à faire : aucune suite sur CE sujet ». Corriger les perdrait.
  * fix-ok: cause mesurée — `/Recommandé\b/u.test('👉 Recommandé : x')` rend false : `\b` ne connaît que [A-Za-z0-9_], même avec `u` ; `(?![\p{L}\p{N}_])` borne le mot, rouge→vert dans chat-auto-mode.rubrique-bornee.test.ts.
  */
 const EN_TETES_CLOTURE_EXACTS =
@@ -197,7 +203,7 @@ function lignesDuBlocFait(texte: string): string[] {
  */
 export function lignesDeRubrique(
   texte: string,
-  rubrique: 'Fait' | 'Maintenant' | 'Reste à faire' | 'Recommandé',
+  rubrique: 'Fait' | 'Maintenant' | 'Reste à faire' | 'À éclaircir' | 'Recommandé',
   lecture: 'mode-auto' | 'exacte' = 'mode-auto'
 ): string[] {
   const enTetes = lecture === 'exacte' ? EN_TETES_CLOTURE_EXACTS : EN_TETES_CLOTURE
@@ -456,11 +462,9 @@ export function lectureDeLaDemande(
 
 /**
  * Relit la demande citee par un ancrage precedent. Doit rester le miroir de `ancrerSurLaDemande`.
- * L'ancienne formule (« tâche initiale de ce fil », avant le 2026-09-30) reste lue : elle vit dans
- * les fils deja ecrits.
+ * Partagée avec le processus principal (shared/envoi-du-mode-auto.ts).
  */
-const ANCRE_DEJA_ECRITE =
-  /\(Mode auto — (?:tâche initiale de ce fil|dernière demande de l'utilisateur) : « ([\s\S]*?) »\./
+const ANCRE_DEJA_ECRITE = ANCRE_DU_MODE_AUTO
 
 /**
  * ANCRAGE ANTI-DERIVE — demande utilisateur du 2026-09-02 : « le mode auto doit pas trop trop
@@ -519,11 +523,11 @@ export type RaisonArret =
   | 'suite-differee'
   /* Tour coupé avec une tâche de fond en vol, sans suite proposée : attente muette. */
   | 'tache-de-fond-coupee'
+  /* La suite dit d'attendre sans rien faire (`suiteEstPassive`) : on patiente, armé, sans payer de tour. */
+  | 'suite-passive'
   /* 2026-10-02 — garde-fou de la chaîne : quota hebdomadaire Claude, tours auto d'affilée. */
   | 'quota-hebdo'
   | 'tours-auto-max'
-  /* Tour coupé avec une tâche de fond en vol, sans suite proposée : attente muette. */
-  | 'tache-de-fond-coupee'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -1143,11 +1147,17 @@ export function fichierAttenduSuiteDifferee(
  * « pas terminé », et la fin a été vue 51 min en retard. Le mode auto sonde désormais l'état du fil
  * — lecture gratuite (`pilotChatActive`, l'autorité du processus principal) — avant de payer un tour.
  * `null` = aucune condition de fin de fil lisible. `\b` ignore « é » : la fin est bornée par une lettre.
+ *
+ * Un chef de plan écrit l'attente autrement : « attendre la réponse de conv-N », « à la réponse de
+ * conv-N », « attendre le compte rendu de conv-N » (mesuré : trois envois en 55 s, trois tours payés
+ * pour lire « pas encore répondu »). Seul un verbe d'ATTENTE compte : « lis la réponse de conv-N »
+ * porte sur une réponse déjà là.
  */
 const FIL_ATTENDU = new RegExp(
   [
-    String.raw`\b(?:quand|d[eè]s\s+que|lorsque)\b[^\n]{0,60}?\b(conv-\d+)\b[^\n]{0,40}?\b(?:est|sera|a|aura)\s+(?:fini|termin[ée]e?|achev[ée]e?|clos)(?![\p{L}])`,
-    String.raw`(?:^|[\s(])[àa]\s+la\s+fin\s+(?:du\s+tour\s+)?de\s+(conv-\d+)\b`
+    String.raw`\b(?:quand|d[eè]s\s+que|lorsque)\b[^\n]{0,60}?\b(conv-\d+)\b[^\n]{0,40}?\b(?:est|sera|a|aura)\s+(?:fini|termin[ée]e?|achev[ée]e?|clos|r[ée]pondu)(?![\p{L}])`,
+    String.raw`(?:^|[\s(])[àa]\s+la\s+fin\s+(?:du\s+tour\s+)?de\s+(conv-\d+)\b`,
+    String.raw`(?:^|[\s(])(?:attendre|attends|[àa]|d[eè]s)\s+(?:la\s+r[ée]ponse|le\s+compte[\s-]rendu|le\s+retour|la\s+fin)\s+de\s+(conv-\d+)\b`
   ].join('|'),
   'iu'
 )
@@ -1159,7 +1169,29 @@ export function filAttenduSuiteDifferee(
   recommandation: string | null
 ): string | null {
   const m = FIL_ATTENDU.exec(`${suite}\n${recommandation ?? ''}`)
-  return m ? (m[1] ?? m[2] ?? null) : null
+  return m ? (m[1] ?? m[2] ?? m[3] ?? null) : null
+}
+
+/**
+ * UNE SUITE QUI DIT « NE FAIS RIEN ». Mesuré sur les 47 envois automatiques retrouvés (12/11) :
+ * « attendre le prochain réveil du plan, aucune action de ta part n'est nécessaire » et « Laisser le
+ * redémarrage partir seul, sans geste de ta part » ont chacun payé un tour dont la réponse a été « je
+ * ne fais rien de plus ici ». Ce qu'elles attendent arrive SANS le mode auto (réveil du plan,
+ * redémarrage) : il patiente, armé, et lit la clôture du tour suivant.
+ * Il faut les DEUX marques — un verbe d'attente en tête ET le refus de tout geste — et aucune action
+ * annoncée après (« attendre la fin du build, puis lancer le judge » reste une suite).
+ */
+const VERBE_D_ATTENTE = /^\s*(?:attendre|attends|patiente[rz]?|laisse[rz]?)\b/iu
+const AUCUN_GESTE =
+  /\b(?:aucune\s+action|aucun\s+geste|sans\s+(?:aucun\s+)?geste|sans\s+(?:aucune\s+)?action|sans\s+rien\s+(?:faire|lancer|toucher)|rien\s+[àa]\s+faire)\b/iu
+const ACTION_ENSUITE = /\b(?:puis|ensuite)\b|(?:^|\s)[àa]\s+la\s+fin\b/iu
+export function suiteEstPassive(suite: string | null): boolean {
+  return (
+    suite !== null &&
+    VERBE_D_ATTENTE.test(suite) &&
+    AUCUN_GESTE.test(suite) &&
+    !ACTION_ENSUITE.test(suite)
+  )
 }
 
 export function suiteEstDifferee(suite: string, recommandation: string | null): boolean {
@@ -1298,6 +1330,9 @@ export function reponseAutoAuDernierAsk(fil: readonly Msg[]): string | null {
   return sure(option) ? promptDeLOption(option).trim() : null
 }
 
+const QUESTIONS_SANS_REPONSE =
+  "Les questions de ta rubrique « ❓ À éclaircir » sont restées sans réponse : tranche chacune toi-même par une hypothèse annoncée en une ligne, sans les reposer ; seuls un geste destructeur ou une publication attendent l'utilisateur."
+
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
 export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   const decision = deciderSuiteAuto(entree)
@@ -1421,12 +1456,17 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
   // proposée passe telle quelle — sinon le mode auto renvoie `/salvage` en boucle, à ses frais.
   const demandeDuTour = texteDerniereDemande(entree.fil) ?? undefined
   // Les suites AFFICHÉES en boutons, mieux notée en tête (gardes de publication déjà appliquées).
-  const propositions = extrairePropositionsSuite(
+  const affichees = extrairePropositionsSuite(
     texteReponse,
     demandeDuTour,
     entree.depotPresent ?? true
   ).map((p) => p.texte)
-  const brut = propositions[0] ?? extractRecommendation(texteReponse)
+  // Une suite « attendre, aucune action » ne part pas ; une vraie suite écrite à côté, si.
+  const propositions = affichees.filter((p) => !suiteEstPassive(p))
+  const proposee =
+    propositions[0] ?? (affichees.length > 0 ? null : extractRecommendation(texteReponse))
+  const passive = proposee === null ? affichees.length > 0 : suiteEstPassive(proposee)
+  const brut = passive ? null : proposee
   const suite =
     brut && publicationJamaisDemandee(brut, demandeDuTour, entree.depotPresent ?? true)
       ? null
@@ -1440,7 +1480,7 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
       raison: 'tache-de-fond-coupee',
       message: MESSAGES_ARRET['tache-de-fond-coupee']
     }
-  if (!suite) return { action: 'attendre', raison: 'aucun-prompt' }
+  if (!suite) return { action: 'attendre', raison: passive ? 'suite-passive' : 'aucun-prompt' }
   /*
    * fix-ok: une question dont la réponse recommandée est destructrice rendait null plus haut, et le code
    * passait à la suite libre : « la question attend l'humain » n'était pas tenu. Mesuré le 30/10 sur
@@ -1513,7 +1553,20 @@ ${suites}`
         ? `CIBLE RETENUE : ${choixScout.cible}
 ${suites}`
         : suites
-  const texte = ancrerSurLaDemande(suiteCiblee, derniereDemandeHumaine(entree.fil))
+  /*
+   * LES QUESTIONS « ❓ À ÉCLAIRCIR » NE BLOQUENT PAS LA SUITE (choix de l'utilisateur) : elle part,
+   * et dit à l'agent que personne n'a répondu. Sans cette phrase, il pouvait attendre une réponse
+   * qui ne viendra pas ou reposer les mêmes questions à chaque tour.
+   */
+  const questionsOuvertes = lignesDeRubrique(texteReponse, 'À éclaircir', 'exacte').some((l) =>
+    l.trim()
+  )
+  const texte = ancrerSurLaDemande(
+    questionsOuvertes
+      ? `${suiteCiblee}${SAUT_ANCRAGE}${SAUT_ANCRAGE}${QUESTIONS_SANS_REPONSE}`
+      : suiteCiblee,
+    derniereDemandeHumaine(entree.fil)
+  )
   /*
    * DIFFÉRÉE : programmée AVANT le garde-fou « même suite » — « quand fin.txt existe » revient
    * forcément identique d'une vérification à l'autre. La borne est `MAX_RELANCES_DIFFEREES`.
