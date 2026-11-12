@@ -116,6 +116,7 @@ import {
 import type { IssueDuTour } from '../../shared/plan-de-lots'
 import { solderOrientationsDuFil } from '../conversations/orientations-en-cours-app'
 import { estUnFluxDeBloc } from '../commands/montrer-bloc-command'
+import { FLUX_LECTURE_RETENUE } from '../../shared/lecture-retenue'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
 export type RunPilotChatDeps = {
@@ -1225,10 +1226,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         // Un bloc posé par `montrer_bloc` n'est pas du texte DIT par le modèle : compté
         // ici, il s'intercalerait dans le déjà-dit (avant + bloc + après) ; `resteADire` n'y
         // retrouverait plus le texte de clôture « avant + après » et le republierait en entier.
+        // Même chose pour la ligne « Compréhension » : écrite par le petit modèle en parallèle,
+        // elle tombe souvent au milieu de la réponse, qui était alors affichée deux fois.
         if (
           pilotEvent.kind === 'delta' &&
           pilotEvent.text &&
-          !estUnFluxDeBloc(pilotEvent.streamId)
+          !estUnFluxDeBloc(pilotEvent.streamId) &&
+          pilotEvent.streamId !== FLUX_LECTURE_RETENUE
         ) {
           // Deux itérations d'un même tour sont deux MESSAGES : les coller bout à bout soudait la
           // fin de l'un au début de l'autre (« …du balayage.```html-render »), ce qui sortait le
