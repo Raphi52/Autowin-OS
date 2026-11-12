@@ -8,10 +8,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-/** Réponse d'un gestionnaire d'ouverture ; `createWindow` reçoit les options d'Electron. */
+/** Réponse d'un gestionnaire d'ouverture ; `overrideBrowserWindowOptions` règle la vraie fenêtre. */
 type ReponseOuverture = {
   action: string
-  createWindow?: (options: { webContents: unknown }) => unknown
+  overrideBrowserWindowOptions?: Record<string, unknown>
 }
 
 const electronSimule = vi.hoisted(() => {
@@ -29,7 +29,7 @@ const electronSimule = vi.hoisted(() => {
     }
   }> = []
   const sessionsParId = new Map<string, unknown>()
-  /** Fabrique une page seule, comme celle qu'Electron prépare pour une fenêtre liée. */
+  /** Fabrique une page seule : celle d'une fenêtre de connexion qu'Electron a créée. */
   const pages: { creer?: () => unknown } = {}
   return { vues, sessionsParId, pages }
 })
@@ -61,6 +61,9 @@ vi.mock('electron', () => {
       session: sessionPartagee,
       getUserAgent: () => 'Mozilla/5.0 Chrome/140.0.0.0 Electron/44.5.1 Safari/537.36',
       setUserAgent: vi.fn(),
+      isDestroyed: () => false,
+      close: vi.fn(),
+      loadURL: vi.fn(() => Promise.resolve()),
       ecoutes,
       ouvertureFenetre: undefined as
         undefined | ((d: { url: string; disposition: string }) => ReponseOuverture),
@@ -134,6 +137,7 @@ import {
   FICHIER_SITES_NAVIGATEUR,
   GestionnaireNavigateur,
   MAX_CARACTERES_LECTURE,
+  MAX_FENETRES_DE_CONNEXION,
   MAX_ONGLETS_PAR_FIL,
   origineSoumiseAAccord,
   PARTITION_EPHEMERE,
@@ -397,60 +401,6 @@ describe('onglets par fil', () => {
     for (let i = 3; i < MAX_ONGLETS_PAR_FIL; i++) nav.ouvrir('conv-a', `https://s${i}.fr`)
     fabrique.vues[0].ecouteurs.surNouvelleFenetre('https://encore.fr', 'foreground-tab')
     expect(nav.etat('conv-a').onglets).toHaveLength(MAX_ONGLETS_PAR_FIL)
-  })
-
-  /*
-   * La fenêtre de connexion (Google…) garde son lien avec la page : le fil n'en charge pas l'adresse,
-   * il adopte la page qu'Electron a créée, et la rend quand elle se ferme d'elle-même.
-   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : charger l'adresse dans une page neuve, ouvrir l'onglet
-   * en arrière-plan, garder l'onglet après la fermeture de sa page, ou dépasser la limite d'onglets.
-   */
-  it('une fenêtre liée devient l’onglet actif sur la page fournie, et part quand elle se ferme', () => {
-    const source = nav.ouvrir('conv-a', 'https://pinterest.fr')
-    nav.ouvrir('conv-b', 'https://autre.fr')
-    const lie = fabrique.vues[0].ecouteurs.surFenetreLiee('https://accounts.google.com/x')
-    if (!lie) throw new Error('fenêtre liée refusée')
-    // Rien n'existe avant qu'Electron ait créé la page.
-    expect(nav.etat('conv-a').onglets).toHaveLength(1)
-
-    const pageLiee = new FausseVue(PARTITION_PERSISTANTE, lie.ecouteurs)
-    pageLiee.adresse = 'https://accounts.google.com/x'
-    lie.adopter(pageLiee)
-    const etat = nav.etat('conv-a')
-    expect(etat.onglets.map((o) => o.url)).toEqual([
-      new URL('https://pinterest.fr').href,
-      'https://accounts.google.com/x'
-    ])
-    expect(etat.ongletActif).toBe(etat.onglets[1].id)
-    expect(pageLiee.navigations).toEqual([])
-    expect(nav.etat('conv-b').onglets).toHaveLength(1)
-
-    // La connexion finie, la page appelle `window.close()` : l'onglet part, l'ouvreur revient devant.
-    lie.ecouteurs.surFermeture()
-    expect(nav.etat('conv-a').onglets.map((o) => o.id)).toEqual([source])
-    expect(nav.etat('conv-a').ongletActif).toBe(source)
-    expect(pageLiee.ferme).toBe(false)
-
-    // Une adresse refusée, ou plus de place dans le fil : la fenêtre est refusée, et on le dit.
-    expect(fabrique.vues[0].ecouteurs.surFenetreLiee('javascript:alert(1)')).toBeNull()
-    for (let i = 1; i < MAX_ONGLETS_PAR_FIL; i++) nav.ouvrir('conv-a', `https://s${i}.fr`)
-    expect(fabrique.vues[0].ecouteurs.surFenetreLiee('https://accounts.google.com/y')).toBeNull()
-    nav.activerOnglet(source)
-    expect(nav.lignesConsole('conv-a').map((l) => l.message)).toEqual([
-      'Fenêtre surgissante ignorée : « javascript:alert(1) ».',
-      `Fenêtre surgissante ignorée : ${MAX_ONGLETS_PAR_FIL} onglets au plus par fil.`
-    ])
-  })
-
-  it('une fenêtre liée dont le fil a disparu est refermée aussitôt', () => {
-    nav.ouvrir('conv-a', 'https://pinterest.fr')
-    const lie = fabrique.vues[0].ecouteurs.surFenetreLiee('https://accounts.google.com/x')
-    if (!lie) throw new Error('fenêtre liée refusée')
-    nav.oublierFil('conv-a')
-    const pageLiee = new FausseVue(PARTITION_PERSISTANTE, lie.ecouteurs)
-    lie.adopter(pageLiee)
-    expect(pageLiee.ferme).toBe(true)
-    expect(nav.etat('conv-a').onglets).toEqual([])
   })
 })
 
@@ -2777,8 +2727,6 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
     const ecouteurs: EcouteursVue = {
       surChangement: vi.fn(),
       surNouvelleFenetre: vi.fn(),
-      surFenetreLiee: vi.fn(() => null),
-      surFermeture: vi.fn(),
       surConsole: vi.fn(),
       surRequeteEchouee: vi.fn(),
       surTelechargement: vi.fn()
@@ -2804,12 +2752,6 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
       action: 'deny'
     })
     expect(ecouteurs.surNouvelleFenetre).toHaveBeenCalledWith('https://pop.fr', 'foreground-tab')
-    // Une fenêtre liée que le fil refuse (plus de place) : refusée, et pas rouverte en onglet.
-    expect(
-      vue.webContents.ouvertureFenetre?.({ url: 'https://connexion.fr', disposition: 'new-window' })
-    ).toEqual({ action: 'deny' })
-    expect(ecouteurs.surFenetreLiee).toHaveBeenCalledWith('https://connexion.fr')
-    expect(ecouteurs.surNouvelleFenetre).toHaveBeenCalledTimes(1)
 
     vue.webContents.ecoutes.get('console-message')?.({
       level: 'error',
@@ -2877,56 +2819,138 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
     ).toBe('autowin-navigateur')
   })
 
+  /** Une fenêtre comme celle qu'Electron crée pour `window.open` : sa page, et `closed` à sa fermeture. */
+  function fenetreSimulee(): {
+    webContents: {
+      setUserAgent: ReturnType<typeof vi.fn>
+      loadURL: ReturnType<typeof vi.fn>
+      ecoutes: Map<string, (...args: unknown[]) => void>
+      ouvertureFenetre?: (d: { url: string; disposition: string }) => ReponseOuverture
+    }
+    isDestroyed: () => boolean
+    once: (nom: string, f: () => void) => void
+    close: () => void
+  } {
+    const ecoutes = new Map<string, () => void>()
+    let detruite = false
+    return {
+      webContents: electronSimule.pages.creer?.() as never,
+      isDestroyed: () => detruite,
+      once: (nom, f) => ecoutes.set(nom, f),
+      close: () => {
+        detruite = true
+        ecoutes.get('closed')?.()
+      }
+    }
+  }
+
   /*
-   * « Continuer avec Google » ne revenait jamais : la fenêtre de connexion était refusée puis
-   * rouverte en onglet NEUF, sans lien avec la page (`window.opener`), seul chemin du résultat.
-   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : refuser la fenêtre liée, construire l'onglet sur une page
-   * neuve au lieu de celle d'Electron, ou laisser l'onglet ouvert quand la page se ferme.
+   * « Continuer avec Google » ne revenait jamais : la fenêtre de connexion était rouverte en onglet
+   * neuf, sans lien avec la page (`window.opener`), seul chemin du résultat. Elle s'ouvre en VRAIE
+   * fenêtre, qu'Electron crée lui-même et relie à la page.
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : refuser la fenêtre, la construire en onglet (`createWindow`
+   * ou vue neuve), l'ouvrir sans parent, laisser ses propres ouvertures sans règle, ne pas borner leur
+   * nombre, ou la laisser ouverte quand l'onglet se ferme.
    */
-  it('une fenêtre de connexion devient un onglet construit sur la page liée d’Electron', () => {
-    const retirees: unknown[] = []
+  it('une fenêtre de connexion s’ouvre en vraie fenêtre, fille de l’app et reliée à la page', () => {
     const fenetre = {
-      contentView: { addChildView: vi.fn(), removeChildView: (v: unknown) => retirees.push(v) },
+      contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
       getContentBounds: () => ({ x: 0, y: 0, width: 900, height: 700 }),
       isDestroyed: () => false
     }
-    const vraie = creerFabriqueElectron(fenetre as never)
-    const ecouteursOnglet: EcouteursVue = {
+    const ecouteurs: EcouteursVue = {
       surChangement: vi.fn(),
       surNouvelleFenetre: vi.fn(),
-      surFenetreLiee: vi.fn(() => null),
-      surFermeture: vi.fn(),
       surConsole: vi.fn(),
       surRequeteEchouee: vi.fn(),
       surTelechargement: vi.fn()
     }
-    const adopter = vi.fn()
-    const ecouteurs: EcouteursVue = {
-      ...ecouteursOnglet,
-      surFenetreLiee: vi.fn(() => ({ ecouteurs: ecouteursOnglet, adopter }))
-    }
-    vraie.creerVue({ partition: PARTITION_PERSISTANTE, ecouteurs })
+    const vue = creerFabriqueElectron(fenetre as never).creerVue({
+      partition: PARTITION_PERSISTANTE,
+      ecouteurs
+    })
     const ouvreur = electronSimule.vues.at(-1)
     if (!ouvreur) throw new Error('aucune vue créée')
+    const vuesAvant = electronSimule.vues.length
+    const ouvrir = (
+      page: { ouvertureFenetre?: (d: { url: string; disposition: string }) => ReponseOuverture },
+      url: string,
+      disposition = 'new-window'
+    ): ReponseOuverture | undefined => page.ouvertureFenetre?.({ url, disposition })
 
-    const reponse = ouvreur.webContents.ouvertureFenetre?.({
-      url: 'https://accounts.google.com/o/oauth2',
-      disposition: 'new-window'
+    // Electron crée la fenêtre lui-même : c'est ce qui la garde reliée à la page.
+    expect(ouvrir(ouvreur.webContents, 'https://accounts.google.com/o/oauth2')).toEqual({
+      action: 'allow',
+      overrideBrowserWindowOptions: { parent: fenetre, autoHideMenuBar: true, useContentSize: true }
     })
-    expect(reponse?.action).toBe('allow')
     expect(ecouteurs.surNouvelleFenetre).not.toHaveBeenCalled()
-    const pageLiee = electronSimule.pages.creer?.()
-    // Electron exige qu'on lui rende SA page : c'est elle qui porte le lien avec l'ouvreur.
-    expect(reponse?.createWindow?.({ webContents: pageLiee })).toBe(pageLiee)
-    const vueLiee = electronSimule.vues.at(-1)
-    expect(vueLiee?.webContents).toBe(pageLiee)
-    expect(vueLiee?.options).toEqual({ webContents: pageLiee })
-    expect(adopter).toHaveBeenCalledTimes(1)
 
-    // `window.close()` en fin de connexion : la vue quitte la fenêtre, le fil retire l'onglet.
-    vueLiee?.webContents.ecoutes.get('destroyed')?.()
-    expect(retirees).toEqual([vueLiee])
-    expect(ecouteursOnglet.surFermeture).toHaveBeenCalledTimes(1)
+    // La fenêtre créée : agent Chrome comme l'onglet. Sa première navigation, lancée par la page
+    // avec l'agent Electron, est retenue et relancée avec l'agent Chrome. Aucun onglet pour elle.
+    const agent = 'Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36'
+    const referrer = { url: 'https://pinterest.fr/', policy: 'strict-origin-when-cross-origin' }
+    const fille = fenetreSimulee()
+    ouvreur.webContents.ecoutes.get('did-create-window')?.(fille, {
+      url: 'https://accounts.google.com/o/oauth2',
+      referrer
+    })
+    expect(fille.webContents.setUserAgent).toHaveBeenCalledWith(agent)
+    const navigation = { preventDefault: vi.fn() }
+    fille.webContents.ecoutes.get('will-navigate')?.(
+      navigation,
+      'https://accounts.google.com/o/oauth2'
+    )
+    expect(navigation.preventDefault).toHaveBeenCalledTimes(1)
+    expect(fille.webContents.loadURL).toHaveBeenCalledWith('https://accounts.google.com/o/oauth2', {
+      userAgent: agent,
+      httpReferrer: referrer
+    })
+    expect(electronSimule.vues).toHaveLength(vuesAvant)
+    // Un lien « Aide » ouvert depuis la connexion devient un onglet du fil, pas une fenêtre libre.
+    expect(ouvrir(fille.webContents, 'https://support.google.com', 'foreground-tab')).toEqual({
+      action: 'deny'
+    })
+    expect(ecouteurs.surNouvelleFenetre).toHaveBeenCalledWith(
+      'https://support.google.com',
+      'foreground-tab'
+    )
+
+    // Une seconde fenêtre ouverte par la première (choix du compte) passe ; une troisième non.
+    expect(ouvrir(fille.webContents, 'https://accounts.google.com/compte')?.action).toBe('allow')
+    // Celle-ci est demandée en POST : sa page ne se rejoue pas.
+    const petiteFille = fenetreSimulee()
+    fille.webContents.ecoutes.get('did-create-window')?.(petiteFille, {
+      url: 'https://accounts.google.com/compte',
+      referrer,
+      postBody: { data: [], contentType: 'application/x-www-form-urlencoded' }
+    })
+    expect(petiteFille.webContents.ecoutes.has('will-navigate')).toBe(false)
+    expect(ouvrir(ouvreur.webContents, 'https://accounts.google.com/encore')).toEqual({
+      action: 'deny'
+    })
+    expect(ouvrir(ouvreur.webContents, 'javascript:alert(1)')).toEqual({ action: 'deny' })
+    expect(vi.mocked(ecouteurs.surConsole).mock.calls.map(([l]) => l)).toEqual([
+      {
+        niveau: 'warning',
+        message: `Fenêtre de connexion ignorée : ${MAX_FENETRES_DE_CONNEXION} ouvertes au plus par onglet.`,
+        source: 'autowin',
+        ligne: 0
+      },
+      {
+        niveau: 'warning',
+        message: 'Fenêtre de connexion ignorée : « javascript:alert(1) ».',
+        source: 'autowin',
+        ligne: 0
+      }
+    ])
+
+    // La connexion finie, la page appelle `window.close()` : la place se libère.
+    petiteFille.close()
+    expect(ouvrir(ouvreur.webContents, 'https://accounts.google.com/encore')?.action).toBe('allow')
+
+    // L'onglet fermé, sa fenêtre de connexion encore ouverte part avec lui.
+    vue.fermer()
+    expect(fille.isDestroyed()).toBe(true)
   })
 
   /*
@@ -2954,8 +2978,6 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
       ecouteurs: {
         surChangement: vi.fn(),
         surNouvelleFenetre: vi.fn(),
-        surFenetreLiee: vi.fn(() => null),
-        surFermeture: vi.fn(),
         surConsole: vi.fn(),
         surRequeteEchouee: vi.fn(),
         surTelechargement: vi.fn()
@@ -3011,8 +3033,6 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
         ecouteurs: {
           surChangement: vi.fn(),
           surNouvelleFenetre: vi.fn(),
-          surFenetreLiee: vi.fn(() => null),
-          surFermeture: vi.fn(),
           surConsole: vi.fn(),
           surRequeteEchouee: vi.fn(),
           surTelechargement: vi.fn()
@@ -3067,8 +3087,6 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
         ecouteurs: {
           surChangement: vi.fn(),
           surNouvelleFenetre: vi.fn(),
-          surFenetreLiee: vi.fn(() => null),
-          surFermeture: vi.fn(),
           surConsole: vi.fn(),
           surRequeteEchouee: vi.fn(),
           surTelechargement: vi.fn()

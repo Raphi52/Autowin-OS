@@ -83,6 +83,12 @@ export const FICHIER_SITES_NAVIGATEUR = 'navigateur-sites.json'
 export const FICHIER_REGLAGES_NAVIGATEUR = 'navigateur-reglages.json'
 
 export const MAX_ONGLETS_PAR_FIL = 20
+/*
+ * Fenêtres de connexion ouvertes en même temps depuis un onglet. Elles s'affichent sur l'écran de
+ * l'utilisateur : une connexion en ouvre une, parfois une seconde depuis la première ; au-delà,
+ * c'est une page qui en ouvrirait en boucle.
+ */
+export const MAX_FENETRES_DE_CONNEXION = 2
 export const TAILLE_ANNEAU = 200
 export const MAX_CARACTERES_LECTURE = 30_000
 export const MAX_ELEMENTS_INSTANTANE = 400
@@ -149,30 +155,17 @@ export type EvenementSaisie =
 export interface EcouteursVue {
   /** URL, titre, chargement ou historique ont changé. */
   surChangement(): void
-  /** La page veut ouvrir une fenêtre : elle devient un onglet du même fil. */
-  surNouvelleFenetre(url: string, disposition: string): void
   /**
-   * La page ouvre une fenêtre qui doit rester LIÉE à elle : `window.open` avec des dimensions, la
-   * forme des fenêtres de connexion (Google, Microsoft…). Le résultat de la connexion revient à la
-   * page par ce lien (`window.opener`) ; rouverte dans un onglet neuf, la fenêtre le perdait et la
-   * connexion ne revenait jamais. Rend les écoutes de l'onglet qui l'accueillera et de quoi l'y
-   * adopter, ou `null` si le fil la refuse.
+   * La page veut ouvrir un onglet (lien `target=_blank`, clic molette) : il devient un onglet du
+   * même fil. Une fenêtre de connexion, elle, s'ouvre en vraie fenêtre (`gererOuvertures`).
    */
-  surFenetreLiee(url: string): OngletLie | null
-  /** La page s'est fermée d'elle-même : `window.close()` en fin de connexion, ou son ouvreur fermé. */
-  surFermeture(): void
+  surNouvelleFenetre(url: string, disposition: string): void
   surConsole(ligne: { niveau: NiveauConsole; message: string; source: string; ligne: number }): void
   surRequeteEchouee(requete: Omit<RequeteEchouee, 'ongletId' | 'horodatage'>): void
   surTelechargement(fichier: {
     chemin: string
     etat: 'completed' | 'cancelled' | 'interrupted'
   }): void
-}
-
-/** L'onglet promis à une fenêtre liée : ses écoutes, puis l'adoption de la page qu'Electron a créée. */
-export interface OngletLie {
-  ecouteurs: EcouteursVue
-  adopter(vue: VueNavigateur): void
 }
 
 /** Une page, vue de loin. La vraie est une `WebContentsView` ; les tests en donnent une fausse. */
@@ -1283,8 +1276,6 @@ export class GestionnaireNavigateur {
     return {
       surChangement: () => this.surChangement(id),
       surNouvelleFenetre: (url, disposition) => this.surNouvelleFenetre(id, url, disposition),
-      surFenetreLiee: (url) => this.surFenetreLiee(id, url),
-      surFermeture: () => this.surPageFermee(id),
       surConsole: (ligne) => this.surConsole(id, ligne),
       surRequeteEchouee: (requete) => {
         const onglet = this.onglets.get(id)
@@ -1393,61 +1384,6 @@ export class GestionnaireNavigateur {
     this.appliquerVisibilite()
     this.emettre(source.conversationId)
     void this.chargerEnFond(onglet, adresse)
-  }
-
-  /*
-   * La fenêtre liée devient un onglet du même fil, au premier plan : le panneau reste le seul endroit
-   * où le navigateur s'affiche (aucune fenêtre ne s'ouvre sur l'écran de l'utilisateur), mais la page
-   * est celle qu'Electron a créée, reliée à son ouvreur. C'est Electron qui la charge.
-   */
-  private surFenetreLiee(ongletId: string, url: string): OngletLie | null {
-    const source = this.onglets.get(ongletId)
-    if (!source) return null
-    if (!normaliserUrlNavigateur(url)) {
-      this.noterConsole(
-        source,
-        'warning',
-        `Fenêtre surgissante ignorée : « ${texteBorne(url, 200)} ».`
-      )
-      return null
-    }
-    const conversationId = source.conversationId
-    if (this.fil(conversationId).onglets.length >= MAX_ONGLETS_PAR_FIL) {
-      this.noterConsole(
-        source,
-        'warning',
-        `Fenêtre surgissante ignorée : ${MAX_ONGLETS_PAR_FIL} onglets au plus par fil.`
-      )
-      return null
-    }
-    const id = `onglet-${++this.compteur}`
-    return {
-      ecouteurs: this.ecouteursDeLOnglet(id),
-      adopter: (vue) => {
-        // Le fil a pu être supprimé entre la demande et la création de la page.
-        if (!this.fils.has(conversationId)) {
-          vue.fermer()
-          return
-        }
-        this.enregistrerOnglet(id, conversationId, vue)
-        this.fil(conversationId).actif = id
-        this.appliquerVisibilite()
-        this.emettre(conversationId)
-      }
-    }
-  }
-
-  /*
-   * Une page fermée d'elle-même quitte le fil comme un onglet fermé à la main ; sa page est déjà
-   * détruite, et la vue s'est déjà retirée de la fenêtre. Une fermeture demandée par le fil
-   * (`fermerOnglet`, `oublierFil`) a déjà retiré l'onglet : rien à faire.
-   */
-  private surPageFermee(ongletId: string): void {
-    const onglet = this.onglets.get(ongletId)
-    if (!onglet) return
-    this.retirerOnglet(onglet)
-    this.appliquerVisibilite()
-    this.emettre(onglet.conversationId)
   }
 
   private surConsole(
@@ -2110,32 +2046,98 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
   }
 
   /*
-   * `page` : celle qu'Electron a déjà créée pour une fenêtre liée (`createWindow`), reliée à son
-   * ouvreur. Elle hérite de la session de l'ouvreur, et de ses réglages les plus sûrs (bac à sable,
-   * isolation, pas de Node) : Electron l'impose à une page ouverte par une autre (doc de
-   * `webpreferences` dans electron.d.ts).
+   * FENÊTRES OUVERTES PAR UNE PAGE — un onglet, ou une fenêtre de connexion elle-même.
+   * `new-window` = `window.open` avec des dimensions, la forme des fenêtres de connexion (Google,
+   * Microsoft…). Elle s'ouvre en VRAIE fenêtre, que Chromium relie à la page qui l'ouvre
+   * (`window.opener`) : le résultat de la connexion revient par ce lien. Rouverte dans un onglet
+   * neuf, elle le perdait et la connexion ne revenait jamais. Fille de la fenêtre de l'app, elle reste
+   * au-dessus d'elle et se ferme avec elle. Electron lui donne la session de la page et lui impose ses
+   * réglages les plus sûrs (bac à sable, isolation, pas de Node : doc de `webpreferences` dans
+   * electron.d.ts). Le reste (lien `target=_blank`, clic molette) devient un onglet du fil.
+   * `filles` : les fenêtres de connexion encore ouvertes depuis l'onglet, toutes générations.
    */
-  function construireVue(
-    partition: string,
+  function gererOuvertures(
+    contenu: WebContents,
     ecouteurs: EcouteursVue,
-    page?: WebContents
-  ): { vue: VueNavigateur; page: WebContents } {
-    const vue = new WebContentsView(
-      page
-        ? { webContents: page }
-        : {
-            webPreferences: {
-              partition,
-              sandbox: true,
-              contextIsolation: true,
-              nodeIntegration: false,
-              nodeIntegrationInSubFrames: false,
-              nodeIntegrationInWorker: false,
-              webviewTag: false,
-              safeDialogs: true
-            }
-          }
-    )
+    filles: Set<BrowserWindow>
+  ): void {
+    const ignorer = (message: string): { action: 'deny' } => {
+      ecouteurs.surConsole({ niveau: 'warning', message, source: 'autowin', ligne: 0 })
+      return { action: 'deny' }
+    }
+    contenu.setWindowOpenHandler((details) => {
+      if (details.disposition !== 'new-window') {
+        ecouteurs.surNouvelleFenetre(details.url, details.disposition)
+        return { action: 'deny' }
+      }
+      if (!normaliserUrlNavigateur(details.url))
+        return ignorer(`Fenêtre de connexion ignorée : « ${texteBorne(details.url, 200)} ».`)
+      if (filles.size >= MAX_FENETRES_DE_CONNEXION)
+        return ignorer(
+          `Fenêtre de connexion ignorée : ${MAX_FENETRES_DE_CONNEXION} ouvertes au plus par onglet.`
+        )
+      return {
+        action: 'allow',
+        // `useContentSize` : comme Chrome, la page donne la taille de son CONTENU ; sans lui, Electron
+        // y comptait le cadre et la fenêtre de connexion sortait plus petite que demandé.
+        overrideBrowserWindowOptions: {
+          parent: fenetre,
+          autoHideMenuBar: true,
+          useContentSize: true
+        }
+      }
+    })
+    contenu.on('did-create-window', (fille, details) => {
+      filles.add(fille)
+      fille.once('closed', () => filles.delete(fille))
+      gererOuvertures(fille.webContents, ecouteurs, filles)
+      /*
+       * Même agent que l'onglet : la page de connexion doit voir Chrome, pas « Electron/x » (Google
+       * refuse certains navigateurs intégrés). `setUserAgent` ne suffit pas : Chromium ne passe pas
+       * l'agent de l'ouvreur à la fenêtre qu'il ouvre, et une navigation lancée par une page (ici
+       * `window.open`) ne prend l'agent posé que si la page d'avant l'avait déjà. Mesuré par
+       * scripts/sonde-fenetre-connexion.mjs : relancée trop tôt, la page était remplacée par la
+       * navigation d'origine, partie avec l'agent Electron. On RETIENT donc cette première
+       * navigation et on la relance nous-mêmes avec l'agent Chrome ; les suivantes en héritent. Le
+       * lien avec l'ouvreur tient à la fenêtre, pas à sa page : il survit (même sonde). Une page
+       * demandée en POST ne se rejoue pas : elle garde l'agent Electron.
+       */
+      const page = fille.webContents
+      const agent = agentChrome(page.getUserAgent())
+      page.setUserAgent(agent)
+      if (details.postBody) return
+      page.once('will-navigate', (evenement, url) => {
+        evenement.preventDefault()
+        page
+          .loadURL(url, { userAgent: agent, httpReferrer: details.referrer })
+          .catch((erreur: unknown) => {
+            // ERR_ABORTED = la page de connexion s'est redirigée tout de suite : elle vit.
+            const message = messageErreur(erreur)
+            if (message.includes('ERR_ABORTED')) return
+            ecouteurs.surConsole({
+              niveau: 'warning',
+              message: `Fenêtre de connexion : ${message}`,
+              source: 'autowin',
+              ligne: 0
+            })
+          })
+      })
+    })
+  }
+
+  function construireVue(partition: string, ecouteurs: EcouteursVue): VueNavigateur {
+    const vue = new WebContentsView({
+      webPreferences: {
+        partition,
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        nodeIntegrationInSubFrames: false,
+        nodeIntegrationInWorker: false,
+        webviewTag: false,
+        safeDialogs: true
+      }
+    })
     // La page passe au-dessus du DOM : le CSS de `.navigateur-zone` ne peut pas l'arrondir.
     vue.setBorderRadius(RAYON_PAGE_PX)
     const contenu = vue.webContents
@@ -2154,35 +2156,8 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
     vue.setBounds(cadreVoulu)
     fenetre.contentView.addChildView(vue)
 
-    contenu.setWindowOpenHandler((details) => {
-      // `new-window` = `window.open` avec des dimensions : une fenêtre de connexion, qui doit
-      // garder son lien avec la page. Les autres (lien `target=_blank`, clic molette) deviennent
-      // un onglet ordinaire, chargé par le fil.
-      if (details.disposition !== 'new-window') {
-        ecouteurs.surNouvelleFenetre(details.url, details.disposition)
-        return { action: 'deny' }
-      }
-      const lie = ecouteurs.surFenetreLiee(details.url)
-      if (!lie) return { action: 'deny' }
-      return {
-        action: 'allow',
-        createWindow: (options) => {
-          // Electron passe la page déjà créée, reliée à l'ouvreur, dans `options.webContents`, et
-          // exige qu'on la rende telle quelle (`openGuestWindow`, lib/browser/guest-window-manager.ts
-          // d'Electron) ; son typage ne déclare pas ce champ.
-          const page = (options as typeof options & { webContents: WebContents }).webContents
-          lie.adopter(construireVue(partition, lie.ecouteurs, page).vue)
-          return page
-        }
-      }
-    })
-    // `window.close()` détruit la page (doc de `webContents.close`) : la vue quitte la fenêtre,
-    // puis le fil retire l'onglet. Après un `fermer()` du fil, l'onglet est déjà parti.
-    contenu.once('destroyed', () => {
-      ecouteursParContenu.delete(idContenu)
-      if (!fenetre.isDestroyed()) fenetre.contentView.removeChildView(vue)
-      ecouteurs.surFermeture()
-    })
+    const fenetresDeConnexion = new Set<BrowserWindow>()
+    gererOuvertures(contenu, ecouteurs, fenetresDeConnexion)
     /*
      * RACCOURCIS DU PANNEAU TAPÉS DANS LA PAGE (lot 5/5) — mesuré dans
      * l'instance cachée : Ctrl+Shift+B, le focus dans la page, laissait le panneau ouvert. Ses
@@ -2346,16 +2321,18 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
       },
       insererTexte: (texte) => contenu.insertText(texte),
       fermer() {
+        // L'onglet parti, ses fenêtres de connexion n'ont plus de page à qui rendre la connexion.
+        for (const fille of fenetresDeConnexion) if (!fille.isDestroyed()) fille.close()
         ecouteursParContenu.delete(idContenu)
         if (!fenetre.isDestroyed()) fenetre.contentView.removeChildView(vue)
         if (!contenu.isDestroyed()) contenu.close()
       }
     }
-    return { vue: vueNavigateur, page: contenu }
+    return vueNavigateur
   }
 
   return {
-    creerVue: ({ partition, ecouteurs }) => construireVue(partition, ecouteurs).vue,
+    creerVue: ({ partition, ecouteurs }) => construireVue(partition, ecouteurs),
     async effacerDonnees() {
       for (const partition of [PARTITION_PERSISTANTE, PARTITION_EPHEMERE]) {
         const ses = session.fromPartition(partition)
