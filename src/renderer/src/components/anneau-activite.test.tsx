@@ -10,7 +10,9 @@
  *  - le VERDICT se lit en deux cases (commande, code) sans perdre son texte ;
  *  - la LEGENDE ne colore que l'exception et ne fond jamais un echec dans des reussites voisines ;
  *  - le cadre n'ecrit AUCUNE couleur en dur et aucune feuille de theme ne le repeint : c'est ce qui
- *    le rend juste dans tous les themes (le defaut de l'ancienne carte, repeinte par sept feuilles).
+ *    le rend juste dans tous les themes (le defaut de l'ancienne carte, repeinte par sept feuilles) ;
+ *  - la VAGUE traverse chaque bloc encadre, par la carte graphique seule, en un seul passage pour
+ *    tout le fil (Actions d'abord, puis Raisonnement).
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -18,14 +20,18 @@ import { fileURLToPath } from 'node:url'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { LegendeDesOutils } from './anneau-activite'
+import { LegendeDesOutils, VagueDuCadre } from './anneau-activite'
 import {
+  ANIMATIONS_D_ATTERRISSAGE,
+  ANIMATIONS_DE_VAGUE,
+  caleSurLHorlogeCommune,
   casesDuVerdict,
   exceptionDuGroupe,
   groupesDeLegende,
   verdictDuRond
 } from './anneau-activite-calcul'
 import { AssistantActivityGroup } from './ChatView.parts'
+import { ThinkingBlock } from './ThinkingBlock'
 
 const ICI = dirname(fileURLToPath(import.meta.url))
 
@@ -273,11 +279,11 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
   /**
    * ANNEAU HOLOGRAPHIQUE : un seul dessin pour le bord de tous les blocs encadres du fil, copie de
    * l'anneau d'un bouton de verre choisi par l'utilisateur : un metal sombre, un point blanc, le
-   * spectre serre autour de ce blanc, et un eclat qui ne bouge que la ou il dit quelque chose.
+   * spectre serre autour de ce blanc, et le meme reflet en miroir en bas.
    * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer un bloc de la liste, ecrire une couleur en dur,
    * etaler le spectre le long du metal (l'arc-en-ciel tout autour, refuse), revenir au chrome clair a
-   * frange de 2 px (refuse aussi), ou faire bouger l'eclat des blocs au repos (l'animation repeint
-   * le calque a chaque image).
+   * frange de 2 px (refuse aussi), redonner au bas un reflet different de celui du haut (« celui
+   * d'en dessous est tout pourri »), ou animer le calque (il serait repeint a chaque image).
    */
   it('pose l anneau holographique sur chaque bloc encadre, a partir des jetons du theme', () => {
     const regle = regleDe(':is(.cadre-anneau, .look-decode-block, .bloc-3d)::before')
@@ -314,13 +320,20 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
       expect(s).toMatch(new RegExp(`${SUR_L_ECLAT.source}\\s*transparent \\d+%`))
     for (const jeton of ['jaune', 'or', 'rouge', 'magenta', 'bleu', 'cyan', 'vert'])
       expect(spectres.join('\n')).toContain(`var(--prisme-${jeton})`)
+    // Le bas est le MIROIR du haut : meme dessin, seule la position change.
+    const auHaut = (c: string): string =>
+      c.replace(/\s+/g, ' ').replace('at calc(100% - var(--chrome-x)) 100%', 'at var(--chrome-x) 0')
+    expect(auHaut(blancs[1]!)).toBe(auHaut(blancs[0]!))
+    expect(auHaut(spectres[1]!)).toBe(auHaut(spectres[0]!))
+    expect(blancs[1]).toContain('at calc(100% - var(--chrome-x)) 100%')
     expect(regle).not.toMatch(/animation/)
   })
 
   // Le halo deborde en hauteur seulement : un calque qui depasse sur les cotes elargit la zone
   // defilable du fil (barre horizontale possible). Eteint en clair : sur fond blanc il ne restait
   // qu'une tache beige. ENTREE QUI DOIT FAIRE ECHOUER : un `inset` qui deborde a gauche ou a droite,
-  // une couleur en dur, un halo qui ne suit pas l'eclat, ou un halo rallume en clair.
+  // une couleur en dur, un halo qui ne suit pas l'eclat, un halo du bas different de celui du haut,
+  // ou un halo rallume en clair.
   it('fait deborder la lumiere de l eclat en halo, sans elargir le fil', () => {
     const regle = regleDe(':is(.cadre-anneau, .look-decode-block)::after')
     const { valeur, couches } = couchesDuFond(regle)
@@ -330,11 +343,15 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     expect(valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
     expect(couches.length).toBeGreaterThan(0)
     for (const c of couches) expect(c).toMatch(SUR_L_ECLAT)
-    expect(couches[0]).toContain('var(--chrome-halo)')
-    expect(couches.join('\n')).toContain('var(--chrome-halo-froid)')
+    expect(couches).toHaveLength(2)
+    for (const c of couches) expect(c).toContain('var(--chrome-halo)')
+    expect(couches[1]!.replace(/\s+/g, ' ')).toBe(
+      couches[0]!
+        .replace(/\s+/g, ' ')
+        .replace('at var(--chrome-x) 10px', 'at calc(100% - var(--chrome-x)) calc(100% - 10px)')
+    )
     const modes = readFileSync(join(ICI, '..', 'assets', 'theme-modes.css'), 'utf8')
     expect(modes).toMatch(/--chrome-halo:\s*transparent;/)
-    expect(modes).toMatch(/--chrome-halo-froid:\s*transparent;/)
   })
 
   it('donne aux tranches de la pile d images le meme metal que le bord', () => {
@@ -347,25 +364,113 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     expect(regle).not.toMatch(/--capsule-|--prisme-/)
   })
 
-  it('ne fait bouger l eclat que sur un bloc en cours ou survole', () => {
-    const regles = [...css.matchAll(/([^{}]+)\{[^{}]*animation:\s*chrome-balayage[^{}]*\}/g)].map(
-      (m) =>
-        m[1]!
-          .replace(/\/\*[\s\S]*?\*\//g, '')
-          .split(',')
-          .map((s) => s.replace(/\s+/g, ' ').trim())
-    )
-    expect(regles).toEqual([
-      [
-        '.cadre-anneau.is-live::before',
-        '.cadre-anneau.is-live::after',
-        ':is(.cadre-anneau',
-        '.look-decode-block',
-        '.bloc-3d):hover::before',
-        ':is(.cadre-anneau',
-        '.look-decode-block):hover::after'
-      ]
+  /** Les etapes d'un `@keyframes` : pourcentage -> declarations. */
+  function etapesDe(nom: string): Map<number, string> {
+    const debut = css.indexOf(`@keyframes ${nom} {`)
+    expect(debut, nom).toBeGreaterThan(-1)
+    const corps = css.slice(debut, css.indexOf('\n}', debut))
+    const etapes = new Map<number, string>()
+    for (const m of corps.matchAll(/((?:\d+(?:\.\d+)?%,?\s*)+)\{([^}]*)\}/g)) {
+      for (const p of m[1]!.split(',')) etapes.set(Number.parseFloat(p), m[2]!.trim())
+    }
+    return etapes
+  }
+  /** Debut et fin du passage (en % du cycle) : le dernier repos a droite, la premiere arrivee a gauche. */
+  function passageDe(nom: string): { debut: number; fin: number } {
+    const etapes = [...etapesDe(nom)].sort((a, b) => a[0] - b[0])
+    const aDroite = etapes.filter(([, d]) => d.includes('translateX(100%)')).map(([p]) => p)
+    const aGauche = etapes.filter(([, d]) => d.includes('translateX(-200px)')).map(([p]) => p)
+    return { debut: Math.max(...aDroite), fin: Math.min(...aGauche) }
+  }
+
+  /**
+   * LA VAGUE (« une vague qui traverse l'input ») : une bande de lumiere glisse sur l'anneau, de
+   * droite a gauche. ENTREE QUI DOIT FAIRE ECHOUER : une vague animee autrement que par `transform`
+   * (un degrade ou une propriete enregistree serait repeint a chaque image, le cout de l'ancienne
+   * lave), une animation d'eclat revenue sur l'anneau, ou une couleur en dur dans la bande.
+   */
+  it('fait glisser la vague par transform seul, et n anime rien d autre sur l anneau', () => {
+    const noms = [...css.matchAll(/@keyframes ([\w-]+)/g)].map((m) => m[1]!)
+    const vagues = noms.filter((n) => n.startsWith('cadre-vague'))
+    expect(vagues.sort()).toEqual(['cadre-vague-droite', 'cadre-vague-gauche', 'cadre-vague-plein'])
+    for (const nom of vagues)
+      for (const declarations of etapesDe(nom).values())
+        expect(declarations, nom).toMatch(/^transform: translateX\([^)]*\);$/)
+    // Seuls la vague et l'atterrissage du verdict animent quelque chose dans ce fichier.
+    for (const n of noms) expect([...vagues, ...ANIMATIONS_D_ATTERRISSAGE], n).toContain(n)
+    expect(css).not.toMatch(/@property/)
+    const onde = regleDe('.cadre-vague__onde::before')
+    expect(onde).toMatch(/animation: cadre-vague-plein 6s linear infinite;/)
+    expect(couchesDuFond(onde).valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
+    expect(onde).toContain('var(--chrome-eclat) 48% 52%')
+    // Clippee : la bande en attente a droite elargirait la zone defilable du fil.
+    expect(regleDe('.cadre-vague')).toMatch(/\boverflow: clip;/)
+    // L'arrondi par variable : `inherit` lit l'arrondi nul de l'emplacement cache d'un `<details>`,
+    // et la vague debordait de l'anneau en equerre. Chaque bloc encadre declare le sien.
+    expect(regleDe('.cadre-vague')).toMatch(/\bborder-radius: var\(--cadre-rayon\);/)
+    for (const [feuille, rayon] of [
+      ['anneau-activite.css', '16px'],
+      ['LookDecodeBlock.css', '10px'],
+      ['Bloc3D.css', '10px']
+    ] as const) {
+      const texte = readFileSync(join(ICI, feuille), 'utf8')
+      expect(texte, feuille).toContain(`--cadre-rayon: ${rayon};`)
+      expect(texte, feuille).toContain('border-radius: var(--cadre-rayon);')
+    }
+  })
+
+  /**
+   * « quand ya un groupement de 3 comme ca ca doit faire une vague qui traverse d'abord action puis
+   * raisonnement » : un SEUL passage pour la rangee, a vitesse constante, et les blocs pleine largeur
+   * dessous traverses dans le meme temps. ENTREE QUI DOIT FAIRE ECHOUER : Raisonnement traverse avant
+   * Actions, une moitie plus rapide que l'autre (la bande sauterait d'un bloc a l'autre), ou un
+   * passage hors de l'horloge commune.
+   */
+  it('traverse Actions puis Raisonnement, d un seul passage a vitesse constante', () => {
+    const plein = passageDe('cadre-vague-plein')
+    const droite = passageDe('cadre-vague-droite')
+    const gauche = passageDe('cadre-vague-gauche')
+    expect(droite.debut).toBe(plein.debut)
+    expect(gauche.fin).toBe(plein.fin)
+    expect(gauche.debut).toBeGreaterThan(droite.debut)
+    expect(gauche.debut).toBeLessThan(droite.fin)
+    // Vitesse : distance parcourue / duree. Bloc plein de 720 px, deux moities de 356 px (8 px
+    // d'ecart), bande de 200 px.
+    const vitesse = (largeur: number, p: { debut: number; fin: number }): number =>
+      (largeur + 200) / (p.fin - p.debut)
+    expect(vitesse(356, droite)).toBeCloseTo(vitesse(720, plein), 0)
+    expect(vitesse(356, gauche)).toBeCloseTo(vitesse(720, plein), 0)
+    // Actions est le SECOND bloc de la rangee, Raisonnement le premier quand il n'est pas seul.
+    const plat = css.replace(/\s+/g, ' ')
+    const rang = (bloc: string, passage: string): string =>
+      `.tour-blocs-rang > .cadre-anneau${bloc} > summary > .cadre-vague > .cadre-vague__onde::before { animation-name: ${passage}; }`
+    expect(plat).toContain(rang(':nth-child(2)', 'cadre-vague-droite'))
+    expect(plat).toContain(rang(':first-child:not(:only-child)', 'cadre-vague-gauche'))
+    // Ces trois passages, et eux seuls, suivent l'horloge commune.
+    expect([...ANIMATIONS_DE_VAGUE].sort()).toEqual([
+      'cadre-vague-droite',
+      'cadre-vague-gauche',
+      'cadre-vague-plein'
     ])
+  })
+
+  /**
+   * « les animations sur les blocs dans le chat doivent etre en fonction de la ou je regarde, pas
+   * juste les dernieres » : la vague passe sur TOUS les tours, et animations-hors-champ.ts met en
+   * pause ce qui sort de l'ecran. Ce module observe l'element qui porte l'animation : c'est donc le
+   * `::before` d'un calque FIXE pose sur le cadre qui bouge, jamais le calque lui-meme. ENTREE QUI
+   * DOIT FAIRE ECHOUER : figer la vague des tours anciens, ou animer le calque `.cadre-vague__onde`
+   * (rogne et pousse hors du cadre entre deux passages, il serait juge hors champ et ne repartirait
+   * plus).
+   */
+  it('anime la vague sur tous les tours, depuis un calque qui reste sur le cadre', () => {
+    expect(css).not.toMatch(/:has\(~ \.msg\.assistant\.msg--rail\)[^{]*cadre-vague/)
+    expect(css).not.toMatch(/cadre-vague[^{]*\{[^}]*animation: none/)
+    const calque = regleDe('.cadre-vague__onde')
+    expect(calque).toMatch(/\binset: 0;/)
+    expect(calque).not.toMatch(/transform|animation/)
+    for (const m of css.matchAll(/([^{}]+)\{[^{}]*animation(?:-name)?:\s*cadre-vague[^{}]*\}/g))
+      expect(m[1]!.trim()).toMatch(/\.cadre-vague__onde::before$/)
   })
 
   /**
@@ -400,5 +505,86 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
       'utf8'
     )
     expect(couche).not.toMatch(/--(chrome|prisme)-[\w-]+\s*:/)
+  })
+})
+
+describe('la vague du cadre — un passage commun a tous les blocs', () => {
+  /** Une animation factice, comme celles que rend `getAnimations()`. */
+  function animation(
+    nom: string,
+    startTime: number | null
+  ): { animationName: string; startTime: number | null } {
+    return { animationName: nom, startTime }
+  }
+
+  // ENTREE QUI DOIT FAIRE ECHOUER : caler une autre animation (l'atterrissage du verdict partirait au
+  // milieu de sa course), laisser un passage de vague sur sa propre horloge, ou oublier l'animation
+  // du `::before` (seule l'option `subtree` la rend).
+  it('cale les passages de vague sur l origine du document, et eux seuls', () => {
+    const vague = animation('cadre-vague-gauche', 1234)
+    const atterrissage = animation('anneau-reflet', 500)
+    const dejaCalee = animation('cadre-vague-plein', 0)
+    const element = {
+      getAnimations: (options?: { subtree?: boolean }) =>
+        options?.subtree ? [vague, atterrissage, dejaCalee] : []
+    }
+    expect(caleSurLHorlogeCommune(element as unknown as Element)).toBe(1)
+    expect(vague.startTime).toBe(0)
+    expect(atterrissage.startTime).toBe(500)
+  })
+
+  it('ne cale rien hors d un vrai navigateur', () => {
+    expect(caleSurLHorlogeCommune({} as Element)).toBe(0)
+  })
+
+  it('pose la bande dans un calque cache aux lecteurs d ecran', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    act(() => root.render(createElement(VagueDuCadre)))
+    const vague = host.querySelector('.cadre-vague')
+    expect(vague?.getAttribute('aria-hidden')).toBe('true')
+    expect(vague?.querySelector(':scope > .cadre-vague__onde')).not.toBeNull()
+    expect(vague?.textContent).toBe('')
+    act(() => root.unmount())
+    host.remove()
+  })
+
+  // Chaque bloc encadre du fil porte la vague. Un `<details>` replie n'affiche que son `<summary>` :
+  // la vague y est le premier enfant. ENTREE QUI DOIT FAIRE ECHOUER : un nouveau bloc encadre sans
+  // `<VagueDuCadre />`, ou une vague posee hors du `summary` d'un bloc repliable.
+  it('est posee dans chaque bloc encadre du fil', () => {
+    const racine = /className=\{?[`'"][^`'"]*\b(cadre-anneau|look-decode-block|bloc-3d)\b(?![-_])/g
+    const fichiers = readdirSync(ICI).filter(
+      (f) => f.endsWith('.tsx') && !f.includes('.test.') && f !== 'anneau-activite.tsx'
+    )
+    const porteurs: Record<string, number> = {}
+    for (const f of fichiers) {
+      const source = readFileSync(join(ICI, f), 'utf8')
+      const cadres = [...source.matchAll(racine)].length
+      if (cadres === 0) continue
+      porteurs[f] = cadres
+      expect(source.split('<VagueDuCadre />').length - 1, f).toBe(cadres)
+    }
+    expect(Object.keys(porteurs).sort()).toEqual([
+      'ArtifactPile.tsx',
+      'ArtifactPreview.tsx',
+      'Bloc3D.tsx',
+      'ChatView.parts.tsx',
+      'LookDecodeBlock.tsx',
+      'ThinkingBlock.tsx'
+    ])
+  })
+
+  it('est rendue dans le summary d un bloc replie (Raisonnement)', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    act(() => root.render(createElement(ThinkingBlock, { text: 'je pese', done: false })))
+    const bloc = host.querySelector<HTMLDetailsElement>('[data-testid="thinking-block"]')!
+    expect(bloc.open).toBe(false)
+    expect(bloc.querySelector(':scope > summary > .cadre-vague:first-child')).not.toBeNull()
+    act(() => root.unmount())
+    host.remove()
   })
 })

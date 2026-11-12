@@ -12,7 +12,8 @@
   margin: var(--s1, 8px) 0;
   overflow: hidden;
   border: 1px solid transparent;
-  border-radius: 10px;
+  --cadre-rayon: 10px;
+  border-radius: var(--cadre-rayon);
 }
 
 .bloc-3d__barre {

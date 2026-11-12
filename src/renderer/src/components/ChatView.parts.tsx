@@ -21,7 +21,13 @@ import {
 import './ChatView.css'
 import './Evidence.css'
 import './ChatView.capsule-orchestration.css'
-import { LegendeDesOutils, RondDIcone, RondDuCompte, VerdictDeVerre } from './anneau-activite'
+import {
+  LegendeDesOutils,
+  RondDIcone,
+  RondDuCompte,
+  VagueDuCadre,
+  VerdictDeVerre
+} from './anneau-activite'
 import { useAtterrissage, type EtatArc } from './anneau-activite-calcul'
 import {
   decouperBattement,
@@ -900,6 +906,7 @@ export function AssistantActivityGroup({
             setPliManuel(!capsuleOuverte)
           }}
         >
+          <VagueDuCadre />
           <span className="anneau-tete">
             <RondDIcone
               etats={etatsDesPhases}
@@ -1048,6 +1055,7 @@ export function AssistantActivityGroup({
         data-state={etat}
         data-testid="activity-anneau"
       >
+        <VagueDuCadre />
         {/* TOUTE LA LIGNE deplie, fleche comprise, comme le <summary> des autres blocs du fil :
             la fleche vivait A COTE du bouton et ne reagissait pas, alors que c'est la qu'on vise
             pour deplier. Le geste est donc pose sur la ligne ; le bouton reste la cible du clavier

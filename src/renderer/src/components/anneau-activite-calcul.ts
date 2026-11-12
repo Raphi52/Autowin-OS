@@ -49,6 +49,35 @@ export function atterrissageDuPassage(avant: string, apres: string): Atterrissag
 /** Les animations de l'atterrissage (anneau-activite.css) : seule leur fin efface la marque. */
 export const ANIMATIONS_D_ATTERRISSAGE: readonly string[] = ['anneau-reflet', 'anneau-secousse']
 
+/** Les passages de la vague (anneau-activite.css), tous cales sur l'HORLOGE COMMUNE du fil. */
+export const ANIMATIONS_DE_VAGUE: readonly string[] = [
+  'cadre-vague-plein',
+  'cadre-vague-droite',
+  'cadre-vague-gauche'
+]
+
+/**
+ * Cale les passages de vague d'un element sur l'horloge commune : un debut a l'origine du document.
+ * Une animation CSS part quand son element apparait ; Raisonnement apparait au debut du tour,
+ * Actions a la premiere action, et chaque retour sur l'onglet Chat les relance. Sans ce calage, la
+ * vague traversait les blocs d'un meme groupe dans un ordre au hasard, au lieu d'un seul passage
+ * (Actions d'abord, puis Raisonnement). Rend le nombre d'animations calees.
+ */
+export function caleSurLHorlogeCommune(element: Element): number {
+  // `getAnimations` manque hors d'un vrai navigateur (jsdom) : rien a caler.
+  if (typeof element.getAnimations !== 'function') return 0
+  let calees = 0
+  // `subtree` : la bande est le `::before` de l'element, et seule cette option rend son animation.
+  for (const animation of element.getAnimations({ subtree: true })) {
+    const nom = (animation as Partial<CSSAnimation>).animationName
+    if (nom === undefined || !ANIMATIONS_DE_VAGUE.includes(nom) || animation.startTime === 0)
+      continue
+    animation.startTime = 0
+    calees++
+  }
+  return calees
+}
+
 /**
  * L'effet a poser sur le rond quand l'etat du bloc PASSE de « en cours » a la fin. Le
  * premier etat vu est la reference : un fil ouvert sur un run deja fini ne joue rien. L'animation

@@ -9,7 +9,8 @@
   isolation: isolate;
   margin: 6px 0;
   border: 1px solid transparent;
-  border-radius: 10px;
+  --cadre-rayon: 10px;
+  border-radius: var(--cadre-rayon);
   color: var(--text-dim);
   font-family: var(--font);
   font-size: 0.9em;

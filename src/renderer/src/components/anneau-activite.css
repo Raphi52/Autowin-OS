@@ -29,7 +29,8 @@
   isolation: isolate;
   box-sizing: border-box;
   width: min(100%, 720px);
-  border-radius: 16px;
+  --cadre-rayon: 16px;
+  border-radius: var(--cadre-rayon);
   font-size: 12px;
   line-height: 1.5;
   /* Verre fume, reflet ETEINT : un bloc fini ne tire pas l'oeil (meme regle que les capsules). */
@@ -58,22 +59,14 @@
    fil sous le cadre.
    LE METAL ET LE SPECTRE ONT LEURS PROPRES JETONS (`--chrome-*`, `--prisme-*`, theme.css et
    theme-modes.css) : des teintes neutres et franches, que la palette du theme ne recolore pas.
-   L'ECLAT NE BOUGE QUE SUR UN BLOC EN COURS OU SURVOLE (regle suivante) : animer sa position repeint
-   le calque a chaque image, le cout de l'ancienne lave animee qu'on avait retiree pour la carte
-   graphique. On ne le paie que pour les un a trois blocs vivants du tour, ou celui sous la souris ;
-   au repos, l'anneau est fige. */
-@property --chrome-x {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 18%;
-}
-@keyframes chrome-balayage {
-  from {
-    --chrome-x: 0%;
-  }
-  to {
-    --chrome-x: 100%;
-  }
+   LE REFLET DU BAS EST LE MIROIR EXACT DU POINT DU HAUT : meme taille, meme spectre. Plus petit et
+   au spectre froid (cyan, bleu, magenta), il ne faisait qu'un trait plat (« celui d'en dessous est
+   tout pourri », alors que celui du haut est « super reussi », 2026-11-12).
+   L'ECLAT EST FIXE : ce qui bouge, c'est la VAGUE (plus bas). Animer la position de l'eclat
+   repeignait le calque a chaque image, le cout de l'ancienne lave animee qu'on avait retiree pour la
+   carte graphique. */
+:is(.cadre-anneau, .look-decode-block, .bloc-3d) {
+  --chrome-x: 18%;
 }
 :is(.cadre-anneau, .look-decode-block, .bloc-3d)::before {
   content: '';
@@ -104,19 +97,24 @@
         color-mix(in srgb, var(--prisme-vert) 60%, transparent) 53%,
         transparent 62%
       ),
-    /* Le reflet du bas, a l'oppose, plus petit, et son spectre. */
+    /* Le reflet du bas, a l'oppose : le miroir du point du haut, puis son spectre. */
     radial-gradient(
-        16% 28px at calc(100% - var(--chrome-x)) 100%,
-        color-mix(in srgb, var(--chrome-eclat) 90%, transparent),
-        transparent 45%
+        30% 34px at calc(100% - var(--chrome-x)) 100%,
+        var(--chrome-eclat),
+        var(--chrome-eclat) 14%,
+        color-mix(in srgb, var(--chrome-eclat) 60%, transparent) 26%,
+        transparent 38%
       ),
     radial-gradient(
-      24% 56px at calc(100% - var(--chrome-x)) 100%,
-      transparent 10%,
-      var(--prisme-cyan) 22%,
-      var(--prisme-bleu) 32%,
-      var(--prisme-magenta) 42%,
-      color-mix(in srgb, var(--prisme-rouge) 70%, transparent) 50%,
+      30% 70px at calc(100% - var(--chrome-x)) 100%,
+      transparent 14%,
+      var(--prisme-jaune) 20%,
+      var(--prisme-or) 25%,
+      var(--prisme-rouge) 30%,
+      var(--prisme-magenta) 35%,
+      var(--prisme-bleu) 41%,
+      var(--prisme-cyan) 47%,
+      color-mix(in srgb, var(--prisme-vert) 60%, transparent) 53%,
       transparent 62%
     ),
     /* Le metal sombre : quelques bandes grises, et le noir teinte de bleu et de rouge profonds que
@@ -141,9 +139,8 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
-/* LE HALO : la lumiere du point blanc deborde du bord, dehors sur le fil et dedans sur le verre du
-   bloc, et une lueur froide accompagne le reflet du bas. Sous l'anneau (z-index -2), sur le meme
-   `--chrome-x`. Il ne deborde qu'en HAUTEUR : un calque qui depasse sur les cotes elargit la zone
+/* LE HALO : la lumiere des deux points blancs deborde du bord, dehors sur le fil et dedans sur le
+   verre du bloc. Sous l'anneau (z-index -2), sur le meme `--chrome-x`, le meme en haut et en bas. Il ne deborde qu'en HAUTEUR : un calque qui depasse sur les cotes elargit la zone
    defilable du fil et peut faire naitre une barre horizontale. Pas sur la scene 3D : elle coupe ce
    qui depasse et son cadre opaque le cacherait. ETEINT EN CLAIR (`--chrome-halo*` transparents dans
    theme-modes.css) : une lumiere sur fond blanc ne se voit pas, il n'en restait qu'une tache beige.
@@ -165,22 +162,146 @@
       transparent 72%
     ),
     radial-gradient(
-      20% 26px at calc(100% - var(--chrome-x)) calc(100% - 10px),
-      var(--chrome-halo-froid),
-      transparent 70%
+      28% 34px at calc(100% - var(--chrome-x)) calc(100% - 10px),
+      var(--chrome-halo),
+      color-mix(in srgb, var(--chrome-halo) 30%, transparent) 45%,
+      transparent 72%
     );
   pointer-events: none;
 }
-/* L'eclat du haut va d'un bout a l'autre puis revient, le reflet du bas en sens inverse : la
-   lumiere tourne autour du bloc sans saut quand l'animation reprend. Le halo suit, sur la meme
-   horloge (les deux calques partent ensemble, au meme survol ou au meme passage en cours).
-   Pas de neutralisation sous `prefers-reduced-motion` : en cours, c'est le signe de vie du bloc
-   (meme regle que l'atterrissage du verdict, plus bas), et ce poste a le mouvement reduit actif. */
-.cadre-anneau.is-live::before,
-.cadre-anneau.is-live::after,
-:is(.cadre-anneau, .look-decode-block, .bloc-3d):hover::before,
-:is(.cadre-anneau, .look-decode-block):hover::after {
-  animation: chrome-balayage 2.5s ease-in-out infinite alternate;
+
+/* LA VAGUE (« faut que ca fasse comme une vague qui traverse l'input », 2026-11-12) : une bande de
+   lumiere, blanche au coeur et bordee du spectre de l'eclat, traverse le bloc de DROITE A GAUCHE.
+   Elle allume l'anneau la ou elle passe, et voile a peine le verre (masque : anneau plein, interieur
+   a 10 %). Element `VagueDuCadre` (anneau-activite.tsx), pose dans chaque bloc encadre.
+   DEPLACEE PAR `transform` SEUL, jamais par une position de degrade : la carte graphique fait glisser
+   la bande deja peinte, le processeur ne repeint rien. Animer un degrade (l'ancienne lave, puis
+   l'eclat au survol) repeignait le calque a chaque image.
+   UN SEUL PASSAGE POUR TOUT LE FIL : chaque passage est cale sur l'horloge commune
+   (`caleSurLHorlogeCommune`). Dans la rangee Raisonnement | Actions, la vague traverse d'abord
+   Actions, puis Raisonnement (« ca doit faire une vague qui traverse d'abord action puis
+   raisonnement ») ; les blocs pleine largeur dessous sont traverses dans le meme temps.
+   L'HORAIRE : un passage de 1,8 s toutes les 6 s, vitesse constante (`linear`). La bande fait 200 px.
+   Sur un bloc pleine largeur de 720 px, elle parcourt 920 px. Dans la rangee (deux moities de 356 px
+   et 8 px d'ecart), Actions est traverse de 0 a 18,1 % du cycle, Raisonnement de 11,9 a 30 % : a la
+   meme vitesse, la bande passe d'un bloc a l'autre sans saut. Dans un fil plus etroit, les moities
+   retrecissent et le passage reste dans le meme ordre.
+   CLIPPEE (`overflow: clip`) : la bande en attente a droite du bloc, decalee par `transform`,
+   elargirait sinon la zone defilable du fil (barre horizontale).
+   SUR TOUS LES TOURS, MAIS SEULEMENT A L'ECRAN (« les animations sur les blocs dans le chat doivent
+   etre en fonction de la ou je regarde, pas juste les dernieres ») : animations-hors-champ.ts met en
+   pause une animation continue sortie du champ et la reprend a sa phase sur l'horloge commune.
+   La bande est donc le `::before` d'un calque FIXE (`.cadre-vague__onde`, pose sur le cadre) : ce
+   module observe l'element qui porte l'animation. Si la bande etait cet element, rognee et poussee
+   hors du cadre entre deux passages, il la jugerait hors champ, la mettrait en pause a cet instant,
+   et elle ne reviendrait jamais (mesure du 2026-11-12 : aucun mouvement sur un cycle entier).
+   L'ARRONDI PAR `--cadre-rayon`, pas par `inherit` : dans un `<details>`, le navigateur glisse un
+   emplacement cache entre le bloc et son `summary`, et `inherit` y lisait un arrondi nul ; le cote
+   allume de la vague debordait de l'anneau en equerre (capture du 2026-11-12). Une variable, elle,
+   traverse cet emplacement. Chaque bloc encadre la declare avec son arrondi.
+   Pas de neutralisation sous `prefers-reduced-motion` : ce poste a le mouvement reduit actif, et la
+   vague y disparaitrait. */
+.cadre-vague {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: 3px;
+  border-radius: var(--cadre-rayon);
+  overflow: clip;
+  pointer-events: none;
+  /* Dans un masque seule l'opacite compte : l'interieur a 90 % retire du plein laisse le verre a
+     10 %. Un jeton opaque plutot qu'un noir ecrit en dur. */
+  -webkit-mask:
+    linear-gradient(color-mix(in srgb, var(--bg-0) 90%, transparent) 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.cadre-vague__onde {
+  position: absolute;
+  inset: 0;
+}
+.cadre-vague__onde::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+      100deg,
+      transparent,
+      color-mix(in srgb, var(--prisme-vert) 60%, transparent) 10%,
+      var(--prisme-cyan) 16%,
+      var(--prisme-bleu) 22%,
+      var(--prisme-magenta) 28%,
+      var(--prisme-rouge) 34%,
+      var(--prisme-or) 39%,
+      var(--prisme-jaune) 44%,
+      var(--chrome-eclat) 48% 52%,
+      var(--prisme-jaune) 56%,
+      var(--prisme-or) 61%,
+      var(--prisme-rouge) 66%,
+      var(--prisme-magenta) 72%,
+      var(--prisme-bleu) 78%,
+      var(--prisme-cyan) 84%,
+      color-mix(in srgb, var(--prisme-vert) 60%, transparent) 90%,
+      transparent
+    )
+    0 0 / 200px 100% no-repeat;
+  transform: translateX(100%);
+  animation: cadre-vague-plein 6s linear infinite;
+}
+@keyframes cadre-vague-plein {
+  0% {
+    transform: translateX(100%);
+  }
+  30%,
+  100% {
+    transform: translateX(-200px);
+  }
+}
+@keyframes cadre-vague-droite {
+  0% {
+    transform: translateX(100%);
+  }
+  18.1%,
+  100% {
+    transform: translateX(-200px);
+  }
+}
+@keyframes cadre-vague-gauche {
+  0%,
+  11.9% {
+    transform: translateX(100%);
+  }
+  30%,
+  100% {
+    transform: translateX(-200px);
+  }
+}
+/* Dans la rangee, Actions (le second bloc) est traverse le premier, puis Raisonnement. */
+.tour-blocs-rang
+  > .cadre-anneau:nth-child(2)
+  > summary
+  > .cadre-vague
+  > .cadre-vague__onde::before {
+  animation-name: cadre-vague-droite;
+}
+.tour-blocs-rang
+  > .cadre-anneau:first-child:not(:only-child)
+  > summary
+  > .cadre-vague
+  > .cadre-vague__onde::before {
+  animation-name: cadre-vague-gauche;
+}
+/* Le decodage a un bord d'1 px transparent sous son anneau, et la scene 3D est opaque : la vague
+   suit l'anneau (meme `inset`, meme plan) et n'y voile pas l'interieur. */
+.look-decode-block > summary > .cadre-vague {
+  inset: -1px;
+}
+.bloc-3d > .cadre-vague {
+  z-index: 3;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
 }
 /* Ces deux blocs gardent leur bord d'1 px, devenu transparent dans leur feuille : l'anneau se pose
    SUR lui pour le decodage. La scene 3D coupe ce qui depasse (`overflow: hidden`) et son cadre de
