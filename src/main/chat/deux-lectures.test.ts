@@ -3,6 +3,7 @@ import {
   AVIS_DEUX_LECTURES,
   CONSIGNE_DEUX_LECTURES,
   ECART_MAX_POUR_DEMANDER,
+  PLAFOND_LECTURE_ANNONCEE,
   annonceDeLaLectureRetenue,
   chargeDeuxLectures,
   consigneDeLectureRetenue,
@@ -120,6 +121,16 @@ describe('lireDeuxLectures — la réponse du petit modèle', () => {
     )
     expect(lireDeuxLectures(longue, DEMANDE_767)).toBeUndefined()
   })
+
+  it('à égalité, une lecture trop longue pour un bouton est annoncée au lieu d’être perdue', () => {
+    const longue = `une task ${'très '.repeat(60)}via arena`
+    expect(
+      lireLesLectures(
+        reponse(['une task pratique évaluée via arena', 50], [longue, 50]),
+        DEMANDE_767
+      )
+    ).toEqual({ kind: 'retenue', retenue: 'une task pratique évaluée via arena', ecartee: longue })
+  })
 })
 
 describe('lireLesLectures — question ou lecture retenue (conv-1123)', () => {
@@ -202,8 +213,24 @@ describe('une seule lecture : annoncée quand même (conv-1240, « met le tout l
     })
   })
 
+  it('une lecture seule de plus de 200 caractères est annoncée : la limite d’un bouton ne la vise pas', () => {
+    // Réponse réelle du petit modèle (run-stdout, 2026-11-12) : 227 caractères, JSON valide. Jetée
+    // à 200, elle finissait « illisible » dans cost.jsonl et le fil n’affichait aucune ligne.
+    const demande =
+      'corrige le plan de lots pour relancer un lot bloqué après redémarrage, teste le blocage de ce matin et vérifie les 26 fichiers du lot 3'
+    const comprise =
+      "Corriger le plan de lots pour qu'il repère un lot bloqué après redémarrage (fil muet, plus de modification) et le relance, avec un test du blocage de ce matin, puis vérifier de près les 26 fichiers du lot 3 avant de le valider."
+    expect(comprise.length).toBeGreaterThan(200)
+    expect(lireLesLectures(reponse([comprise, 100]), demande)).toEqual({
+      kind: 'retenue',
+      retenue: comprise
+    })
+  })
+
   it('une lecture seule trop longue ou sans probabilité n’est pas annoncée', () => {
-    expect(lireLesLectures(reponse([`temps ${'x'.repeat(250)}`, 100]), DEMANDE)).toBeUndefined()
+    expect(
+      lireLesLectures(reponse([`temps ${'x'.repeat(PLAFOND_LECTURE_ANNONCEE)}`, 100]), DEMANDE)
+    ).toBeUndefined()
     expect(
       lireLesLectures(JSON.stringify({ lectures: [{ texte: COMPRISE }] }), DEMANDE)
     ).toBeUndefined()
