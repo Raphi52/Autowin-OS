@@ -10,6 +10,10 @@
 :root[data-theme^='malvoyant-'] .topology-assign-button,
 :root[data-theme^='malvoyant-'] .topology-runtime-limit,
 :root[data-theme^='malvoyant-'] .studio-modeles .agents-topology .topology-toolbar .topology-state,
+:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .router-default .model-select summary > em,
+:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .slot-unresolved,
+:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .topology-ligne-role,
+:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .router-default > .ce-que-ca-couvre dt,
 :root[data-theme^='malvoyant-'] .studio-modeles.studio-modeles .agents-topology .topology-workspace .topology-runtime-limit {
   font-size: 13px;
 }
