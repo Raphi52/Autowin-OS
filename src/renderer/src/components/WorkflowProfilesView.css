@@ -471,3 +471,139 @@ input.workflow-profile-name:focus-visible {
   font-family: var(--mono);
   white-space: pre-wrap;
 }
+
+/*
+ * CARTES DE VERRE D'AGENT STUDIO — demande de l'utilisateur : l'onglet Workflows prend le même
+ * habillage que les cartes des rôles (onglet Modèles & topologie). Chaque workflow est une carte
+ * aux coins très arrondis, fenêtre sur le ciel commun d'Agent Studio (peint sur `::before` par
+ * AgentsTopologyView.css, sous le contenu) ; ses commandes deviennent des pastilles de verre :
+ * fond voilé translucide, contour clair très fin, violet au survol. Pas de flou de fond
+ * (`assets/aucun-flou.test.ts`). Les thèmes gardent la main sur le cadre et l'état choisi de la
+ * carte : ce bloc n'y touche pas, le ciel passe dessous.
+ */
+.workflow-profiles .workflow-profiles-list {
+  gap: 10px;
+}
+
+.workflow-profiles .workflow-profile {
+  position: relative;
+  isolation: isolate;
+}
+
+.workflow-profiles .workflow-profile::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  content: '';
+  pointer-events: none;
+}
+
+/* « Arène » et « Usage réel » : deux petites lignes discrètes en tête de carte, comme le
+   surtitre des cartes des rôles. */
+.workflow-profiles .workflow-profile-mesures {
+  margin: 0;
+  padding: 2px 14px 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.workflow-profiles .workflow-profile-mesures:first-child {
+  padding-top: 12px;
+}
+
+/* Le nom du workflow : le grand titre fin des cartes. */
+.workflow-profiles .workflow-profile-name,
+.workflow-profiles .workflow-profile-name-static {
+  font-size: 20px;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+}
+
+.workflow-profiles .workflow-profile-pick:hover {
+  background: color-mix(in srgb, var(--violet) 8%, transparent);
+}
+
+/* Les actions d'un workflow (case « invocable », Éditer, exporter, supprimer) : des pastilles
+   séparées au bout de la rangée, plus des cases collées par des filets. */
+.workflow-profiles .workflow-profile-row {
+  align-items: center;
+  gap: 6px;
+  padding-right: 12px;
+}
+
+.workflow-profiles .workflow-profile-toggle,
+.workflow-profiles .workflow-profile-action {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-0) 35%, transparent);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.workflow-profiles .workflow-profile-toggle:hover,
+.workflow-profiles .workflow-profile-action:hover {
+  border-color: color-mix(in srgb, var(--violet) 60%, transparent);
+  background: color-mix(in srgb, var(--violet) 16%, transparent);
+  color: var(--text);
+}
+
+.workflow-profiles .workflow-profile-action.is-danger {
+  border-color: color-mix(in srgb, var(--err) 35%, transparent);
+}
+
+.workflow-profiles .workflow-profile-action.is-danger:hover {
+  border-color: color-mix(in srgb, var(--err) 70%, transparent);
+  background: color-mix(in srgb, var(--err) 16%, transparent);
+  color: var(--err);
+}
+
+.workflow-profiles .workflow-profile-confirm {
+  padding-left: 0;
+  border-left: 0;
+}
+
+/* Les étiquettes (« actif », « injouable », « ajouté ») : des puces arrondies. */
+.workflow-profiles .wf-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Les étapes de la portée : de petites cartes de verre. */
+.workflow-profiles .wf-tn {
+  border-color: color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-0) 45%, transparent);
+}
+
+/* L'en-tête de l'onglet et ses boutons : la même pastille de verre. */
+.workflow-profiles .workflow-profiles-head {
+  border-radius: 18px;
+}
+
+.workflow-profiles .workflow-profiles-actions button {
+  min-height: 30px;
+  padding: 0 14px;
+  border-color: color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-0) 35%, transparent);
+  font-size: 12px;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.workflow-profiles .workflow-profiles-actions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--violet) 60%, transparent);
+  background: color-mix(in srgb, var(--violet) 16%, transparent);
+  color: var(--text);
+}

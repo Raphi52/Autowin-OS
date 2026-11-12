@@ -37,11 +37,17 @@ export function PetitesTachesReglage({
   idBase,
   testId,
   couvertureRepliee = false,
-  modeleSeul = false
+  modeleSeul = false,
+  surtitre,
+  ouvertureMenu = 'haut'
 }: {
   /** Agent Studio ne garde que le choix du modèle : la case du routage et le retour au défaut
    *  se règlent dans Réglages → Routage. */
   modeleSeul?: boolean
+  /** Agent Studio pose une carte : un petit surtitre au-dessus du nom. Absent = rien (Routage). */
+  surtitre?: string
+  /** Agent Studio pose le bouton en barre en haut de carte : son menu s'ouvre dessous. */
+  ouvertureMenu?: 'haut' | 'bas'
   /** Agent Studio pose le bloc en ligne : l'explication y part repliée, au bout de la ligne. */
   couvertureRepliee?: boolean
   active: boolean
@@ -141,6 +147,7 @@ export function PetitesTachesReglage({
   return (
     <section className="router-default" data-testid={testId}>
       <header>
+        {surtitre && <span className="carte-surtitre">{surtitre}</span>}
         <h3>{t('routeur.petites.titre')}</h3>
         <small>{t('routeur.petites.aide')}</small>
       </header>
@@ -179,6 +186,7 @@ export function PetitesTachesReglage({
         pending={pending}
         error={error}
         onSelect={(option) => void changer(option)}
+        ouverture={ouvertureMenu}
         idBase={idBase}
         // Libellé et aide sont réservés aux lecteurs d'écran (`.model-select-label` est masqué) :
         // l'état « non réglé » a donc AUSSI sa phrase visible juste en dessous.

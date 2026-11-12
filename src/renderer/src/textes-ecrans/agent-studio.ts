@@ -30,6 +30,10 @@ export const TEXTES_FR = {
   'studio.aria': 'Sections Agent Studio',
   'studio.onglet.topologie': 'Modèles & topologie',
   'studio.anomalie.workflows': 'Workflow(s) non exécutable(s) : {liste}',
+  // Le petit surtitre au-dessus du nom de chaque rôle : ce que le rôle fait, en quelques mots.
+  'studio.surtitre.petites': 'Choix courts, sans outil',
+  'studio.surtitre.orchestrateur': 'Te répond dans le chat',
+  'studio.surtitre.sousAgents': 'Font le travail lancé',
   'barre.sections': 'Sections {titre}',
 
   // — Modèles & topologie (AgentsTopologyView) —
@@ -223,6 +227,9 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'studio.aria': 'Agent Studio sections',
   'studio.onglet.topologie': 'Models & topology',
   'studio.anomalie.workflows': 'Non-runnable workflow(s): {liste}',
+  'studio.surtitre.petites': 'Short choices, no tools',
+  'studio.surtitre.orchestrateur': 'Answers you in the chat',
+  'studio.surtitre.sousAgents': 'Do the work you launch',
   'barre.sections': '{titre} sections',
 
   'topo.erreur.rafraichissement': 'Could not refresh the topology: {raison}',

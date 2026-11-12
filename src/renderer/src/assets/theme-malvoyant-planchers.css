@@ -11,6 +11,7 @@
 :root[data-theme^='malvoyant-'] .topology-runtime-limit,
 :root[data-theme^='malvoyant-'] .studio-modeles .agents-topology .topology-toolbar .topology-state,
 :root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .router-default .model-select summary > em,
+:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .router-default .model-select-status:not(:empty),
 :root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .slot-unresolved,
 :root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .topology-ligne-role,
 :root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .router-default > .ce-que-ca-couvre dt,
@@ -1233,7 +1234,9 @@
 :root[data-theme^='malvoyant-'] .wf-badge,
 :root[data-theme^='malvoyant-'] .wf-tn-head,
 :root[data-theme^='malvoyant-'] .workflow-profiles-note,
-:root[data-theme^='malvoyant-'] .workflow-graph-hint {
+:root[data-theme^='malvoyant-'] .workflow-graph-hint,
+:root[data-theme^='malvoyant-'] .workflow-profiles .workflow-profile-mesures,
+:root[data-theme^='malvoyant-'] .workflow-profiles .wf-badge {
   font-size: 13px;
 }
 

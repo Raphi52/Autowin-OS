@@ -127,6 +127,8 @@ function MenuDeRole({
       // Les échecs d'écriture ont leur badge en tête de vue : pas de second message par menu.
       error={null}
       onSelect={onSelect}
+      // Le bouton est une barre en haut de sa carte : son menu s'ouvre dessous, comme un accordéon.
+      ouverture="bas"
       idBase={idBase}
       libelle={libelle}
       aide={aide}
@@ -430,10 +432,12 @@ export function AgentsTopologyView({
 
   function renderTargetPanel({
     target,
+    surtitre,
     title,
     description
   }: {
     target: Target
+    surtitre: string
     title: string
     description: string
   }): React.JSX.Element {
@@ -445,6 +449,7 @@ export function AgentsTopologyView({
         data-testid={`topology-panel-${target}`}
       >
         <header>
+          <span className="carte-surtitre">{surtitre}</span>
           <h3>{title}</h3>
           <small>{description}</small>
         </header>
@@ -770,11 +775,13 @@ export function AgentsTopologyView({
         {premiereLigne}
         {renderTargetPanel({
           target: 'orchestrator',
+          surtitre: t('studio.surtitre.orchestrateur'),
           title: t('topo.orchestrateur.titre'),
           description: t('topo.orchestrateur.description')
         })}
         {renderTargetPanel({
           target: 'subagents',
+          surtitre: t('studio.surtitre.sousAgents'),
           title: t('topo.sousAgents.titre'),
           description: t('topo.sousAgents.description')
         })}

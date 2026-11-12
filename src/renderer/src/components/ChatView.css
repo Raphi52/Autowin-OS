@@ -5844,6 +5844,12 @@ button.chat-project-dot:disabled {
   max-width: calc(100vw - 24px);
 }
 
+/* Ouvert vers le bas : jamais plus haut que la place restante sous le bouton (mesurée par
+   OrchestratorModelSelector), sinon le recadrage le remontait par-dessus le bouton. */
+.model-select-menu.is-flottant.is-ouverture-bas {
+  max-height: min(430px, 65vh, var(--menu-place-dessous));
+}
+
 /* LE MODÈLE DU FIL, EN TÊTE DE CONVERSATION (2026-10-11). Le sélecteur a quitté la
    barre de saisie pour remplacer le libellé du modèle dans la ligne d'infos du haut. Il en prend
    la typographie (corps, casse, couleur) au lieu de sa taille de barre de saisie, et garde le

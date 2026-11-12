@@ -110,6 +110,8 @@ export function AgentStudioView({
                   testId="studio-petites-taches"
                   couvertureRepliee
                   modeleSeul
+                  surtitre={t('studio.surtitre.petites')}
+                  ouvertureMenu="bas"
                 />
               }
             />
