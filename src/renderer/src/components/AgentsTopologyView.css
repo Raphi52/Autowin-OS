@@ -402,7 +402,8 @@
 
 /*
  * CARTES ÉTOILÉES — choix de l'utilisateur sur image de référence : chaque rôle est une carte
- * sombre aux coins très arrondis, baignée d'un halo violet semé d'étoiles. Comme sur l'image,
+ * sombre aux coins très arrondis, et les trois cartes sont des fenêtres sur UN MÊME ciel (halo
+ * violet, étoiles) qui se poursuit d'une carte à l'autre par-dessus les espaces. Comme sur l'image,
  * la pastille se pose en haut et le grand titre fin en bas : en haut, le ou les modèles à
  * gauche et « ce que ça couvre » à droite ; en bas, le nom du rôle, puis sa phrase en petit.
  * L'en-tête et le bloc « ce que ça couvre » se dissolvent dans la grille (`display: contents`).
@@ -410,8 +411,6 @@
  * `--bg-0` pour le fond — pour que la carte suive le thème choisi.
  */
 .studio-modeles .router-default {
-  /* Où monte la nébuleuse : chaque rôle la déplace (plus bas). */
-  --studio-halo-x: 72%;
   /* La couleur des étoiles : celle du texte sur fond sombre, le violet sur fond clair (plus bas). */
   --studio-etoile: var(--text);
   /* Les deux grandes étoiles (::before, ::after) se posent sous le contenu, dans la carte. La
@@ -441,48 +440,60 @@
   padding: 16px var(--view-head-retrait) 18px;
   border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   border-radius: 18px;
+  /*
+   * UN SEUL CIEL. Avec `background-attachment: fixed`, chaque calque se cale sur la FENÊTRE et non
+   * sur la carte : les trois cartes montrent chacune leur morceau du même ciel, qui se raccorde
+   * exactement à leurs bords, quelle que soit leur taille (« ce que ça couvre » ouvert compris).
+   * La nébuleuse est centrée là où se rejoignent les trois cartes : à hauteur fixe (l'en-tête au-
+   * dessus a une hauteur fixe) et un peu à droite du milieu (la barre de navigation à gauche).
+   * Les étoiles sont des motifs répétés de tailles premières entre elles : pas de grille visible.
+   */
   background:
-    /* poussière d'étoiles : des points nets, d'éclat inégal */
-    radial-gradient(circle at 9% 22%, var(--studio-etoile) 0 0.7px, transparent 1.3px),
+    radial-gradient(circle at 12% 18%, var(--studio-etoile) 0 0.7px, transparent 1.3px) 0 0 / 263px
+      197px,
     radial-gradient(
-      circle at 31% 78%,
-      color-mix(in srgb, var(--studio-etoile) 70%, transparent) 0 0.6px,
-      transparent 1.2px
-    ),
+        circle at 58% 64%,
+        color-mix(in srgb, var(--studio-etoile) 70%, transparent) 0 0.6px,
+        transparent 1.2px
+      )
+      0 0 / 331px 229px,
     radial-gradient(
-      circle at 47% 18%,
-      color-mix(in srgb, var(--studio-etoile) 55%, transparent) 0 0.6px,
-      transparent 1.2px
-    ),
-    radial-gradient(circle at 63% 64%, var(--studio-etoile) 0 0.8px, transparent 1.4px),
+        circle at 83% 27%,
+        color-mix(in srgb, var(--studio-etoile) 55%, transparent) 0 0.6px,
+        transparent 1.2px
+      )
+      0 0 / 197px 151px,
+    radial-gradient(circle at 34% 86%, var(--studio-etoile) 0 0.8px, transparent 1.4px) 0 0 / 419px
+      283px,
     radial-gradient(
-      circle at 79% 30%,
-      color-mix(in srgb, var(--studio-etoile) 65%, transparent) 0 0.6px,
-      transparent 1.2px
-    ),
+        circle at 71% 9%,
+        color-mix(in srgb, var(--studio-etoile) 60%, transparent) 0 0.6px,
+        transparent 1.2px
+      )
+      0 0 / 373px 167px,
+    /* la nébuleuse pourpre (violet teinté de rose), au point de rencontre des trois cartes */
     radial-gradient(
-      circle at 93% 84%,
-      color-mix(in srgb, var(--studio-etoile) 50%, transparent) 0 0.7px,
-      transparent 1.3px
-    ),
-    /* le halo : une nébuleuse pourpre (violet teinté de rose) qui monte du bas, un voile violet
-       sur toute la carte, une lueur rose dans l'angle */
+        ellipse 360px 210px at calc(50% + 110px) 380px,
+        color-mix(in srgb, color-mix(in srgb, var(--violet) 62%, var(--rose)) 64%, transparent),
+        transparent 100%
+      )
+      0 0 / 100% 100% no-repeat,
+    /* un voile violet plus large, qui gagne le haut et le bas des cartes */
     radial-gradient(
-        ellipse 62% 170% at var(--studio-halo-x) 130%,
-        color-mix(in srgb, color-mix(in srgb, var(--violet) 68%, var(--rose)) 78%, transparent),
-        transparent 70%
-      ),
+        ellipse 760px 380px at calc(50% + 110px) 380px,
+        color-mix(in srgb, var(--violet) 12%, transparent),
+        transparent 100%
+      )
+      0 0 / 100% 100% no-repeat,
+    /* une lueur rose plus chaude, côté droit, comme dans la grande carte de l'image */
     radial-gradient(
-      ellipse 90% 130% at 25% 0%,
-      color-mix(in srgb, var(--violet) 16%, transparent),
-      transparent 75%
-    ),
-    radial-gradient(
-      ellipse 40% 110% at 104% -10%,
-      color-mix(in srgb, var(--rose) 24%, transparent),
-      transparent 70%
-    ),
+        ellipse 280px 180px at calc(50% + 300px) 320px,
+        color-mix(in srgb, var(--rose) 22%, transparent),
+        transparent 100%
+      )
+      0 0 / 100% 100% no-repeat,
     color-mix(in srgb, var(--bg-0) 72%, transparent);
+  background-attachment: fixed;
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent);
 }
 
@@ -533,41 +544,10 @@
   opacity: 0.8;
 }
 
-/* Chaque rôle a son ciel : la poussière d'étoiles glisse (le motif se répète, il ne se coupe
-   pas), la nébuleuse et la grande étoile changent de place. Les quatre derniers calques restent. */
-.studio-modeles .router-default[data-target='orchestrator'] {
-  --studio-halo-x: 30%;
-  background-position:
-    120px 0,
-    -90px 6px,
-    60px -4px,
-    -150px 0,
-    200px 5px,
-    -60px 0,
-    0 0,
-    0 0,
-    0 0,
-    0 0;
-}
-
+/* Les grandes étoiles changent de place d'une carte à l'autre. */
 .studio-modeles .router-default[data-target='orchestrator']::before {
   top: 40%;
   left: 74%;
-}
-
-.studio-modeles .router-default[data-target='subagents'] {
-  --studio-halo-x: 90%;
-  background-position:
-    -140px 0,
-    70px -5px,
-    -200px 3px,
-    110px 0,
-    -40px -6px,
-    160px 0,
-    0 0,
-    0 0,
-    0 0,
-    0 0;
 }
 
 .studio-modeles .router-default[data-target='subagents']::before {
