@@ -676,7 +676,7 @@ describe('mascotte du bureau — style panda boss', () => {
       for (const b of parEtat.slice(i + 1)) expect(a.filter((n) => b.includes(n))).toEqual([])
     // Le chiffre suit l'écran du médaillon : une étape par image, entrée puis boucle, à son rythme.
     expect(css('travail', '3')).toContain(
-      'body .n{display:grid;animation:net 0.96s step-end 1,nt 1.6s step-end 0.96s infinite}'
+      'body .n{display:grid;animation:net 0.96s step-end 1,nt 1.6s step-end 0.96s infinite;'
     )
     for (const nom of ['nr', 'ner', 'nt', 'net', 'na', 'nea', 'ns', 'nes'])
       expect(
@@ -690,6 +690,16 @@ describe('mascotte du bureau — style panda boss', () => {
     expect(css('probleme', '2')).not.toContain('.n')
     // Le chiffre vit DANS le panda (.ob) : il grossit avec lui au survol.
     expect(html).toContain('<i class="bw"></i><i class="n"></i></i>')
+    // Le chiffre remplit l'écran du médaillon (≈ 18 px de large, 21 px quand un fil attend) : à 11 px il
+    // était trop petit (retour utilisateur). Deux chiffres se serrent pour tenir dans le cercle.
+    const taille = (feuille: string): number[] =>
+      [...feuille.matchAll(/body \.n\{[^}]*font-size:(\d+)px/gu)].map(([, px]) => Number(px))
+    expect(taille(css('travail', '3')).at(-1)).toBe(16)
+    expect(taille(css('travail', '12')).at(-1)).toBe(13)
+    expect(taille(css('attente', '2')).at(-1)).toBe(18)
+    expect(taille(css('attente', '10')).at(-1)).toBe(15)
+    // La case du chiffre (22 px) reste centrée sur l'écran du médaillon.
+    expect(html).toMatch(/\.n\{[^}]*width:22px;height:22px/u)
     // Paillettes d'or : deux, lentes, au repos ; une pluie quand un fil attend ; aucune en échec.
     expect(html.match(/class="ps"/gu)).toHaveLength(2)
     expect(html.match(/class="pl"/gu)).toHaveLength(7)

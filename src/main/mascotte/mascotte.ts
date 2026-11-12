@@ -624,7 +624,15 @@ const GESTES_DU_PANDA: Record<NomEtatMascotte, { cle: string; planche: string; b
 const ENTREE_DU_PANDA = 0.96
 /** Côté de l'image du panda dans la page, et demi-côté de la case du chiffre. */
 const COTE_DU_PANDA = 125
-const DEMI_CHIFFRE = 9
+const DEMI_CHIFFRE = 11
+/**
+ * La taille du chiffre : il remplit l'écran du médaillon (≈ 18 px de large, 21 px quand un fil attend et
+ * que le médaillon grossit). À 11 px, il était trop petit (retour utilisateur) ; deux chiffres se serrent
+ * pour tenir dans le cercle.
+ */
+function tailleDuChiffre(pastille: string, etat: NomEtatMascotte): number {
+  return (pastille.length > 1 ? 13 : 16) + (etat === 'attente' ? 2 : 0)
+}
 
 /** La position du chiffre sur l'écran du médaillon, dans l'image `i` d'une planche. */
 function placeDuChiffre(planche: string, i: number): string {
@@ -695,7 +703,7 @@ body{font-family:ui-sans-serif,system-ui,sans-serif;user-select:none}
 .ob:active{cursor:grabbing}
 .m:hover .ob{scale:1.06}
 .bw{inset:0;background:var(--repos) 0 0/2000px 125px no-repeat;filter:drop-shadow(0 0 1px #ffffffb3) drop-shadow(0 0 2px #ffffff40);animation:${animationsDuPanda('calme').image}}
-.n{display:none;place-items:center;left:0;top:0;translate:${placeDuChiffre('TRAVAIL', 0)};width:18px;height:18px;font-weight:900;font-size:11px;line-height:1;letter-spacing:-.5px;color:#ffc24a;text-shadow:0 0 3px #ffb52e,0 0 1px #000;pointer-events:none}
+.n{display:none;place-items:center;left:0;top:0;translate:${placeDuChiffre('TRAVAIL', 0)};width:22px;height:22px;font-weight:900;font-size:16px;line-height:1;letter-spacing:-1px;color:#ffc24a;text-shadow:0 0 3px #ffb52e,0 0 1px #000;pointer-events:none}
 .n::after{position:static}
 .bu{display:none;place-items:center;left:13px;top:4px;width:24px;height:24px;border-radius:50%;font-weight:700;font-size:15px;line-height:1;background:#ffe7ae;color:#6a4300;box-shadow:0 0 0 1.5px #c58a22,0 1px 5px #0007;animation:bu 1.6s ease-in-out infinite}
 .pl,.ps{display:none;width:5px;height:5px;border-radius:1px;background:linear-gradient(135deg,#fff6d8,#e2b23c);box-shadow:0 0 2px #ffcf5c99;opacity:0}
@@ -717,7 +725,10 @@ function reglesDuPanda(etat: NomEtatMascotte, pastille: string | null): Array<[s
   const { image, chiffre } = animationsDuPanda(etat)
   // En échec, le médaillon peint son « ! » rouge : un compte posé dessus le cacherait.
   if (pastille && etat !== 'probleme')
-    regles.push(['.n', `display:grid;animation:${chiffre}`], ['.n::after', `content:"${pastille}"`])
+    regles.push(
+      ['.n', `display:grid;animation:${chiffre};font-size:${tailleDuChiffre(pastille, etat)}px`],
+      ['.n::after', `content:"${pastille}"`]
+    )
   switch (etat) {
     // Le repos est la page elle-même (le soupir d'entrée, puis il somnole) : rien à poser.
     case 'calme':
@@ -730,7 +741,7 @@ function reglesDuPanda(etat: NomEtatMascotte, pastille: string | null): Array<[s
     case 'attente':
       regles.push(
         ['.bw', `background-image:var(--attente);animation:${image}`],
-        ['.n', 'font-size:12px;color:#ffe08a'],
+        ['.n', 'color:#ffe08a'],
         ['.pl', 'display:block'],
         ['.ps', 'display:none'],
         ['.bu', 'display:grid'],
