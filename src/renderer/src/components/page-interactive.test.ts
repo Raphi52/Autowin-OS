@@ -16,8 +16,19 @@ import {
   reponseALaPage,
   retenirStockageDeLaPage,
   stockageDeLaPage,
+  VARIABLES_DU_THEME,
   type AvisPage
 } from './page-interactive'
+
+describe('VARIABLES_DU_THEME', () => {
+  it('passe à la page tous les jetons de couleur de l’interface', () => {
+    // Une maquette /draft écrite avec var(--gold) ou var(--bg-1) sortait sans son or ni ses aplats
+    // dès que le carrousel devenait une page interactive (mélange par axe, réglages, calques).
+    const jetons = ['--text', '--text-dim', '--line', '--bg-0', '--bg-1', '--bg-2', '--bg-3']
+    const couleurs = ['--gold', '--rose', '--ok', '--warn', '--err']
+    expect(VARIABLES_DU_THEME).toEqual(expect.arrayContaining([...jetons, ...couleurs]))
+  })
+})
 
 const msg = (contenu: Record<string, unknown>): unknown => ({
   type: TYPE_MESSAGE_SCENE_3D,

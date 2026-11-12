@@ -383,11 +383,14 @@ export function borneHauteurPage(hauteur: unknown): number | null {
  * Les jetons du theme lus sur le bloc du fil : ceux de la feuille de base, puis ceux de
  * l'habit holographique du carrousel /draft (scripts/draft-carrousel.mjs), devenu une page
  * interactive pour un sujet en volume. Sans eux, il retombait sur ses valeurs sombres de repli :
- * fiches noires sous un theme clair.
+ * fiches noires sous un theme clair. Tous les jetons de couleur de l'interface y passent : une
+ * maquette ecrite avec var(--gold) ou var(--bg-1), comme dans un bloc du fil, perdait sinon son or
+ * et ses aplats des que le carrousel devenait une page (melange par axe, reglages, calques).
  */
 export const VARIABLES_DU_THEME = [
   '--text',
   '--text-dim',
+  '--gold',
   '--gold-doux',
   '--gold-clair',
   '--ok',
@@ -397,6 +400,9 @@ export const VARIABLES_DU_THEME = [
   '--line',
   '--text-faint',
   '--bg-0',
+  '--bg-1',
+  '--bg-2',
+  '--bg-3',
   '--rose',
   '--violet',
   '--nv-degrade',
