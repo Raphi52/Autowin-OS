@@ -16,8 +16,9 @@
  * `run-state` illisible ne condamne rien : ce jour-là, aucun run n'est jugé réglé, et le bilan le dit.
  *
  * CE QUI PART : supprimé pour de bon, sans corbeille, et seulement avec `--supprimer`. Le `/gc`
- * quotidien ne le lance pas seul (`skills/gc/SKILL.md`) : il affiche la liste, et l'accord de
- * l'utilisateur tranche. Chaque fichier est revérifié juste avant d'être effacé.
+ * quotidien le lance avec `--supprimer` sans attendre d'accord (décision de l'utilisateur du
+ * 2026-11-10, `skills/gc/SKILL.md`) et écrit ce qui part dans son bilan. Chaque fichier est revérifié
+ * juste avant d'être effacé.
  *
  * Usage, depuis le dépôt Autowin :
  *   node --no-warnings scripts/gc-causes-en-cours.mjs [--supprimer] [--donnees <chemin>]

@@ -86,20 +86,22 @@ collègues. Chaque commande ci-dessous se lance donc avec le dépôt comme dossi
      Mesuré le 16/10 : 73 fils dans le fichier, 785 en archive — sans les archives, leurs satellites
      passaient pour orphelins.
    - **Runs bloqués = scan complet, jamais `runsBlocked` de `get_state`** (une fenêtre de 24 RUN.md :
-     les passes des 02 et 03/10 ont mis 42 runs rouges en corbeille sur la foi d'une liste vide). Sonde :
-     un script `.mts` lancé par `npx tsx`, qui importe `scanRuns` (`src/main/dashboards/runs-scan.ts`)
-     et `isBlocked` (`src/shared/run-blocked.ts`), scanne `.autowin-data/autowin-os/runs` et rend les
-     `session` qui portent un run bloqué.
+     les passes des 02 et 03/10 ont mis 42 runs rouges en corbeille sur la foi d'une liste vide).
+     L'outil ci-dessous fait ce scan (`scanRuns` sans borne, puis `isBlocked`).
    - **`conversations.json.pre-remake` ne part jamais** : filet pris une seule fois par
      `backupBeforeFirstMigratedWrite` (`src/main/store/conversations-disk.ts`), recréé dès qu'il manque
      à partir de données déjà migrées — le déplacer ne libère rien et perd le vrai filet.
    - Hors périmètre absolu : `claude-accounts/` hors `projects/`, `Cache/`, `Code Cache/`, `GPUCache/`,
      `Local Storage/`, `Session Storage/`, `Network/`, fichiers `*-wal`, `whisper/`, `piper/`,
      `worktrees/` (→ étape 4), tout `*.json` de configuration à la racine.
-   Déplacement : un `mv` unitaire par candidat vers `.autowin-data/gc-corbeille/AAAA-MM-JJ/<chemin
-   d'origine>`, avec sa ligne dans le `MANIFEST.txt` du jour. Un nom dont l'id ne se lit pas sans
-   ambiguïté → NON collecté, rapporté en « à vérifier ». Une sonde qui échoue → sa catégorie n'est pas
-   collectée ce jour-là, et le bilan le dit.
+   **Outil**, depuis le dépôt : `npx tsx scripts/gc-donnees-autowin.mjs --travaux <agentId de
+   travauxNonPublies> --controle <ids des fils récents de get_state>` (listes séparées par des
+   virgules). Il applique ce tableau, sauf les états de cause (script à part, ci-dessus), et rend
+   `vivants`, `runs`, `candidats` avec leur motif, `compteurs`, `aVerifier`, `sondesEnEchec`. Relancé
+   avec `--balayer`, il met les candidats dans la corbeille du jour, ligne de `MANIFEST.txt` écrite
+   avant chaque déplacement. Code 2 : un id de contrôle manque à la liste vivante, rien n'a bougé —
+   en chercher la cause avant toute collecte. Un nom dont l'id ne se lit pas sans ambiguïté n'est
+   jamais collecté ; une sonde qui échoue retire sa catégorie du jour, et le bilan le dit.
 4. **Signaler sans déplacer — gestes git.** Les bouger casse git : ils vont au bilan dans
    « À purger », avec la commande exacte, et attendent l'accord.
    - **Copies de travail git orphelines** (`git worktree list`) : `bench/runs/*`,
