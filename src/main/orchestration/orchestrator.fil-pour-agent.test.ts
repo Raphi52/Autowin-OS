@@ -142,10 +142,22 @@ describe('le fil voyage aussi jusqu’à l’agent Codex', () => {
 
   it('codex.ts remet cet environnement au lancement survivable', () => {
     const src = readFileSync(join(process.cwd(), 'src', 'main', 'providers', 'codex.ts'), 'utf8')
-    const appel = src.slice(
-      src.indexOf('spawnSurvivable({'),
-      src.indexOf('spawnSurvivable({') + 400
-    )
+    const debut = src.indexOf('spawnSurvivable({')
+    expect(debut).toBeGreaterThanOrEqual(0)
+    // L'objet de l'appel, de son accolade ouvrante à sa fermante. Les commentaires ne comptent pas
+    // (un `env` commenté ne serait pas lancé), ni les retours à la ligne : une fenêtre de caractères
+    // bruts casse dès que l'appel s'allonge.
+    let profondeur = 0
+    let fin = -1
+    for (let i = debut; i < src.length && fin < 0; i++) {
+      if (src[i] === '{') profondeur++
+      else if (src[i] === '}' && --profondeur === 0) fin = i + 1
+    }
+    expect(fin).toBeGreaterThan(debut)
+    const appel = src
+      .slice(debut, fin)
+      .replace(/\/\/[^\n]*/g, '')
+      .replace(/\s+/g, ' ')
     // `\s*` : l'objet se replie sur plusieurs lignes dès qu'une source d'environnement s'ajoute.
     expect(appel).toMatch(/env: environnementCodex\(process\.env, \{\s*\.\.\.execution\.agentEnv,/)
   })
