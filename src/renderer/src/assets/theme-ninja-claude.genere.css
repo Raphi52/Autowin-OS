@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   943 regles, 1321 declarations. Voir genererNinjaClaude.
+   948 regles, 1328 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -3025,6 +3025,23 @@
 }
 :root[data-theme='ninja-claude'] .workflow-profile-prompt blockquote {
     border-left: 2px solid var(--container-border, rgb(59, 57, 52))
+}
+:root[data-theme='ninja-claude'] .workflow-profiles .workflow-profile-pick:hover {
+    background: color-mix(in srgb, var(--violet) 8%, transparent)
+}
+:root[data-theme='ninja-claude'] .workflow-profiles .workflow-profile-confirm {
+    border-left: 0
+}
+:root[data-theme='ninja-claude'] .workflow-profiles .wf-tn {
+    background: color-mix(in srgb, var(--bg-0) 45%, transparent)
+}
+:root[data-theme='ninja-claude'] .workflow-profiles .workflow-profiles-actions button {
+    background: color-mix(in srgb, var(--bg-0) 35%, transparent)
+}
+:root[data-theme='ninja-claude'] .workflow-profiles .workflow-profiles-actions button:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--violet) 60%, transparent);
+    background: color-mix(in srgb, var(--violet) 16%, transparent);
+    color: var(--text)
 }
 
 /* ---- src/renderer/src/components/WorktreeView.css ---- */

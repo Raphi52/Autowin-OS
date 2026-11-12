@@ -116,9 +116,8 @@
   min-width: 0;
 }
 
-.topology-ligne.is-unresolved .model-select {
-  outline: 1px solid var(--err);
-  border-radius: 8px;
+.topology-ligne.is-unresolved .modele-deroulant-barre {
+  border-color: color-mix(in srgb, var(--err) 70%, transparent);
 }
 
 /* Le premier sous-agent écrit le code quand ils sont plusieurs (runtimeFanOutSlots). */
@@ -656,7 +655,7 @@
   opacity: 1;
 }
 
-.studio-modeles .router-default > .model-select-shell,
+.studio-modeles .router-default > .modele-deroulant,
 .studio-modeles .router-default > .topology-lignes {
   grid-area: modele;
   margin: 0;
@@ -680,7 +679,7 @@
   gap: 8px;
 }
 
-.studio-modeles .topology-ligne > .model-select-shell {
+.studio-modeles .topology-ligne > .modele-deroulant {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -688,113 +687,19 @@
 /*
  * LES COMMANDES DES CARTES, EN ACCORDÉON — demande de l'utilisateur. Chaque commande est une
  * barre de verre pleine largeur, comme un en-tête d'accordéon : libellé à gauche, chevron au
- * bout ; ce qu'elle ouvre se pose DESSOUS (le menu de modèle, ouvert vers le bas ; la liste de
- * « Ce que ça couvre », collée à sa barre). Verre de l'image de référence : fond voilé
- * translucide, contour clair très fin, police d'interface — SANS flou de fond, que l'interface
- * s'interdit (coût de carte graphique, `assets/aucun-flou.test.ts`). Au survol et une fois
- * ouverte, la barre prend le violet du ciel.
- * Portée : les cartes d'Agent Studio seulement — le même menu de modèle, dans le chat, ne change
- * pas. Le préfixe `.topology-workspace` passe devant les règles du mode clair de ChatView.css.
+ * bout ; ce qu'elle ouvre se pose DESSOUS. Le menu de modèle est le menu déroulant d'Agent Studio
+ * (ModeleDeroulant.css : sa liste soudée sous la barre, de sa largeur) ; « + Ajouter un modèle » et
+ * « Ce que ça couvre » prennent le même verre plus bas.
  */
-.studio-modeles .topology-workspace .router-default .model-select {
-  /* Le menu du chat plafonne sa largeur à 250 px : ici, la barre suit la carte. */
-  flex: 1 1 auto;
-  width: 100%;
-  max-width: none;
-  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-0) 38%, transparent);
-  transition:
-    border-color 150ms ease,
-    background-color 150ms ease;
+
+/* Une liste ouverte passe par-dessus la suite de sa carte ET des cartes voisines : chaque carte
+   est son propre plan (`isolation`), celle qui porte la liste ouverte passe donc devant. */
+.studio-modeles .router-default:has(.modele-deroulant.is-ouvert) {
+  z-index: 2;
 }
 
-.studio-modeles .topology-workspace .router-default .model-select:hover,
-.studio-modeles .topology-workspace .router-default .model-select[open] {
-  border-color: color-mix(in srgb, var(--violet) 60%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--violet) 18%,
-    color-mix(in srgb, var(--bg-0) 38%, transparent)
-  );
-}
-
-.studio-modeles .topology-workspace .router-default .model-select summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 8px 14px;
-  border-radius: 12px;
-  background: transparent;
-}
-
-/* Le chevron au bout de la barre, comme un en-tête d'accordéon. */
-.studio-modeles .topology-workspace .router-default .model-select summary > .model-select-chevron {
-  flex: none;
-  margin-left: auto;
-}
-
-.studio-modeles .topology-workspace .router-default .model-select summary:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--violet) 75%, transparent);
-  outline-offset: 2px;
-}
-
-/* Le nom du modèle se lit d'abord : graisse moyenne, taille de texte courant. Serré, il
-   s'abrège au lieu de pousser le chevron hors de la barre. */
-.studio-modeles .topology-workspace .router-default .model-select summary > strong {
-  min-width: 0;
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
-/* L'effort devient une petite puce violette à côté du nom. */
-.studio-modeles .topology-workspace .router-default .model-select summary > em {
-  padding: 2px 7px;
-  border-radius: 999px;
-  flex: none;
-  background: color-mix(in srgb, var(--violet) 22%, transparent);
-  color: color-mix(in srgb, var(--text) 85%, transparent);
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.studio-modeles .topology-workspace .router-default .model-select-chevron {
-  width: 7px;
-  height: 7px;
-  border-right-width: 1.25px;
-  border-bottom-width: 1.25px;
-  border-color: color-mix(in srgb, var(--text) 60%, transparent);
-}
-
-/* La bulle d'état (erreur, enregistrement, modèle introuvable) flotte d'ordinaire contre le
-   bouton. Sous une barre d'accordéon, elle recouvrait la barre suivante : elle devient une ligne
-   sous sa barre, dans le flux, qui pousse la suite au lieu de la cacher. */
-.studio-modeles .topology-workspace .router-default .model-select-shell {
-  flex-wrap: wrap;
-}
-
-.studio-modeles .topology-workspace .router-default .model-select-status:not(:empty) {
-  position: static;
-  flex: 1 0 100%;
-  width: auto;
-  max-width: none;
-  margin-top: 6px;
-  border-radius: 10px;
-  font-size: 11px;
-}
-
-/* Un modèle introuvable : le contour de la pastille vire au rouge (plus de cadre carré
-   par-dessus), et l'étiquette devient une puce rouge pâle. */
-.studio-modeles .topology-workspace .topology-ligne.is-unresolved .model-select {
-  outline: 0;
-  border-color: color-mix(in srgb, var(--err) 70%, transparent);
-}
-
+/* Un modèle introuvable : le contour de sa barre vire au rouge (règle `.topology-ligne.is-unresolved`
+   plus haut), et l'étiquette devient une puce rouge pâle. */
 .studio-modeles .topology-workspace .slot-unresolved {
   flex: none;
   padding: 2px 8px;

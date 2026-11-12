@@ -73,21 +73,16 @@ const monter = async (): Promise<void> => {
   await flush()
 }
 
-/** Le geste réel : ouvrir le menu de modèle d'un rôle, puis cliquer un point modèle × effort. */
+/** Le geste réel : ouvrir le menu déroulant d'un rôle, puis cliquer une pastille d'effort. */
 async function choisirDansLeMenu(idBase: string, ligne: string, effort: string): Promise<void> {
-  const menu = container.querySelector<HTMLDetailsElement>(`details[data-testid="${idBase}"]`)
-  expect(menu).not.toBeNull()
-  await act(async () => {
-    menu!.open = true
-    menu!.dispatchEvent(new Event('toggle'))
-  })
-  const cran = document.body.querySelector<HTMLButtonElement>(
-    `[data-testid="effort-matrix"] [data-row="${ligne}"] [data-effort="${effort}"]`
+  const barre = container.querySelector<HTMLButtonElement>(`button[data-testid="${idBase}"]`)
+  expect(barre).not.toBeNull()
+  await act(async () => barre!.click())
+  const cran = container.querySelector<HTMLButtonElement>(
+    `[data-testid="${idBase}-liste"] [data-row="${ligne}"] [data-effort="${effort}"]`
   )
   expect(cran).not.toBeNull()
   await act(async () => cran!.click())
-  // Le clic referme le menu : on rejoue l'événement que le navigateur émet alors.
-  await act(async () => menu!.dispatchEvent(new Event('toggle')))
   await flush()
 }
 

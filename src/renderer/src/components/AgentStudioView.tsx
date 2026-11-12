@@ -111,7 +111,7 @@ export function AgentStudioView({
                   couvertureRepliee
                   modeleSeul
                   surtitre={t('studio.surtitre.petites')}
-                  ouvertureMenu="bas"
+                  menuDeroulant
                 />
               }
             />

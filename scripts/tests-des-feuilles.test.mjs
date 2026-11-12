@@ -25,6 +25,10 @@ const VOISIN = {
   chemin: 'src/renderer/src/components/OrchestratorModelSelector.test.tsx',
   contenu: "import { OrchestratorModelSelector } from './OrchestratorModelSelector'"
 }
+const PAR_GENERATEUR = {
+  chemin: 'src/renderer/src/assets/theme-ninja-claude.test.ts',
+  contenu: "await import('../../../../scripts/theme-nebuleuse-verre.mjs')"
+}
 const TESTS = [GARDE_FLOU, GARDE_COMPOSANTS, NOMME, SANS_RAPPORT, VOISIN]
 
 describe('tests-des-feuilles', () => {
@@ -50,6 +54,22 @@ describe('tests-des-feuilles', () => {
         tests: [VOISIN]
       })
     ).toEqual([VOISIN.chemin])
+  })
+
+  it('une feuille modifiée retient le test qui passe par un script balayant les feuilles', () => {
+    const modifies = ['src/renderer/src/components/WorkflowProfilesView.css']
+    const tests = [...TESTS, PAR_GENERATEUR]
+    expect(testsLies({ modifies, tests, balayeurs: ['theme-nebuleuse-verre.mjs'] })).toContain(
+      PAR_GENERATEUR.chemin
+    )
+    // Sans feuille modifiée, le générateur n'a rien de neuf à relire : le test n'est pas retenu.
+    expect(
+      testsLies({
+        modifies: ['src/renderer/src/components/BoardView.tsx'],
+        tests,
+        balayeurs: ['theme-nebuleuse-verre.mjs']
+      })
+    ).not.toContain(PAR_GENERATEUR.chemin)
   })
 
   it('un fichier sans rapport ne retient rien', () => {

@@ -15,6 +15,10 @@
  * Un test de `src/renderer` est retenu si :
  *   - il NOMME un fichier modifié (son nom de base, ex. « AgentsTopologyView.css ») ;
  *   - ou il BALAIE les feuilles (`readdirSync` + « .css ») et une feuille a changé ;
+ *   - ou il appelle un SCRIPT qui balaie les feuilles (un générateur de couche de thème) et une
+ *     feuille a changé. Constat du 2026-11-12 : `theme-ninja-claude.test.ts` compare sa couche à
+ *     la sortie de `scripts/theme-nebuleuse-verre.mjs`, qui relit TOUTES les feuilles ; une feuille
+ *     de l'onglet Workflows modifiée l'a rendu rouge sans qu'aucune règle ci-dessus ne le retienne ;
  *   - ou il BALAIE les composants (`readdirSync` + « .tsx ») et un composant a changé ;
  *   - ou il est le test voisin d'un fichier modifié (`x.ts` → `x.test.ts`).
  */
@@ -30,10 +34,11 @@ const normaliser = (chemin) => chemin.split(sep).join('/')
 
 /**
  * Le cœur, sans disque ni git : quels tests retenir pour ces fichiers modifiés.
- * @param {{ modifies: string[], tests: { chemin: string, contenu: string }[] }} entree
+ * `balayeurs` : noms des scripts de `scripts/` qui balaient les feuilles (voir `scriptsBalayeurs`).
+ * @param {{ modifies: string[], tests: { chemin: string, contenu: string }[], balayeurs?: string[] }} entree
  * @returns {string[]} chemins des tests retenus, triés, sans doublon
  */
-export function testsLies({ modifies, tests }) {
+export function testsLies({ modifies, tests, balayeurs = [] }) {
   const noms = modifies.map((m) => basename(normaliser(m)))
   const feuilleChangee = modifies.some((m) => m.endsWith('.css'))
   const composantChange = modifies.some((m) => m.endsWith('.tsx'))
@@ -45,10 +50,12 @@ export function testsLies({ modifies, tests }) {
   const retenus = new Set()
   for (const { chemin, contenu } of tests) {
     const balaie = contenu.includes('readdirSync')
+    const appelleUnBalayeur = balayeurs.some((script) => contenu.includes(`scripts/${script}`))
     if (
       voisins.has(normaliser(chemin)) ||
       noms.some((nom) => contenu.includes(nom)) ||
       (balaie && feuilleChangee && contenu.includes('.css')) ||
+      (appelleUnBalayeur && feuilleChangee) ||
       (balaie && composantChange && contenu.includes('.tsx'))
     ) {
       retenus.add(normaliser(chemin))
@@ -73,6 +80,17 @@ function fichiersModifies(racine) {
     )
 }
 
+/** Les scripts de `scripts/` qui parcourent un dossier ET lisent des feuilles `.css`. */
+function scriptsBalayeurs(racine) {
+  const dossier = join(racine, 'scripts')
+  return readdirSync(dossier)
+    .filter((nom) => /\.(?:mjs|js)$/.test(nom) && !EST_UN_TEST.test(nom))
+    .filter((nom) => {
+      const contenu = readFileSync(join(dossier, nom), 'utf8')
+      return contenu.includes('readdirSync') && contenu.includes('.css')
+    })
+}
+
 function testsDuRendu(racine) {
   const dossier = join(racine, 'src', 'renderer')
   return readdirSync(dossier, { recursive: true })
@@ -93,7 +111,11 @@ if (lanceSeul) {
   const lancer = args.includes('--lancer')
   const donnes = args.filter((a) => a !== '--lancer')
   const modifies = donnes.length > 0 ? donnes : fichiersModifies(racine)
-  const liste = testsLies({ modifies, tests: testsDuRendu(racine) })
+  const liste = testsLies({
+    modifies,
+    tests: testsDuRendu(racine),
+    balayeurs: scriptsBalayeurs(racine)
+  })
   if (!lancer) {
     process.stdout.write(liste.join('\n') + (liste.length ? '\n' : ''))
     process.exit(0)

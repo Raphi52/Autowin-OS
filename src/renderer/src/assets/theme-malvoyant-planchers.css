@@ -10,8 +10,6 @@
 :root[data-theme^='malvoyant-'] .topology-assign-button,
 :root[data-theme^='malvoyant-'] .topology-runtime-limit,
 :root[data-theme^='malvoyant-'] .studio-modeles .agents-topology .topology-toolbar .topology-state,
-:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .router-default .model-select summary > em,
-:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .router-default .model-select-status:not(:empty),
 :root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .slot-unresolved,
 :root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .topology-ligne-role,
 :root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .router-default > .ce-que-ca-couvre dt,
@@ -755,6 +753,16 @@
 :root[data-theme^='malvoyant-'] .model-quota-reset button,
 :root[data-theme^='malvoyant-'] .model-quota-reset-message {
   color: var(--text);
+}
+
+/* components/ModeleDeroulant.css — tailles */
+:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-barre > em,
+:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-fournisseur,
+:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-nom > small,
+:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-statut,
+:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-cran,
+:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-etat {
+  font-size: 13px;
 }
 
 /* components/NavigateurIntegre.css — tailles */

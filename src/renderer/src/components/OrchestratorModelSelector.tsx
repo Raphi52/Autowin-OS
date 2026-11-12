@@ -7,8 +7,9 @@ import {
 } from './chat-view-model'
 import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
 import { effortLabel } from './model-effort-labels'
-import { useTextesChatPanneaux, type traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
+import { useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import { shortModelLabel } from './model-display-label'
+import { CLE_DU_STATUT, STATUTS_BLOQUANTS } from './statuts-fournisseur'
 import './ChatView.css'
 // Les puces de compte (.router-account-chip, .is-active = compte retenu encadré) sont stylées ici.
 import './RouterView.css'
@@ -59,21 +60,6 @@ export interface OrchestratorModelDefaut {
   actif: boolean
   onChoisir: () => void
 }
-
-const STATUT_LABEL: Record<string, Parameters<typeof traduireChatPanneaux>[0]> = {
-  authenticated: 'selecteur.statut.authentifie',
-  expired: 'selecteur.statut.expire',
-  'installed-untested': 'selecteur.statut.installeNonTeste',
-  absent: 'selecteur.statut.nonConnecte',
-  unknown: 'selecteur.statut.indetermine',
-  standby: 'selecteur.statut.standby'
-}
-
-/** Les états sous lesquels un prompt ne partirait pas : le choix est refusé, pas juste décoré. */
-const STATUTS_BLOQUANTS = new Set(['expired', 'absent', 'standby'])
-
-/** Hauteur minimale (px) d'un menu ouvert vers le bas : en dessous, quelques lignes à peine. */
-const PLANCHER_MENU_DESSOUS = 240
 
 /**
  * Services directs (`api-xai`, `api-mistral`…) : sans niveau de réflexion, ils prennent un onglet de la
@@ -145,8 +131,8 @@ export function OrchestratorModelSelector({
    * bouton — plus aucun parent ne peut le couper.
    */
   const [ancre, setAncre] = useState<
-    | { left: number; bottom: number; top?: undefined; placeDessous?: undefined }
-    | { left: number; top: number; bottom?: undefined; placeDessous: number }
+    | { left: number; bottom: number; top?: undefined }
+    | { left: number; top: number; bottom?: undefined }
     | null
   >(null)
   useClampDansFenetre(menuRef, ancre !== null)
@@ -156,18 +142,7 @@ export function OrchestratorModelSelector({
     const rect = resume.getBoundingClientRect()
     setAncre(
       ouverture === 'bas'
-        ? {
-            left: rect.left,
-            top: rect.bottom + 7,
-            /*
-             * Ouvert vers le bas, le menu ne doit pas déborder SOUS la fenêtre : le recadrage
-             * (`useClampDansFenetre`) le remontait alors par-dessus son propre bouton — un bouton
-             * en bas de page ouvrait son menu « au-dessus » malgré `bas`. Le menu prend donc au
-             * plus la place qui reste dessous (il défile au-delà), avec un plancher de
-             * PLANCHER_MENU_DESSOUS pour rester utilisable tout en bas de l'écran.
-             */
-            placeDessous: Math.max(PLANCHER_MENU_DESSOUS, window.innerHeight - rect.bottom - 7 - 8)
-          }
+        ? { left: rect.left, top: rect.bottom + 7 }
         : { left: rect.left, bottom: window.innerHeight - rect.top + 7 }
     )
   }, [ouverture])
@@ -198,7 +173,7 @@ export function OrchestratorModelSelector({
   // `mesurerAncre` (react-hooks/preserve-manual-memoization, mesuré le 2026-10-27).
   const MODELE_VERROUILLE = t('selecteur.verrouille')
   const libelleStatut = (statut: string): string => {
-    const cle = STATUT_LABEL[statut]
+    const cle = CLE_DU_STATUT[statut]
     return cle ? t(cle) : statut
   }
   const grouped = useMemo(
@@ -337,14 +312,8 @@ export function OrchestratorModelSelector({
               style={
                 ancre.top !== undefined
                   ? // `bottom: auto` : la règle de base pose `bottom: calc(100% + 7px)`, qui, avec un
-                    // `top` en ligne, écraserait la hauteur du menu à zéro. La place restante
-                    // passe par une variable : le plafond de hauteur reste celui de ChatView.css.
-                    ({
-                      left: ancre.left,
-                      top: ancre.top,
-                      bottom: 'auto',
-                      '--menu-place-dessous': `${Math.round(ancre.placeDessous)}px`
-                    } as React.CSSProperties)
+                    // `top` en ligne, écraserait la hauteur du menu à zéro.
+                    { left: ancre.left, top: ancre.top, bottom: 'auto' }
                   : { left: ancre.left, bottom: ancre.bottom }
               }
             >

@@ -7,10 +7,8 @@ import { ID_DU_PROFIL_DEFAUT } from '../../../shared/profil-defaut-id'
 import { libraryModels } from './model-library'
 import { Spinner } from './Spinner'
 import { CeQueCaCouvre } from './CeQueCaCouvre'
-import {
-  OrchestratorModelSelector,
-  type OrchestratorProviderStatus
-} from './OrchestratorModelSelector'
+import type { OrchestratorProviderStatus } from './OrchestratorModelSelector'
+import { ModeleDeroulant } from './ModeleDeroulant'
 import type { OrchestratorModelOption } from './chat-view-model'
 // Même bloc que « Modèle des petites tâches » : mêmes classes (`.router-default`, `.router-hint`).
 import './RouterView.css'
@@ -83,9 +81,9 @@ const COUVERTURE: Readonly<
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
 
 /**
- * Le menu de modèle d'un rôle : le même que « Modèle des petites tâches » (et que l'en-tête du chat).
- * Composant à part, hors de la vue : défini dedans, il serait recréé à chaque rendu et refermerait
- * le menu ouvert.
+ * Le menu de modèle d'un rôle : le même menu déroulant que « Modèle des petites tâches » dans Agent
+ * Studio. Composant à part, hors de la vue : défini dedans, il serait recréé à chaque rendu et
+ * refermerait le menu ouvert.
  */
 function MenuDeRole({
   idBase,
@@ -110,7 +108,7 @@ function MenuDeRole({
 }): React.JSX.Element {
   const model = binding ? modelsById.get(binding.modelId) : undefined
   return (
-    <OrchestratorModelSelector
+    <ModeleDeroulant
       busy={false}
       catalogLoaded
       models={models}
@@ -128,8 +126,6 @@ function MenuDeRole({
       // Les échecs d'écriture ont leur badge en tête de vue : pas de second message par menu.
       error={null}
       onSelect={onSelect}
-      // Le bouton est une barre en haut de sa carte : son menu s'ouvre dessous, comme un accordéon.
-      ouverture="bas"
       idBase={idBase}
       libelle={libelle}
       aide={aide}
