@@ -29,6 +29,13 @@ import type { OrchestrationRunState } from './orchestration-state'
 export type SuiviDuPlan = {
   /** Un run repart dans ce fil : son lot redevient en cours. */
   agentRepris: (conversationId: string, tour?: string) => void
+  /**
+   * Au démarrage, la relance de ce run est mise dans la file des reprises : rien ne tourne encore.
+   * Son lot est montré en cours, mais reste relançable tant que la file ne l'a pas fait partir.
+   */
+  repriseEnFile: (conversationId: string, tour?: string) => void
+  /** Vrai quand le lot de ce fil a été relancé pendant que cette reprise attendait dans la file. */
+  repriseAbandonnee: (conversationId: string, tour?: string) => boolean
   /** Le run est fini : même observateur qu'une fin de tour de chat. */
   finDuRun: (conversationId: string, issue: IssueDuTour) => void
 }
@@ -255,6 +262,25 @@ export function creerRelanceDeRunReprenable(
     if (refusDuFil) {
       console.warn('[resume-orchestration] reprise refusée, checkpoint conserve :', refusDuFil)
       fin.issue = issueDuRunPerdu(`run ${resumableRun.runId} non repris : ${refusDuFil}`)
+      return
+    }
+    // Le lot de ce fil a été relancé pendant que cette reprise attendait dans la file : la faire
+    // partir mettrait un second agent dans le même fil. Le point de reprise est retiré, sinon il
+    // repartirait au démarrage suivant.
+    if (
+      resumableRun.conversationId &&
+      plansDeLots?.repriseAbandonnee(resumableRun.conversationId, resumableRun.turnId)
+    ) {
+      os.forgetResumableOrchestration(resumableRun.runId)
+      const raison = `run ${resumableRun.runId} non repris : son lot a été relancé pendant qu’il attendait dans la file des reprises.`
+      console.warn('[resume-orchestration]', raison)
+      appendConvActivity(resumableRun.conversationId, {
+        kind: 'exec',
+        label: 'reprise',
+        provider: 'orchestrator',
+        text: raison
+      })
+      fin.issue = issueDuRunPerdu(raison)
       return
     }
     gardePlantage?.poser(resumableRun.runId)

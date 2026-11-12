@@ -23,11 +23,13 @@ import {
   noterDecision,
   noterDemandeDeCommit,
   noterFinDeTour,
+  noterRepriseEnFile,
   noterTourDuLot,
   promptDeReveil,
   promptDuLot,
   relancerLot,
   reprendrePlan,
+  repriseAbandonnee as repriseAbandonneeDuPlan,
   statutApresLancements,
   suiteDeLOrdreAuLot,
   suivreLesPublications,
@@ -436,6 +438,22 @@ export class CoordinateurDesPlans {
       const adopte = adopterLotRepris(plan, fil, tour)
       if (adopte !== plan) this.#poser(adopte)
     }
+  }
+
+  /**
+   * Au redémarrage, le travail de ce fil est mis dans la file des reprises : il ne tourne pas encore.
+   * Son lot est montré en cours mais reste relançable ; son départ effectif passe par `agentRepris`.
+   */
+  repriseEnFile(fil: string, tour?: string): void {
+    for (const plan of [...this.#plans]) {
+      const note = noterRepriseEnFile(plan, fil, tour, this.#maintenant())
+      if (note !== plan) this.#poser(note)
+    }
+  }
+
+  /** La reprise de ce tour, quand son tour de file arrive : vrai si son lot a été relancé entre-temps. */
+  repriseAbandonnee(fil: string, tour?: string): boolean {
+    return this.#plans.some((plan) => repriseAbandonneeDuPlan(plan, fil, tour))
   }
 
   /** Reprise par l'utilisateur (quota, redémarrage, arrêt) : jamais automatique. */

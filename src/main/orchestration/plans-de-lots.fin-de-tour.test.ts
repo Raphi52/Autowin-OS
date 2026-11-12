@@ -474,17 +474,19 @@ describe('plans de lots — branchement de la fin de tour dans index.ts', () => 
     expect(adopte).toBeGreaterThan(reserve)
   })
 
-  it('un run repris au démarrage (rattaché ou relancé) est adopté avant toute attente', () => {
+  it('un run repris au démarrage est suivi avant toute attente : rattaché adopté, relancé marqué en file', () => {
     const debut = index.indexOf('for (const resumableRun of resumableRuns) {')
     const boucle = index.slice(debut, index.indexOf('const preflightStartedAt', debut))
-    expect(boucle).toMatch(
-      /reprise === 'rattacher' \|\| reprise === 'relancer'[\s\S]{0,200}suiviDuPlan\.agentRepris\(/
+    expect(boucle).toMatch(/reprise === 'rattacher'[\s\S]{0,80}suiviDuPlan\.agentRepris\(/)
+    // Une relance attend dans la file sans que rien ne tourne : son lot reste relançable.
+    expect(boucle).toMatch(/reprise === 'relancer'[\s\S]{0,80}suiviDuPlan\.repriseEnFile\(/)
+    const attente = boucle.indexOf(
+      'void waitUntilRunCanResume(',
+      boucle.indexOf("if (reprise === 'rattacher') {")
     )
-    expect(boucle.indexOf('suiviDuPlan.agentRepris(')).toBeLessThan(
-      boucle.indexOf(
-        'void waitUntilRunCanResume(',
-        boucle.indexOf("if (reprise === 'rattacher') {")
-      )
+    expect(boucle.indexOf('suiviDuPlan.agentRepris(')).toBeLessThan(attente)
+    expect(boucle.indexOf('suiviDuPlan.repriseEnFile(')).toBeLessThan(
+      boucle.indexOf('startupResumeQueue.enqueue(')
     )
   })
 

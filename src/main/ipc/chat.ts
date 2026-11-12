@@ -2849,6 +2849,9 @@ Le fil reprend ensuite normalement.`
   /** Rendu au démarrage : les runs repris y préviennent les plans de lots. */
   const suiviDuPlan: SuiviDuPlan = {
     agentRepris: (fil, tour) => suiviDesPlans.coordinateur?.agentRepris(fil, tour),
+    repriseEnFile: (fil, tour) => suiviDesPlans.coordinateur?.repriseEnFile(fil, tour),
+    repriseAbandonnee: (fil, tour) =>
+      suiviDesPlans.coordinateur?.repriseAbandonnee(fil, tour) ?? false,
     finDuRun: (fil, issue) => annoncerLaFinDuTour(observateurDesPlans, fil, issue)
   }
   /**

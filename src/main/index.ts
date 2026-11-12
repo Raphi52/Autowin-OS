@@ -2615,10 +2615,13 @@ app.whenReady().then(async () => {
     }
     // Le travail continue dans ce fil : son lot n'est pas interrompu. Fait AVANT d'attendre,
     // parce que la file de démarrage peut retarder la relance jusqu'à la fin d'un autre run : pendant
-    // ce temps, « Reprendre » y aurait lancé un second agent. `bloquer` n'est pas adopté : plus rien
-    // ne tourne, et son lot attend le clic.
-    if ((reprise === 'rattacher' || reprise === 'relancer') && resumableRun.conversationId)
+    // ce temps, « Reprendre » y aurait lancé un second agent. Une relance, elle, attend dans la file
+    // sans que rien ne tourne (des heures, derrière d'autres runs) : son lot est marqué, et reste
+    // relançable. `bloquer` n'est pas adopté : plus rien ne tourne, et son lot attend le clic.
+    if (reprise === 'rattacher' && resumableRun.conversationId)
       suiviDuPlan.agentRepris(resumableRun.conversationId, resumableRun.turnId)
+    if (reprise === 'relancer' && resumableRun.conversationId)
+      suiviDuPlan.repriseEnFile(resumableRun.conversationId, resumableRun.turnId)
     if ((reprise === 'rattacher' || reprise === 'bloquer') && resumableRun) {
       const conversationId = resumableRun.conversationId ?? '__autonomous__'
       const recordedTurnRuntime = resumableRun.turnId
