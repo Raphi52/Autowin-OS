@@ -1,7 +1,7 @@
 /*
- * MODÈLES & TOPOLOGIE — les profils en pastilles, puis trois lignes : « Modèle des petites tâches »
+ * MODÈLES & TOPOLOGIE — les profils en pastilles, puis trois cartes : « Modèle des petites tâches »
  * (PetitesTachesReglage), « Orchestrateur » et « Sous-agents ». Chaque rôle se règle par le même
- * menu de modèle (OrchestratorModelSelector) ; la pose en lignes est en fin de fichier.
+ * menu de modèle (OrchestratorModelSelector) ; la pose en cartes étoilées est en fin de fichier.
  */
 
 /* La section défile EN ENTIER : `.domain-content` coupe tout débordement, et les trois blocs
@@ -302,14 +302,18 @@
 }
 
 /*
- * PASTILLES PUIS LIGNES — choix de l'utilisateur : les profils en pastilles au premier plan, puis
- * une ligne à filet fin par rôle, sans cadre. Le balisage reste celui des blocs (`.router-default`,
- * partagé avec Réglages) : seule sa pose change ici, sous `.studio-modeles`.
+ * PASTILLES PUIS CARTES — choix de l'utilisateur : les profils en pastilles au premier plan, puis
+ * une carte étoilée par rôle (« CARTES ÉTOILÉES » plus bas). Le balisage reste celui des blocs
+ * (`.router-default`, partagé avec Réglages) : seule sa pose change ici, sous `.studio-modeles`.
  */
 .studio-modeles,
-.studio-modeles .agents-topology,
-.studio-modeles .topology-workspace {
+.studio-modeles .agents-topology {
   gap: 0;
+}
+
+.studio-modeles .topology-workspace {
+  gap: 10px;
+  padding-top: 12px;
 }
 
 .studio-modeles .topology-toolbar {
@@ -372,31 +376,183 @@
   font-weight: 500;
 }
 
-/* Une ligne par rôle. L'en-tête et le bloc « ce que ça couvre » se dissolvent dans la ligne
-   (`display: contents`) : le nom à gauche, les modèles au milieu, l'explication au bout. */
+/*
+ * CARTES ÉTOILÉES — choix de l'utilisateur sur image de référence : chaque rôle est une carte
+ * sombre aux coins très arrondis, baignée d'un halo violet semé d'étoiles, avec un grand titre
+ * fin. Le contenu et l'ordre ne changent pas : le nom à gauche, les modèles au milieu, « ce que
+ * ça couvre » au bout ; l'en-tête et ce bloc se dissolvent dans la carte (`display: contents`).
+ * Tout vient des jetons du thème — `--violet` et `--rose` pour le halo, `--text` pour les étoiles,
+ * `--bg-0` pour le fond — pour que la carte suive le thème choisi.
+ */
 .studio-modeles .router-default {
+  /* Où monte la nébuleuse : chaque rôle la déplace (plus bas). */
+  --studio-halo-x: 72%;
+  /* La couleur des étoiles : celle du texte sur fond sombre, le violet sur fond clair (plus bas). */
+  --studio-etoile: var(--text);
+  /* Les deux grandes étoiles (::before, ::after) se posent sous le contenu, dans la carte. */
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 10px;
+  gap: 8px 12px;
   margin: 0;
-  padding: 10px var(--view-head-retrait);
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  padding: 18px var(--view-head-retrait);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 18px;
+  background:
+    /* poussière d'étoiles : des points nets, d'éclat inégal */
+    radial-gradient(circle at 9% 22%, var(--studio-etoile) 0 0.7px, transparent 1.3px),
+    radial-gradient(
+      circle at 31% 78%,
+      color-mix(in srgb, var(--studio-etoile) 70%, transparent) 0 0.6px,
+      transparent 1.2px
+    ),
+    radial-gradient(
+      circle at 47% 18%,
+      color-mix(in srgb, var(--studio-etoile) 55%, transparent) 0 0.6px,
+      transparent 1.2px
+    ),
+    radial-gradient(circle at 63% 64%, var(--studio-etoile) 0 0.8px, transparent 1.4px),
+    radial-gradient(
+      circle at 79% 30%,
+      color-mix(in srgb, var(--studio-etoile) 65%, transparent) 0 0.6px,
+      transparent 1.2px
+    ),
+    radial-gradient(
+      circle at 93% 84%,
+      color-mix(in srgb, var(--studio-etoile) 50%, transparent) 0 0.7px,
+      transparent 1.3px
+    ),
+    /* le halo : une nébuleuse pourpre (violet teinté de rose) qui monte du bas, un voile violet
+       sur toute la carte, une lueur rose dans l'angle */
+    radial-gradient(
+        ellipse 62% 170% at var(--studio-halo-x) 130%,
+        color-mix(in srgb, color-mix(in srgb, var(--violet) 68%, var(--rose)) 78%, transparent),
+        transparent 70%
+      ),
+    radial-gradient(
+      ellipse 90% 130% at 25% 0%,
+      color-mix(in srgb, var(--violet) 16%, transparent),
+      transparent 75%
+    ),
+    radial-gradient(
+      ellipse 40% 110% at 104% -10%,
+      color-mix(in srgb, var(--rose) 24%, transparent),
+      transparent 70%
+    ),
+    color-mix(in srgb, var(--bg-0) 72%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* Deux grandes étoiles en croix, comme les éclats de l'image : un cœur net et deux rayons fins. */
+.studio-modeles .router-default::before,
+.studio-modeles .router-default::after {
+  position: absolute;
+  z-index: -1;
+  width: 18px;
+  height: 18px;
+  content: '';
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle,
+      var(--studio-etoile) 0 1.2px,
+      color-mix(in srgb, var(--studio-etoile) 35%, transparent) 2.2px,
+      transparent 4.5px
+    ),
+    linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in srgb, var(--studio-etoile) 75%, transparent),
+        transparent
+      )
+      center / 100% 1px no-repeat,
+    linear-gradient(
+        0deg,
+        transparent,
+        color-mix(in srgb, var(--studio-etoile) 75%, transparent),
+        transparent
+      )
+      center / 1px 100% no-repeat;
+}
+
+.studio-modeles .router-default::before {
+  top: 16%;
+  left: 56%;
+}
+
+/* La petite étoile reste dans la bande basse, à l'écart des pastilles et de « ce que ça couvre ». */
+.studio-modeles .router-default::after {
+  bottom: 6px;
+  left: 62%;
+  width: 12px;
+  height: 12px;
+  opacity: 0.8;
+}
+
+/* Chaque rôle a son ciel : la poussière d'étoiles glisse (le motif se répète, il ne se coupe
+   pas), la nébuleuse et la grande étoile changent de place. Les quatre derniers calques restent. */
+.studio-modeles .router-default[data-target='orchestrator'] {
+  --studio-halo-x: 30%;
+  background-position:
+    120px 0,
+    -90px 6px,
+    60px -4px,
+    -150px 0,
+    200px 5px,
+    -60px 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0;
+}
+
+.studio-modeles .router-default[data-target='orchestrator']::before {
+  top: 24%;
+  left: 40%;
+}
+
+.studio-modeles .router-default[data-target='subagents'] {
+  --studio-halo-x: 90%;
+  background-position:
+    -140px 0,
+    70px -5px,
+    -200px 3px,
+    110px 0,
+    -40px -6px,
+    160px 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0;
+}
+
+.studio-modeles .router-default[data-target='subagents']::before {
+  top: 58%;
+  left: 70%;
+}
+
+/* MODE CLAIR — le texte y est sombre : des étoiles de sa couleur faisaient des taches sur le
+   voile lavande. Elles prennent le violet du halo, plus doux sur fond clair. */
+:root[data-base='clair'] .studio-modeles .router-default {
+  --studio-etoile: var(--violet);
 }
 
 .studio-modeles .router-default > header {
   display: contents;
 }
 
+/* Le grand titre fin de l'image : le nom du rôle se lit en premier. */
 .studio-modeles .router-default > header h3 {
-  flex: 0 0 190px;
+  flex: 0 0 210px;
   order: 0;
-  font-size: 13px;
-  font-weight: 700;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 /* Seul l'orchestrateur garde sa phrase, après son modèle ; les autres lignes parlent d'elles-mêmes. */
@@ -430,10 +586,12 @@
   gap: 6px;
 }
 
-/* Le menu de modèle prend la forme d'une pastille : même geste, contour fin. */
+/* Le menu de modèle prend la forme d'une pastille voilée, comme le sélecteur « Weekly » de
+   l'image de référence : même geste, posée en verre sur le ciel de la carte. */
 .studio-modeles .router-default .model-select {
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
   border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-0) 45%, transparent);
 }
 
 .studio-modeles .topology-ligne-retirer {
