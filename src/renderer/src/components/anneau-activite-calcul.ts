@@ -49,12 +49,12 @@ export function atterrissageDuPassage(avant: string, apres: string): Atterrissag
 /** Les animations de l'atterrissage (anneau-activite.css) : seule leur fin efface la marque. */
 export const ANIMATIONS_D_ATTERRISSAGE: readonly string[] = ['anneau-reflet', 'anneau-secousse']
 
-/** Les passages de la vague (anneau-activite.css), tous cales sur l'HORLOGE COMMUNE du fil. */
-export const ANIMATIONS_DE_VAGUE: readonly string[] = [
-  'cadre-vague-plein',
-  'cadre-vague-droite',
-  'cadre-vague-gauche'
-]
+/**
+ * Le passage de la vague (anneau-activite.css), cale sur l'HORLOGE COMMUNE du fil. Un seul nom pour
+ * tous les blocs : la place de chacun dans son groupe est une distance (`--vague-avance`), pas un
+ * horaire propre.
+ */
+export const ANIMATIONS_DE_VAGUE: readonly string[] = ['cadre-vague']
 
 /**
  * Cale les passages de vague d'un element sur l'horloge commune : un debut a l'origine du document.
@@ -67,7 +67,7 @@ export function caleSurLHorlogeCommune(element: Element): number {
   // `getAnimations` manque hors d'un vrai navigateur (jsdom) : rien a caler.
   if (typeof element.getAnimations !== 'function') return 0
   let calees = 0
-  // `subtree` : la bande est le `::before` de l'element, et seule cette option rend son animation.
+  // `subtree` : chaque bande est le `::before` d'un calque, et seule cette option rend son animation.
   for (const animation of element.getAnimations({ subtree: true })) {
     const nom = (animation as Partial<CSSAnimation>).animationName
     if (nom === undefined || !ANIMATIONS_DE_VAGUE.includes(nom) || animation.startTime === 0)

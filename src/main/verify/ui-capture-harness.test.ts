@@ -283,6 +283,21 @@ describe('verdict de mouvement', () => {
     expect(verdict.echecs).toHaveLength(1)
   })
 
+  it('nomme une occurrence hors de la fenetre, sans la dire immobile ni a court d images', () => {
+    // La photographier faisait expirer tout le releve : un selecteur qui vise aussi les tours plus
+    // anciens d un fil en a toujours. Elle n est pas mesuree, et le verdict le dit sous son nom ;
+    // l occurrence a l ecran garde son propre verdict.
+    const verdict = verdictMouvement({
+      selecteur: '.tour-blocs',
+      occurrences: [
+        { largeur: 720, hauteur: 97, ratios: [0, 0.03, 0.02] },
+        { largeur: 720, hauteur: 97, horsChamp: true, ratios: [] }
+      ]
+    })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.echecs).toEqual(['occurrence-hors-champ(.tour-blocs#2, 720x97)'])
+  })
+
   it('accuse l occurrence FAUTIVE, pas la moyenne — le piege du spinner qui bouge ailleurs', () => {
     // Exactement le « il agit pas de la meme facon selon ou il est » du 12:18 : le rail tourne, la
     // pastille de la sidebar est morte. Une moyenne, ou un « au moins une bouge », aurait rendu

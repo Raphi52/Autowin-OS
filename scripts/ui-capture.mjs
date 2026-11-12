@@ -235,6 +235,13 @@ export const verdictMouvement = ({ selecteur, occurrences }) => {
       echecs.push(`occurrence-invisible(${nom}, ${taille})`)
       return
     }
+    // HORS DE LA FENETRE : non photographiee, donc non mesuree — ni immobile, ni a court d'images.
+    // La photographier faisait expirer TOUT le releve (Chrome ne rend pas une zone hors fenetre),
+    // et un selecteur qui vise aussi les tours plus anciens d'un fil en a toujours.
+    if (occurrence.horsChamp) {
+      echecs.push(`occurrence-hors-champ(${nom}, ${taille})`)
+      return
+    }
     const ratios = occurrence.ratios ?? []
     if (ratios.length === 0) {
       // Une seule frame ne prouve rien : sans deuxieme instant, « immobile » et « pas mesure » sont
@@ -2024,11 +2031,20 @@ const main = async () => {
         total: noeuds.length,
         boites: noeuds.slice(0, ${PLAFOND}).map((n) => {
           const r = n.getBoundingClientRect()
+          // La photo ne prend que la part de la boite DANS la fenetre : Chrome ne rend jamais
+          // celle d'une zone hors de la fenetre, et la capture expirait apres 120 s.
+          const gauche = Math.max(r.left, 0)
+          const haut = Math.max(r.top, 0)
+          const largeurVue = Math.min(r.right, window.innerWidth) - gauche
+          const hauteurVue = Math.min(r.bottom, window.innerHeight) - haut
           return {
-            x: r.left + window.scrollX,
-            y: r.top + window.scrollY,
+            x: gauche + window.scrollX,
+            y: haut + window.scrollY,
             largeur: Math.round(r.width),
-            hauteur: Math.round(r.height)
+            hauteur: Math.round(r.height),
+            largeurVue: Math.round(largeurVue),
+            hauteurVue: Math.round(hauteurVue),
+            horsChamp: r.width >= 1 && r.height >= 1 && (largeurVue < 1 || hauteurVue < 1)
           }
         })
       }
@@ -2076,11 +2092,11 @@ const main = async () => {
 
     const occurrences = []
     for (const boite of boites.boites) {
-      if (boite.largeur < 1 || boite.hauteur < 1) {
+      if (boite.largeur < 1 || boite.hauteur < 1 || boite.horsChamp) {
         occurrences.push({ ...boite, ratios: [] })
         continue
       }
-      const clip = { x: boite.x, y: boite.y, width: boite.largeur, height: boite.hauteur }
+      const clip = { x: boite.x, y: boite.y, width: boite.largeurVue, height: boite.hauteurVue }
       const prises = []
       for (let f = 0; f < frames; f++) {
         // scale 1 : le rendu VRAI. C'est ici que se joue l'honnetete de l'outil.
@@ -2160,7 +2176,9 @@ const main = async () => {
         intervalle,
         ...(tauxDeLecture !== 1 ? { ralenti: Math.round(1 / tauxDeLecture) } : {}),
         occurrencesTotal: boites.total,
-        occurrencesMesurees: occurrences.length,
+        // Seules celles qui ont ete photographiees : une occurrence hors champ ou invisible est
+        // listee, pas mesuree.
+        occurrencesMesurees: occurrences.filter((o) => o.ratios.length > 0).length,
         ...(boites.total > occurrences.length
           ? { tronque: `${boites.total - occurrences.length} occurrence(s) non mesuree(s)` }
           : {}),
