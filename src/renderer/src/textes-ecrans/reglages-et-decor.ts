@@ -28,7 +28,7 @@ export const TEXTES_FR = {
   // Le choix « Magicien / Basique ».
   'mascotte.style.titre': 'Style de la mascotte',
   'mascotte.style.description':
-    'Le **magicien** porte un chapeau où brille le nombre, et lance des sorts quand un agent travaille. La **bille basique** reste une bille seule, le nombre au milieu. La **machine** de NieR somnole au repos, visse au travail, salue quand c’est fini et fume en cas d’erreur ; c’est elle que montre le thème NieR. Le **panda boss** respire au repos ; ses lunettes-écran disent l’état et son médaillon d’or compte les agents au travail ; il te fait coucou sous une pluie de paillettes quand c’est fini, et ses bras tombent en cas d’erreur. Le changement est immédiat ; la mascotte garde sa place.',
+    'Le **magicien** porte un chapeau où brille le nombre, et lance des sorts quand un agent travaille. La **bille basique** reste une bille seule, le nombre au milieu. La **machine** de NieR somnole au repos, visse au travail, salue quand c’est fini et fume en cas d’erreur ; c’est elle que montre le thème NieR. Le **panda boss** somnole au repos ; au travail il tient son médaillon d’or, qui compte les agents ; il te fait coucou des deux pattes sous une pluie de paillettes quand c’est fini, et se cache les yeux en cas d’erreur. Ses lunettes-écran disent l’état, et chaque changement le fait réagir (soupir, saut de joie, sursaut). Le changement est immédiat ; la mascotte garde sa place.',
   'mascotte.style.magicien': 'Magicien',
   'mascotte.style.basique': 'Basique',
   'mascotte.style.machine': 'Machine (NieR)',
@@ -81,7 +81,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'mascotte.erreurEnregistrement': 'The choice could not be saved: the mascot stays as it was.',
   'mascotte.style.titre': 'Mascot style',
   'mascotte.style.description':
-    'The **wizard** wears a hat where the number shines, and casts spells while an agent is working. The **basic marble** stays a plain marble, with the number in the middle. The NieR **machine** dozes at rest, tightens bolts while working, waves when done and smokes on errors; the NieR theme shows it. The **boss panda** breathes at rest; his screen glasses show the state and his gold medallion counts the working agents; he waves under falling glitter when done, and his arms drop on errors. The change is immediate; the mascot keeps its place.',
+    'The **wizard** wears a hat where the number shines, and casts spells while an agent is working. The **basic marble** stays a plain marble, with the number in the middle. The NieR **machine** dozes at rest, tightens bolts while working, waves when done and smokes on errors; the NieR theme shows it. The **boss panda** dozes at rest; while working he holds his gold medallion, which counts the agents; he waves with both paws under falling glitter when done, and covers his eyes on errors. His screen glasses show the state, and every change makes him react (a sigh, a jump of joy, a start). The change is immediate; the mascot keeps its place.',
   'mascotte.style.magicien': 'Wizard',
   'mascotte.style.basique': 'Basic',
   'mascotte.style.machine': 'Machine (NieR)',

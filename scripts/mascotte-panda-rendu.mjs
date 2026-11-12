@@ -94,7 +94,10 @@ try {
     }
   }
   if (erreurs.length) throw new Error(erreurs.join(' | '))
-  // Par geste : la position moyenne de l'écran du médaillon et son plus grand écart (il se balance).
+  // Par geste : la position moyenne de l'écran du médaillon, son plus grand écart (il se balance, le panda
+  // sautille), et sa position IMAGE PAR IMAGE, en part de l'image (0 à 1) : la page de la mascotte en tire
+  // l'animation du chiffre, pour qu'il reste posé sur le médaillon.
+  const taille = await page.evaluate(() => window.exporter.taille)
   const medaillon = Object.fromEntries(
     Object.entries(reperes).map(([geste, points]) => {
       const moy = (cle) => points.reduce((s, p) => s + p[cle], 0) / points.length
@@ -102,8 +105,9 @@ try {
         y = moy('y'),
         r = moy('r')
       const ecart = Math.max(...points.map((p) => Math.hypot(p.x - x, p.y - y)))
-      const arrondi = (v) => Math.round(v * 10) / 10
-      return [geste, { x: arrondi(x), y: arrondi(y), r: arrondi(r), ecart: arrondi(ecart) }]
+      const arrondi = (v, k = 10) => Math.round(v * k) / k
+      const images = points.map((p) => [arrondi(p.x / taille, 1e4), arrondi(p.y / taille, 1e4)])
+      return [geste, { x: arrondi(x), y: arrondi(y), r: arrondi(r), ecart: arrondi(ecart), images }]
     })
   )
   writeFileSync(join(sortie, 'medaillon.json'), JSON.stringify(medaillon, null, 2))

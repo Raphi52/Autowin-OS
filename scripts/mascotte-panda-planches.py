@@ -1,24 +1,30 @@
 """Assemble les images du panda boss en planches pour la mascotte du bureau.
 
 Le panda boss (lunettes-ecran, chaine et medaillon d'or) est modele en three.js : sa scene d'export
-est rendue par `scripts/mascotte-panda-rendu.mjs`, une image par numero (`f-001.png` ... `f-064.png`,
+est rendue par `scripts/mascotte-panda-rendu.mjs`, une image par numero (`f-001.png` ... `f-128.png`,
 fond transparent, 384x384 : le double de la planche, reduit ici pour un poil et des lunettes plus
 nets). Ce script les colle par geste en planches de 16 images de 192x192 cote a cote, en WebP, et
-ecrit le module TypeScript que la page de la mascotte embarque. La fenetre de la mascotte n'admet
-aucun script : la 3D y est rejouee en CSS, par `steps(16)`.
+ecrit le module TypeScript que la page de la mascotte embarque, avec la position de l'ecran du
+medaillon image par image (`medaillon.json` du rendu) : la page y pose le compte. La fenetre de la
+mascotte n'admet aucun script : la 3D y est rejouee en CSS, par `steps(16)`.
 
 Usage : python scripts/mascotte-panda-planches.py <dossier des f-NNN.png> [--apercu <dossier>]
 """
 
 import base64
 import io
+import json
 import sys
 from pathlib import Path
 
 from PIL import Image
 
-# Un geste par etat de la mascotte, dans l'ordre de `window.exporter.gestes` : 16 images chacun.
-GESTES = ["REPOS", "TRAVAIL", "ATTENTE", "SOUCI"]
+# Dans l'ordre de `window.exporter.gestes`, 16 images chacun : la boucle de chaque etat, puis son
+# entree (le geste d'une seconde au changement d'etat).
+GESTES = [
+    "REPOS", "TRAVAIL", "ATTENTE", "SOUCI",
+    "ENTREE_REPOS", "ENTREE_TRAVAIL", "ENTREE_ATTENTE", "ENTREE_SOUCI",
+]
 IMAGES_PAR_GESTE = 16
 LARGEUR, HAUTEUR = 192, 192
 RACINE = Path(__file__).resolve().parent.parent
@@ -26,9 +32,10 @@ MODULE = RACINE / "src" / "main" / "mascotte" / "mascotte-panda-images.ts"
 
 ENTETE = """/**
  * Les planches du PANDA BOSS : modele en three.js (fourrure, lunettes-ecran, medaillon), rendu par
- * `scripts/mascotte-panda-rendu.mjs` en 16 images par geste (192x192, WebP), cote a cote. La fenetre
- * de la mascotte n'admet aucun script : la 3D y est donc rejouee en CSS, par `steps(16)`. Genere par
- * `scripts/mascotte-panda-planches.py` — ne pas editer a la main.
+ * `scripts/mascotte-panda-rendu.mjs` en 16 images par geste (192x192, WebP), cote a cote : la boucle
+ * de chaque etat et son entree. La fenetre de la mascotte n'admet aucun script : la 3D y est donc
+ * rejouee en CSS, par `steps(16)`. Genere par `scripts/mascotte-panda-planches.py` — ne pas editer
+ * a la main.
  */
 """
 
@@ -95,6 +102,20 @@ def main() -> None:
         donnees = base64.b64encode(tampon.getvalue()).decode("ascii")
         lignes.append(f"export const PANDA_{geste} =\n  'data:image/webp;base64,{donnees}'\n")
         print(f"{geste}: {len(tampon.getvalue())} octets")
+    # Le centre de l'ecran du medaillon, image par image, en part de l'image (0 a 1).
+    medaillon = json.loads((dossier / "medaillon.json").read_text(encoding="utf-8"))
+    manquants = [g for g in GESTES if len(medaillon.get(g, {}).get("images", [])) != IMAGES_PAR_GESTE]
+    if manquants:
+        raise SystemExit(f"medaillon.json : positions absentes ou incompletes pour {manquants}")
+    positions = ",\n".join(
+        f"  {geste}: {json.dumps(medaillon[geste]['images'])}" for geste in GESTES
+    )
+    lignes.append(
+        "/** Le centre de l'ecran du medaillon dans chaque image (x, y en part de l'image) : le compte\n"
+        " * de la page suit le medaillon quand le panda bouge. */\n"
+        "export const PANDA_MEDAILLON: Record<string, ReadonlyArray<readonly [number, number]>> = {\n"
+        f"{positions}\n}}\n"
+    )
     frolent = sorted(n for n, v in au_bord.items() if BORD_FROLE <= v < BORD_COUPE)
     coupees = sorted(n for n, v in au_bord.items() if v >= BORD_COUPE)
     if frolent:

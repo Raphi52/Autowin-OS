@@ -612,12 +612,18 @@ describe('mascotte du bureau — style panda boss', () => {
     pastille: string | null = null
   ) => cssDeLEtat({ etat, pastille, fil: null }, 'panda')
 
-  it('la page embarque ses 4 planches, une par état, sans script, et respire au repos', () => {
+  it('la page embarque ses 8 planches (boucle et entrée de chaque état), sans script', () => {
     const html = htmlDeMascotte('panda')
-    expect(html.match(/data:image\/webp;base64,/gu)).toHaveLength(4)
+    expect(html.match(/data:image\/webp;base64,/gu)).toHaveLength(8)
     expect(html).toContain('img-src data:')
     expect(html).not.toMatch(/<script/iu)
-    expect(html).toMatch(/\.bw\{[^}]*var\(--repos\)[^}]*animation:sp 3\.2s steps\(16\) infinite\}/u)
+    // À l'ouverture, il soupire (l'entrée du repos), puis somnole en boucle de 4,4 s.
+    expect(html).toMatch(
+      /\.bw\{[^}]*var\(--repos\)[^}]*animation:er 0\.96s steps\(16\) 1,br 4\.4s steps\(16\) 0\.96s infinite\}/u
+    )
+    expect(html).toContain(
+      '@keyframes er{from{background-image:var(--e-repos);background-position:0 0}'
+    )
     // Plus rien de la panda en kimono : ni ses autres gestes, ni sa lueur, ni ses pétales roses.
     for (const ancien of ['--grignote', '--salut', '--lueur', 'class="lu"', '#ff9fc2'])
       expect(html).not.toContain(ancien)
@@ -640,16 +646,42 @@ describe('mascotte du bureau — style panda boss', () => {
     }
   })
 
-  it('chaque état a son geste ; le compte s’affiche sur le médaillon, jamais sur le « ! » rouge', () => {
+  it('chaque changement d’état joue son entrée puis sa boucle ; le compte suit le médaillon', () => {
     expect(css('calme')).toBe('')
     expect(css('travail', '3')).toContain(
-      'body .bw{background-image:var(--travail);animation:sp 1.6s steps(16) infinite}'
+      'body .bw{background-image:var(--travail);animation:et 0.96s steps(16) 1,bt 1.6s steps(16) 0.96s infinite}'
     )
     expect(css('travail', '3')).toContain('body .n::after{content:"3"}')
     expect(css('attente', '2')).toContain(
-      'body .bw{background-image:var(--attente);animation:sp 1.6s steps(16) infinite}'
+      'body .bw{background-image:var(--attente);animation:ea 0.96s steps(16) 1,ba 1.6s steps(16) 0.96s infinite}'
     )
     expect(css('attente', '2')).toContain('body .n::after{content:"2"}')
+    expect(css('probleme')).toContain(
+      'animation:es 0.96s steps(16) 1,bs 2.4s steps(16) 0.96s infinite'
+    )
+    // Aucun nom d'animation partagé entre deux états : un nom qui survit au changement de feuille
+    // continuerait sa course, et l'entrée du nouvel état ne se jouerait pas.
+    const noms = (feuille: string): string[] =>
+      [...feuille.matchAll(/animation:([^;}]+)/gu)].flatMap(([, liste]) =>
+        liste.split(',').map((a) => a.trim().split(' ')[0])
+      )
+    const html = htmlDeMascotte('panda')
+    const parEtat = [
+      noms(/\.bw\{[^}]*\}/u.exec(html)?.[0] ?? ''),
+      noms(css('travail', '3')),
+      noms(css('attente', '2')),
+      noms(css('probleme')).filter((n) => n !== 'tr')
+    ]
+    for (const [i, a] of parEtat.entries())
+      for (const b of parEtat.slice(i + 1)) expect(a.filter((n) => b.includes(n))).toEqual([])
+    // Le chiffre suit l'écran du médaillon : une étape par image, entrée puis boucle, à son rythme.
+    expect(css('travail', '3')).toContain(
+      'body .n{display:grid;animation:net 0.96s step-end 1,nt 1.6s step-end 0.96s infinite}'
+    )
+    for (const nom of ['nr', 'ner', 'nt', 'net', 'na', 'nea', 'ns', 'nes'])
+      expect(
+        new RegExp(`@keyframes ${nom}\\{([^{}]*\\{translate:[^}]+\\}){16}\\}`, 'u').test(html)
+      ).toBe(true)
     expect(css('attente')).toContain('content:"✓"')
     expect(css('probleme')).toContain('var(--souci)')
     expect(css('probleme')).toContain('content:"!"')
@@ -657,9 +689,8 @@ describe('mascotte du bureau — style panda boss', () => {
     expect(css('probleme', '!')).not.toContain('.n')
     expect(css('probleme', '2')).not.toContain('.n')
     // Le chiffre vit DANS le panda (.ob) : il grossit avec lui au survol.
-    expect(htmlDeMascotte('panda')).toContain('<i class="bw"></i><i class="n"></i></i>')
+    expect(html).toContain('<i class="bw"></i><i class="n"></i></i>')
     // Paillettes d'or : deux, lentes, au repos ; une pluie quand un fil attend ; aucune en échec.
-    const html = htmlDeMascotte('panda')
     expect(html.match(/class="ps"/gu)).toHaveLength(2)
     expect(html.match(/class="pl"/gu)).toHaveLength(7)
     expect(html).toMatch(/\.ps\{display:block;[^}]*pe 9s/u)
