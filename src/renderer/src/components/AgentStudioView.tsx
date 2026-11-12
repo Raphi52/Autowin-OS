@@ -97,12 +97,12 @@ export function AgentStudioView({
         {section === 'workflows' ? (
           <WorkflowProfilesView active={active} />
         ) : (
-          // Les profils en pastilles, puis une carte étoilée par rôle : petites tâches, orchestrateur
+          // Les profils en pastilles, puis une carte étoilée par rôle : orchestrateur, petites tâches
           // et sous-agents se règlent par le même menu (AgentsTopologyView.css).
           <div className="studio-modeles" data-testid="studio-modeles">
             <AgentsTopologyView
               active={active}
-              premiereLigne={
+              carteVoisine={
                 // Le modèle des petites tâches, aussi ici : même bloc que Routage.
                 <PetitesTachesReglage
                   active={active}

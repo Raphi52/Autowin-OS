@@ -687,6 +687,8 @@ const api = {
     ipcRenderer.invoke('os:profiles:save', profile),
   applyProfile: (id: string): Promise<{ topology: AgentTopology }> =>
     ipcRenderer.invoke('os:profiles:apply', id),
+  deleteProfile: (id: string): Promise<AutowinProfile[]> =>
+    ipcRenderer.invoke('os:profiles:delete', id),
   providerLogin: (provider: string): Promise<{ ok: true }> =>
     ipcRenderer.invoke('os:providerLogin', provider),
   /** Compte Claude propre a une conversation (`null` = compte de l'application). */

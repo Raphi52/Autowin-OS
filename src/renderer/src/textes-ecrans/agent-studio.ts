@@ -60,6 +60,10 @@ export const TEXTES_FR = {
   'topo.confirmer.questionModifiee':
     'Écraser la topologie courante (modifications non enregistrées dans un profil) ?',
   'topo.confirmer.appliquer': 'Appliquer',
+  'topo.profil.supprimer': 'Supprimer le profil {nom}',
+  'topo.supprimer.aria': 'Confirmer la suppression du profil',
+  'topo.supprimer.question': 'Supprimer le profil « {nom} » ? La topologie en place ne change pas.',
+  'topo.supprimer.confirmer': 'Supprimer',
   'topo.profils.illisible': 'Liste des profils illisible : {erreur}',
   'topo.slotsIntrouvables':
     '{n} slot(s) pointent un modèle introuvable au catalogue ({slots}) : profils et application gelés tant qu’ils ne sont pas résolus.',
@@ -98,7 +102,7 @@ export const TEXTES_FR = {
   'topo.couvre.orchestrateur.pendant':
     'Il **découpe** un gros chantier en morceaux menés en parallèle, et il **fusionne** les propositions quand plusieurs modèles travaillent sur une même étape (plusieurs sous-agents, ou un workflow).',
   'topo.couvre.orchestrateur.horsChamp':
-    'Les **petites tâches** (bloc en haut de page) et l’exécution des étapes (**Sous-agents**).',
+    'Les **petites tâches** (carte voisine) et l’exécution des étapes (**Sous-agents**).',
   'topo.couvre.sousAgents.couvre':
     'Le modèle qui **fait le travail** lancé depuis le chat, **à toutes les étapes** : scout, frame, build, clean et le contrôle final (judge). Seul, il **juge son propre travail**, sauf si un **workflow** place un autre modèle sur l’étape judge.',
   'topo.couvre.sousAgents.plusieurs':
@@ -253,6 +257,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.confirmer.questionModifiee':
     'Overwrite the current topology (changes not saved in a profile)?',
   'topo.confirmer.appliquer': 'Apply',
+  'topo.profil.supprimer': 'Delete the profile {nom}',
+  'topo.supprimer.aria': 'Confirm deleting the profile',
+  'topo.supprimer.question': 'Delete the profile “{nom}”? The current topology does not change.',
+  'topo.supprimer.confirmer': 'Delete',
   'topo.profils.illisible': 'Profile list unreadable: {erreur}',
   'topo.slotsIntrouvables':
     '{n} slot(s) point to a model missing from the catalog ({slots}): profiles and applying are frozen until they are resolved.',
@@ -290,7 +298,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'topo.couvre.orchestrateur.pendant':
     'It **splits** a large job into pieces run in parallel, and it **merges** the proposals when several models work on the same step (several sub-agents, or a workflow).',
   'topo.couvre.orchestrateur.horsChamp':
-    'The **small tasks** (block at the top of the page) and running the steps (**Sub-agents**).',
+    'The **small tasks** (the card next to it) and running the steps (**Sub-agents**).',
   'topo.couvre.sousAgents.couvre':
     'The model that **does the work** started from the chat, **at every step**: scout, frame, build, clean and the final check (judge). On its own, it **judges its own work**, unless a **workflow** puts another model on the judge step.',
   'topo.couvre.sousAgents.plusieurs':

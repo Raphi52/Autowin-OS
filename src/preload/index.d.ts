@@ -461,6 +461,7 @@ interface ChatApi {
   profiles: () => Promise<AutowinProfile[]>
   saveProfile: (profile: unknown) => Promise<AutowinProfile[]>
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
+  deleteProfile: (id: string) => Promise<AutowinProfile[]>
   providerLogin: (provider: string) => Promise<{ ok: true }>
   /** Compte Claude propre a une conversation (`null` = compte de l'application). */
   conversationSetClaudeAccount: (id: string, accountId: string | null) => Promise<string | null>

@@ -1,7 +1,7 @@
 /**
  * LES CANAUX DES PROFILS DE WORKFLOW, sortis de `src/main/index.ts`.
  *
- * Trois canaux : lister les profils, en enregistrer un, en appliquer un.
+ * Quatre canaux : lister les profils, en enregistrer un, en appliquer un, en supprimer un.
  *
  * Déplacement MÉCANIQUE depuis `index.ts` : corps identiques, mêmes gardes d'expéditeur, même
  * attente du catalogue de modèles avant toute écriture, même migration de forme à la LECTURE
@@ -85,6 +85,18 @@ export function registerProfilesIpc({
       updatedAt: new Date().toISOString()
     }
     profiles.save(safe as AutowinProfile)
+    return tous()
+  })
+  ipcMain.handle('os:profiles:delete', (event, id: string) => {
+    assertTrustedRendererSender(event, 'Profiles')
+    const cible = guardString(id, 'profile.id')
+    // « Défaut » n'est pas dans le fichier : le « supprimer » ne ferait rien et il reviendrait au
+    // prochain affichage. On le refuse en le disant, plutôt qu'un succès qui ment.
+    if (cible === ID_DU_PROFIL_DEFAUT) {
+      throw new Error('Le profil « Défaut » est fourni avec l’application : il ne se supprime pas')
+    }
+    // Supprimer ne touche PAS la topologie en place : le profil n'est qu'une copie enregistrée.
+    profiles.remove(cible)
     return tous()
   })
   ipcMain.handle('os:profiles:apply', async (event, id: string) => {

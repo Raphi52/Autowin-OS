@@ -25,7 +25,17 @@ export class ProfileStore {
     }
   }
   save(profile: AutowinProfile): AutowinProfile[] {
-    const next = [profile, ...this.list().filter((item) => item.id !== profile.id)]
+    return this.write([profile, ...this.list().filter((item) => item.id !== profile.id)])
+  }
+  /** Un id inconnu ne réécrit rien : supprimer deux fois le même profil n'est pas une erreur. */
+  remove(id: string): AutowinProfile[] {
+    const current = this.list()
+    const next = current.filter((item) => item.id !== id)
+    return next.length === current.length ? current : this.write(next)
+  }
+  /** Écriture atomique (fichier temporaire puis renommage) : un arrêt en plein milieu laisse
+   *  l'ancienne liste entière, jamais une liste à moitié écrite. */
+  private write(next: AutowinProfile[]): AutowinProfile[] {
     mkdirSync(dirname(this.path), { recursive: true })
     const tmp = `${this.path}.${process.pid}.tmp`
     writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf8')

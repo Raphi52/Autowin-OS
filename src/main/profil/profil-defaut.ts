@@ -15,8 +15,9 @@ import { findModel, type ImportedModel } from '../modeles/models'
 import type { AgentTopology, SlotBinding } from '../topologie/topology'
 import type { AutowinProfile } from './profile-store'
 import type { ReasoningEffort, Role, RoleBinding } from './roles'
+import { ID_DU_PROFIL_DEFAUT } from '../../shared/profil-defaut-id'
 
-export const ID_DU_PROFIL_DEFAUT = 'defaut'
+export { ID_DU_PROFIL_DEFAUT }
 const NOM_DU_PROFIL_DEFAUT = 'Défaut'
 
 interface Souhait {
