@@ -1048,7 +1048,27 @@ export function AssistantActivityGroup({
         data-state={etat}
         data-testid="activity-anneau"
       >
-        <div className="anneau-tete">
+        {/* TOUTE LA LIGNE deplie, fleche comprise, comme le <summary> des autres blocs du fil :
+            la fleche vivait A COTE du bouton et ne reagissait pas, alors que c'est la qu'on vise
+            pour deplier. Le geste est donc pose sur la ligne ; le bouton reste la cible du clavier
+            (Entree, Espace) et son clic remonte ici. ↗ et Relancer arretent leur clic avant. */}
+        <div
+          className="anneau-tete"
+          // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la
+          // liste des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
+          onClick={() => {
+            if (why.length) {
+              setWhyOpen((estOuvert) => !estOuvert)
+              return
+            }
+            if (actions.length) {
+              basculerEtapes()
+              return
+            }
+            if (!runConsultable) return
+            onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
+          }}
+        >
           <button
             type="button"
             className="activity-group-main"
@@ -1066,20 +1086,6 @@ export function AssistantActivityGroup({
               : actions.length
                 ? { 'aria-expanded': etapesOuvertes }
                 : {})}
-            // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la
-            // liste des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
-            onClick={() => {
-              if (why.length) {
-                setWhyOpen((estOuvert) => !estOuvert)
-                return
-              }
-              if (actions.length) {
-                basculerEtapes()
-                return
-              }
-              if (!runConsultable) return
-              onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
-            }}
           >
             <RondDuCompte etats={etatsDesArcs} testid="activity-compte" />
             <span className="anneau-col">

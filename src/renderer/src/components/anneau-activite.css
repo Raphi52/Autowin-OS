@@ -447,6 +447,14 @@
 
 /* -- BARRE D'ACTIVITE : le bouton principal occupe la ligne, les boutons ↗ et Relancer suivent,
    arrondis comme les capsules. -- */
+/* Toute la ligne deplie, fleche et marges comprises (ChatView.parts.tsx) : la main le dit partout,
+   pas seulement sur le texte. */
+.activity-anneau > .anneau-tete {
+  cursor: pointer;
+}
+.activity-anneau > .anneau-tete:has(> .activity-group-main[aria-disabled='true']) {
+  cursor: default;
+}
 .activity-anneau .anneau-tete .activity-group-main {
   display: flex;
   flex: 1 1 0;
