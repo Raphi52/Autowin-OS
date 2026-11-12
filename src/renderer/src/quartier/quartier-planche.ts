@@ -54,9 +54,45 @@ export function niveauPourEchelle(e: number, parts: readonly number[]): number {
   return i
 }
 
-/** L'échelle la plus réduite d'une transformation 2D : la carte graphique choisit sa réduction d'après elle. */
-export function echelleMin(m: { a: number; b: number; c: number; d: number }): number {
+/** Une transformation 2D sans sa translation (celle de `getTransform()`). */
+type Matrice2D = { a: number; b: number; c: number; d: number }
+
+/**
+ * Le plus court des deux axes de la planche une fois posés à l'écran : le niveau à lire se choisit
+ * d'après lui. Exact sans biais ; avec le biais de l'ombre portée, l'écran écrase plus fort en oblique
+ * (`reductionMin`).
+ */
+export function echelleMin(m: Matrice2D): number {
   return Math.min(Math.hypot(m.a, m.b), Math.hypot(m.c, m.d))
+}
+
+/**
+ * La plus forte réduction d'une transformation 2D, biais compris (sa plus petite valeur singulière) :
+ * sous 1, le dessin rétrécit l'image dans au moins une direction. L'ombre portée (biais 0,46,
+ * écrasement 0,2) rétrécit à 0,18 alors que ses deux axes gardent 1 et 0,5.
+ */
+export function reductionMin(m: Matrice2D): number {
+  const somme = m.a * m.a + m.b * m.b + m.c * m.c + m.d * m.d
+  const det = m.a * m.d - m.b * m.c
+  return Math.sqrt(Math.max(0, (somme - Math.sqrt(Math.max(0, somme * somme - 4 * det * det))) / 2))
+}
+
+/**
+ * Comment lire la planche pour un dessin de transformation `m` (pixels d'écran par pixel de la grille) :
+ * le niveau, et `rapide` = lissage « low » dès que la case lue est rétrécie à l'écran, dans n'importe
+ * quelle direction. Le test se fait contre la part du niveau lu, pas contre 1 : sur une planche ×2, la
+ * case de 252 px reste rétrécie jusqu'à l'échelle 2.
+ * Mesuré le 12/11/2026 en Bureau à distance, zoom sur un tanuki : rétrécie en « high », 14 images/s et
+ * des trous de 344 et 835 ms ; en « low », 66 images/s sans trou. Le niveau étant choisi pour ne pas
+ * rétrécir sa case de plus de moitié sur ses axes, le bilinéaire la rend sans crénelage.
+ * Agrandie (fin du zoom), la case garde le lissage fin de la scène : c'est là que la planche ×2 rend net.
+ */
+export function lirePlanche(
+  m: Matrice2D,
+  parts: readonly number[]
+): { niveau: number; rapide: boolean } {
+  const niveau = niveauPourEchelle(echelleMin(m), parts)
+  return { niveau, rapide: reductionMin(m) < parts[niveau] }
 }
 
 /** Une toile `cw × ch` cases, réduite case par case de `source` (cases `scw × sch`). */

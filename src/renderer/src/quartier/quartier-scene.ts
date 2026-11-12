@@ -62,9 +62,8 @@ import {
   type RectQuartier
 } from './quartier-pont'
 import {
-  echelleMin,
   finesseDePlanche,
-  niveauPourEchelle,
+  lirePlanche,
   niveauxDePlanche,
   type NiveauPlanche
 } from './quartier-planche'
@@ -622,16 +621,16 @@ export function creerSceneQuartier(): DecorScene | null {
     const ox = -an.ax + (cl.dx ?? 0)
     // Rétréci, il est lu dans la réduction de sa taille, en « low » : en « high », la carte graphique
     // refaisait les réductions de toute la planche à chaque dessin — 3,4 images/s au lieu de 32.
-    // Agrandi (zoom), l'original garde le lissage de la scène.
-    const e = echelleMin(x.getTransform())
-    const n = planche.niveaux[niveauPourEchelle(e, planche.parts)]
+    // Agrandi (zoom), l'original garde le lissage de la scène (`lirePlanche`).
+    const { niveau, rapide } = lirePlanche(x.getTransform(), planche.parts)
+    const n = planche.niveaux[niveau]
     const atlas = ombre ? n.AO : n.A
     const qualite = x.imageSmoothingQuality
     // La tenue à la couleur choisie, posée sur chaque image lue, celle de la respiration
     // comprise. L'ombre n'a pas de couleur.
     const tenue = ombre ? null : tenueDe(w)
     const lire = (c: number): void => {
-      if (e < 1) x.imageSmoothingQuality = 'low'
+      if (rapide) x.imageSmoothingQuality = 'low'
       x.drawImage(atlas, c * n.cw, cl.r * n.ch, n.cw, n.ch, ox, -an.ay, an.cw, an.ch)
       if (tenue) poserTenue(M, planche, tenue, c, cl.r, ox)
       x.imageSmoothingQuality = qualite
