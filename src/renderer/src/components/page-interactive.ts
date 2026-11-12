@@ -247,6 +247,55 @@ export function retenirStockageDeLaPage(cle: string, donnees: Record<string, str
 }
 
 /**
+ * La hauteur que chaque page a deja mesuree, par empreinte. Sans elle, une page remontee (retour
+ * sur le fil, redemarrage) repartait d'une bande de HAUTEUR_INITIALE_PAGE le temps de se recharger :
+ * le fil se tassait, et un carrousel de /draft qu'on cherchait en defilant n'etait qu'un vide de
+ * 48 px qu'on depassait sans le voir. Gardee aussi sur disque (localStorage de l'app) : la place est
+ * juste des le premier affichage d'une session suivante.
+ */
+const CLE_HAUTEURS = 'autowin.chat.hauteursPages'
+const MAX_HAUTEURS_RETENUES = 300
+let hauteurs: Map<string, number> | null = null
+
+function hauteursRetenues(): Map<string, number> {
+  if (hauteurs) return hauteurs
+  hauteurs = new Map()
+  try {
+    const lu: unknown = JSON.parse(localStorage.getItem(CLE_HAUTEURS) ?? '[]')
+    if (Array.isArray(lu))
+      for (const paire of lu) {
+        if (!Array.isArray(paire) || typeof paire[0] !== 'string') continue
+        const hauteur = borneHauteurPage(paire[1])
+        if (hauteur !== null) hauteurs.set(paire[0], hauteur)
+      }
+  } catch {
+    // Stockage absent ou illisible : la page reprendra sa hauteur a sa premiere mesure.
+  }
+  return hauteurs
+}
+
+export function hauteurConnueDeLaPage(cle: string): number | undefined {
+  return hauteursRetenues().get(cle)
+}
+
+export function retenirHauteurDeLaPage(cle: string, hauteur: number): void {
+  const retenues = hauteursRetenues()
+  if (retenues.get(cle) === hauteur) return
+  retenues.delete(cle)
+  retenues.set(cle, hauteur)
+  while (retenues.size > MAX_HAUTEURS_RETENUES) {
+    const plusAncienne = retenues.keys().next().value
+    if (plusAncienne === undefined) break
+    retenues.delete(plusAncienne)
+  }
+  try {
+    localStorage.setItem(CLE_HAUTEURS, JSON.stringify([...retenues]))
+  } catch {
+    // Quota plein ou stockage absent : la copie de session suffit jusqu'au redemarrage.
+  }
+}
+
+/**
  * Ancre de la page (`<a href="#x">`) : le cadre prend la hauteur de son contenu et ne defile
  * jamais, c'est le conteneur du FIL qui doit amener le point `y` du cadre a l'ecran.
  */

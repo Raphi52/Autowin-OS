@@ -144,6 +144,7 @@ export const TEXTES_FR = {
 
   // BlocHtmlInteractif
   'pageInteractive.cadre': 'Page interactive du fil',
+  'pageInteractive.chargement': '{page} · chargement…',
   'pageInteractive.plantee': 'La page a planté : {message}',
   // Barre, avis et demandes de la page
   'pageInteractive.barre': 'Actions de la page interactive',
@@ -338,6 +339,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'scene.cadre': '3D scene in the thread',
 
   'pageInteractive.cadre': 'Interactive page in the thread',
+  'pageInteractive.chargement': '{page} · loading…',
   'pageInteractive.plantee': 'The page crashed: {message}',
   'pageInteractive.barre': 'Interactive page actions',
   'pageInteractive.relancer': 'Restart',

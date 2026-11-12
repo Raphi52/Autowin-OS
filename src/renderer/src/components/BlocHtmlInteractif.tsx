@@ -42,12 +42,14 @@ import {
   empreintePage,
   extraitDeLErreur,
   gesteRecentDeLUtilisateur,
+  hauteurConnueDeLaPage,
   lireMessagePage,
   lireThemePourPage,
   nomFichierDePage,
   pageIsoleePour,
   pageUtiliseLeMoteur3d,
   reponseALaPage,
+  retenirHauteurDeLaPage,
   retenirStockageDeLaPage,
   titreDePage,
   type AvisPage
@@ -56,8 +58,13 @@ import { pageAutonome, type RessourcesPage } from './page-autonome'
 import { RemplirSaisieDuFil } from './saisie-du-fil'
 import './BlocHtmlInteractif.css'
 
-/** Monte a cette distance de l'ecran, pour que la page soit prete quand elle arrive. */
-const MARGE_VISIBILITE = '300px 0px'
+/**
+ * Monte a cette distance de l'ecran, pour que la page soit prete quand elle arrive. Une page sans 3D
+ * se charge bien avant : a 300 px, un defilement rapide passait sur un carrousel de /draft encore
+ * vide. Une page 3D reste a 300 px, elle tient un contexte WebGL (voir LIBERATION).
+ */
+const MARGE_VISIBILITE_3D = '300px 0px'
+const MARGE_VISIBILITE = '1200px 0px'
 /** Une page sans 3D n'est liberee qu'au-dela : un petit defilement ne doit pas la relancer. */
 const MARGE_LIBERATION = '1500px 0px'
 
@@ -114,7 +121,6 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
   const hoteRef = useRef<HTMLElement>(null)
   const cadreRef = useRef<HTMLIFrameElement>(null)
   const [monte, setMonte] = useState(() => typeof IntersectionObserver === 'undefined')
-  const [hauteur, setHauteur] = useState(HAUTEUR_INITIALE_PAGE)
   const [avis, setAvis] = useState<AvisPage[]>([])
   // Barre du bloc : voir le code, relancer la page, copier son code. Le cadre reste
   // monte quand on lit le code : ce que l'utilisateur a fait dans la page n'est pas perdu.
@@ -124,6 +130,12 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
   const [agrandi, setAgrandi] = useState(false)
   const [figee, setFigee] = useState(false)
   const cle = useMemo(() => empreintePage(html), [html])
+  // La hauteur deja mesuree de cette page : sa place est juste avant meme qu'elle soit chargee.
+  const [hauteur, setHauteur] = useState(() => hauteurConnueDeLaPage(cle) ?? HAUTEUR_INITIALE_PAGE)
+  // Faux tant que la page n'a rien affiche : le bloc porte alors une ligne qui la nomme, au lieu
+  // d'un vide qu'on depasse sans le voir.
+  const [affichee, setAffichee] = useState(false)
+  const titre = useMemo(() => titreDePage(html), [html])
   const avec3d = useMemo(() => pageUtiliseLeMoteur3d(html), [html])
   // Ce que le fil sait de la page, lu par ses minuteries et ses observateurs.
   const prochRef = useRef(true)
@@ -138,22 +150,26 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
     if (!hote || typeof IntersectionObserver === 'undefined') return
     const visible = (entrees: IntersectionObserverEntry[]): boolean =>
       entrees.some((entree) => entree.isIntersecting)
+    const liberer = (): void => {
+      setMonte(false)
+      setAffichee(false)
+    }
     const proche = new IntersectionObserver(
       (entrees) => {
         // Agrandie, la page quitte le fil pour la couche superieure du navigateur : l'observateur la
         // dit absente alors qu'elle occupe tout l'ecran.
         prochRef.current = visible(entrees) || agrandiRef.current
         if (prochRef.current) setMonte(true)
-        else if (avec3d) setMonte(false)
+        else if (avec3d) liberer()
       },
-      marges(hote, MARGE_VISIBILITE)
+      marges(hote, avec3d ? MARGE_VISIBILITE_3D : MARGE_VISIBILITE)
     )
     proche.observe(hote)
     const loin = avec3d
       ? null
       : new IntersectionObserver(
           (entrees) => {
-            if (!visible(entrees) && !toucheeRef.current && !agrandiRef.current) setMonte(false)
+            if (!visible(entrees) && !toucheeRef.current && !agrandiRef.current) liberer()
           },
           marges(hote, MARGE_LIBERATION)
         )
@@ -263,6 +279,8 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
         }
         case 'hauteur':
           setHauteur(message.hauteur)
+          setAffichee(true)
+          retenirHauteurDeLaPage(cle, message.hauteur)
           break
         case 'erreur':
         case 'alerte':
@@ -364,6 +382,7 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
     setAvis([])
     setVoirCode(false)
     setFigee(false)
+    setAffichee(false)
     toucheeRef.current = false
     dernierSigneRef.current = null
     setVersion((valeur) => valeur + 1)
@@ -471,6 +490,11 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
           style={{ height: `${hauteur}px` }}
           aria-hidden="true"
         />
+      )}
+      {!affichee && !voirCode && (
+        <p className="bloc-html-interactif__attente" data-testid="html-interactif-attente">
+          {t('pageInteractive.chargement', { page: titre || t('pageInteractive.cadre') })}
+        </p>
       )}
       {voirCode && (
         <pre className="md-code bloc-html-interactif__code" data-testid="html-interactif-code">

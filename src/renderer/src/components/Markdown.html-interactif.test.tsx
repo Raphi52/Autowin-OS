@@ -45,6 +45,7 @@ let aLEcran = true
 let pasTropLoin = true
 const observateurs: Array<{ rappeler: () => void }> = []
 const racines: Array<Element | Document | null | undefined> = []
+const marges: Array<string | undefined> = []
 class FauxObservateur {
   private readonly rappel: IntersectionObserverCallback
   private readonly lointain: boolean
@@ -52,6 +53,7 @@ class FauxObservateur {
     this.rappel = rappel
     this.lointain = options?.rootMargin?.startsWith('1500') === true
     racines.push(options?.root)
+    marges.push(options?.rootMargin)
   }
   observe(cible: Element): void {
     const rappeler = (): void =>
@@ -84,6 +86,7 @@ beforeEach(() => {
   pasTropLoin = true
   observateurs.length = 0
   racines.length = 0
+  marges.length = 0
   vi.stubGlobal('IntersectionObserver', FauxObservateur)
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -319,6 +322,66 @@ describe('Markdown — pages interactives', () => {
     expect(cadre.style.height).toBe('232px')
     message(faux, { type: TYPE_MESSAGE_SCENE_3D, etat: 'hauteur', hauteur: 1e9 })
     expect(cadre.style.height).toBe(`${HAUTEUR_MAX_PAGE}px`)
+  })
+
+  /*
+   * Signale par l'utilisateur : « le carrousel de draft met du temps a apparaitre, je le rate quand
+   * je defile pour le chercher, et quand je change de page il se recharge et redisparait ». Une
+   * page remontee repartait d'une bande vide de 48 px le temps de se recharger.
+   */
+  it('reprend la hauteur deja mesuree quand la page est remontee (retour sur le fil)', () => {
+    const page = '<h2>Carrousel remonte</h2>'
+    render(bloc(page))
+    const faux = brancherCadre(cadreDuFil() as HTMLIFrameElement)
+    message(faux, { type: TYPE_MESSAGE_SCENE_3D, etat: 'hauteur', hauteur: 640 })
+
+    act(() => root.unmount())
+    root = createRoot(container)
+    render(bloc(page))
+    // Avant tout message du nouveau cadre : la place est deja la bonne.
+    expect((cadreDuFil() as HTMLIFrameElement).style.height).toBe('640px')
+  })
+
+  it('garde la hauteur connue a la place d une page pas encore montee', () => {
+    const page = '<h2>Carrousel plus bas</h2>'
+    render(bloc(page))
+    const faux = brancherCadre(cadreDuFil() as HTMLIFrameElement)
+    message(faux, { type: TYPE_MESSAGE_SCENE_3D, etat: 'hauteur', hauteur: 512 })
+
+    act(() => root.unmount())
+    root = createRoot(container)
+    aLEcran = false
+    render(bloc(page))
+    expect(cadreDuFil()).toBeNull()
+    const place = container.querySelector<HTMLElement>('.bloc-html-interactif__cadre')
+    expect(place?.style.height).toBe('512px')
+  })
+
+  it('nomme la page tant qu elle n a rien affiche, puis s efface', () => {
+    const attente = (): Element | null =>
+      container.querySelector('[data-testid="html-interactif-attente"]')
+    render(bloc('<h2>Six mascottes</h2><p>x</p>'))
+    expect(attente()?.textContent).toBe('Six mascottes · chargement…')
+    const faux = brancherCadre(cadreDuFil() as HTMLIFrameElement)
+    message(faux, { type: TYPE_MESSAGE_SCENE_3D, etat: 'hauteur', hauteur: 300 })
+    expect(attente()).toBeNull()
+    // Relancee, elle se recharge : la ligne revient.
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>('[data-action="html-interactif-relancer"]')
+        ?.click()
+    })
+    expect(attente()).not.toBeNull()
+  })
+
+  it('charge une page sans 3D bien avant l ecran, une page 3D seulement tout pres', () => {
+    render(bloc(PAGE))
+    expect(marges).toContain('1200px 0px')
+    marges.length = 0
+    act(() => root.unmount())
+    root = createRoot(container)
+    render(bloc('<script>const r = new THREE.WebGLRenderer()</script>'))
+    expect(marges).toEqual(['300px 0px'])
   })
 
   it('affiche sous le cadre l erreur que la page remonte', () => {

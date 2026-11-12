@@ -5,7 +5,9 @@
    cadre. Ferme, le bloc garde sa place normale dans le fil : il ne doit pas disparaitre. */
 .bloc-html-interactif {
   display: block;
-  position: static;
+  /* Repere de la ligne d'attente, posee PAR-DESSUS la place de la page : rien ne bouge quand elle
+     s'efface. */
+  position: relative;
   inset: auto;
   width: 100%;
   height: auto;
@@ -71,6 +73,28 @@
   max-height: 480px;
   margin: 0;
   overflow: auto;
+}
+
+/* Ligne d'attente : nomme la page tant qu'elle n'a rien affiche. Elle ne prend aucune place et ne
+   capte aucun clic. */
+.bloc-html-interactif__attente {
+  position: absolute;
+  inset: 0 0 auto;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.bloc-html-interactif__attente::before {
+  content: '●';
+  margin-right: 6px;
+  color: var(--gold-doux, var(--accent));
+  animation: bloc-html-interactif-pouls 1.2s ease-in-out infinite;
 }
 
 /* Avis de la page : une ligne par avis, sans panneau. */
@@ -215,6 +239,7 @@
   .bloc-html-interactif__barre {
     transition: none;
   }
+  .bloc-html-interactif__attente::before,
   .bloc-html-interactif-en-cours summary::before {
     animation: none;
   }
