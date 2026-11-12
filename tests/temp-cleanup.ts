@@ -153,6 +153,9 @@ export function suitesEnCours(
  * ceux-ci sont créés par `src/main/providers/*.ts` pour la durée d'un appel, et nettoyés par lui.
  * Les quelques tests qui réutilisent ces préfixes laissent un dossier vide — coût sans commune
  * mesure avec un appel de modèle tué en plein vol.
+ *
+ * Ce n'est plus que le SOCLE : `prefixesVivantsDeLapp` y ajoute tout préfixe que le code de l'app
+ * déclare (voir son commentaire). Écrite à la main, la liste avait manqué une vingtaine de dossiers.
  */
 export const PREFIXES_VIVANTS_DE_LAPP = [
   'autowin-os-settings-',
@@ -218,18 +221,47 @@ function fichiersCandidats(racine: string, restant: { budget: number }): string[
   return trouves
 }
 
-const cachePrefixes = new Map<string, string[]>()
-
 /**
- * Rend les prefixes temporaires utilises par la suite : les deux historiques, plus tous ceux
- * declares litteralement dans le depot. Resultat mis en cache par racine (un teardown, une lecture).
+ * DOSSIERS DE L'APP LUS DANS SON CODE — même principe que les préfixes de la suite, dans l'autre sens.
+ *
+ * MESURÉ le 2026-11-12 : « Le moteur modifié ne compile pas … empreinte illisible : ENOENT ». Le
+ * moteur compilait ; la fin d'une suite vitest jouée par un autre fil avait supprimé, entre la liste
+ * de ses fichiers et leur lecture, le dossier où l'app compile son moteur (`autowin-moteur-`, créé
+ * par `src/main/providers/relance-auto-moteur.ts`). Le socle écrit à la main en épargnait 7 ; le code
+ * de l'app en créait une vingtaine d'autres, nés eux aussi pendant le run et tous à la merci du
+ * nettoyage : copie de travail à la demande, photo du code, vérification avant publication, Outlook…
+ *
+ * Est donc VIVANT tout préfixe qu'un fichier qui n'est pas un test passe à `mkdtemp`,
+ * `mkdtempSync` ou `mkdtempAsync` sous `src/` ou `scripts/` (les outils que lancent les agents en
+ * font partie). Un préfixe de l'app ajouté demain est épargné sans toucher à ce fichier.
+ * Coût assumé, comme pour le socle : un test qui crée l'un de ces dossiers sans le ranger le laisse
+ * au ménage du disque (`scripts/gc-disque.mjs`, dossiers temporaires calmes depuis 30 jours).
  */
-export function prefixesTemporairesDeLaSuite(racineDepot?: string): string[] {
+const MOTIF_CREATION_TEMPORAIRE =
+  /mkdtemp\w*\(\s*(?:path\.)?(?:join|resolve)\(\s*(?:os\.)?tmpdir\(\)\s*,\s*['"`]([^'"`]+)['"`]/g
+
+/** Où vit le code de l'app et de ses outils ; `tests/` n'en fait pas partie. */
+const DOSSIERS_DU_CODE_VIVANT: ReadonlySet<string> = new Set(['src', 'scripts'])
+
+/** Fichiers qui servent les tests sans en porter le suffixe `.test` (aides, bancs, données). */
+const FICHIER_DE_TEST =
+  /\.(?:test|spec|bench|harness|fixture|test-helpers|test-fixture)\.[cm]?[jt]sx?$|[\\/]__(?:tests|fixtures)__[\\/]/
+
+interface PrefixesDuDepot {
+  suite: string[]
+  vivants: string[]
+}
+
+const cachePrefixes = new Map<string, PrefixesDuDepot>()
+
+/** Une lecture du dépôt pour les deux listes, mise en cache par racine (un teardown, une lecture). */
+function prefixesDuDepot(racineDepot?: string): PrefixesDuDepot {
   const racine = racineDepot ?? fileURLToPath(new URL('..', import.meta.url))
   const enCache = cachePrefixes.get(racine)
   if (enCache) return enCache
 
   const prefixes = new Set<string>(PREFIXES_TEMPORAIRES_DE_TEST)
+  const vivants = new Set<string>(PREFIXES_VIVANTS_DE_LAPP)
   const restant = { budget: 5000 }
   for (const dossier of DOSSIERS_A_LIRE) {
     for (const fichier of fichiersCandidats(join(racine, dossier), restant)) {
@@ -239,7 +271,7 @@ export function prefixesTemporairesDeLaSuite(racineDepot?: string): string[] {
       } catch {
         continue
       }
-      if (!contenu.includes('mkdtempSync')) continue
+      if (!contenu.includes('mkdtemp')) continue
       MOTIF_PREFIXE.lastIndex = 0
       let m: RegExpExecArray | null
       while ((m = MOTIF_PREFIXE.exec(contenu)) !== null) {
@@ -251,12 +283,32 @@ export function prefixesTemporairesDeLaSuite(racineDepot?: string): string[] {
         // programme, et c'est la forme qu'ont tous les vrais prefixes de la suite.
         if (prefixe.length >= 4 && prefixe.endsWith('-')) prefixes.add(prefixe)
       }
+      if (!DOSSIERS_DU_CODE_VIVANT.has(dossier) || FICHIER_DE_TEST.test(fichier)) continue
+      MOTIF_CREATION_TEMPORAIRE.lastIndex = 0
+      while ((m = MOTIF_CREATION_TEMPORAIRE.exec(contenu)) !== null) {
+        // Épargner est le sens sûr : seule une capture trop courte (`...` d'un commentaire)
+        // couvrirait assez de noms pour désarmer le nettoyage.
+        if (m[1].length >= 4) vivants.add(m[1])
+      }
     }
   }
 
-  const liste = [...prefixes]
-  cachePrefixes.set(racine, liste)
-  return liste
+  const resultat = { suite: [...prefixes], vivants: [...vivants] }
+  cachePrefixes.set(racine, resultat)
+  return resultat
+}
+
+/**
+ * Rend les prefixes temporaires utilises par la suite : les deux historiques, plus tous ceux
+ * declares litteralement dans le depot.
+ */
+export function prefixesTemporairesDeLaSuite(racineDepot?: string): string[] {
+  return prefixesDuDepot(racineDepot).suite
+}
+
+/** Préfixes des dossiers temporaires de l'app et de ses outils : le socle, plus ceux lus dans leur code. */
+export function prefixesVivantsDeLapp(racineDepot?: string): string[] {
+  return prefixesDuDepot(racineDepot).vivants
 }
 
 /**
@@ -281,6 +333,7 @@ export function nettoyerDossiersTemporairesDeTest(
   }
 
   const prefixes = prefixesTemporairesDeLaSuite()
+  const vivants = prefixesVivantsDeLapp()
   // Les AUTRES suites qui tournent encore sur le poste (voir `REGISTRE_DES_SUITES`).
   const autres = suitesEnCours(racine).filter((suite) => suite.id !== moi)
 
@@ -291,7 +344,7 @@ export function nettoyerDossiersTemporairesDeTest(
       continue
     }
     // Dossier de vie de l'application qui tourne : jamais à nous, même né pendant ce run.
-    if (PREFIXES_VIVANTS_DE_LAPP.some((prefixe) => nom.startsWith(prefixe))) {
+    if (vivants.some((prefixe) => nom.startsWith(prefixe))) {
       resultat.epargnes.push(nom)
       continue
     }
@@ -335,7 +388,7 @@ export function nettoyerDossiersTemporairesDeTest(
  * toucher par construction.
  *
  * La borne d'age est le garde-fou : un dossier de plus de `ageMinimalMs` n'appartient a aucun appel
- * ni a aucune suite en cours. Les dossiers VIVANTS de l'application (voir `PREFIXES_VIVANTS_DE_LAPP`)
+ * ni a aucune suite en cours. Les dossiers VIVANTS de l'application (voir `prefixesVivantsDeLapp`)
  * restent epargnes quel que soit leur age — un appel provider peut etre long.
  */
 export function purgerDossiersTemporairesAnciens(
@@ -345,6 +398,7 @@ export function purgerDossiersTemporairesAnciens(
 ): ResultatNettoyage {
   const resultat: ResultatNettoyage = { supprimes: [], epargnes: [], echecs: [] }
   const prefixesAnciens = prefixesTemporairesDeLaSuite()
+  const vivants = prefixesVivantsDeLapp()
 
   let entrees: string[]
   try {
@@ -359,7 +413,7 @@ export function purgerDossiersTemporairesAnciens(
       resultat.epargnes.push(nom)
       continue
     }
-    if (PREFIXES_VIVANTS_DE_LAPP.some((prefixe) => nom.startsWith(prefixe))) {
+    if (vivants.some((prefixe) => nom.startsWith(prefixe))) {
       resultat.epargnes.push(nom)
       continue
     }
