@@ -14,7 +14,7 @@ type OsDouble = ConstructorParameters<typeof AppCommandBus>[0]
 const os = (lent: () => void): OsDouble =>
   ({
     executionWorkspace: process.cwd(),
-    conversations: { list: () => [] },
+    conversations: { listResumes: () => [] },
     registry: { ids: () => ['claude'] },
     roles: { all: () => ({}), getBinding: () => undefined },
     runsWithGate: async () => [],

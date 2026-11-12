@@ -19,9 +19,9 @@ const os = (): OsDouble =>
   ({
     executionWorkspace: process.cwd(),
     conversations: {
-      list: () => [
-        { id: 'conv-342', title: 'en vol', provider: 'claude', updatedAt: 1, messages: [] },
-        { id: 'conv-343', title: 'au repos', provider: 'claude', updatedAt: 1, messages: [] }
+      listResumes: () => [
+        { id: 'conv-342', title: 'en vol', provider: 'claude', updatedAt: 1 },
+        { id: 'conv-343', title: 'au repos', provider: 'claude', updatedAt: 1 }
       ]
     },
     registry: { ids: () => ['claude'] },

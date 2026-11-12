@@ -155,7 +155,7 @@ export function registerCarteDesBesoinsIpc({
   const liens = racineDesLiens ? creerLiensWorkItems({ racine: racineDesLiens }) : null
   // Le type du store et celui de la carte décrivent le même JSON ; seul le typage des parts diffère.
   const lireConversations = (): readonly (ConversationPourLaCarte & { updatedAt?: number })[] =>
-    os.conversations.list() as unknown as readonly (ConversationPourLaCarte & {
+    os.conversations.listAvecMessages() as unknown as readonly (ConversationPourLaCarte & {
       updatedAt?: number
     })[]
   const lireLiens = (): EtatDesLiens => {

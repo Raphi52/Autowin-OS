@@ -12,6 +12,7 @@ import {
 import { pickResumeForTask } from '../runs/orchestration-state'
 import { exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
 import { readBrainTraces } from '../activity/brain-trace-spool'
+import { resumeDuFil } from '../store/conversations'
 import { WorktreeManager } from '../store/worktree-manager'
 import { RunWorktreeCoordinator } from '../store/run-worktree-coordinator'
 import { TraceStore } from '../activity/trace-store'
@@ -97,7 +98,10 @@ function fakeOs(): any {
     conversations: {
       get: (id: string) => conversations.get(id),
       remove: (id: string) => conversations.delete(id),
-      list: () => [...conversations.values()],
+      // fix-ok: cause mesurée — `listAvecMessages is not a function` : le kaizen (orchestration-tache.ts)
+      // lit encore les messages ; la fixture doit garder les deux lectures, pas seulement le résumé.
+      listAvecMessages: () => [...conversations.values()],
+      listResumes: () => [...conversations.values()].map(resumeDuFil),
       rangerDansDossier: (id: string, projectPath: string | null) => {
         const conversation = conversations.get(id)
         if (!conversation) return undefined
@@ -1422,9 +1426,9 @@ describe('AppCommandBus command execution policy', () => {
         runPaths: []
       }))
       const sourceGet = os.conversations.get
-      const sourceList = os.conversations.list
+      const sourceList = os.conversations.listAvecMessages
       os.conversations.get = (id: string) => autres.find((c) => c.id === id) ?? sourceGet(id)
-      os.conversations.list = () => [...sourceList(), ...autres]
+      os.conversations.listAvecMessages = () => [...sourceList(), ...autres]
       const bus = new AppCommandBus(os, () => {})
 
       const result = await bus.exec(

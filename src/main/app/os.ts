@@ -2032,7 +2032,10 @@ export class AutowinOS {
    * n'est jamais passée s'affichait comme un run vert ordinaire.
    */
   async listRuns(): Promise<RunEntry[]> {
-    const avecConversation = attachConversationIds(await scanRuns(), this.conversations.list())
+    const avecConversation = attachConversationIds(
+      await scanRuns(),
+      this.conversations.listResumes()
+    )
     return attachPublicationStates(
       avecConversation,
       this.tousLesCoordinateurs().flatMap((coordinateur) => coordinateur.runRecords())

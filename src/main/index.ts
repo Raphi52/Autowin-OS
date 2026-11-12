@@ -1548,7 +1548,7 @@ async function menagesApresAffichage(): Promise<void> {
   try {
     const tracesPurgees = await collectCausalTraces(join(app.getPath('userData'), 'causal-trace'), {
       protectedConversationIds: os.conversations
-        .list()
+        .listResumes()
         .filter((conversation) => conversation.updatedAt >= T0_DEMARRAGE)
         .map((conversation) => conversation.id)
     })

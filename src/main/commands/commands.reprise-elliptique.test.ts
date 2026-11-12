@@ -32,7 +32,7 @@ function osDouble(): {
     executionWorkspace: process.cwd(),
     conversations: {
       get: () => undefined,
-      list: () => [],
+      listAvecMessages: () => [],
       attachRun: () => undefined
     },
     registry: { ids: () => ['claude'] },

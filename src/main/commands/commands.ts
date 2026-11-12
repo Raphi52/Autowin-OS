@@ -638,7 +638,7 @@ export class AppCommandBus {
    */
   /** @internal */ contexteDesFils(maintenant = Date.now()): ContexteFils {
     const actifs = new Map<string, true>()
-    for (const c of this.os.conversations?.list?.() ?? []) {
+    for (const c of this.os.conversations?.listResumes?.() ?? []) {
       if (typeof c.updatedAt === 'number' && maintenant - c.updatedAt < SEUIL_ARCHIVE_MS)
         actifs.set(c.id, true)
     }

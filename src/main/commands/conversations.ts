@@ -36,12 +36,20 @@ export async function executerConversations(
       )
       // Un second envoi identique a quelques secondes d'intervalle est le MEME geste : il rend
       // la conversation deja creee au lieu d'en empiler une vide.
-      const dejaCreee = conversationRecenteEquivalente(bus.os.conversations.list?.() ?? [], {
+      // La comparaison ne lit que les résumés : un fil identique se reconnaît sans ses messages.
+      const existantes = bus.os.conversations.listResumes?.() ?? []
+      const dejaCreee = conversationRecenteEquivalente(existantes, {
         title,
         provider,
         maintenant: Date.now()
       })
-      if (dejaCreee) return { ...dejaCreee, reprise: true }
+      // fix-ok: cause mesurée — la réponse de ce chemin était le résumé, sans `messages` ; avant la
+      // lecture par résumé elle rendait le fil entier (test « le second envoi identique rend le fil
+      // entier » rouge sur le résumé). La comparaison reste sur les résumés, la réponse non.
+      if (dejaCreee) {
+        const complet = bus.os.conversations.get?.(dejaCreee.id) ?? dejaCreee
+        return { ...complet, reprise: true }
+      }
       const c = bus.os.conversations.create({ title, provider })
       bus.broadcast({ type: 'refresh', scope: 'conversations' })
       return c

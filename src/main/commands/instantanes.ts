@@ -13,7 +13,6 @@ import { tachesDeFondEnCours } from '../providers/taches-de-fond-suivies'
 import type { AppSnapshot, PromptSnapshot } from './types'
 import type { AppCommandBus } from './commands'
 import { pendantOperation } from '../gel/gel-main'
-import { lastUserMessageAt } from '../store/conversations'
 import { skillsInvocables } from './skills'
 import { listerCles } from '../app/coffre-cles'
 import { LEGENDE_RUNS_NON_EXAMINES } from '../dashboards/runs-scan'
@@ -116,21 +115,20 @@ export async function snapshot(bus: AppCommandBus, jalon?: (nom: string) => void
     // tete, elle faisait depasser les 120 000 caracteres de `resultat-de-commande-borne.ts` et la
     // coupe emportait `travauxNonPublies`, jamais lu. Ici, la coupe ne retire que les
     // fils les plus anciens.
+    // La date du dernier message utilisateur vient du résumé, pas des messages : un fil archivé n'aura
+    // plus ses messages en mémoire, et son résumé doit suffire à la photo.
     conversations: bus.os.conversations
-      .list()
+      .listResumes()
       // Le nom `category` de CETTE sortie est un contrat d'agent : il reste, sa source devient
       // `provider` (les deux valeurs etaient toujours egales).
-      .map((c) => {
-        const userAt = lastUserMessageAt(c.messages ?? [])
-        return {
-          id: c.id,
-          title: c.title,
-          category: c.provider,
-          updatedAt: c.updatedAt,
-          ...(userAt !== undefined ? { lastUserMessageAt: userAt } : {}),
-          ...(bus.tourDeChatActif?.(c.id) ? { tourEnCours: true } : {})
-        }
-      })
+      .map((c) => ({
+        id: c.id,
+        title: c.title,
+        category: c.provider,
+        updatedAt: c.updatedAt,
+        ...(c.lastUserMessageAt !== undefined ? { lastUserMessageAt: c.lastUserMessageAt } : {}),
+        ...(bus.tourDeChatActif?.(c.id) ? { tourEnCours: true } : {})
+      }))
   }
 }
 

@@ -343,7 +343,7 @@ describe('composerTacheDOrchestration — la tâche envoyée réunit les dossier
     os: {
       conversations: {
         get: (id: string) => convs.find((c) => c.id === id),
-        list: () => convs
+        listAvecMessages: () => convs
       }
     },
     workspaceDuTour: ''

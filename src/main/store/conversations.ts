@@ -292,13 +292,45 @@ export interface Conversation {
   updatedAt: number
 }
 
-export type ConversationSummary = Omit<Conversation, 'messages'> & {
+/**
+ * Un fil SANS son historique : ses métadonnées (titre, dossier, copie, runs, dates...) et les champs
+ * DÉRIVÉS de ses messages (`ChampsDerivesDesMessages`), recalculés par `resumeDuFil` à chaque lecture.
+ * Le lecteur qui n'a besoin d'aucun message le prend par `listResumes`, pas par `listAvecMessages`. La
+ * projection de la liste (`ConversationSummary`) n'y ajoute qu'un champ, l'état de reprise, que ce magasin
+ * ne connaît pas.
+ */
+export type ConversationResume = Omit<Conversation, 'messages'> & ChampsDerivesDesMessages
+
+/**
+ * Les branches à rattacher : les fils qui ont un fil source (`forkedFrom`), ENTIERS, du plus récent
+ * au moins récent. `conversationId` ne garde que les branches de ce seul fil source.
+ *
+ * Entiers, parce que `rattacherLaBranche` lit les messages de la branche ET de sa source. Ils viennent
+ * de `get` (qui rend aussi un fil archivé), pas de `listAvecMessages` (qui ne couvre que les fils en mémoire).
+ * fix-ok: la liste est prise d'un coup, avant la première attente de l'appelant. Relire chaque fil
+ * par `get` pendant l'attente ferait sauter une branche supprimée entre-temps.
+ */
+export function branchesARattacher(
+  store: Pick<ConversationStore, 'listResumes' | 'get'>,
+  conversationId?: string
+): Conversation[] {
+  const branches: Conversation[] = []
+  for (const resume of store.listResumes()) {
+    const sourceId = resume.forkedFrom?.conversationId
+    if (!sourceId || (conversationId !== undefined && sourceId !== conversationId)) continue
+    const branche = store.get(resume.id)
+    if (branche) branches.push(branche)
+  }
+  return branches
+}
+
+/**
+ * Les champs qu'une liste affiche d'un fil et qui se DÉRIVENT de son historique. Ils restent dans
+ * le résumé : un fil dont les messages ne sont pas en mémoire doit quand même les afficher. Tant que
+ * ses messages sont en mémoire, `resumeDuFil` les recalcule à chaque lecture.
+ */
+export type ChampsDerivesDesMessages = {
   messageCount: number
-  /**
-   * Où en est un fil coupé par le quota. Ajouté par `os:conversations`, pas par `listSummaries` :
-   * il dépend des plans de lots et des runs, que ce magasin ne connaît pas.
-   */
-  repriseQuota?: EtatDeRepriseDuFil
   lastMessageRole?: Msg['role']
   lastAssistantStatus?: ChatTurnStatus
   /**
@@ -331,6 +363,18 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
 }
 
 /**
+ * La projection de la liste (`os:conversations`) : le résumé, plus l'état de reprise d'un fil coupé
+ * par le quota.
+ */
+export type ConversationSummary = ConversationResume & {
+  /**
+   * Où en est un fil coupé par le quota. Ajouté par `os:conversations`, pas par `listSummaries` :
+   * il dépend des plans de lots et des runs, que ce magasin ne connaît pas.
+   */
+  repriseQuota?: EtatDeRepriseDuFil
+}
+
+/**
  * AVIS DE L'APP (2026-11-05) : message assistant écrit par `append` — carte de
  * publication auto, bascule de dossier, modèle indisponible —, donc sans `status` ni `turnId`.
  * La réponse d'un tour porte les deux dès `beginTurn`. Un avis ne répond à rien : il ne doit pas
@@ -358,7 +402,49 @@ function attendUneDecision(messages: readonly Msg[]): boolean {
   )
 }
 
-/** Date du dernier tour de l'utilisateur, ou `undefined` s'il n'a encore rien écrit. */
+/**
+ * Le résumé d'un fil : ses métadonnées, puis les champs dérivés de son historique. `listResumes` et
+ * `listSummaries` passent par ici : une seule définition de ce qui compte comme « dernier tour ».
+ * fix-ok: cause mesurée — `ConversationResume` ne portait pas ces champs : la liste et la photo de
+ * l'état les recalculaient chacune à partir du fil entier. Le résumé les porte désormais, mais
+ * `resumeDuFil` les recalcule encore en parcourant les messages en mémoire à chaque lecture (≈ 6 ms
+ * pour les 1 597 fils de la copie des données réelles). Ce parcours ne disparaît que si ces champs
+ * sont calculés une seule fois, à l'archivage.
+ */
+export function resumeDuFil(conversation: Conversation): ConversationResume {
+  const { messages, ...metadonnees } = conversation
+  // Le dernier TOUR, pas la dernière carte de l'app posée après lui. Sans tour du
+  // tout, on retombe sur le dernier message assistant, comme avant.
+  const assistantsRecents = [...messages].reverse().filter((m) => m.role === 'assistant')
+  const dernierAssistant =
+    assistantsRecents.find((message) => !estAvisDeLApp(message)) ?? assistantsRecents[0]
+  const dateDeLUtilisateur = lastUserMessageAt(messages)
+  return {
+    ...metadonnees,
+    messageCount: messages.length,
+    // UNE CONSIGNE ÉCRITE PENDANT UN TOUR N'EST PAS UN TOUR EN ATTENTE (2026-09-09).
+    // Défaut vécu : « il m'indique un statut sans réponse alors qu'il a bien pris en compte mon
+    // message ». Le texte injecté pendant qu'un tour tourne est ajouté en FIN de fil avec
+    // `orientation: true` — le dernier message devenait donc `user`, et la pastille annonçait
+    // « Sans réponse » alors que la réponse était là, juste au-dessus. On ignore ces messages
+    // pour décider du rôle qui porte l'attente.
+    lastMessageRole: [...messages].reverse().find((m) => m.orientation !== true)?.role,
+    lastAssistantStatus: dernierAssistant?.status,
+    // Le MOTIF de l'échec, pas seulement le fait qu'il y en ait un : la liste ne peut pas
+    // distinguer un fil coupé par le quota (qui se relance tel quel) d'un fil tombé sur une
+    // vraie erreur sans lire ce texte. Servi uniquement quand le tour a échoué — sinon chaque
+    // résumé IPC porterait une erreur périmée.
+    ...(dernierAssistant?.status === 'failed' && dernierAssistant.error
+      ? { lastAssistantError: dernierAssistant.error }
+      : {}),
+    ...(dateDeLUtilisateur !== undefined ? { lastUserMessageAt: dateDeLUtilisateur } : {}),
+    ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {}),
+    ...(messages.some((m) => m.role === 'assistant' && m.status === 'streaming')
+      ? { hasStreamingTurn: true as const }
+      : {})
+  }
+}
+
 /** Un passage d'une conversation qui porte le terme cherche, avec de quoi le situer. */
 export interface ConversationExtrait {
   role: string
@@ -598,6 +684,7 @@ function fenetre(origine: string, position: number, longueur: number): string {
   return debutCoupe + coeur + finCoupee
 }
 
+/** Date du dernier tour de l'utilisateur, ou `undefined` s'il n'a encore rien écrit. */
 export function lastUserMessageAt(messages: readonly Msg[]): number | undefined {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
@@ -1502,7 +1589,7 @@ export class ConversationStore {
       Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
     )
     const trouvees: ConversationRecherche[] = []
-    for (const conversation of this.list()) {
+    for (const conversation of this.listAvecMessages()) {
       const extraits: ConversationExtrait[] = []
       for (const message of conversation.messages) {
         if (typeof message.content !== 'string') continue
@@ -1558,7 +1645,7 @@ export class ConversationStore {
     // (comme `search`) ferait disparaitre des conversations qui contiennent pourtant le mot.
     const limite = Math.max(1, Math.min(5_000, Math.floor(options?.limite ?? 2_000) || 2_000))
     const trouvees: Array<{ id: string; extrait: string; occurrences: number }> = []
-    for (const conversation of this.list()) {
+    for (const conversation of this.listAvecMessages()) {
       let extrait: string | undefined
       let occurrences = 0
       for (const message of conversation.messages) {
@@ -1602,9 +1689,36 @@ export class ConversationStore {
     return this.conversations.get(id)
   }
 
-  /** Liste toutes les conversations, triées par updatedAt décroissant. */
-  list(): Conversation[] {
+  /**
+   * Lecture SANS messages : le résumé de chaque fil (métadonnées et champs dérivés de l'historique),
+   * du plus récemment touché au moins récent. L'historique n'est pas copié dans le résultat.
+   */
+  listResumes(): ConversationResume[] {
+    return this.filsTriesParTouche().map((fil) => resumeDuFil(fil))
+  }
+
+  /**
+   * Lecture AVEC messages : chaque fil entier, du plus récemment touché au moins récent. À prendre
+   * seulement quand un message est LU (texte, statut, date) ; un lecteur qui n'a besoin que des
+   * métadonnées prend `listResumes`.
+   */
+  listAvecMessages(): Conversation[] {
+    return this.filsTriesParTouche()
+  }
+
+  /**
+   * Les fils du store, du plus récemment touché au moins récent. Les deux lectures partagent cet ordre
+   * sans s'appeler l'une l'autre : `listResumes` n'en garde que les métadonnées et les champs dérivés.
+   */
+  private filsTriesParTouche(): Conversation[] {
     return [...this.conversations.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  /**
+   * Alias de `listAvecMessages`, gardé tant que `conversations-disk.ts` et les tests l'appellent.
+   */
+  list(): Conversation[] {
+    return this.listAvecMessages()
   }
 
   /**
@@ -1696,7 +1810,7 @@ export class ConversationStore {
       if ((messagesParcourus & 255) !== 0) return false
       return Date.now() > echeance
     }
-    for (const conversation of this.list()) {
+    for (const conversation of this.listAvecMessages()) {
       if (candidates && !candidates.has(conversation.id)) continue
       if (budgetEpuise()) break
       const extraits: ConversationExtrait[] = []
@@ -2147,41 +2261,12 @@ export class ConversationStore {
     return ordre.slice(0, limite).map(({ c }) => c)
   }
 
-  /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */
+  /**
+   * Projection légère destinée aux listes IPC : c'est le résumé de `listResumes`. La liste n'a besoin
+   * ni du texte des messages ni de l'historique entier, et ses champs dérivés sont déjà dans le résumé.
+   */
   listSummaries(): ConversationSummary[] {
-    return this.list().map(({ messages, ...summary }) => {
-      // Le dernier TOUR, pas la dernière carte de l'app posée après lui. Sans tour du
-      // tout, on retombe sur le dernier message assistant, comme avant.
-      const assistantsRecents = [...messages].reverse().filter((m) => m.role === 'assistant')
-      const dernierAssistant =
-        assistantsRecents.find((message) => !estAvisDeLApp(message)) ?? assistantsRecents[0]
-      return {
-        ...summary,
-        messageCount: messages.length,
-        // UNE CONSIGNE ÉCRITE PENDANT UN TOUR N'EST PAS UN TOUR EN ATTENTE (2026-09-09).
-        // Défaut vécu : « il m'indique un statut sans réponse alors qu'il a bien pris en compte mon
-        // message ». Le texte injecté pendant qu'un tour tourne est ajouté en FIN de fil avec
-        // `orientation: true` — le dernier message devenait donc `user`, et la pastille annonçait
-        // « Sans réponse » alors que la réponse était là, juste au-dessus. On ignore ces messages
-        // pour décider du rôle qui porte l'attente.
-        lastMessageRole: [...messages].reverse().find((m) => m.orientation !== true)?.role,
-        lastAssistantStatus: dernierAssistant?.status,
-        // Le MOTIF de l'échec, pas seulement le fait qu'il y en ait un : la liste ne peut pas
-        // distinguer un fil coupé par le quota (qui se relance tel quel) d'un fil tombé sur une
-        // vraie erreur sans lire ce texte. Servi uniquement quand le tour a échoué — sinon chaque
-        // résumé IPC porterait une erreur périmée.
-        ...(dernierAssistant?.status === 'failed' && dernierAssistant.error
-          ? { lastAssistantError: dernierAssistant.error }
-          : {}),
-        ...(lastUserMessageAt(messages) !== undefined
-          ? { lastUserMessageAt: lastUserMessageAt(messages) }
-          : {}),
-        ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {}),
-        ...(messages.some((m) => m.role === 'assistant' && m.status === 'streaming')
-          ? { hasStreamingTurn: true as const }
-          : {})
-      }
-    })
+    return this.listResumes()
   }
 
   /**

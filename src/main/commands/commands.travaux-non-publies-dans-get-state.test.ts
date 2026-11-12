@@ -27,7 +27,7 @@ type Travail = { agentId: string; date: string; fichiers: string[] }
 const osAvecTravaux = (travaux: Travail[], recense = true): OsDouble =>
   ({
     executionWorkspace: process.cwd(),
-    conversations: { list: () => [] },
+    conversations: { listResumes: () => [] },
     registry: { ids: () => ['claude'] },
     roles: { all: () => ({}), getBinding: () => undefined },
     runsWithGate: async () => [],

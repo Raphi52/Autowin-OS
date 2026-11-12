@@ -24,7 +24,7 @@ import { sourceProcessPrincipal } from '../app/source-process-principal.test-hel
 
 const os = {
   executionWorkspace: process.cwd(),
-  conversations: { get: () => undefined, list: () => [] },
+  conversations: { get: () => undefined, listResumes: () => [] },
   registry: { ids: () => ['claude'] },
   roles: { all: () => ({}), getBinding: () => ({ provider: 'claude' }) },
   runsWithGate: async () => [],
@@ -53,17 +53,17 @@ const specDe = (nom: string): (typeof CATALOG)[number] | undefined =>
 describe('(a) get_state : réponse courte et arguments pour rétrécir', () => {
   const titre = (i: number): string =>
     `Conversation ${i} : un titre de longueur réaliste pour un fil de travail du dépôt`
+  // Des résumés, sans messages : `get_state` ne lit que la liste, jamais l'historique.
   const conversations = Array.from({ length: 1190 }, (_, i) => ({
     id: `conv-${i}`,
     title: titre(i),
     provider: 'claude',
-    updatedAt: 1000 + i,
-    messages: [{ role: 'user', content: 'demande', ts: 1000 + i }]
+    updatedAt: 1000 + i
   }))
   const travaux = [{ agentId: 'run-1', date: '2026-10-31', fichiers: ['src/a.ts'] }]
   const busEtat = (): AppCommandBus =>
     nouveauBus({
-      conversations: { get: () => undefined, list: () => conversations },
+      conversations: { get: () => undefined, listResumes: () => conversations },
       travauxNonPubliesBornes: () => travaux
     })
 
@@ -595,7 +595,7 @@ describe('(f) conversation_read remonte le fil et lit un message en entier', () 
     return nouveauBus({
       conversations: {
         get: (id: string) => (id === 'conv-1' ? conversation : undefined),
-        list: () => [conversation]
+        listAvecMessages: () => [conversation]
       }
     })
   }
