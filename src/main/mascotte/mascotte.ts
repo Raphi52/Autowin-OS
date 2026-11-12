@@ -42,16 +42,7 @@ import {
   MACHINE_PROBLEME,
   MACHINE_TRAVAIL
 } from './mascotte-machine-images'
-import {
-  PANDA_APPLAUDIT,
-  PANDA_DANSE,
-  PANDA_GRIGNOTE,
-  PANDA_LUEUR,
-  PANDA_MARCHE,
-  PANDA_REPOS,
-  PANDA_SALUT,
-  PANDA_SOUCI
-} from './mascotte-panda-images'
+import { PANDA_ATTENTE, PANDA_REPOS, PANDA_SOUCI, PANDA_TRAVAIL } from './mascotte-panda-images'
 import type { StyleMascotte } from './mascotte-reglage'
 import { LARGEUR_POPUP, MARGE_CARTE, type Rect, type ZoneDesCartes } from '../app/notification-popup'
 import {
@@ -123,8 +114,8 @@ const GEOMETRIES: Record<StyleMascotte, GeometrieMascotte> = {
     retraitCote: 8,
     croix: { x: 94, y: 22, taille: 18 }
   },
-  // Le panda : 125x125 px (cadre carré, pour que ses manches larges ne soient pas coupées), posé au bas
-  // d'une fenêtre de 146x136 ; le centre est celui de son ventre, la croix au-dessus de son oreille droite.
+  // Le panda : 125x125 px (cadre carré, pour que son bras levé quand il fait coucou ne soit pas coupé), posé
+  // au bas d'une fenêtre de 146x136 ; le centre est celui de son ventre, la croix au-dessus de son oreille droite.
   panda: {
     largeur: 146,
     hauteur: 136,
@@ -574,23 +565,22 @@ function reglesDeLaMachine(etat: NomEtatMascotte, pastille: string | null): Arra
 }
 
 /**
- * LA PANDA EN KIMONO : modelée et animée dans Blender (fourrure, squelette, kimono à fleurs de
- * cerisier, nœud sur la tête), rendue en planches de 16 images par geste
- * (`mascotte-panda-images.ts`) et rejouée en CSS comme la machine — la page n'admet aucun script.
- * Elle a huit gestes pour quatre états, donc chaque état en ALTERNE plusieurs : au repos elle
- * respire puis s'assoit grignoter son bambou ; au travail elle marche puis tient sa lueur ; quand
- * un fil attend elle salue, applaudit, danse ; en échec elle se prend la tête. Le changement de
- * geste est une seconde animation de `.bw` (`background-image`, en `step-end`), dont la durée est
- * un multiple de la boucle : le geste change toujours entre deux boucles, jamais au milieu. `.pc`
- * précharge les huit planches, pour qu'un changement ne clignote pas. Le liseré clair de `.bw`
- * détache ses pattes noires d'un fond d'écran sombre. Des pétales de cerisier tombent autour
- * d'elle : deux, lents, au repos (`.ps`) ; une pluie quand un fil attend (`.pl`). Bulle, pastille
- * et croix reprennent les couleurs de sa tenue (or de la ceinture, rose du kimono).
+ * LE PANDA BOSS : lunettes-écran d'or, chaîne et médaillon, modelé en three.js et rendu en planches
+ * de 16 images par geste (`mascotte-panda-images.ts`, scripts/mascotte-panda-rendu.mjs puis
+ * scripts/mascotte-panda-planches.py), rejouées en CSS comme la machine — la page n'admet aucun script.
+ * Un geste par état : au repos il respire, la tête penchée ; au travail il tient le bord de son
+ * médaillon et ses verres déroulent des lignes ; quand un fil attend il te fait coucou, ses verres
+ * cochés ; en échec ses bras tombent, ses verres et son médaillon passent au rouge. Ses verres disent
+ * l'état, son médaillon le COMPTE : le chiffre `.n` est posé dans `.ob`, au centre de l'écran du
+ * médaillon (repère mesuré par le rendu, `medaillon.json`), pour grossir avec lui au survol.
+ * `.pc` précharge les planches, pour qu'un changement d'état ne clignote pas. Le liseré clair de
+ * `.bw` détache ses pattes noires d'un fond d'écran sombre. Des paillettes d'or tombent autour de
+ * lui : deux, lentes, au repos (`.ps`) ; une pluie quand un fil attend (`.pl`).
  */
 function htmlDuPanda(): string {
   const pluie = [0, 1, 2, 3, 4, 5, 6].map((i) => `<i class="pl" style="--i:${i}"></i>`).join('')
-  const petales = [0, 1].map((i) => `<i class="ps" style="--i:${i}"></i>`).join('')
-  const planches = `--repos:url("${PANDA_REPOS}");--salut:url("${PANDA_SALUT}");--lueur:url("${PANDA_LUEUR}");--grignote:url("${PANDA_GRIGNOTE}");--marche:url("${PANDA_MARCHE}");--danse:url("${PANDA_DANSE}");--applaudit:url("${PANDA_APPLAUDIT}");--souci:url("${PANDA_SOUCI}")`
+  const paillettes = [0, 1].map((i) => `<i class="ps" style="--i:${i}"></i>`).join('')
+  const planches = `--repos:url("${PANDA_REPOS}");--travail:url("${PANDA_TRAVAIL}");--attente:url("${PANDA_ATTENTE}");--souci:url("${PANDA_SOUCI}")`
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><title>Autowin — mascotte</title><style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
 body{font-family:ui-sans-serif,system-ui,sans-serif;user-select:none}
@@ -598,58 +588,54 @@ body{font-family:ui-sans-serif,system-ui,sans-serif;user-select:none}
 .m{position:relative;width:146px;height:136px}
 .m i,.m a{position:absolute;font-style:normal}
 .sh,.ob,.bw,.pc{display:block}
-.pc{left:0;top:0;width:1px;height:1px;opacity:0;background:var(--repos),var(--salut),var(--lueur),var(--grignote),var(--marche),var(--danse),var(--applaudit),var(--souci)}
+.pc{left:0;top:0;width:1px;height:1px;opacity:0;background:var(--repos),var(--travail),var(--attente),var(--souci)}
 .sh{left:34px;top:113px;width:78px;height:13px;border-radius:50%;background:radial-gradient(closest-side,#0009,#0000)}
 .ob{left:10px;top:6px;width:125px;height:125px;cursor:pointer;touch-action:none;transition:scale .2s;transform-origin:50% 100%}
 .ob:active{cursor:grabbing}
 .m:hover .ob{scale:1.06}
-.bw{inset:0;background:var(--repos) 0 0/2000px 125px no-repeat;filter:drop-shadow(0 0 1px #ffffffb3) drop-shadow(0 0 2px #ffffff40);animation:sp 3.2s steps(16) infinite,gc 25.6s step-end infinite}
-.lu{display:none;left:43px;top:52px;width:60px;height:60px;border-radius:50%;background:radial-gradient(closest-side,#fff3c46b,#fff3c400);animation:lu 12.8s step-end infinite}
-.n{display:none;place-items:center;left:13px;top:30px;min-width:22px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;font-weight:700;font-size:12px;line-height:1;color:#6b0f2e;background:#ffd6e3;box-shadow:0 0 0 1.5px #d2447a,0 1px 4px #0006}
+.bw{inset:0;background:var(--repos) 0 0/2000px 125px no-repeat;filter:drop-shadow(0 0 1px #ffffffb3) drop-shadow(0 0 2px #ffffff40);animation:sp 3.2s steps(16) infinite}
+.n{display:none;place-items:center;left:49px;top:86px;width:18px;height:18px;font-weight:900;font-size:11px;line-height:1;letter-spacing:-.5px;color:#ffc24a;text-shadow:0 0 3px #ffb52e,0 0 1px #000;pointer-events:none}
 .n::after{position:static}
 .bu{display:none;place-items:center;left:13px;top:4px;width:24px;height:24px;border-radius:50%;font-weight:700;font-size:15px;line-height:1;background:#ffe7ae;color:#6a4300;box-shadow:0 0 0 1.5px #c58a22,0 1px 5px #0007;animation:bu 1.6s ease-in-out infinite}
-.pl,.ps{display:none;width:7px;height:6px;border-radius:100% 0 100% 0;background:linear-gradient(135deg,#fff3f7,#ff9fc2);box-shadow:0 0 2px #ff7fae99;opacity:0}
+.pl,.ps{display:none;width:5px;height:5px;border-radius:1px;background:linear-gradient(135deg,#fff6d8,#e2b23c);box-shadow:0 0 2px #ffcf5c99;opacity:0}
 .pl{left:calc(16px + var(--i) * 17px);top:2px;animation:pe 2.4s calc(var(--i) * .34s) ease-in infinite}
 .ps{display:block;left:calc(30px + var(--i) * 74px);top:0;animation:pe 9s calc(var(--i) * 4.5s) linear infinite}
-.f{z-index:2;display:grid;place-items:center;left:111px;top:4px;width:18px;height:18px;border-radius:50%;background:#3b0f22e6;box-shadow:0 0 0 1px #ffb3cf8c;color:#ffe6ef;font-size:13px;line-height:1;text-decoration:none;cursor:pointer;opacity:0;transition:opacity .2s .4s}
+.f{z-index:2;display:grid;place-items:center;left:111px;top:4px;width:18px;height:18px;border-radius:50%;background:#1b1a20e6;box-shadow:0 0 0 1px #e2b23c8c;color:#fff3cf;font-size:13px;line-height:1;text-decoration:none;cursor:pointer;opacity:0;transition:opacity .2s .4s}
 .m:hover .f{opacity:1;transition-delay:0s}
 .m:hover .bu{visibility:hidden}
 @keyframes sp{to{background-position:-2000px 0}}
-@keyframes gc{0%{background-image:var(--repos)}62.5%{background-image:var(--grignote)}}
-@keyframes gt{0%{background-image:var(--marche)}50%{background-image:var(--lueur)}}
-@keyframes ga{0%{background-image:var(--salut)}33.3333%{background-image:var(--applaudit)}66.6667%{background-image:var(--danse)}}
-@keyframes lu{0%{opacity:0}50%{opacity:1}}
 @keyframes bu{50%{transform:translateY(-3px)}}
 @keyframes tr{25%{translate:-1px 0}75%{translate:1px 0}}
 @keyframes pe{0%{opacity:0;transform:translate(0,-4px) rotate(0)}12%{opacity:.95}80%{opacity:.9}100%{opacity:0;transform:translate(calc(10px - var(--i) * 3px),118px) rotate(320deg)}}
-</style></head><body><div class="m"><i class="pc"></i><i class="sh"></i><i class="lu"></i><i class="ob" title="Ouvrir Autowin — glisser pour la déplacer"><i class="bw"></i></i>${petales}${pluie}<i class="bu"></i><i class="n"></i><a class="f" href="#${FRAGMENT_FERMER}" title="Fermer la mascotte (pour la rouvrir : Réglages · Interface)">×</a></div></body></html>`
+</style></head><body><div class="m"><i class="pc"></i><i class="sh"></i><i class="ob" title="Ouvrir Autowin — glisser pour le déplacer"><i class="bw"></i><i class="n"></i></i>${paillettes}${pluie}<i class="bu"></i><a class="f" href="#${FRAGMENT_FERMER}" title="Fermer la mascotte (pour la rouvrir : Réglages · Interface)">×</a></div></body></html>`
 }
 
-/** Les règles d'état de la panda : les gestes que l'état alterne, sa bulle et ses effets. */
+/** Les règles d'état du panda : son geste, sa bulle, le compte sur son médaillon et ses paillettes. */
 function reglesDuPanda(etat: NomEtatMascotte, pastille: string | null): Array<[string, string]> {
   const regles: Array<[string, string]> = []
-  if (pastille) regles.push(['.n', 'display:grid'], ['.n::after', `content:"${pastille}"`])
+  // En échec, le médaillon peint son « ! » rouge : un compte posé dessus le cacherait.
+  if (pastille && etat !== 'probleme')
+    regles.push(['.n', 'display:grid'], ['.n::after', `content:"${pastille}"`])
   switch (etat) {
-    // Le repos est la page elle-même (elle respire, puis grignote) : rien à poser.
+    // Le repos est la page elle-même (il respire) : rien à poser.
     case 'calme':
       break
     case 'travail':
-      regles.push(
-        ['.bw', 'animation:sp 1.6s steps(16) infinite,gt 12.8s step-end infinite'],
-        ['.lu', 'display:block']
-      )
+      regles.push(['.bw', 'background-image:var(--travail);animation:sp 1.6s steps(16) infinite'])
       break
-    // La pluie de pétales remplace les deux pétales lents du repos.
+    // Quand un fil attend, il présente son médaillon : plus grand et plus bas de 3 px (medaillon.json).
+    // La pluie de paillettes remplace les deux paillettes lentes du repos.
     case 'attente':
       regles.push(
-        ['.bw', 'animation:sp 1.6s steps(16) infinite,ga 14.4s step-end infinite'],
+        ['.bw', 'background-image:var(--attente);animation:sp 1.6s steps(16) infinite'],
+        ['.n', 'top:89px;font-size:12px;color:#ffe08a'],
         ['.pl', 'display:block'],
         ['.ps', 'display:none'],
         ['.bu', 'display:grid'],
         ['.bu::after', 'content:"✓"']
       )
       break
-    // Aucun pétale quand ça va mal : ils diraient le contraire de son geste.
+    // Aucune paillette quand ça va mal : elles diraient le contraire de son geste.
     case 'probleme':
       regles.push(
         ['.bw', 'background-image:var(--souci);animation:sp 1.6s steps(16) infinite'],
@@ -658,11 +644,7 @@ function reglesDuPanda(etat: NomEtatMascotte, pastille: string | null): Array<[s
           '.bu',
           'display:grid;background:#e2573f;color:#fff;box-shadow:0 0 0 1.5px #7a2416,0 1px 5px #0007;animation:tr .15s linear infinite'
         ],
-        ['.bu::after', 'content:"!"'],
-        // La bulle dit déjà « ! » : une pastille « ! » juste dessous le dirait deux fois.
-        pastille === '!'
-          ? ['.n', 'display:none']
-          : ['.n', 'color:#fff;background:#e2573f;box-shadow:0 0 0 1.5px #7a2416,0 1px 4px #0006']
+        ['.bu::after', 'content:"!"']
       )
       break
   }
@@ -969,7 +951,7 @@ export function cssDeLAccueil(
     case 'coucou':
       return cssDeLEtat({ etat: 'attente', pastille: null, fil: null }, style)
     // La bille basique n'a ni bras ni grimoire : son halo qui tourne dit qu'elle est attentive. Le
-    // panda non plus n'a pas de grimoire : il marche et tient sa lueur, et son éveil est son repos.
+    // panda non plus n'a pas de grimoire : il se penche sur son médaillon, et son éveil est son repos.
     case 'lecture':
       return style === 'basique' || style === 'panda'
         ? cssDeLEtat({ etat: 'travail', pastille: null, fil: null }, style)

@@ -606,19 +606,21 @@ describe('mascotte du bureau — style machine (conv-346)', () => {
   })
 })
 
-describe('mascotte du bureau — style panda en kimono', () => {
+describe('mascotte du bureau — style panda boss', () => {
   const css = (
     etat: 'calme' | 'travail' | 'attente' | 'probleme',
     pastille: string | null = null
   ) => cssDeLEtat({ etat, pastille, fil: null }, 'panda')
 
-  it('la page embarque ses 8 planches, sans script, et respire puis grignote au repos', () => {
+  it('la page embarque ses 4 planches, une par état, sans script, et respire au repos', () => {
     const html = htmlDeMascotte('panda')
-    expect(html.match(/data:image\/webp;base64,/gu)).toHaveLength(8)
+    expect(html.match(/data:image\/webp;base64,/gu)).toHaveLength(4)
     expect(html).toContain('img-src data:')
     expect(html).not.toMatch(/<script/iu)
-    expect(html).toMatch(/\.bw\{[^}]*var\(--repos\)[^}]*steps\(16\)[^}]*gc 25\.6s step-end/u)
-    expect(html).toContain('@keyframes gc{0%{background-image:var(--repos)}62.5%')
+    expect(html).toMatch(/\.bw\{[^}]*var\(--repos\)[^}]*animation:sp 3\.2s steps\(16\) infinite\}/u)
+    // Plus rien de la panda en kimono : ni ses autres gestes, ni sa lueur, ni ses pétales roses.
+    for (const ancien of ['--grignote', '--salut', '--lueur', 'class="lu"', '#ff9fc2'])
+      expect(html).not.toContain(ancien)
     // Mêmes accroches que les autres styles : la fenêtre y pose le nombre, la croix et les clics.
     for (const accroche of ['class="ob"', 'class="bw"', 'class="n"', 'class="bu"', 'class="f"'])
       expect(html).toContain(accroche)
@@ -638,18 +640,25 @@ describe('mascotte du bureau — style panda en kimono', () => {
     }
   })
 
-  it('un geste ne change qu’entre deux boucles : la durée du cycle est un multiple de la boucle', () => {
+  it('chaque état a son geste ; le compte s’affiche sur le médaillon, jamais sur le « ! » rouge', () => {
     expect(css('calme')).toBe('')
-    expect(css('travail', '3')).toContain('sp 1.6s steps(16) infinite,gt 12.8s step-end infinite')
+    expect(css('travail', '3')).toContain(
+      'body .bw{background-image:var(--travail);animation:sp 1.6s steps(16) infinite}'
+    )
     expect(css('travail', '3')).toContain('body .n::after{content:"3"}')
-    expect(css('attente')).toContain('sp 1.6s steps(16) infinite,ga 14.4s step-end infinite')
+    expect(css('attente', '2')).toContain(
+      'body .bw{background-image:var(--attente);animation:sp 1.6s steps(16) infinite}'
+    )
+    expect(css('attente', '2')).toContain('body .n::after{content:"2"}')
     expect(css('attente')).toContain('content:"✓"')
     expect(css('probleme')).toContain('var(--souci)')
     expect(css('probleme')).toContain('content:"!"')
-    // La bulle dit déjà « ! » : la pastille « ! » ne le répète pas, un compte reste affiché.
-    expect(css('probleme', '!').split('\n').at(-1)).toBe('body .n{display:none}')
-    expect(css('probleme', '2').split('\n').at(-1)).toContain('body .n{color:#fff')
-    // Pétales de cerisier : deux, lents, au repos ; une pluie quand un fil attend ; aucun en échec.
+    // En échec, le médaillon peint son « ! » rouge : aucun compte par-dessus, quel qu'il soit.
+    expect(css('probleme', '!')).not.toContain('.n')
+    expect(css('probleme', '2')).not.toContain('.n')
+    // Le chiffre vit DANS le panda (.ob) : il grossit avec lui au survol.
+    expect(htmlDeMascotte('panda')).toContain('<i class="bw"></i><i class="n"></i></i>')
+    // Paillettes d'or : deux, lentes, au repos ; une pluie quand un fil attend ; aucune en échec.
     const html = htmlDeMascotte('panda')
     expect(html.match(/class="ps"/gu)).toHaveLength(2)
     expect(html.match(/class="pl"/gu)).toHaveLength(7)
@@ -658,9 +667,6 @@ describe('mascotte du bureau — style panda en kimono', () => {
     expect(css('attente')).toContain('body .ps{display:none}')
     expect(css('probleme')).toContain('body .ps{display:none}')
     expect(css('travail')).not.toContain('.pl')
-    expect(12.8 / 1.6).toBe(8)
-    expect(Math.round((14.4 / 1.6) * 1000) / 1000).toBe(9)
-    expect(25.6 / 3.2).toBe(8)
   })
 
   it('sur l’accueil : il dort au repos, travaille en lecture, et son éveil est sa page nue', () => {

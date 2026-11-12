@@ -106,7 +106,7 @@ describe('Settings · Interface — style « Magicien / Basique » (conv-1249)',
       'Magicien',
       'Basique',
       'Machine (NieR)',
-      'Panda en kimono'
+      'Panda boss'
     ])
   })
 

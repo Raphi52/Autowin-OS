@@ -1,14 +1,11 @@
-"""Assemble les images de la panda en kimono en planches pour la mascotte du bureau.
+"""Assemble les images du panda boss en planches pour la mascotte du bureau.
 
-La panda est modelee et animee dans Blender (fourrure, squelette, kimono, visage a expressions,
-huit gestes de 16 images). Blender rend une image par numero (`f-001.png` ... `f-128.png`, fond
-transparent, 384x384 : le double de la planche, reduit ici pour un poil et des motifs plus nets) ;
-ce script les colle par geste en planches de 16 images de 192x192 cote a cote, en WebP, et ecrit
-le module TypeScript que la page de la mascotte embarque. La fenetre de la mascotte n'admet aucun
-script : la 3D y est rejouee en CSS, par `steps(16)`.
-
-Rendu : UN seul Blender a la fois, deux au plus. Sur une carte graphique de 2 Go, quatre rendus
-en parallele se disputent la memoire : mesure, plus de 100 s par image chacun contre 9 s seul.
+Le panda boss (lunettes-ecran, chaine et medaillon d'or) est modele en three.js : sa scene d'export
+est rendue par `scripts/mascotte-panda-rendu.mjs`, une image par numero (`f-001.png` ... `f-064.png`,
+fond transparent, 384x384 : le double de la planche, reduit ici pour un poil et des lunettes plus
+nets). Ce script les colle par geste en planches de 16 images de 192x192 cote a cote, en WebP, et
+ecrit le module TypeScript que la page de la mascotte embarque. La fenetre de la mascotte n'admet
+aucun script : la 3D y est rejouee en CSS, par `steps(16)`.
 
 Usage : python scripts/mascotte-panda-planches.py <dossier des f-NNN.png> [--apercu <dossier>]
 """
@@ -20,33 +17,25 @@ from pathlib import Path
 
 from PIL import Image
 
-# L'ordre des gestes est celui de la ligne de temps du fichier Blender : 16 images chacun.
-GESTES = ["REPOS", "SALUT", "LUEUR", "GRIGNOTE", "MARCHE", "DANSE", "APPLAUDIT", "SOUCI"]
+# Un geste par etat de la mascotte, dans l'ordre de `window.exporter.gestes` : 16 images chacun.
+GESTES = ["REPOS", "TRAVAIL", "ATTENTE", "SOUCI"]
 IMAGES_PAR_GESTE = 16
 LARGEUR, HAUTEUR = 192, 192
 RACINE = Path(__file__).resolve().parent.parent
 MODULE = RACINE / "src" / "main" / "mascotte" / "mascotte-panda-images.ts"
 
 ENTETE = """/**
- * Les planches de la PANDA en kimono : modelee et animee dans Blender (fourrure, squelette), rendue
- * en 16 images par geste (192x192, WebP), cote a cote. La fenetre de la mascotte n'admet aucun
- * script : la 3D y est donc rejouee en CSS, par `steps(16)`. Genere par
+ * Les planches du PANDA BOSS : modele en three.js (fourrure, lunettes-ecran, medaillon), rendu par
+ * `scripts/mascotte-panda-rendu.mjs` en 16 images par geste (192x192, WebP), cote a cote. La fenetre
+ * de la mascotte n'admet aucun script : la 3D y est donc rejouee en CSS, par `steps(16)`. Genere par
  * `scripts/mascotte-panda-planches.py` — ne pas editer a la main.
  */
 """
 
 
-# Le rendu de Blender sort peu contraste (noir de la fourrure vers 49-90, blanc vers 207-223 sur
-# 255, mesures sur l'image de repos) : pose sur un bureau, la panda paraissait delavee. On etire
-# donc les tons entre ces deux bornes, sans toucher a la transparence. Le noir se cale juste sous le
-# poil le plus sombre : plus bas, son pelage noir, fin et clair aux pointes, tournait au gris.
-NOIR, BLANC = 45, 220
-TABLE = [max(0, min(255, round((v - NOIR) * 255 / (BLANC - NOIR)))) for v in range(256)]
-
-
-def contraste(image: Image.Image) -> Image.Image:
-    r, v, b, a = image.split()
-    return Image.merge("RGBA", (r.point(TABLE), v.point(TABLE), b.point(TABLE), a))
+# Pas d'etirement des tons : le rendu three.js couvre deja toute la plage (luminance des pixels
+# opaques du repos : 1er centile 0, 99e centile 241). L'etirement 45-220 fait pour la panda de
+# Blender, peu contrastee, y bouchait les noirs et brulait le blanc du pelage.
 
 
 # Un dessin qui touche le bord du cadre est un dessin coupe : dans un cadre de 160 px, les manches
@@ -85,7 +74,7 @@ def planche(dossier: Path, rang: int, au_bord: dict[int, int]) -> Image.Image:
         nom = f"f-{numero:03d}.png"
         image = a_la_taille(Image.open(dossier / nom).convert("RGBA"), nom)
         au_bord[numero] = opacite_au_bord(image)
-        feuille.paste(contraste(image), (i * LARGEUR, 0))
+        feuille.paste(image, (i * LARGEUR, 0))
     return feuille
 
 
