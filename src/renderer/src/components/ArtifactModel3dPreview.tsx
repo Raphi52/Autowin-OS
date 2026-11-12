@@ -11,6 +11,7 @@ import {
   type CleArtefactsEtBandeaux
 } from '../textes-ecrans/artefacts-et-bandeaux'
 import { refusDuModele3d } from './artifact-model3d-validation'
+import { libererMoteur3d } from './moteur-3d-liberation'
 import { Spinner } from './Spinner'
 
 function artifactBytes(artifact: ChatArtifact): Uint8Array | undefined {
@@ -128,7 +129,7 @@ export function ArtifactModel3dPreview({
       stopped = true
       cancelAnimationFrame(frame)
       controls?.dispose()
-      renderer?.dispose()
+      libererMoteur3d(renderer)
       host.replaceChildren()
     }
   }, [artifact])

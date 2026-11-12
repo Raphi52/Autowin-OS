@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { DECOR_DEFAUT } from './fond-accueil'
+import { libererMoteur3d } from './moteur-3d-liberation'
 
 /**
  * Le décor 3D de la page d'accueil : la scène, sans React.
@@ -2058,7 +2059,7 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       // Le composer détient des cibles de rendu plein écran : les oublier fuit de la VRAM à chaque
       // ouverture de l'accueil.
       composer.dispose()
-      renderer.dispose()
+      libererMoteur3d(renderer)
       canvas.remove()
     }
   }
