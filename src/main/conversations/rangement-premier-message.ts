@@ -6,7 +6,7 @@ import { memeCheminSurDisque } from '../fichiers/meme-chemin'
  * LE RANGEMENT D'UNE CONVERSATION DEDUIT DE SON PREMIER MESSAGE.
  *
  * LE DEFAUT QUE CECI CORRIGE (2026-09-16) : une conversation ouverte alors que le dossier
- * actif etait `D:\BrainRotRoyale`, dont le premier message parlait des bureaux virtuels d'Autowin,
+ * actif etait celui d'un autre projet, dont le premier message parlait des bureaux virtuels d'Autowin,
  * est restee rangee au mauvais endroit jusqu'a un deplacement a la main. `depotCiteDansLeMessage`
  * ne rattrape pas ce cas : l'utilisateur NOMME son projet, il n'ecrit pas son chemin.
  *
@@ -33,7 +33,7 @@ function normaliser(texte: string): string {
 /**
  * Score d'un dossier face au message : longueur du plus long PREFIXE de son nom present dans le
  * message normalise. « Autowin » dans le message reconnait ainsi `D:\AutoWinOS` (7), alors que
- * `D:\BrainRotRoyale` ne marque rien. 0 = pas de correspondance.
+ * `D:\MonProjet` ne marque rien. 0 = pas de correspondance.
  */
 function score(nomDossier: string, messageNormalise: string): number {
   const nom = normaliser(nomDossier)

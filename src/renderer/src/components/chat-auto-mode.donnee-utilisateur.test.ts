@@ -14,7 +14,7 @@ const base = { actif: true, occupe: false, dernierTourTraite: null, dernierPromp
  * s'est tue sans message.
  */
 const SUITE_VECUE =
-  'Voici les identifiants Robux de BrainRotRoyale (3 produits + pass VIP + pass de saison) : reporte-les dans Economie.lua puis vérifie les achats en test'
+  'Voici les identifiants Robux de mon jeu (3 produits + pass VIP + pass de saison) : reporte-les dans Economie.lua puis vérifie les achats en test'
 
 describe('suite qui attend une donnée que seul l’utilisateur possède (conv-751)', () => {
   it('reconnaît la suite vécue', () => {

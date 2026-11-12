@@ -43,11 +43,11 @@ describe('liste des affectations', () => {
 describe('enregistrer une affectation', () => {
   it('enregistre le dossier et le rend dans la liste', () => {
     const rendu = enregistrerAffectationDepuisLeRendu(env, {
-      cwd: projet('BrainRotRoyale'),
+      cwd: projet('MonProjet'),
       brain: 'perso'
     })
     expect(rendu).toStrictEqual({
-      affectations: [{ cwd: resolve(projet('BrainRotRoyale')), brain: 'perso' }]
+      affectations: [{ cwd: resolve(projet('MonProjet')), brain: 'perso' }]
     })
     expect(listerAffectations(env)).toStrictEqual(rendu)
   })

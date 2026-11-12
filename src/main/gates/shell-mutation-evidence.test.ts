@@ -413,7 +413,7 @@ describe('une preuve de test redirigée vers un fichier reste une VÉRIFICATION'
 
 /**
  * BOUCLE MESURÉE le 2026-10-30 (`run-acf5f351f041-1`) — même pathologie que,
- * autre langage. Le lot RobloxFishingBrainrot exigeait « tests verts » ; ses tests se lancent par
+ * autre langage. Le lot d'un dépôt Python exigeait « tests verts » ; ses tests se lancent par
  * `python tools/tests.py` (code 0, 898 OK, relancés à chaque passage). Le contrôle final a
  * pourtant refusé CINQ fois « Promis mais pas fait : "Tests demandes executes avec un code de
  * sortie 0" ».
@@ -426,7 +426,7 @@ describe('une preuve de test redirigée vers un fichier reste une VÉRIFICATION'
 describe('un test lancé par l’interpréteur Python est une VÉRIFICATION', () => {
   it.each([
     'python tools/tests.py',
-    'cd "/d/SOurcees/RobloxFishingBrainrot" && python tools/tests.py > /tmp/t.log 2>&1; echo "EXIT_TESTS=$?"',
+    'cd "/d/Sources/MonProjet" && python tools/tests.py > /tmp/t.log 2>&1; echo "EXIT_TESTS=$?"',
     'python3 tests/test_peche.py',
     'py -3 tools/tests.py',
     'python -I tools/run_tests.py',

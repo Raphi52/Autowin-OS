@@ -13,8 +13,8 @@ import {
  * panne ne casse pas le tour.
  */
 const AUTOWIN = resolve('D:/AutoWinOS')
-const BRAINROT = resolve('D:/BrainRotRoyale')
-const CONNUS = [AUTOWIN, BRAINROT]
+const AUTRE = resolve('D:/MonProjet')
+const CONNUS = [AUTOWIN, AUTRE]
 const existe = (): boolean => true
 /** Le PREMIER message reel, copie de sa trace causale — jamais reecrit. */
 const MESSAGE_REEL_CONV_611 =
@@ -26,7 +26,7 @@ describe('dossierDeduitParModele', () => {
   it('range le VRAI premier message de conv-611, qui n ecrit jamais « Autowin »', async () => {
     const envoyer = repond({ dossier: AUTOWIN, confiance: 0.93, motif: 'bureaux virtuels' })
     expect(
-      await dossierDeduitParModele(MESSAGE_REEL_CONV_611, CONNUS, BRAINROT, envoyer, existe)
+      await dossierDeduitParModele(MESSAGE_REEL_CONV_611, CONNUS, AUTRE, envoyer, existe)
     ).toBe(AUTOWIN)
     const [systeme, charge] = envoyer.mock.calls[0]
     expect(systeme).toBe(RANGEMENT_SYSTEM)
@@ -38,7 +38,7 @@ describe('dossierDeduitParModele', () => {
       await dossierDeduitParModele(
         MESSAGE_REEL_CONV_611,
         CONNUS,
-        BRAINROT,
+        AUTRE,
         repond({ dossier: AUTOWIN, confiance: 0.6 }),
         existe
       )
@@ -50,7 +50,7 @@ describe('dossierDeduitParModele', () => {
       await dossierDeduitParModele(
         'un sujet',
         CONNUS,
-        BRAINROT,
+        AUTRE,
         repond({ dossier: 'D:/Invente', confiance: 1 }),
         existe
       )
@@ -66,14 +66,14 @@ describe('dossierDeduitParModele', () => {
       })
     ]
     for (const envoyer of appels) {
-      expect(await dossierDeduitParModele('un sujet', CONNUS, BRAINROT, envoyer, existe)).toBeNull()
+      expect(await dossierDeduitParModele('un sujet', CONNUS, AUTRE, envoyer, existe)).toBeNull()
     }
   })
 
   it('ecarte le dossier absent du poste avant meme d interroger le modele', async () => {
     const envoyer = repond({ dossier: AUTOWIN, confiance: 1 })
     expect(
-      await dossierDeduitParModele('un sujet', [AUTOWIN], BRAINROT, envoyer, () => false)
+      await dossierDeduitParModele('un sujet', [AUTOWIN], AUTRE, envoyer, () => false)
     ).toBeNull()
     expect(envoyer).not.toHaveBeenCalled()
   })
@@ -86,7 +86,7 @@ describe('bout en bout — conv-611 rangee par le modele', () => {
     const applique = await rangerConversationSurLePremierMessage({
       conversation: { messages: [{ role: 'user', content: MESSAGE_REEL_CONV_611 }] },
       dossiersConnus: CONNUS,
-      dossierActif: BRAINROT,
+      dossierActif: AUTRE,
       existe,
       demanderAuModele: repond({ dossier: AUTOWIN, confiance: 0.95 }),
       ranger: (c) => ranges.push(c),
@@ -104,7 +104,7 @@ describe('bout en bout — conv-611 rangee par le modele', () => {
         messages: [{ role: 'user', content: 'rien a voir avec AutoWinOS, parle moi de cuisine' }]
       },
       dossiersConnus: CONNUS,
-      dossierActif: BRAINROT,
+      dossierActif: AUTRE,
       existe,
       demanderAuModele: repond({ dossier: '', confiance: 0.1, motif: 'negation' }),
       ranger: (c) => ranges.push(c),
@@ -218,7 +218,7 @@ describe('preference de la categorie sur le dossier', () => {
       await dossierDeduitParModele(
         MESSAGE_REEL_CONV_611,
         CONNUS,
-        BRAINROT,
+        AUTRE,
         repond({ rangement: AUTOWIN, confiance: 0.9 }),
         existe,
         ['Autowin OS', 'Perso']
@@ -232,11 +232,11 @@ describe('preference de la categorie sur le dossier', () => {
         'un souci dans le projet',
         CONNUS,
         AUTOWIN,
-        repond({ rangement: BRAINROT, confiance: 0.9 }),
+        repond({ rangement: AUTRE, confiance: 0.9 }),
         existe,
         ['Autowin OS']
       )
-    ).toBe(BRAINROT)
+    ).toBe(AUTRE)
   })
 
   it('demande explicitement au modele de preferer la categorie', () => {

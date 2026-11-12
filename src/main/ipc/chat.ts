@@ -2232,7 +2232,7 @@ Le fil reprend ensuite normalement.`
    * RANGEMENT AUTOMATIQUE AU PREMIER MESSAGE, quand la demande NOMME un projet connu sans donner
    * son chemin.
    *
-   * Cas mesure (2026-09-16) : conversation ouverte dans D:\BrainRotRoyale, premier
+   * Cas mesure (2026-09-16) : conversation ouverte dans le dossier d'un autre projet, premier
    * message sur les bureaux virtuels d'Autowin -> restee au mauvais endroit jusqu'a un deplacement
    * a la main. `alignerDossierSurLaDemande` ne couvre que le chemin ECRIT ; ici l'utilisateur
    * nomme seulement son projet. On ne choisit QUE parmi les dossiers deja utilises sur ce poste,

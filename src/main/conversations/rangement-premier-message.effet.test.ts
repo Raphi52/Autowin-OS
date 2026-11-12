@@ -7,7 +7,7 @@ import { rangerConversationSurLePremierMessage } from './rangement-premier-messa
  * ici, la ou un test textuel passait.
  */
 const AUTOWIN = 'D:\\AutoWinOS'
-const AUTRE = 'D:\\BrainRotRoyale'
+const AUTRE = 'D:\\MonProjet'
 
 async function harnais(
   conversation: Parameters<typeof rangerConversationSurLePremierMessage>[0]['conversation'],

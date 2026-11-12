@@ -119,12 +119,12 @@ describe('affectations dossier de travail → Brain', () => {
   it('un sous-dossier suit son dossier assigné ; un frère au nom voisin ne le suit pas', () => {
     const env = poste()
     const parent = temp()
-    const dossier = join(parent, 'BrainRotRoyale')
+    const dossier = join(parent, 'MonProjet')
     enregistrerAffectation(env, dossier, 'perso')
 
     expect(brainPourCwd(dossier, env)).toBe('perso')
     expect(brainPourCwd(join(dossier, 'src', 'profond'), env)).toBe('perso')
-    expect(brainPourCwd(join(parent, 'BrainRotRoyale-bis'), env)).toBeUndefined()
+    expect(brainPourCwd(join(parent, 'MonProjet-bis'), env)).toBeUndefined()
     expect(brainPourCwd(parent, env)).toBeUndefined()
   })
 

@@ -170,7 +170,7 @@ describe('copies ouvertes par l’app pour ses agents', () => {
     expect(estDossierDuChat('D:\\AutoWinOS\\.autowin-data')).toBe(false)
     // Un vrai projet dont le nom ressemble ne sort pas.
     expect(estDossierDuChat('D:\\projets\\autowin-data')).toBe(true)
-    expect(estDossierDuChat('D:\\BrainRotRoyale')).toBe(true)
+    expect(estDossierDuChat('D:\\MonProjet')).toBe(true)
   })
 
   it('sortent de la liste relue, donc aussi celles déjà mémorisées', () => {

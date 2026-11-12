@@ -11,7 +11,7 @@ import type { QuelBrain } from './brain-reglage'
  * Un dossier de travail (CWD) peut être assigné au Brain de l'équipe ou au Brain perso. Les notes
  * écrites depuis ce dossier iront dans le Brain assigné. Le fichier vit à côté de `brain.json` et de
  * `brain-perso.json`, dans `%APPDATA%\autowin-os\brain-affectations.json` :
- *   { "affectations": [ { "cwd": "D:\\BrainRotRoyale", "brain": "perso" } ] }
+ *   { "affectations": [ { "cwd": "D:\\MonProjet", "brain": "perso" } ] }
  *
  * Ce module lit, écrit et répond « quel Brain pour ce dossier ». Il ne décide ni du repli quand le
  * Brain perso n'est pas réglé, ni des recherches : elles interrogent toujours les deux Brains.
@@ -47,7 +47,7 @@ function cheminComparable(chemin: string): string {
 /** Le chemin est-il le dossier lui-même, ou un de ses sous-dossiers ? Formes déjà comparables. */
 function estDansDossier(cible: string, dossier: string): boolean {
   if (cible === dossier) return true
-  // Le `/` ajouté empêche un frère au nom voisin (« Brain » et « BrainRotRoyale ») d'y passer.
+  // Le `/` ajouté empêche un frère au nom voisin (« MonProjet » et « MonProjet-bis ») d'y passer.
   const prefixe = dossier.endsWith('/') ? dossier : `${dossier}/`
   return cible.startsWith(prefixe)
 }

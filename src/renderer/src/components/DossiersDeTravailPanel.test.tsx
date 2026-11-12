@@ -10,7 +10,7 @@ import {
   retirerDossierDuChat
 } from './dossiers-du-chat'
 
-const ROTATION = 'D:\\BrainRotRoyale'
+const PROJET = 'D:\\MonProjet'
 const JOURNAL = 'D:\\Notes\\Journal'
 const DEPOT = 'D:\\AutoWinOS'
 const PERSONNEL = 'C:\\Users\\moi'
@@ -121,39 +121,39 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
 
   it('liste les dossiers du Chat, « This computer » en tête puis le dépôt de la session', async () => {
     installerApi()
-    poserDossiersDuChat([ROTATION, JOURNAL])
+    poserDossiersDuChat([PROJET, JOURNAL])
     await monter()
-    expect(chemins()).toEqual([PERSONNEL, DEPOT, ROTATION, JOURNAL])
-    expect(noms()).toEqual(['💻 This computer', 'AutoWinOS', 'BrainRotRoyale', 'Journal'])
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, PROJET, JOURNAL])
+    expect(noms()).toEqual(['💻 This computer', 'AutoWinOS', 'MonProjet', 'Journal'])
   })
 
   it('ne liste pas un dossier assigné qui n’est pas un dossier du Chat', async () => {
     installerApi([{ cwd: 'D:\\Ailleurs', brain: 'perso' }])
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
-    expect(chemins()).toEqual([PERSONNEL, DEPOT, ROTATION])
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, PROJET])
   })
 
   it('ne liste pas le dépôt de la session quand sa croix l’a retiré, mais garde « This computer »', async () => {
     installerApi()
-    poserDossiersDuChat([ROTATION], [DEPOT, PERSONNEL])
+    poserDossiersDuChat([PROJET], [DEPOT, PERSONNEL])
     await monter()
-    expect(chemins()).toEqual([PERSONNEL, ROTATION])
+    expect(chemins()).toEqual([PERSONNEL, PROJET])
   })
 
   it('ne répète pas un dossier présent dans le Chat et parmi ceux toujours proposés', async () => {
     installerApi()
-    poserDossiersDuChat(['D:/AutoWinOS/', ROTATION])
+    poserDossiersDuChat(['D:/AutoWinOS/', PROJET])
     await monter()
-    expect(chemins()).toEqual([PERSONNEL, DEPOT, ROTATION])
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, PROJET])
   })
 
   it('suit un retrait fait ailleurs pendant que le menu est ouvert', async () => {
     installerApi()
-    poserDossiersDuChat([ROTATION, JOURNAL])
+    poserDossiersDuChat([PROJET, JOURNAL])
     await monter()
     await act(async () => {
-      retirerDossierDuChat(ROTATION)
+      retirerDossierDuChat(PROJET)
     })
     await flush()
     expect(chemins()).toEqual([PERSONNEL, DEPOT, JOURNAL])
@@ -161,28 +161,28 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
 
   it('relit la liste à l’annonce du Chat, même sans retrait', async () => {
     installerApi()
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
-    poserDossiersDuChat([ROTATION, JOURNAL])
+    poserDossiersDuChat([PROJET, JOURNAL])
     await act(async () => {
       window.dispatchEvent(new Event(EVT_DOSSIERS_DU_CHAT))
     })
     await flush()
-    expect(chemins()).toEqual([PERSONNEL, DEPOT, ROTATION, JOURNAL])
+    expect(chemins()).toEqual([PERSONNEL, DEPOT, PROJET, JOURNAL])
   })
 
   it('montre le Brain de l’équipe pour un dossier sans affectation', async () => {
     installerApi()
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
-    expect(brainDe(ROTATION)).toBe('equipe')
+    expect(brainDe(PROJET)).toBe('equipe')
   })
 
   it('montre le Brain assigné au dossier, chemin comparé sans casse ni séparateur final', async () => {
-    installerApi([{ cwd: 'd:/brainrotroyale/', brain: 'perso' }])
-    poserDossiersDuChat([ROTATION])
+    installerApi([{ cwd: 'd:/monprojet/', brain: 'perso' }])
+    poserDossiersDuChat([PROJET])
     await monter()
-    expect(brainDe(ROTATION)).toBe('perso')
+    expect(brainDe(PROJET)).toBe('perso')
   })
 
   it('montre le Brain hérité d’un dossier parent, et le plus précis gagne', async () => {
@@ -201,49 +201,49 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
   it('assigne le Brain choisi au dossier, puis montre la liste renvoyée', async () => {
     const api = installerApi()
     api.enregistrerBrainAffectation.mockResolvedValueOnce({
-      affectations: [{ cwd: ROTATION, brain: 'perso' }]
+      affectations: [{ cwd: PROJET, brain: 'perso' }]
     })
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
-    await choisir(ROTATION, 'perso')
-    expect(api.enregistrerBrainAffectation).toHaveBeenCalledWith({ cwd: ROTATION, brain: 'perso' })
-    expect(brainDe(ROTATION)).toBe('perso')
+    await choisir(PROJET, 'perso')
+    expect(api.enregistrerBrainAffectation).toHaveBeenCalledWith({ cwd: PROJET, brain: 'perso' })
+    expect(brainDe(PROJET)).toBe('perso')
     expect(alerte()).toBeUndefined()
   })
 
   it('ne redemande rien quand on clique le Brain déjà montré', async () => {
-    const api = installerApi([{ cwd: ROTATION, brain: 'perso' }])
-    poserDossiersDuChat([ROTATION])
+    const api = installerApi([{ cwd: PROJET, brain: 'perso' }])
+    poserDossiersDuChat([PROJET])
     await monter()
-    await choisir(ROTATION, 'perso')
+    await choisir(PROJET, 'perso')
     await choisir(DEPOT, 'equipe')
     expect(api.enregistrerBrainAffectation).not.toHaveBeenCalled()
   })
 
   it('une `erreur` qui accompagne une écriture réussie est un avertissement, pas une alerte', async () => {
-    const api = installerApi([{ cwd: ROTATION, brain: 'perso' }])
+    const api = installerApi([{ cwd: PROJET, brain: 'perso' }])
     api.enregistrerBrainAffectation.mockResolvedValueOnce({
-      affectations: [{ cwd: ROTATION, brain: 'equipe' }],
+      affectations: [{ cwd: PROJET, brain: 'equipe' }],
       erreur: 'Fichier illisible mis de côté.'
     })
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
-    await choisir(ROTATION, 'equipe')
-    expect(brainDe(ROTATION)).toBe('equipe')
+    await choisir(PROJET, 'equipe')
+    expect(brainDe(PROJET)).toBe('equipe')
     expect(avertissement()).toBe('Fichier illisible mis de côté.')
     expect(alerte()).toBeUndefined()
   })
 
   it('montre en échec un changement de Brain refusé : la liste renvoyée garde l’ancien Brain', async () => {
-    const api = installerApi([{ cwd: ROTATION, brain: 'perso' }])
+    const api = installerApi([{ cwd: PROJET, brain: 'perso' }])
     api.enregistrerBrainAffectation.mockResolvedValueOnce({
-      affectations: [{ cwd: ROTATION, brain: 'perso' }],
+      affectations: [{ cwd: PROJET, brain: 'perso' }],
       erreur: 'Écriture impossible.'
     })
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
-    await choisir(ROTATION, 'equipe')
-    expect(brainDe(ROTATION)).toBe('perso')
+    await choisir(PROJET, 'equipe')
+    expect(brainDe(PROJET)).toBe('perso')
     expect(alerte()).toBe('Écriture impossible.')
     expect(avertissement()).toBeUndefined()
   })
@@ -251,10 +251,10 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
   it('montre en échec une demande qui n’aboutit pas', async () => {
     const api = installerApi()
     api.enregistrerBrainAffectation.mockRejectedValueOnce(new Error('canal coupé'))
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
-    await choisir(ROTATION, 'perso')
-    expect(brainDe(ROTATION)).toBe('equipe')
+    await choisir(PROJET, 'perso')
+    expect(brainDe(PROJET)).toBe('equipe')
     expect(alerte()).toBe('Impossible d’enregistrer cette affectation.')
   })
 
@@ -264,7 +264,7 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
       affectations: [],
       erreur: 'Le fichier brain-affectations.json est présent mais illisible.'
     })
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
     expect(avertissement()).toBe('Le fichier brain-affectations.json est présent mais illisible.')
     expect(alerte()).toBeUndefined()
@@ -273,7 +273,7 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
   it('dit que les Brains n’ont pas pu être lus, au lieu de montrer « Équipe » partout', async () => {
     const api = installerApi()
     api.brainAffectations.mockRejectedValueOnce(new Error('canal coupé'))
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
     expect(alerte()).toBe('Impossible de lire le Brain de chaque dossier de travail.')
     expect(container.querySelector('ul')).toBeNull()
@@ -281,7 +281,7 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
 
   it('ne fait pas tomber la vue quand le pont manque (application pas à jour)', async () => {
     ;(window as unknown as { api: object }).api = {}
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
     expect(alerte()).toBe('Impossible de lire le Brain de chaque dossier de travail.')
   })
@@ -309,7 +309,7 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
 
   it('filtre les dossiers sur leur chemin ou leur nom, sans tenir compte de la casse, et dit quand rien ne correspond', async () => {
     installerApi()
-    poserDossiersDuChat([ROTATION, JOURNAL])
+    poserDossiersDuChat([PROJET, JOURNAL])
     await monter()
     await saisir(filtre(), 'journal')
     expect(chemins()).toEqual([JOURNAL])
@@ -330,37 +330,37 @@ describe('DossiersDeTravailPanel — la liste est celle des dossiers de travail 
 
   it('la croix retire le dossier de la liste du Chat : il quitte ce menu, la mémoire du Chat et part au Board', async () => {
     const api = installerApi()
-    poserDossiersDuChat([ROTATION, JOURNAL])
+    poserDossiersDuChat([PROJET, JOURNAL])
     await monter()
-    await act(async () => croix(ROTATION)?.click())
+    await act(async () => croix(PROJET)?.click())
     await flush()
     expect(chemins()).toEqual([PERSONNEL, DEPOT, JOURNAL])
     expect(JSON.parse(localStorage.getItem(CLE_DOSSIERS_CONNUS) ?? '[]')).toEqual([JOURNAL])
-    expect(JSON.parse(localStorage.getItem(CLE_DOSSIERS_RETIRES) ?? '[]')).toContain(ROTATION)
-    expect(api.boardDossiersDuChat).toHaveBeenLastCalledWith([JOURNAL], [ROTATION])
+    expect(JSON.parse(localStorage.getItem(CLE_DOSSIERS_RETIRES) ?? '[]')).toContain(PROJET)
+    expect(api.boardDossiersDuChat).toHaveBeenLastCalledWith([JOURNAL], [PROJET])
   })
 
   it('la croix retire aussi le dépôt de la session, que le Chat propose toujours', async () => {
     installerApi()
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
     await act(async () => croix(DEPOT)?.click())
     await flush()
-    expect(chemins()).toEqual([PERSONNEL, ROTATION])
+    expect(chemins()).toEqual([PERSONNEL, PROJET])
   })
 
   it('« This computer » n’a pas de croix : il ne se retire jamais', async () => {
     installerApi()
-    poserDossiersDuChat([ROTATION])
+    poserDossiersDuChat([PROJET])
     await monter()
     expect(croix(PERSONNEL)).toBeUndefined()
-    expect(croix(ROTATION)).toBeDefined()
+    expect(croix(PROJET)).toBeDefined()
     expect(container.querySelectorAll('button.dossiers-travail__croix')).toHaveLength(2)
   })
 
   it('n’a pas d’ajout d’un chemin libre : un dossier s’ajoute depuis le Chat', async () => {
-    installerApi([{ cwd: ROTATION, brain: 'perso' }])
-    poserDossiersDuChat([ROTATION])
+    installerApi([{ cwd: PROJET, brain: 'perso' }])
+    poserDossiersDuChat([PROJET])
     await monter()
     expect(container.querySelector('form')).toBeNull()
     expect(container.querySelector('input[type="text"]')).toBeNull()
