@@ -29,6 +29,7 @@ import { entrerLeTravailDeLaCopie } from '../copies/copie-de-tache'
 import { dossierDeCopieDeTache, racineDesCopiesDeTaches } from '../copies/chemins-de-copies'
 import { lireLaBaseDuFil } from '../git/photo-du-code'
 import { memeCheminSurDisque } from '../fichiers/meme-chemin'
+import { SUITE_QUAND_LA_PORTE_RETENTE_SEULE } from './reparation-du-refus'
 
 /**
  * ENCHAÎNEMENT AUTO DU CHAT.
@@ -815,7 +816,9 @@ function texteDuRefusDeLaPorte(refus: {
   if (refus.motif === 'base-absente')
     return 'La base de ce fil n’existe plus : la porte ne peut pas dire ce que le fil a changé depuis son dernier passage. Rien n’est entré dans main, et jamais toute la copie à la place.'
   // la passe horaire refait cette entrée seule (menage-des-copies-de-fil.ts) : « Autowin retentera » dit vrai.
-  if (refus.motif === 'modifie-non-commite') return `${refus.raison} Autowin retentera tout seul.`
+  // la même phrase est relue par la réparation automatique, qui ne lance alors aucun tour.
+  if (refus.motif === 'modifie-non-commite')
+    return `${refus.raison} ${SUITE_QUAND_LA_PORTE_RETENTE_SEULE}`
   return refus.raison
 }
 

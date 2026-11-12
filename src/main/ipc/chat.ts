@@ -109,6 +109,7 @@ import { lancerSansAttendre } from '../chat/lancer-sans-attendre'
 import { demarrerPointEntreeLocal } from '../app/point-entree-local'
 import { modeleDuTour } from '../chat/modele-de-conversation'
 import { creerRelanceurSurDisque, type RelanceurTachesDeFond } from '../chat/relance-taches-de-fond'
+import { lancerLaReparationDuRefus } from '../chat/reparation-du-refus'
 import { enregistrerDirectiveDansLeFil } from '../chat/directive-dans-le-fil'
 import { buildContinuationProviderHistory } from '../chat/chat-continuation'
 import { parseFileRef, resolveFileRef } from '../../shared/file-ref'
@@ -2130,6 +2131,10 @@ Le fil reprend ensuite normalement.`
   const suiviDesPlans: { coordinateur?: CoordinateurDesPlans } = {}
   /** Assigné plus bas, une fois `scheduledChatRuntime` construit (il ouvre le tour `/git`). */
   const suiviGitApresFil: { file?: FileGitApresFil } = {}
+  /** Assigné plus bas, une fois `scheduledChatRuntime` construit (il ouvre le tour de réparation). */
+  const reparationDuRefus: {
+    envoyerTour?: Parameters<typeof lancerLaReparationDuRefus>[0]['envoyerTour']
+  } = {}
   const lancerTour = createRunPilotChat({
     os,
     pilot,
@@ -2760,6 +2765,27 @@ Le fil reprend ensuite normalement.`
             })
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
             .finally(finPublication)
+          // La porte a refusé le travail du fil : l'app lance elle-même le tour qui règle la cause, une
+          // fois la publication close. Sans lui, l'utilisateur devait lire le refus et le demander.
+          void publicationDuTour.then((rapport) => {
+            const { envoyerTour } = reparationDuRefus
+            if (!envoyerTour) return
+            lancerLaReparationDuRefus(
+              {
+                envoyerTour,
+                journal: (message, detail) =>
+                  console.warn('[reparation du refus]', message, detail ?? '')
+              },
+              {
+                conversationId,
+                rapport,
+                demande,
+                deFond: args[5]?.background === true,
+                lotDePlan: suiviDesPlans.coordinateur?.planDuFil(conversationId)?.role === 'enfant',
+                filOccupe: activeChatTurns.isInFlight(conversationId)
+              }
+            )
+          })
         }
         // Le bloc git des commits que CE tour a publiés, par lui-même ou par l'enchaînement auto,
         // une fois l'enchaînement fini (Ces publications ne posaient aucun bloc).
@@ -3406,6 +3432,11 @@ Le fil reprend ensuite normalement.`
     }
   })
   relanceTachesDeFond.relanceur = relanceurTachesDeFond
+  // Même voie que la reprise d'une tâche de fond : un tour dans le fil, hors du devis du tour refusé.
+  reparationDuRefus.envoyerTour = (conversationId, prompt) =>
+    os.executionSupervisor.runOutsideCurrent(() =>
+      scheduledChatRuntime.runPrompt(conversationId, prompt)
+    )
   /*
    * « PUBLIER LES FILS FINIS » : une passe à la fois. AUCUN tour ni
    * message dans le fil : l'app vérifie, commite et pousse elle-même, et seul le titre du commit part
