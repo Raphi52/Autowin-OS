@@ -242,39 +242,69 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
   })
 
   /**
-   * L'ANCIENNE CARTE etait repeinte par sept feuilles de theme (fond, liseré, degrade par statut) :
-   * chaque correction ecrite d'un cote etait ecrasee de l'autre. Le cadre n'a qu'une source.
-   * Exception nommee : theme-holographique-clair.css, en cours de reprise par une autre
-   * conversation, garde des regles `.activity-group` MORTES (aucun element ne porte plus cette
-   * classe) — elles ne visent pas le cadre.
+   * ANNEAU CHROME : un seul dessin pour le bord de tous les blocs encadres du fil, un metal neutre
+   * dont la couleur n'est qu'une frange au bord des eclats, et un eclat qui ne bouge que la ou il dit
+   * quelque chose. ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer un bloc de la liste, ecrire une
+   * couleur en dur, remettre le spectre dans le metal (l'arc-en-ciel tout autour que l'utilisateur a
+   * refuse), ou faire bouger l'eclat des blocs au repos (l'animation repeint le calque a chaque image).
    */
-  // Ce qui est interdit : une regle dont la CIBLE est le cadre (son fond, son bord). Une copie de
-  // theme qui vise un element DANS le cadre (la pastille de duree, recolorée comme celles des
-  // capsules) est legitime : elle suit le theme sans toucher au cadre.
-  /**
-   * ANNEAU PRISME : un seul dessin pour le bord de tous les blocs encadres du fil, et un eclat qui
-   * ne tourne que la ou il dit quelque chose. ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer un bloc
-   * de la liste, ecrire une couleur du spectre en dur, ou faire tourner l'anneau des blocs au repos
-   * (une animation de l'angle repeint le calque a chaque image).
-   */
-  it('pose l anneau prisme sur chaque bloc encadre, a partir des jetons du theme', () => {
+  it('pose l anneau chrome sur chaque bloc encadre, a partir des jetons du theme', () => {
     const debut = css.indexOf(':is(.cadre-anneau, .look-decode-block, .bloc-3d)::before {')
     expect(debut).toBeGreaterThan(-1)
-    const regle = css.slice(debut, css.indexOf('\n}', debut))
-    // Ses propres jetons, pas ceux des statuts : en Nebuleuse, l'or et le cyan sont roses et le
-    // spectre retombait dans le degrade rose -> bleu du theme.
-    for (const jeton of ['rouge', 'or', 'cyan', 'bleu', 'magenta'])
-      expect(regle).toContain(`var(--prisme-${jeton})`)
-    expect(regle).toMatch(/conic-gradient\(\s*from var\(--prisme-angle\)/)
+    const regle = css.slice(debut, css.indexOf('\n}', debut)).replace(/\/\*[\s\S]*?\*\//g, '')
+    const fond = regle.slice(regle.indexOf('background:') + 'background:'.length)
+    const valeur = fond.slice(0, fond.indexOf(';'))
+    // Les couches du fond, coupees aux virgules de premier niveau.
+    const couches: string[] = []
+    let profondeur = 0
+    let courante = ''
+    for (const c of valeur) {
+      if (c === '(') profondeur++
+      if (c === ')') profondeur--
+      if (c === ',' && profondeur === 0) {
+        couches.push(courante.trim())
+        courante = ''
+      } else courante += c
+    }
+    couches.push(courante.trim())
+
+    expect(valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
+    const metal = couches.filter((c) => c.startsWith('linear-gradient('))
+    expect(metal).toHaveLength(1)
+    for (const jeton of ['eclat', 'clair', 'moyen', 'sombre'])
+      expect(metal[0]).toContain(`var(--chrome-${jeton})`)
+    expect(metal[0]).not.toContain('--prisme-')
+    // Le spectre ne vit que dans des franges : des anneaux d'ellipse transparents au centre, poses
+    // sur la position de l'eclat.
+    const franges = couches.filter((c) => c.includes('--prisme-'))
+    expect(franges).toHaveLength(2)
+    for (const frange of franges) {
+      expect(frange).toMatch(
+        /^radial-gradient\(\s*\d+px \d+px at [^,]*var\(--chrome-x\)[^,]*,\s*transparent \d+%/
+      )
+    }
+    for (const jeton of ['rouge', 'or', 'cyan', 'bleu'])
+      expect(franges.join('\n')).toContain(`var(--prisme-${jeton})`)
     expect(regle).not.toMatch(/animation/)
   })
 
-  it('ne fait tourner l eclat que sur un bloc en cours ou survole', () => {
-    const regles = [...css.matchAll(/([^{}]+)\{[^{}]*animation:\s*prisme-tour[^{}]*\}/g)].map((m) =>
-      m[1]!
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .split(',')
-        .map((s) => s.replace(/\s+/g, ' ').trim())
+  it('donne aux tranches de la pile d images le meme metal que le bord', () => {
+    const pile = readFileSync(join(ICI, 'ArtifactPreview.css'), 'utf8')
+    const debut = pile.indexOf('.artifact-pile__tranches > span {')
+    expect(debut).toBeGreaterThan(-1)
+    const regle = pile.slice(debut, pile.indexOf('\n}', debut))
+    for (const jeton of ['eclat', 'clair', 'moyen', 'sombre'])
+      expect(regle).toContain(`var(--chrome-${jeton})`)
+    expect(regle).not.toMatch(/--capsule-|--prisme-/)
+  })
+
+  it('ne fait bouger l eclat que sur un bloc en cours ou survole', () => {
+    const regles = [...css.matchAll(/([^{}]+)\{[^{}]*animation:\s*chrome-balayage[^{}]*\}/g)].map(
+      (m) =>
+        m[1]!
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .split(',')
+          .map((s) => s.replace(/\s+/g, ' ').trim())
     )
     expect(regles).toEqual([
       [
@@ -286,12 +316,25 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     ])
   })
 
-  it('aucune feuille de theme ne repeint le cadre', () => {
+  /**
+   * L'ANCIENNE CARTE etait repeinte par sept feuilles de theme (fond, liseré, degrade par statut) :
+   * chaque correction ecrite d'un cote etait ecrasee de l'autre. Le cadre n'a qu'une source.
+   * Exception nommee : theme-holographique-clair.css, en cours de reprise par une autre
+   * conversation, garde des regles `.activity-group` MORTES (aucun element ne porte plus cette
+   * classe) — elles ne visent pas le cadre.
+   * Les TRANCHES de la pile d'images prolongent ce bord sous la carte de devant : un theme qui les
+   * repeint (la lave rose et bleu de Nebuleuse) les detache du chrome.
+   */
+  // Ce qui est interdit : une regle dont la CIBLE est le cadre (son fond, son bord). Une copie de
+  // theme qui vise un element DANS le cadre (la pastille de duree, recolorée comme celles des
+  // capsules) est legitime : elle suit le theme sans toucher au cadre.
+  it('aucune feuille de theme ne repeint le cadre ni les tranches de la pile', () => {
     const assets = join(ICI, '..', 'assets')
     const cibleLeCadre = /\.(activity-anneau|cadre-anneau)[\w\-.[\]='"():]*\s*[,{]/
     for (const fichier of readdirSync(assets).filter((f) => f.endsWith('.css'))) {
       const feuille = readFileSync(join(assets, fichier), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
       expect(feuille, fichier).not.toMatch(cibleLeCadre)
+      expect(feuille, fichier).not.toMatch(/\.artifact-pile__tranche/)
     }
   })
 })

@@ -72,12 +72,16 @@
   --err: #b23a34;
   --info: #0f6f9c;
   --violet: #5a48c8;
-  /* Le prisme plus soutenu : sur fond pale, les teintes de nuit se delavent. */
+  /* Le chrome plus fonce et la frange plus soutenue : sur fond pale, un argent clair disparait et
+     les teintes de nuit se delavent. L'eclat reste blanc, un reflet de metal. */
+  --chrome-eclat: #ffffff;
+  --chrome-clair: #b9bec6;
+  --chrome-moyen: #6b717b;
+  --chrome-sombre: #23262c;
   --prisme-rouge: #d43a1a;
   --prisme-or: #b98600;
   --prisme-cyan: #0a91c4;
   --prisme-bleu: #2f4bd8;
-  --prisme-magenta: #a32fd1;
 
   /* --------------------------------------------------------------------------
      LE CHAT SUIT ENFIN LE THEME. Les 116 jetons `--chat-*` valent, dans theme.css, la couleur

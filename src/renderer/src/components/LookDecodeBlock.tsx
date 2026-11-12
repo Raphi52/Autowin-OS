@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
-// L'anneau prisme de son bord est partagé par tous les blocs du fil : il vit dans anneau-activite.css.
+// L'anneau chrome de son bord est partagé par tous les blocs du fil : il vit dans anneau-activite.css.
 import './anneau-activite.css'
 import './LookDecodeBlock.css'
 

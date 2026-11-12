@@ -387,7 +387,9 @@
   font: 700 0.92em/1.5 var(--mono, ui-monospace, Consolas, monospace);
 }
 /* Les deux bords qui dépassent sous la carte de devant : un U creux de 2 px, le même calque évidé
-   par masque que le bord des capsules (anneau-activite.css), de plus en plus étroit et pâle. */
+   par masque que le bord des blocs (anneau-activite.css), de plus en plus étroit et pâle. Le même
+   métal chrome aussi : une pile aux bords rose et bleu sous une carte argentée se lisait comme un
+   autre objet. */
 .artifact-pile__tranches {
   display: flex;
   flex-direction: column;
@@ -398,7 +400,17 @@
   height: 6px;
   padding: 0 2px 2px;
   border-radius: 0 0 12px 12px;
-  background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  background: linear-gradient(
+    100deg,
+    var(--chrome-moyen),
+    var(--chrome-clair) 14%,
+    var(--chrome-sombre) 32%,
+    var(--chrome-moyen) 48%,
+    var(--chrome-eclat) 58%,
+    var(--chrome-sombre) 72%,
+    var(--chrome-clair) 88%,
+    var(--chrome-moyen)
+  );
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);

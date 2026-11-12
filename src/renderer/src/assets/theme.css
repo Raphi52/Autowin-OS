@@ -64,14 +64,18 @@
   --info: var(--cyan);
   --violet: #8f7cff;
 
-  /* Anneau prisme des blocs du fil (anneau-activite.css) : une lumiere decomposee par un prisme.
-     Ses jetons a part, parce que l'effet EST l'ecart des teintes : pris aux statuts, il tombait dans
-     la palette du theme (rose et lavande en Nebuleuse, ou l'or et le cyan sont roses). */
+  /* Anneau chrome des blocs du fil (anneau-activite.css) : un metal poli, et une frange de lumiere
+     decomposee au bord de ses eclats. Ses jetons a part : un chrome est NEUTRE, et le texte du theme
+     est teinte (lavande en Nebuleuse) ; pris aux statuts, la frange tombait dans la palette du
+     theme (en Nebuleuse, l'or et le cyan sont roses). */
+  --chrome-eclat: #ffffff;
+  --chrome-clair: #e9ecf0;
+  --chrome-moyen: #8a9099;
+  --chrome-sombre: #16181c;
   --prisme-rouge: #ff5a3c;
   --prisme-or: #ffc93c;
   --prisme-cyan: #3cd8ff;
   --prisme-bleu: #4a6cff;
-  --prisme-magenta: #d44cff;
 
   /* Espacement (échelle 4px) */
   --s1: 4px;

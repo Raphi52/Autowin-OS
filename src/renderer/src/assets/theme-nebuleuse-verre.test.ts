@@ -1592,7 +1592,7 @@ describe('Lampe a lave des capsules : le dernier tour seul', () => {
   })
   const TOUR_FINI = `${PREFIXE} .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)`
 
-  // Le cadre des blocs porte l'anneau prisme, fige au repos (anneau-activite.css) : il n'a plus de
+  // Le cadre des blocs porte l'anneau chrome, fige au repos (anneau-activite.css) : il n'a plus de
   // gouttes a vider sur un tour fini, et des jetons de gouttes restes ici ne peindraient plus rien.
   it('ne fournit plus de gouttes au cadre des blocs', () => {
     const jetonsDeGouttes = regles.flatMap((r) =>
@@ -1601,14 +1601,11 @@ describe('Lampe a lave des capsules : le dernier tour seul', () => {
     expect(jetonsDeGouttes).toEqual([])
   })
 
-  it('rend aux pastilles et aux tranches leur degrade fixe', () => {
+  // Les tranches de la pile d'images ne sont plus ici : elles portent le chrome du bord des blocs
+  // (ArtifactPreview.css), que la garde d'anneau-activite.test.tsx interdit aux themes de repeindre.
+  it('rend aux pastilles leur degrade fixe', () => {
     const fige = regles.find((r) =>
       r.selecteurs.some((s) => s.startsWith(`${TOUR_FINI} :is(`) && s.endsWith('::before'))
-    )
-    // Par la CLASSE des tranches, jamais `> span` : sous `:has()`, une balise nue fait restyler
-    // toutes les balises de ce nom à chaque frappe (has-cible-nue.test.ts).
-    expect(fige?.selecteurs).toContain(
-      `${TOUR_FINI} .artifact-pile__tranches > .artifact-pile__tranche`
     )
     expect(fige?.decls.background).toBe(
       'linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud))'

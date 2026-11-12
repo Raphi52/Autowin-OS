@@ -4311,7 +4311,6 @@
   .shell.theme-serious
   .router-view
   :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled),
-:root[data-theme='nebuleuse-verre'] .artifact-pile__tranches > span,
 :root[data-theme='nebuleuse-verre'] .brand::after,
 :root[data-theme='nebuleuse-verre']
   .thinking-block:not(.workflow-capsule)
@@ -4625,8 +4624,8 @@
   background-image: var(--nv-lave-fond);
 }
 /* Les CALQUES de bord (capsules du fil, cadre des anneaux, qui met a jour, pied de la liste des fils,
-   « Garder » de la suppression, tranches de la pile d'images, filet de la marque). */
-:root[data-theme='nebuleuse-verre'] .artifact-pile__tranches > span,
+   « Garder » de la suppression, filet de la marque). Les tranches de la pile d'images n'y sont pas :
+   elles prolongent le bord chrome du bloc d'image (ArtifactPreview.css). */
 :root[data-theme='nebuleuse-verre'] .brand::after,
 :root[data-theme='nebuleuse-verre']
   .thinking-block:not(.workflow-capsule)
@@ -4661,26 +4660,21 @@
    Raisonnement / Actions au dernier tour du fil, pour alleger la carte graphique »). Une reponse
    suivie d'une autre reponse est un tour fini : ses capsules reprennent le degrade FIXE d'avant
    la lave. Seule la derniere reponse du fil garde les gouttes.
-   Le cadre des blocs (anneau-activite.css) n'a plus de gouttes : son anneau prisme est fige au
-   repos. Restent :
-   - les pastilles et les tranches de la pile d'images : le degrade de ChatView.css et
-     ArtifactPreview.css, recopie tel quel.
+   Le cadre des blocs (anneau-activite.css) et les tranches de la pile d'images (ArtifactPreview.css)
+   n'ont plus de gouttes : leur metal chrome est fige au repos. Restent les pastilles : le degrade de
+   ChatView.css, recopie tel quel.
    `.msg--rail` ne marque que les reponses du fil : la TV du bureau cache, qui porte aussi
    `.msg.assistant` et se pose apres le dernier message, ne compte pas comme une reponse.
-   Les tranches sont visees par leur CLASSE, jamais par `> span` : Chromium range la
-   cible finale de TOUTES les regles `:has()` dans un seul ensemble d'invalidation, et `span` y
-   faisait restyler tous les `span` de l'app a chaque frappe dans la saisie (≈ 220 ms par lettre,
-   gel de 15 s puis rechargement de la fenetre le 28/10 a 18:31). Garde : has-cible-nue.test.ts. */
+   Une cible ajoutee ici se vise par sa CLASSE, jamais par une balise nue (`> span`) : Chromium
+   range la cible finale de TOUTES les regles `:has()` dans un seul ensemble d'invalidation, et
+   `span` y faisait restyler tous les `span` de l'app a chaque frappe dans la saisie (≈ 220 ms par
+   lettre, gel de 15 s puis rechargement de la fenetre le 28/10 a 18:31). Garde : has-cible-nue.test.ts. */
 :root[data-theme='nebuleuse-verre']
   .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)
   :is(
     .thinking-block:not(.workflow-capsule) > summary .thinking-capsule,
     .capsule-bouton:not(.is-error) .thinking-capsule
-  )::before,
-:root[data-theme='nebuleuse-verre']
-  .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)
-  .artifact-pile__tranches
-  > .artifact-pile__tranche {
+  )::before {
   background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
 }
 /* LA LAVE DES BULLES : LA DERNIERE SEULE BOUGE (2026-11-05 : « Garde la fluidite, mais

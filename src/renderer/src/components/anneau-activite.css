@@ -40,35 +40,42 @@
     var(--chat-capsule-reflet-fin) 100%
   );
 }
-/* ANNEAU PRISME — le bord de 2 px de TOUS les blocs encadres du fil : ce cadre (Raisonnement,
+/* ANNEAU CHROME — le bord de 2 px de TOUS les blocs encadres du fil : ce cadre (Raisonnement,
    Actions, Etapes, Chantier, Orchestration, barre d'activite, capsule d'image), le decodage d'une
-   image (LookDecodeBlock.css) et la scene 3D (Bloc3D.css). Un anneau fin aux couleurs du spectre,
-   un ECLAT de lumiere a un endroit du tour et le cote oppose dans l'ombre : l'anneau irise d'un
-   bouton de verre. Les blocs le partagent ici pour qu'une retouche les suive tous.
+   image (LookDecodeBlock.css) et la scene 3D (Bloc3D.css). Un metal poli : des bandes argent clair et
+   presque noir le long du bord, deux ECLATS blancs (l'un en haut, l'autre en bas a l'oppose) et, au
+   bord de chaque eclat seulement, une frange de couleur : la lumiere decomposee de l'anneau du bouton
+   de verre que l'utilisateur a pris pour modele. Les blocs le partagent ici pour qu'une retouche les
+   suive tous.
+   POURQUOI PAS UN ARC-EN-CIEL TOUT AUTOUR : une premiere version faisait le tour du spectre, et
+   l'utilisateur n'y retrouvait pas son modele, « argente/chrome » a ses yeux (2026-11-12). Sur le
+   modele, le blanc et le noir dominent ; la couleur n'est qu'une frange.
+   POURQUOI DES BANDES EN LIGNE ET DES ECLATS EN ELLIPSE, PAS UN DEGRADE CONIQUE : un bloc fait 720 px
+   sur 60. Vu de son centre, 16 degres ne couvrent que 8 px du bord haut, et l'eclat s'y perdait en un
+   trait. Des tailles en pixels donnent le meme eclat a un bloc large et a un rond.
    Calque EVIDE par masque : `border-image` ignore l'arrondi, et un fond `border-box` masquerait le
    fil sous le cadre.
-   LE SPECTRE A SES PROPRES JETONS (`--prisme-*`, theme.css et theme-modes.css) : un arc-en-ciel dans
-   tous les themes, plus soutenu en clair pour rester lisible sur fond pale. L'eclat est le reflet des
-   capsules, pose deux fois (un coeur etroit dans un halo plus large) ; l'ombre est la couleur du
-   fond, qui eteint le cote oppose en sombre comme en clair.
-   L'ECLAT NE TOURNE QUE SUR UN BLOC EN COURS OU SURVOLE (regle suivante) : animer cet angle repeint
+   LE METAL ET LA FRANGE ONT LEURS PROPRES JETONS (`--chrome-*`, `--prisme-*`, theme.css et
+   theme-modes.css) : des gris neutres, que la teinte du theme ne colore pas, plus fonces en clair
+   pour que le bord reste visible sur fond pale.
+   L'ECLAT NE BOUGE QUE SUR UN BLOC EN COURS OU SURVOLE (regle suivante) : animer sa position repeint
    le calque a chaque image, le cout de l'ancienne lave animee qu'on avait retiree pour la carte
    graphique. On ne le paie que pour les un a trois blocs vivants du tour, ou celui sous la souris ;
    au repos, l'anneau est fige. */
-@property --prisme-angle {
-  syntax: '<angle>';
+@property --chrome-x {
+  syntax: '<percentage>';
   inherits: false;
-  initial-value: 300deg;
+  initial-value: 18%;
 }
-@keyframes prisme-tour {
+@keyframes chrome-balayage {
+  from {
+    --chrome-x: 0%;
+  }
   to {
-    --prisme-angle: 660deg;
+    --chrome-x: 100%;
   }
 }
 :is(.cadre-anneau, .look-decode-block, .bloc-3d)::before {
-  --prisme-eclat: var(--chat-capsule-reflet-haut);
-  --prisme-ombre: color-mix(in srgb, var(--bg-0) 70%, transparent);
-
   content: '';
   position: absolute;
   inset: 0;
@@ -76,33 +83,51 @@
   padding: 2px;
   border-radius: inherit;
   background:
-    conic-gradient(
-      from var(--prisme-angle),
-      var(--prisme-eclat),
-      transparent 14deg 346deg,
-      var(--prisme-eclat)
+    /* L'eclat du haut, puis sa frange chaude. */
+    radial-gradient(
+      150px 40px at var(--chrome-x) 0,
+      var(--chrome-eclat),
+      color-mix(in srgb, var(--chrome-eclat) 40%, transparent) 45%,
+      transparent 72%
     ),
-    conic-gradient(
-      from var(--prisme-angle),
-      var(--prisme-eclat),
-      transparent 40deg 320deg,
-      var(--prisme-eclat)
+    radial-gradient(
+      210px 52px at var(--chrome-x) 0,
+      transparent 48%,
+      color-mix(in srgb, var(--prisme-or) 75%, transparent) 56%,
+      color-mix(in srgb, var(--prisme-rouge) 65%, transparent) 63%,
+      transparent 72%
     ),
-    conic-gradient(
-      from var(--prisme-angle),
-      transparent 70deg,
-      var(--prisme-ombre) 140deg 220deg,
-      transparent 290deg
+    /* Le reflet du bas, a l'oppose, puis sa frange froide. */
+    radial-gradient(
+        110px 34px at calc(100% - var(--chrome-x)) 100%,
+        color-mix(in srgb, var(--chrome-eclat) 85%, transparent),
+        transparent 68%
+      ),
+    radial-gradient(
+      170px 46px at calc(100% - var(--chrome-x)) 100%,
+      transparent 46%,
+      color-mix(in srgb, var(--prisme-cyan) 70%, transparent) 55%,
+      color-mix(in srgb, var(--prisme-bleu) 60%, transparent) 63%,
+      transparent 72%
     ),
-    conic-gradient(
-      from calc(var(--prisme-angle) - 50deg),
-      var(--prisme-rouge),
-      var(--prisme-or),
-      var(--prisme-cyan),
-      var(--prisme-bleu),
-      var(--prisme-magenta),
-      var(--prisme-rouge)
-    );
+    /* Le metal : l'alternance clair / sombre d'un chrome qui reflete ce qui l'entoure. */
+    linear-gradient(
+        100deg,
+        var(--chrome-moyen),
+        var(--chrome-clair) 8%,
+        var(--chrome-eclat) 11%,
+        var(--chrome-clair) 14%,
+        var(--chrome-sombre) 24%,
+        var(--chrome-moyen) 38%,
+        var(--chrome-clair) 47%,
+        var(--chrome-eclat) 50%,
+        var(--chrome-moyen) 55%,
+        var(--chrome-sombre) 64% 70%,
+        var(--chrome-moyen) 80%,
+        var(--chrome-clair) 89%,
+        var(--chrome-eclat) 92%,
+        var(--chrome-moyen)
+      );
   background-origin: border-box;
   background-repeat: no-repeat;
   pointer-events: none;
@@ -112,11 +137,13 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
-/* Pas de neutralisation sous `prefers-reduced-motion` : en cours, c'est le signe de vie du bloc
+/* L'eclat du haut va d'un bout a l'autre puis revient, le reflet du bas en sens inverse : la
+   lumiere tourne autour du bloc sans saut quand l'animation reprend.
+   Pas de neutralisation sous `prefers-reduced-motion` : en cours, c'est le signe de vie du bloc
    (meme regle que l'atterrissage du verdict, plus bas), et ce poste a le mouvement reduit actif. */
 .cadre-anneau.is-live::before,
 :is(.cadre-anneau, .look-decode-block, .bloc-3d):hover::before {
-  animation: prisme-tour 4s linear infinite;
+  animation: chrome-balayage 2.5s ease-in-out infinite alternate;
 }
 /* Ces deux blocs gardent leur bord d'1 px, devenu transparent dans leur feuille : l'anneau se pose
    SUR lui pour le decodage. La scene 3D coupe ce qui depasse (`overflow: hidden`) et son cadre de
