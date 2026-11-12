@@ -757,10 +757,6 @@
 
 /* components/ModeleDeroulant.css — tailles */
 :root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-barre > em,
-:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-fournisseur,
-:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-nom > small,
-:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-statut,
-:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-cran,
 :root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-etat {
   font-size: 13px;
 }

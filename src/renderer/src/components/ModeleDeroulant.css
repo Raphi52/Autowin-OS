@@ -131,7 +131,7 @@
   max-height: min(360px, 60vh);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 0 6px;
+  padding: 0 0 4px;
   border: 1px solid color-mix(in srgb, var(--violet) 60%, transparent);
   border-top: 0;
   border-radius: 0 0 12px 12px;
@@ -140,155 +140,71 @@
   scrollbar-width: thin;
 }
 
-/* L'intitulé du fournisseur reste en haut de la liste pendant qu'on fait défiler ses modèles. */
-.modele-deroulant .modele-deroulant-fournisseur {
+/* LA GRILLE PORTE LA CLASSE DE LA FENÊTRE DU CHAT (`model-select-menu`) : chaque thème habille les
+   points, les noms et la ligne choisie sous cette classe seulement, et l'utilisateur veut les points
+   de cette fenêtre. Elle en prend l'habillage, pas le cadre : ni position flottante, ni largeur, ni
+   fond, ni coins coupés, ni ombre — le cadre est celui de la liste. Quatre classes : les règles de
+   cadre des thèmes en ont trois. */
+.modele-deroulant .modele-deroulant-liste .model-select-menu.modele-deroulant-grille {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  clip-path: none;
+  animation: none;
+}
+
+/* LA GRILLE DU CHAT DANS LA LISTE (ModelEffortMatrix) : ses onglets, ses lignes et ses points
+   gardent les styles de la fenêtre du chat ; seules la marge et la ligne choisie s'accordent ici
+   au verre des cartes. */
+.modele-deroulant .modele-deroulant-liste .effort-matrix.is-inline {
+  padding: 4px 12px 2px;
+}
+
+/* Les onglets restent en haut pendant que la grille défile, sur le fond de la liste. */
+.modele-deroulant .modele-deroulant-liste .model-quota-providers {
   position: sticky;
   top: 0;
   z-index: 1;
-  display: block;
-  padding: 9px 14px 4px;
+  margin: 0 -12px 6px;
+  padding: 6px 12px 0;
   background: var(--deroulant-fond);
-  color: color-mix(in srgb, var(--violet) 65%, var(--text));
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
-.modele-deroulant .modele-deroulant-ligne {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  margin: 0 6px;
+.modele-deroulant .modele-deroulant-liste .effort-matrix-row {
+  margin: 0 -8px;
   padding: 5px 8px;
-  border-radius: 9px;
+  border-radius: 10px;
 }
 
-.modele-deroulant .modele-deroulant-ligne:hover {
-  background: color-mix(in srgb, var(--text) 6%, transparent);
+.modele-deroulant .modele-deroulant-liste .effort-matrix-row:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
-/* Le modèle choisi : fond violet et un trait à gauche, comme une ligne sélectionnée. */
-.modele-deroulant .modele-deroulant-ligne.is-active {
-  background: color-mix(in srgb, var(--violet) 20%, transparent);
-  box-shadow: inset 2px 0 0 var(--violet);
+/* Le modèle choisi : la ligne cerclée de violet, comme celle de la fenêtre du chat. */
+.modele-deroulant .modele-deroulant-liste .effort-matrix-row.is-active {
+  background: color-mix(in srgb, var(--violet) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--violet) 70%, transparent);
 }
 
-.modele-deroulant .modele-deroulant-ligne.is-bloquee {
-  opacity: 0.5;
-}
-
-.modele-deroulant .modele-deroulant-nom {
-  display: flex;
-  /* Assez court pour tenir sur la ligne des pastilles dans une demi-carte ; en dessous, les
-     pastilles passent à la ligne. */
-  flex: 1 1 88px;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  min-width: 0;
-  margin: 0;
-  padding: 2px 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-family: var(--font);
-  text-align: left;
-  cursor: pointer;
-}
-
-.modele-deroulant .modele-deroulant-nom > strong {
-  max-width: 100%;
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.modele-deroulant .modele-deroulant-nom > small {
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--text-dim);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.modele-deroulant .modele-deroulant-statut {
-  color: var(--warn);
-  font-size: 10.5px;
-  font-style: normal;
-}
-
-/* Les efforts : une pastille par cran, en colonnes alignées dans un même fournisseur. */
-.modele-deroulant .modele-deroulant-crans {
-  display: grid;
-  grid-template-columns: repeat(var(--colonnes), auto);
-  gap: 4px;
-  margin-left: auto;
-}
-
-.modele-deroulant .modele-deroulant-cran {
-  position: relative;
-  margin: 0;
-  padding: 3px 7px;
-  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
-  border-radius: 999px;
-  background: transparent;
-  color: color-mix(in srgb, var(--text) 78%, transparent);
-  font: inherit;
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 500;
-  text-align: center;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    border-color 120ms ease,
-    background-color 120ms ease;
-}
-
-.modele-deroulant .modele-deroulant-cran:hover {
-  border-color: color-mix(in srgb, var(--violet) 65%, transparent);
-  color: var(--text);
-}
-
-.modele-deroulant .modele-deroulant-cran[aria-checked='true'] {
-  border-color: var(--violet);
-  background: color-mix(in srgb, var(--violet) 55%, transparent);
-  color: var(--text);
-}
-
-/* Le cran conseillé pour ce modèle : un point vert dans le coin de sa pastille. */
-.modele-deroulant .modele-deroulant-cran.is-conseille::after {
-  position: absolute;
-  top: 2px;
-  right: 3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--ok);
-  content: '';
-}
-
-.modele-deroulant .modele-deroulant-cran.is-absent {
-  visibility: hidden;
-}
-
-.modele-deroulant .is-bloquee .modele-deroulant-nom,
-.modele-deroulant .is-bloquee .modele-deroulant-cran {
-  cursor: not-allowed;
-}
-
-.modele-deroulant .modele-deroulant-nom:focus-visible,
-.modele-deroulant .modele-deroulant-cran:focus-visible {
+.modele-deroulant .modele-deroulant-liste .effort-cran:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--violet) 75%, transparent);
-  outline-offset: 1px;
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.modele-deroulant .modele-deroulant-liste .model-quota-provider-chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--violet) 75%, transparent);
+  outline-offset: 2px;
 }
 
 /* L'état (erreur, enregistrement, modèle introuvable) : une ligne sous la barre, dans le flux. */

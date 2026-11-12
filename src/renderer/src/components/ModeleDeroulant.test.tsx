@@ -88,7 +88,16 @@ describe('ModeleDeroulant', () => {
   const liste = (): HTMLElement | null =>
     host!.querySelector<HTMLElement>('[data-testid="menu-liste"]')
 
-  it('ouvre la liste sous sa barre, dans le composant, sans la fenêtre du chat', async () => {
+  const ongletActif = (): string | null | undefined =>
+    liste()!.querySelector('[role="tab"][aria-selected="true"]')?.textContent
+
+  const touche = async (key: string): Promise<void> => {
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+    })
+  }
+
+  it('ouvre sous sa barre la grille du chat : un onglet par fournisseur, des points', async () => {
     const { barre } = await monter()
     expect(barre.textContent).toContain('Opus 5.5')
     expect(barre.getAttribute('aria-expanded')).toBe('false')
@@ -97,65 +106,60 @@ describe('ModeleDeroulant', () => {
     await act(async () => barre.click())
 
     expect(barre.getAttribute('aria-expanded')).toBe('true')
-    // Soudée à la barre : même parent, juste après elle.
+    // Soudée à la barre : même parent, juste après elle — pas de fenêtre flottante dans la page.
     expect(liste()?.previousElementSibling).toBe(barre)
-    expect(document.body.querySelector('[data-testid="effort-matrix"]')).toBeNull()
-    expect(document.body.querySelector('[role="tablist"]')).toBeNull()
-    // Groupés par fournisseur, avec leur nom affiché.
-    const fournisseurs = [...liste()!.querySelectorAll('.modele-deroulant-fournisseur')].map(
-      (el) => el.textContent
+    expect(liste()!.querySelector('[data-testid="effort-matrix"]')).not.toBeNull()
+    expect(document.body.querySelectorAll('[data-testid="effort-matrix"]')).toHaveLength(1)
+    // Les onglets du chat, l'onglet du modèle choisi ouvert.
+    const onglets = [...liste()!.querySelectorAll('[role="tab"]')].map((el) => el.textContent)
+    expect(onglets).toEqual(['Claude', 'ChatGPT', 'Grok'])
+    expect(ongletActif()).toBe('Claude')
+    // Le modèle choisi et son point cochés.
+    expect(liste()!.querySelector('.effort-matrix-row.is-active')?.getAttribute('data-row')).toBe(
+      'claude:claude-opus-5-5'
     )
-    expect(fournisseurs).toEqual(['Claude', 'ChatGPT', 'Grok'])
-    // Le modèle choisi est marqué, et son effort coché.
-    const active = liste()!.querySelector('.modele-deroulant-ligne.is-active')
-    expect(active?.getAttribute('data-row')).toBe('claude:claude-opus-5-5')
     expect(liste()!.querySelector('[aria-checked="true"]')?.getAttribute('data-effort')).toBe('low')
   })
 
-  it('aligne les pastilles en colonnes : un cran absent garde sa place', async () => {
+  it('la grille porte la classe de la fenêtre du chat, pour en prendre l’habillage du thème', async () => {
     const { barre } = await monter()
     await act(async () => barre.click())
-    const haiku = liste()!.querySelector('[data-row="claude:claude-haiku-5-5"]')!
-    // Colonnes du groupe Claude : low, medium, high, max — Haiku n'en a que deux.
-    expect(haiku.querySelectorAll('.modele-deroulant-cran')).toHaveLength(4)
-    expect(haiku.querySelectorAll('button[data-effort]')).toHaveLength(2)
-    expect(haiku.querySelectorAll('.modele-deroulant-cran.is-absent')).toHaveLength(2)
+    const grille = liste()!.querySelector('.model-select-menu')
+    expect(grille?.classList.contains('modele-deroulant-grille')).toBe(true)
+    expect(grille?.querySelector('[data-testid="effort-matrix"]')).not.toBeNull()
   })
 
-  it('une pastille choisit le modèle à cet effort et referme la liste', async () => {
+  it('un point choisit le modèle à cet effort et referme la liste', async () => {
     const { barre, onSelect } = await monter()
     await act(async () => barre.click())
-    const cran = liste()!.querySelector<HTMLButtonElement>(
+    await act(async () =>
+      liste()!
+        .querySelector<HTMLButtonElement>('[data-testid="effort-matrix-onglet-codex"]')!
+        .click()
+    )
+    const point = liste()!.querySelector<HTMLButtonElement>(
       '[data-row="codex:gpt-5.6"] [data-effort="xhigh"]'
     )!
-    await act(async () => cran.click())
+    await act(async () => point.click())
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'codex', model: 'gpt-5.6', reasoningEffort: 'xhigh' })
     )
     expect(liste()).toBeNull()
   })
 
-  it('le nom choisit le modèle à son effort retenu ; sans effort, à « none »', async () => {
+  it('un modèle sans niveau de réflexion garde un point unique « Standard »', async () => {
     const { barre, onSelect } = await monter()
     await act(async () => barre.click())
-    // Haiku n'est pas le modèle choisi : il prend l'effort de son catalogue.
     await act(async () =>
       liste()!
-        .querySelector<HTMLButtonElement>(
-          '[data-row="claude:claude-haiku-5-5"] .modele-deroulant-nom'
-        )!
+        .querySelector<HTMLButtonElement>('[data-testid="effort-matrix-onglet-grok"]')!
         .click()
     )
-    expect(onSelect).toHaveBeenLastCalledWith(
-      expect.objectContaining({ model: 'claude-haiku-5-5', reasoningEffort: 'high' })
-    )
-
-    await act(async () => barre.click())
-    await act(async () =>
-      liste()!
-        .querySelector<HTMLButtonElement>('[data-row="grok:grok-4"] .modele-deroulant-nom')!
-        .click()
-    )
+    const points = liste()!.querySelectorAll<HTMLButtonElement>('[data-row="grok:grok-4"] button')
+    expect(points).toHaveLength(1)
+    expect(points[0].getAttribute('data-effort')).toBe('none')
+    expect(points[0].textContent).toBe('Standard')
+    await act(async () => points[0].click())
     expect(onSelect).toHaveBeenLastCalledWith(
       expect.objectContaining({ model: 'grok-4', reasoningEffort: 'none' })
     )
@@ -166,10 +170,16 @@ describe('ModeleDeroulant', () => {
       statuses: [{ provider: 'codex', status: 'expired' }]
     })
     await act(async () => barre.click())
+    await act(async () =>
+      liste()!
+        .querySelector<HTMLButtonElement>('[data-testid="effort-matrix-onglet-codex"]')!
+        .click()
+    )
     const ligne = liste()!.querySelector('[data-row="codex:gpt-5.6"]')!
-    expect(ligne.classList.contains('is-bloquee')).toBe(true)
-    expect(ligne.textContent).toContain('Expiré')
-    await act(async () => ligne.querySelector<HTMLButtonElement>('[data-effort="low"]')!.click())
+    expect(ligne.classList.contains('is-blocked')).toBe(true)
+    const point = ligne.querySelector<HTMLButtonElement>('[data-effort="low"]')!
+    expect(point.title).toContain('Expiré')
+    await act(async () => point.click())
     expect(onSelect).not.toHaveBeenCalled()
     expect(liste()).not.toBeNull()
   })
@@ -177,15 +187,12 @@ describe('ModeleDeroulant', () => {
   it('se referme sur Échap (focus rendu à la barre) et au clic dehors', async () => {
     const { barre } = await monter()
     await act(async () => barre.click())
-    // À l'ouverture, le modèle choisi prend le focus.
+    // À l'ouverture, le point du modèle choisi prend le focus.
+    expect(document.activeElement?.getAttribute('data-effort')).toBe('low')
     expect(document.activeElement?.closest('[data-row]')?.getAttribute('data-row')).toBe(
       'claude:claude-opus-5-5'
     )
-    await act(async () => {
-      document.activeElement!.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-      )
-    })
+    await touche('Escape')
     expect(liste()).toBeNull()
     expect(document.activeElement).toBe(barre)
 
@@ -196,18 +203,24 @@ describe('ModeleDeroulant', () => {
     expect(liste()).toBeNull()
   })
 
-  it('les flèches passent d’un bouton de la liste au suivant', async () => {
+  it('les flèches parcourent la grille : un point à droite, le même effort en dessous', async () => {
     const { barre } = await monter()
     await act(async () => barre.click())
-    const boutons = [...liste()!.querySelectorAll<HTMLButtonElement>('button')]
-    const depart = boutons.indexOf(document.activeElement as HTMLButtonElement)
-    expect(depart).toBeGreaterThanOrEqual(0)
-    await act(async () => {
-      document.activeElement!.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })
-      )
-    })
-    expect(document.activeElement).toBe(boutons[depart + 1])
+    // Départ : Opus, low. Droite → Opus, medium.
+    await touche('ArrowRight')
+    expect(document.activeElement?.getAttribute('data-effort')).toBe('medium')
+    // Bas → Haiku n'a pas medium : la flèche tombe sur le dernier point de sa ligne.
+    await touche('ArrowDown')
+    expect(document.activeElement?.closest('[data-row]')?.getAttribute('data-row')).toBe(
+      'claude:claude-haiku-5-5'
+    )
+    // Haut, deux fois → au-dessus de la première ligne, l'onglet ouvert.
+    await touche('ArrowUp')
+    await touche('ArrowUp')
+    expect(document.activeElement?.getAttribute('role')).toBe('tab')
+    // Droite sur un onglet → l'onglet voisin.
+    await touche('ArrowRight')
+    expect(document.activeElement?.textContent).toBe('ChatGPT')
   })
 
   it('pendant un enregistrement, la barre tourne mais reste ouvrable', async () => {

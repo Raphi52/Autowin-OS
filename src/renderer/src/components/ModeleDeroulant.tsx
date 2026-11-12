@@ -5,28 +5,28 @@ import {
   type RuntimeModel
 } from './chat-view-model'
 import type { OrchestratorProviderStatus } from './OrchestratorModelSelector'
-import { effortLabel, sortEfforts } from './model-effort-labels'
-import { recommendedEffort } from './model-effort-recommendations'
+import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
+import { effortLabel } from './model-effort-labels'
 import { shortModelLabel } from './model-display-label'
-import { libelleFournisseur } from './provider-labels'
 import { CLE_DU_STATUT, STATUTS_BLOQUANTS } from './statuts-fournisseur'
 import { useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import { Spinner } from './Spinner'
+// La grille modèle × effort et ses onglets gardent les styles de la fenêtre du chat.
+import './ChatView.css'
+import './ModelQuotaIndicator.css'
 import './ModeleDeroulant.css'
 
 /**
- * LE MENU DÉROULANT DE MODÈLE D'AGENT STUDIO — choix de l'utilisateur : un vrai menu déroulant
- * sous sa barre, de la même largeur qu'elle, et non la fenêtre du chat (onglets par fournisseur,
- * curseurs d'effort, coins décorés, plus étroite que la barre).
+ * LE MENU DÉROULANT DE MODÈLE D'AGENT STUDIO — choix de l'utilisateur, en deux temps :
+ *  - un vrai menu déroulant, soudé sous sa barre et de la même largeur qu'elle, et non une fenêtre
+ *    flottante plus étroite que la barre ;
+ *  - dedans, la même grille que la fenêtre du chat : un onglet par fournisseur, une ligne par
+ *    modèle, un point par niveau d'effort (`ModelEffortMatrix`, réutilisée telle quelle).
  *
- * La liste vit DANS la carte, collée sous la barre (`position: absolute`) : elle suit la barre au
- * défilement, prend sa largeur exacte et passe par-dessus la suite de la carte. Les modèles y sont
- * groupés par fournisseur ; chaque ligne porte ses niveaux d'effort en pastilles, alignés en
- * colonnes dans un même fournisseur. Cliquer le nom choisit le modèle à son effort retenu ;
- * cliquer une pastille choisit le modèle à cet effort.
- *
- * Mêmes règles de choix que le menu du chat : mêmes modèles (`buildOrchestratorModelGroups`),
- * mêmes efforts lus dans le catalogue, même refus d'un fournisseur injoignable.
+ * La liste vit DANS la carte (`position: absolute`) : elle suit la barre au défilement et passe
+ * par-dessus la suite de la carte. Mêmes règles de choix que le menu du chat : mêmes modèles
+ * (`buildOrchestratorModelGroups`), mêmes efforts lus dans le catalogue, même refus d'un
+ * fournisseur injoignable.
  */
 export interface ProprietesMenuDeModele {
   /** Un tour tourne : aucun modèle ne se choisit. */
@@ -43,32 +43,6 @@ export interface ProprietesMenuDeModele {
   libelle?: string
   aide?: string
   idBase?: string
-}
-
-interface LigneDeModele {
-  cle: string
-  option: OrchestratorModelOption
-  /** Efforts réellement choisissables, dans l'ordre croissant ; vide = modèle sans effort. */
-  efforts: string[]
-  statut?: string
-  bloquee: boolean
-}
-
-interface GroupeDeFournisseur {
-  libelle: string
-  lignes: LigneDeModele[]
-  /** Union ordonnée des efforts du groupe : une colonne par effort, pour aligner les pastilles. */
-  colonnes: string[]
-}
-
-/** L'effort que prend un clic sur le NOM : le courant s'il s'agit du modèle choisi, sinon celui
- *  du catalogue, sinon le cran du milieu — la même règle que la matrice du chat. */
-function effortRetenu(ligne: LigneDeModele, active: boolean, effortActif?: string): string {
-  if (ligne.efforts.length === 0) return 'none'
-  if (active && effortActif && ligne.efforts.includes(effortActif)) return effortActif
-  const duCatalogue = ligne.option.defaultReasoningEffort
-  if (duCatalogue && ligne.efforts.includes(duCatalogue)) return duCatalogue
-  return ligne.efforts[Math.floor((ligne.efforts.length - 1) / 2)]
 }
 
 export function ModeleDeroulant({
@@ -110,43 +84,47 @@ export function ModeleDeroulant({
       ? binding.reasoningEffort
       : undefined
 
-  const groupes = useMemo((): GroupeDeFournisseur[] => {
-    const parLibelle = new Map<string, LigneDeModele[]>()
-    for (const option of grouped.groups.flatMap((groupe) => groupe.options)) {
-      const statut = statuses?.find((s) => s.provider === option.provider)?.status
-      const ligne: LigneDeModele = {
-        cle: `${option.provider}:${option.model}`,
-        option,
-        efforts: sortEfforts(option.reasoningEfforts.filter((effort) => effort !== 'none')),
-        statut,
-        bloquee: statut !== undefined && STATUTS_BLOQUANTS.has(statut)
-      }
-      // Groupés par NOM de fournisseur : Gemini par abonnement et par clé restent ensemble.
-      const libelleGroupe = libelleFournisseur(option.provider)
-      const lignes = parLibelle.get(libelleGroupe)
-      if (lignes) lignes.push(ligne)
-      else parLibelle.set(libelleGroupe, [ligne])
-    }
-    return [...parLibelle.entries()].map(([libelleGroupe, lignes]) => ({
-      libelle: libelleGroupe,
-      lignes,
-      colonnes: sortEfforts([...new Set(lignes.flatMap((ligne) => ligne.efforts))])
-    }))
-  }, [grouped, statuses])
+  const libelleStatut = (statut: string): string => {
+    const cle = CLE_DU_STATUT[statut]
+    return cle ? t(cle) : statut
+  }
 
-  const optionCourante = groupes
-    .flatMap((groupe) => groupe.lignes)
-    .find((ligne) => ligne.cle === cleActive)?.option
+  /*
+   * Une ligne de la grille par modèle du catalogue. Un modèle sans niveau de réflexion garde un
+   * point unique, « Standard » (`none`) : sans lui, il n'aurait aucune place dans les onglets (la
+   * fenêtre du chat le relègue dans une liste sous la grille).
+   */
+  const lignes: ModelEffortRow[] = grouped.groups
+    .flatMap((groupe) => groupe.options)
+    .map((option) => {
+      const statut = statuses?.find((s) => s.provider === option.provider)?.status
+      const injoignable = statut !== undefined && STATUTS_BLOQUANTS.has(statut)
+      const efforts = option.reasoningEfforts.filter((effort) => effort !== 'none')
+      return {
+        key: `${option.provider}:${option.model}`,
+        label: option.label,
+        model: option.model,
+        option,
+        efforts: efforts.length > 0 ? efforts : ['none'],
+        blocked: injoignable || busy,
+        blockedReason: injoignable
+          ? t('selecteur.injoignable', {
+              provider: option.provider,
+              statut: libelleStatut(statut as string)
+            })
+          : busy
+            ? t('selecteur.verrouille')
+            : undefined
+      }
+    })
+
+  const optionCourante = lignes.find((ligne) => ligne.key === cleActive)?.option
   /*
    * Un enregistrement en cours ne ferme pas la barre : la vue des rôles enfile ses écritures dans
    * l'ordre (`persist`), et les petites tâches ignorent un second choix tant que le premier
    * s'écrit. La roue qui tourne au bout de la barre dit seulement que l'écriture n'est pas finie.
    */
   const desactive = busy || !catalogLoaded || models.length === 0
-  const libelleStatut = (statut: string): string => {
-    const cle = CLE_DU_STATUT[statut]
-    return cle ? t(cle) : statut
-  }
   const libelleCourant = !catalogLoaded ? (
     <>
       <Spinner /> {t('selecteur.chargement')}
@@ -165,12 +143,6 @@ export function ModeleDeroulant({
     if (rendreLeFocus) barreRef.current?.focus()
   }
 
-  function choisir(ligne: LigneDeModele, effort: string): void {
-    if (ligne.bloquee || busy) return
-    fermer(true)
-    onSelect({ ...ligne.option, reasoningEffort: effort })
-  }
-
   // Un clic hors du menu le referme, comme toute liste déroulante.
   useEffect(() => {
     if (!ouvert) return
@@ -184,29 +156,57 @@ export function ModeleDeroulant({
   }, [ouvert])
 
   // À l'ouverture : la liste entre dans la vue (la carte du bas la ferait sinon déborder sous le
-  // bord de la page), puis le modèle choisi prend le focus, pour un choix au clavier immédiat.
+  // bord de la page), puis le point du modèle choisi prend le focus, pour un choix au clavier.
   useEffect(() => {
     if (!ouvert) return
     const liste = listeRef.current
     if (!liste) return
     liste.scrollIntoView?.({ block: 'nearest' })
     const cible =
-      liste.querySelector<HTMLButtonElement>('[aria-current="true"]') ??
-      liste.querySelector<HTMLButtonElement>('button')
+      liste.querySelector<HTMLButtonElement>('[data-effort][aria-checked="true"]') ??
+      liste.querySelector<HTMLButtonElement>('button[data-effort]')
     cible?.focus({ preventScroll: true })
-    cible?.scrollIntoView?.({ block: 'nearest' })
   }, [ouvert])
 
-  /** Flèches haut et bas : d'un bouton de la liste au suivant, noms et pastilles compris. */
+  /**
+   * Les flèches dans la grille : gauche et droite d'un point au voisin de la même ligne (ou d'un
+   * onglet au voisin), haut et bas au même niveau d'effort de la ligne voisine.
+   */
   function naviguer(event: React.KeyboardEvent<HTMLDivElement>): void {
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-    const boutons = [...(listeRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
-    if (boutons.length === 0) return
-    event.preventDefault()
-    const index = boutons.indexOf(document.activeElement as HTMLButtonElement)
-    const pas = event.key === 'ArrowDown' ? 1 : -1
-    const suivant = index === -1 ? 0 : (index + pas + boutons.length) % boutons.length
-    boutons[suivant].focus()
+    const liste = listeRef.current
+    const actif = document.activeElement
+    if (!liste || !(actif instanceof HTMLElement)) return
+    const versLe = (cible: Element | null | undefined): void => {
+      if (!(cible instanceof HTMLElement)) return
+      event.preventDefault()
+      cible.focus()
+    }
+    const voisin = (elements: Element[], courant: Element, pas: number): Element | undefined =>
+      elements[elements.indexOf(courant) + pas]
+    const horizontal = event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+    const vertical = event.key === 'ArrowUp' || event.key === 'ArrowDown'
+    const pas = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1
+    if (actif.getAttribute('role') === 'tab') {
+      if (horizontal) versLe(voisin([...liste.querySelectorAll('[role="tab"]')], actif, pas))
+      else if (event.key === 'ArrowDown') versLe(liste.querySelector('button[data-effort]'))
+      return
+    }
+    const ligne = actif.closest('[data-row]')
+    if (!ligne || !actif.matches('button[data-effort]')) return
+    if (horizontal) {
+      versLe(voisin([...ligne.querySelectorAll('button[data-effort]')], actif, pas))
+      return
+    }
+    if (!vertical) return
+    const autre = voisin([...liste.querySelectorAll('[data-row]')], ligne, pas)
+    if (!autre) {
+      // En haut de la grille, la flèche remonte aux onglets.
+      if (pas === -1) versLe(liste.querySelector('[role="tab"][aria-selected="true"]'))
+      return
+    }
+    const effort = actif.getAttribute('data-effort')
+    const points = [...autre.querySelectorAll('button[data-effort]')]
+    versLe(points.find((point) => point.getAttribute('data-effort') === effort) ?? points.at(-1))
   }
 
   return (
@@ -269,97 +269,22 @@ export function ModeleDeroulant({
             aria-label={libelle ?? t('selecteur.libelle.orchestrateur')}
             onKeyDown={naviguer}
           >
-            {groupes.map((groupe) => (
-              <section
-                key={groupe.libelle}
-                className="modele-deroulant-groupe"
-                aria-label={groupe.libelle}
-              >
-                <span className="modele-deroulant-fournisseur" aria-hidden="true">
-                  {groupe.libelle}
-                </span>
-                {groupe.lignes.map((ligne) => {
-                  const active = ligne.cle === cleActive
-                  const nom = shortModelLabel(ligne.option.label, ligne.option.provider)
-                  const refus = ligne.bloquee
-                    ? t('selecteur.injoignable', {
-                        provider: ligne.option.provider,
-                        statut: libelleStatut(ligne.statut as string)
-                      })
-                    : undefined
-                  const conseille = recommendedEffort(ligne.option.provider, ligne.option.model)
-                  return (
-                    <div
-                      key={ligne.cle}
-                      className={`modele-deroulant-ligne${active ? ' is-active' : ''}${ligne.bloquee ? ' is-bloquee' : ''}`}
-                      data-row={ligne.cle}
-                    >
-                      <button
-                        type="button"
-                        className="modele-deroulant-nom"
-                        aria-current={active || undefined}
-                        aria-disabled={ligne.bloquee || busy || undefined}
-                        title={refus}
-                        onClick={() => choisir(ligne, effortRetenu(ligne, active, effortActif))}
-                      >
-                        <strong>{nom}</strong>
-                        <small>{ligne.option.model}</small>
-                        {/* Seul un état qui REFUSE le choix s'affiche : « installé, non testé »
-                            sur chaque ligne n'était que du bruit. */}
-                        {ligne.bloquee && (
-                          <em className="modele-deroulant-statut">
-                            {libelleStatut(ligne.statut as string)}
-                          </em>
-                        )}
-                      </button>
-                      {ligne.efforts.length > 0 && (
-                        <span
-                          className="modele-deroulant-crans"
-                          role="radiogroup"
-                          aria-label={t('matrice.effortPour', { modele: nom })}
-                          style={{ '--colonnes': groupe.colonnes.length } as React.CSSProperties}
-                        >
-                          {groupe.colonnes.map((effort) =>
-                            ligne.efforts.includes(effort) ? (
-                              <button
-                                key={effort}
-                                type="button"
-                                role="radio"
-                                data-effort={effort}
-                                aria-checked={active && effort === effortActif}
-                                aria-disabled={ligne.bloquee || busy || undefined}
-                                className={`modele-deroulant-cran${conseille === effort ? ' is-conseille' : ''}`}
-                                title={
-                                  refus ??
-                                  (conseille === effort
-                                    ? t('matrice.recommande', {
-                                        effort: effortLabel(effort),
-                                        modele: nom
-                                      })
-                                    : undefined)
-                                }
-                                onClick={() => choisir(ligne, effort)}
-                              >
-                                {effortLabel(effort)}
-                              </button>
-                            ) : (
-                              // Place gardée : les pastilles restent alignées en colonnes.
-                              <span
-                                key={effort}
-                                className="modele-deroulant-cran is-absent"
-                                aria-hidden="true"
-                              >
-                                {effortLabel(effort)}
-                              </span>
-                            )
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  )
-                })}
-              </section>
-            ))}
+            {lignes.length > 0 && (
+              // La classe de la fenêtre du chat : chaque thème habille ses points et ses lignes
+              // sous elle seulement. Le cadre de la fenêtre, lui, est neutralisé (ModeleDeroulant.css).
+              <div className="model-select-menu modele-deroulant-grille">
+                <ModelEffortMatrix
+                  variant="inline"
+                  // Déjà en anglais, identique dans les deux langues.
+                  title="MODEL × EFFORT"
+                  rows={lignes}
+                  activeKey={cleActive}
+                  activeEffort={effortActif}
+                  onSelect={onSelect}
+                  onClose={() => fermer(true)}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
