@@ -358,12 +358,19 @@ const CLAIR_JETONS_BLANCS = new Set([
   '--nv-askd-encre-bulle'
 ])
 
+/**
+ * L'anneau des blocs du fil (anneau-activite.css) : un metal et un spectre dont theme-modes.css
+ * donne deja la valeur claire, choisie a l'oeil. Transposes, le noir du metal (`--chrome-noir`)
+ * passait pour un fond d'encre et devenait la nacre : l'anneau disparaissait sur le blanc.
+ */
+const CLAIR_JETONS_ANNEAU = /^--(chrome|prisme)-/
+
 /** Role d'une declaration : ce que la couleur y peint. */
 function roleClair(propriete) {
   const p = propriete.toLowerCase()
   if (/mask/.test(p)) return 'masque'
   if (p.startsWith('--')) {
-    if (CLAIR_JETONS_BLANCS.has(p)) return 'garde'
+    if (CLAIR_JETONS_BLANCS.has(p) || CLAIR_JETONS_ANNEAU.test(p)) return 'garde'
     if (/survol|hover|cran-fond|selected/.test(p)) return 'survol'
     if (/ombre|shadow|lueur|reflet|filet-or/.test(p)) return 'ombre'
     if (/bord|-line|filet|separateur|ascenseur|cotes|border/.test(p)) return 'trait'

@@ -40,24 +40,24 @@
     var(--chat-capsule-reflet-fin) 100%
   );
 }
-/* ANNEAU CHROME — le bord de 2 px de TOUS les blocs encadres du fil : ce cadre (Raisonnement,
+/* ANNEAU HOLOGRAPHIQUE — le bord de 3 px de TOUS les blocs encadres du fil : ce cadre (Raisonnement,
    Actions, Etapes, Chantier, Orchestration, barre d'activite, capsule d'image), le decodage d'une
-   image (LookDecodeBlock.css) et la scene 3D (Bloc3D.css). Un metal poli : des bandes argent clair et
-   presque noir le long du bord, deux ECLATS blancs (l'un en haut, l'autre en bas a l'oppose) et, au
-   bord de chaque eclat seulement, une frange de couleur : la lumiere decomposee de l'anneau du bouton
-   de verre que l'utilisateur a pris pour modele. Les blocs le partagent ici pour qu'une retouche les
-   suive tous.
-   POURQUOI PAS UN ARC-EN-CIEL TOUT AUTOUR : une premiere version faisait le tour du spectre, et
-   l'utilisateur n'y retrouvait pas son modele, « argente/chrome » a ses yeux (2026-11-12). Sur le
-   modele, le blanc et le noir dominent ; la couleur n'est qu'une frange.
-   POURQUOI DES BANDES EN LIGNE ET DES ECLATS EN ELLIPSE, PAS UN DEGRADE CONIQUE : un bloc fait 720 px
-   sur 60. Vu de son centre, 16 degres ne couvrent que 8 px du bord haut, et l'eclat s'y perdait en un
-   trait. Des tailles en pixels donnent le meme eclat a un bloc large et a un rond.
+   image (LookDecodeBlock.css) et la scene 3D (Bloc3D.css). Le modele de l'utilisateur est l'anneau
+   d'un bouton de verre (une epingle Pinterest) : un metal SOMBRE, presque noir, ou la lumiere fait un
+   point BLANC qui deborde en halo, et ou le spectre se range serre de part et d'autre de ce blanc,
+   comme dans un hologramme. Les blocs le partagent ici pour qu'une retouche les suive tous.
+   CE QUI A ETE ESSAYE ET REFUSE (2026-11-12) : le spectre tout autour du bord (« ca fait arc en
+   ciel ») ; puis un chrome gris clair avec une frange de couleur de 2 px (« un peu mieux mais on est
+   loin du compte »). Ce qui manquait au second, mesure sur l'epingle : un anneau plus epais (5 % du
+   diametre, soit 3 px sur un bloc de 60), un blanc qui irradie au-dela du bord (le halo, `::after`),
+   un spectre franc et large autour du blanc, et un metal qui reste sombre pour que la lumiere ressorte.
+   DES ECLATS EN ELLIPSE, PAS UN DEGRADE CONIQUE : un bloc fait 720 px sur 60. Vu de son centre,
+   16 degres ne couvrent que 8 px du bord haut, et l'eclat s'y perdait en un trait. Des tailles en
+   pixels donnent le meme eclat a un bloc large et a un rond.
    Calque EVIDE par masque : `border-image` ignore l'arrondi, et un fond `border-box` masquerait le
    fil sous le cadre.
-   LE METAL ET LA FRANGE ONT LEURS PROPRES JETONS (`--chrome-*`, `--prisme-*`, theme.css et
-   theme-modes.css) : des gris neutres, que la teinte du theme ne colore pas, plus fonces en clair
-   pour que le bord reste visible sur fond pale.
+   LE METAL ET LE SPECTRE ONT LEURS PROPRES JETONS (`--chrome-*`, `--prisme-*`, theme.css et
+   theme-modes.css) : des teintes neutres et franches, que la palette du theme ne recolore pas.
    L'ECLAT NE BOUGE QUE SUR UN BLOC EN COURS OU SURVOLE (regle suivante) : animer sa position repeint
    le calque a chaque image, le cout de l'ancienne lave animee qu'on avait retiree pour la carte
    graphique. On ne le paie que pour les un a trois blocs vivants du tour, ou celui sous la souris ;
@@ -80,53 +80,57 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  padding: 2px;
+  padding: 3px;
   border-radius: inherit;
   background:
-    /* L'eclat du haut, puis sa frange chaude. */
+    /* Le point blanc du haut. */
     radial-gradient(
-      150px 40px at var(--chrome-x) 0,
+      30% 34px at var(--chrome-x) 0,
       var(--chrome-eclat),
-      color-mix(in srgb, var(--chrome-eclat) 40%, transparent) 45%,
-      transparent 72%
+      var(--chrome-eclat) 14%,
+      color-mix(in srgb, var(--chrome-eclat) 60%, transparent) 26%,
+      transparent 38%
     ),
+    /* Son spectre, serre autour du blanc. */
     radial-gradient(
-      210px 52px at var(--chrome-x) 0,
-      transparent 48%,
-      color-mix(in srgb, var(--prisme-or) 75%, transparent) 56%,
-      color-mix(in srgb, var(--prisme-rouge) 65%, transparent) 63%,
-      transparent 72%
-    ),
-    /* Le reflet du bas, a l'oppose, puis sa frange froide. */
+        30% 70px at var(--chrome-x) 0,
+        transparent 14%,
+        var(--prisme-jaune) 20%,
+        var(--prisme-or) 25%,
+        var(--prisme-rouge) 30%,
+        var(--prisme-magenta) 35%,
+        var(--prisme-bleu) 41%,
+        var(--prisme-cyan) 47%,
+        color-mix(in srgb, var(--prisme-vert) 60%, transparent) 53%,
+        transparent 62%
+      ),
+    /* Le reflet du bas, a l'oppose, plus petit, et son spectre. */
     radial-gradient(
-        110px 34px at calc(100% - var(--chrome-x)) 100%,
-        color-mix(in srgb, var(--chrome-eclat) 85%, transparent),
-        transparent 68%
+        16% 28px at calc(100% - var(--chrome-x)) 100%,
+        color-mix(in srgb, var(--chrome-eclat) 90%, transparent),
+        transparent 45%
       ),
     radial-gradient(
-      170px 46px at calc(100% - var(--chrome-x)) 100%,
-      transparent 46%,
-      color-mix(in srgb, var(--prisme-cyan) 70%, transparent) 55%,
-      color-mix(in srgb, var(--prisme-bleu) 60%, transparent) 63%,
-      transparent 72%
+      24% 56px at calc(100% - var(--chrome-x)) 100%,
+      transparent 10%,
+      var(--prisme-cyan) 22%,
+      var(--prisme-bleu) 32%,
+      var(--prisme-magenta) 42%,
+      color-mix(in srgb, var(--prisme-rouge) 70%, transparent) 50%,
+      transparent 62%
     ),
-    /* Le metal : l'alternance clair / sombre d'un chrome qui reflete ce qui l'entoure. */
+    /* Le metal sombre : quelques bandes grises, et le noir teinte de bleu et de rouge profonds que
+       le modele garde loin de la lumiere. */
     linear-gradient(
         100deg,
-        var(--chrome-moyen),
-        var(--chrome-clair) 8%,
-        var(--chrome-eclat) 11%,
-        var(--chrome-clair) 14%,
-        var(--chrome-sombre) 24%,
-        var(--chrome-moyen) 38%,
-        var(--chrome-clair) 47%,
-        var(--chrome-eclat) 50%,
-        var(--chrome-moyen) 55%,
-        var(--chrome-sombre) 64% 70%,
-        var(--chrome-moyen) 80%,
-        var(--chrome-clair) 89%,
-        var(--chrome-eclat) 92%,
-        var(--chrome-moyen)
+        color-mix(in srgb, var(--prisme-bleu) 30%, var(--chrome-noir)),
+        var(--chrome-sombre) 20%,
+        var(--chrome-moyen) 34%,
+        var(--chrome-noir) 46%,
+        color-mix(in srgb, var(--prisme-rouge) 25%, var(--chrome-noir)) 58%,
+        var(--chrome-sombre) 70%,
+        var(--chrome-moyen) 82%,
+        var(--chrome-noir)
       );
   background-origin: border-box;
   background-repeat: no-repeat;
@@ -137,12 +141,45 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
+/* LE HALO : la lumiere du point blanc deborde du bord, dehors sur le fil et dedans sur le verre du
+   bloc, et une lueur froide accompagne le reflet du bas. Sous l'anneau (z-index -2), sur le meme
+   `--chrome-x`. Il ne deborde qu'en HAUTEUR : un calque qui depasse sur les cotes elargit la zone
+   defilable du fil et peut faire naitre une barre horizontale. Pas sur la scene 3D : elle coupe ce
+   qui depasse et son cadre opaque le cacherait. ETEINT EN CLAIR (`--chrome-halo*` transparents dans
+   theme-modes.css) : une lumiere sur fond blanc ne se voit pas, il n'en restait qu'une tache beige.
+   LES LARGEURS sont en % du bloc : en pixels fixes, le spectre couvrait tout le
+   bord d'un bloc etroit (Raisonnement et Actions cote a cote), et l'anneau redevenait arc-en-ciel.
+   Jamais `min()`, `calc()` ni `clamp()` melant px et % dans la taille d'une ellipse : Chromium 44
+   les refuse (`CSS.supports` faux) et jette TOUT le `background`, l'anneau disparait. */
+:is(.cadre-anneau, .look-decode-block)::after {
+  content: '';
+  position: absolute;
+  inset: -10px 0;
+  z-index: -2;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      28% 34px at var(--chrome-x) 10px,
+      var(--chrome-halo),
+      color-mix(in srgb, var(--chrome-halo) 30%, transparent) 45%,
+      transparent 72%
+    ),
+    radial-gradient(
+      20% 26px at calc(100% - var(--chrome-x)) calc(100% - 10px),
+      var(--chrome-halo-froid),
+      transparent 70%
+    );
+  pointer-events: none;
+}
 /* L'eclat du haut va d'un bout a l'autre puis revient, le reflet du bas en sens inverse : la
-   lumiere tourne autour du bloc sans saut quand l'animation reprend.
+   lumiere tourne autour du bloc sans saut quand l'animation reprend. Le halo suit, sur la meme
+   horloge (les deux calques partent ensemble, au meme survol ou au meme passage en cours).
    Pas de neutralisation sous `prefers-reduced-motion` : en cours, c'est le signe de vie du bloc
    (meme regle que l'atterrissage du verdict, plus bas), et ce poste a le mouvement reduit actif. */
 .cadre-anneau.is-live::before,
-:is(.cadre-anneau, .look-decode-block, .bloc-3d):hover::before {
+.cadre-anneau.is-live::after,
+:is(.cadre-anneau, .look-decode-block, .bloc-3d):hover::before,
+:is(.cadre-anneau, .look-decode-block):hover::after {
   animation: chrome-balayage 2.5s ease-in-out infinite alternate;
 }
 /* Ces deux blocs gardent leur bord d'1 px, devenu transparent dans leur feuille : l'anneau se pose

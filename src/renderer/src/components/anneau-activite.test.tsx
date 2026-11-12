@@ -241,20 +241,16 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     expect(regle).toMatch(/box-shadow:[^;]*--capsule-chaud/)
   })
 
-  /**
-   * ANNEAU CHROME : un seul dessin pour le bord de tous les blocs encadres du fil, un metal neutre
-   * dont la couleur n'est qu'une frange au bord des eclats, et un eclat qui ne bouge que la ou il dit
-   * quelque chose. ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer un bloc de la liste, ecrire une
-   * couleur en dur, remettre le spectre dans le metal (l'arc-en-ciel tout autour que l'utilisateur a
-   * refuse), ou faire bouger l'eclat des blocs au repos (l'animation repeint le calque a chaque image).
-   */
-  it('pose l anneau chrome sur chaque bloc encadre, a partir des jetons du theme', () => {
-    const debut = css.indexOf(':is(.cadre-anneau, .look-decode-block, .bloc-3d)::before {')
-    expect(debut).toBeGreaterThan(-1)
-    const regle = css.slice(debut, css.indexOf('\n}', debut)).replace(/\/\*[\s\S]*?\*\//g, '')
+  /** Le corps d'une regle de anneau-activite.css, sans ses commentaires. */
+  function regleDe(selecteur: string): string {
+    const debut = css.indexOf(`${selecteur} {`)
+    expect(debut, selecteur).toBeGreaterThan(-1)
+    return css.slice(debut, css.indexOf('\n}', debut)).replace(/\/\*[\s\S]*?\*\//g, '')
+  }
+  /** Les couches de `background:`, coupees aux virgules de premier niveau. */
+  function couchesDuFond(regle: string): { valeur: string; couches: string[] } {
     const fond = regle.slice(regle.indexOf('background:') + 'background:'.length)
     const valeur = fond.slice(0, fond.indexOf(';'))
-    // Les couches du fond, coupees aux virgules de premier niveau.
     const couches: string[] = []
     let profondeur = 0
     let courante = ''
@@ -267,25 +263,78 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
       } else courante += c
     }
     couches.push(courante.trim())
+    return { valeur, couches }
+  }
+  // Une ellipse posee sur l'eclat, dont la largeur est un % du bloc : en pixels fixes, le spectre
+  // couvrait tout le bord d'un bloc etroit et l'anneau redevenait arc-en-ciel. Un % SEUL : Chromium
+  // refuse `min()`/`calc()` melant px et % dans cette taille et jette tout le `background`.
+  const SUR_L_ECLAT = /^radial-gradient\(\s*\d+% \d+px at [^,]*var\(--chrome-x\)[^,]*,/
 
+  /**
+   * ANNEAU HOLOGRAPHIQUE : un seul dessin pour le bord de tous les blocs encadres du fil, copie de
+   * l'anneau d'un bouton de verre choisi par l'utilisateur : un metal sombre, un point blanc, le
+   * spectre serre autour de ce blanc, et un eclat qui ne bouge que la ou il dit quelque chose.
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer un bloc de la liste, ecrire une couleur en dur,
+   * etaler le spectre le long du metal (l'arc-en-ciel tout autour, refuse), revenir au chrome clair a
+   * frange de 2 px (refuse aussi), ou faire bouger l'eclat des blocs au repos (l'animation repeint
+   * le calque a chaque image).
+   */
+  it('pose l anneau holographique sur chaque bloc encadre, a partir des jetons du theme', () => {
+    const regle = regleDe(':is(.cadre-anneau, .look-decode-block, .bloc-3d)::before')
+    const { valeur, couches } = couchesDuFond(regle)
+    expect(regle).toMatch(/\bpadding: 3px;/)
     expect(valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
+
+    // Le metal reste SOMBRE : du noir et des gris, le spectre n'y entre qu'en teinte du noir.
     const metal = couches.filter((c) => c.startsWith('linear-gradient('))
     expect(metal).toHaveLength(1)
-    for (const jeton of ['eclat', 'clair', 'moyen', 'sombre'])
+    for (const jeton of ['noir', 'sombre', 'moyen'])
       expect(metal[0]).toContain(`var(--chrome-${jeton})`)
-    expect(metal[0]).not.toContain('--prisme-')
-    // Le spectre ne vit que dans des franges : des anneaux d'ellipse transparents au centre, poses
-    // sur la position de l'eclat.
-    const franges = couches.filter((c) => c.includes('--prisme-'))
-    expect(franges).toHaveLength(2)
-    for (const frange of franges) {
-      expect(frange).toMatch(
-        /^radial-gradient\(\s*\d+px \d+px at [^,]*var\(--chrome-x\)[^,]*,\s*transparent \d+%/
+    const teintes = [
+      ...metal[0]!.matchAll(
+        /color-mix\(in srgb, var\(--prisme-\w+\) (\d+)%, var\(--chrome-noir\)\)/g
       )
-    }
-    for (const jeton of ['rouge', 'or', 'cyan', 'bleu'])
-      expect(franges.join('\n')).toContain(`var(--prisme-${jeton})`)
+    ]
+    for (const t of teintes) expect(Number(t[1])).toBeLessThanOrEqual(30)
+    expect(
+      metal[0]!.replace(/color-mix\(in srgb, var\(--prisme-\w+\) \d+%, var\(--chrome-noir\)\)/g, '')
+    ).not.toContain('--prisme-')
+
+    // Deux points blancs sur la position de l'eclat (en haut, et l'oppose en bas).
+    const blancs = couches.filter(
+      (c) =>
+        SUR_L_ECLAT.test(c) &&
+        /,\s*(var\(--chrome-eclat\)|color-mix\(in srgb, var\(--chrome-eclat\))/.test(c)
+    )
+    expect(blancs).toHaveLength(2)
+    // Le spectre entier, mais seulement en anneaux autour de ces points : transparent au centre.
+    const spectres = couches.filter((c) => c.includes('--prisme-') && !c.startsWith('linear'))
+    expect(spectres).toHaveLength(2)
+    for (const s of spectres)
+      expect(s).toMatch(new RegExp(`${SUR_L_ECLAT.source}\\s*transparent \\d+%`))
+    for (const jeton of ['jaune', 'or', 'rouge', 'magenta', 'bleu', 'cyan', 'vert'])
+      expect(spectres.join('\n')).toContain(`var(--prisme-${jeton})`)
     expect(regle).not.toMatch(/animation/)
+  })
+
+  // Le halo deborde en hauteur seulement : un calque qui depasse sur les cotes elargit la zone
+  // defilable du fil (barre horizontale possible). Eteint en clair : sur fond blanc il ne restait
+  // qu'une tache beige. ENTREE QUI DOIT FAIRE ECHOUER : un `inset` qui deborde a gauche ou a droite,
+  // une couleur en dur, un halo qui ne suit pas l'eclat, ou un halo rallume en clair.
+  it('fait deborder la lumiere de l eclat en halo, sans elargir le fil', () => {
+    const regle = regleDe(':is(.cadre-anneau, .look-decode-block)::after')
+    const { valeur, couches } = couchesDuFond(regle)
+    expect(regle).toMatch(/\binset: -\d+px 0;/)
+    expect(regle).toMatch(/\bz-index: -2;/)
+    expect(regle).toMatch(/\bpointer-events: none;/)
+    expect(valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
+    expect(couches.length).toBeGreaterThan(0)
+    for (const c of couches) expect(c).toMatch(SUR_L_ECLAT)
+    expect(couches[0]).toContain('var(--chrome-halo)')
+    expect(couches.join('\n')).toContain('var(--chrome-halo-froid)')
+    const modes = readFileSync(join(ICI, '..', 'assets', 'theme-modes.css'), 'utf8')
+    expect(modes).toMatch(/--chrome-halo:\s*transparent;/)
+    expect(modes).toMatch(/--chrome-halo-froid:\s*transparent;/)
   })
 
   it('donne aux tranches de la pile d images le meme metal que le bord', () => {
@@ -309,9 +358,12 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     expect(regles).toEqual([
       [
         '.cadre-anneau.is-live::before',
+        '.cadre-anneau.is-live::after',
         ':is(.cadre-anneau',
         '.look-decode-block',
-        '.bloc-3d):hover::before'
+        '.bloc-3d):hover::before',
+        ':is(.cadre-anneau',
+        '.look-decode-block):hover::after'
       ]
     ])
   })
@@ -336,5 +388,17 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
       expect(feuille, fichier).not.toMatch(cibleLeCadre)
       expect(feuille, fichier).not.toMatch(/\.artifact-pile__tranche/)
     }
+  })
+
+  // Le metal et le spectre ont leur valeur claire, choisie a l'oeil, dans theme-modes.css. La couche
+  // generee du theme clair prenait le noir du metal pour un fond d'encre et le passait en nacre :
+  // l'anneau disparaissait sur le blanc. ENTREE QUI DOIT FAIRE ECHOUER : retirer l'exception
+  // `CLAIR_JETONS_ANNEAU` de scripts/theme-nebuleuse-verre.mjs puis regenerer.
+  it('la couche generee du theme clair ne transpose pas les couleurs de l anneau', () => {
+    const couche = readFileSync(
+      join(ICI, '..', 'assets', 'theme-holographique-clair.genere.css'),
+      'utf8'
+    )
+    expect(couche).not.toMatch(/--(chrome|prisme)-[\w-]+\s*:/)
   })
 })

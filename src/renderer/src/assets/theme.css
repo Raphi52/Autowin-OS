@@ -64,18 +64,24 @@
   --info: var(--cyan);
   --violet: #8f7cff;
 
-  /* Anneau chrome des blocs du fil (anneau-activite.css) : un metal poli, et une frange de lumiere
-     decomposee au bord de ses eclats. Ses jetons a part : un chrome est NEUTRE, et le texte du theme
-     est teinte (lavande en Nebuleuse) ; pris aux statuts, la frange tombait dans la palette du
-     theme (en Nebuleuse, l'or et le cyan sont roses). */
+  /* Anneau holographique des blocs du fil (anneau-activite.css) : un metal sombre, un point blanc et
+     le spectre serre autour. Ses jetons a part : un metal est NEUTRE, et le texte du theme est
+     teinte (lavande en Nebuleuse) ; pris aux statuts, le spectre tombait dans la palette du theme
+     (en Nebuleuse, l'or et le cyan sont roses). */
   --chrome-eclat: #ffffff;
   --chrome-clair: #e9ecf0;
   --chrome-moyen: #8a9099;
   --chrome-sombre: #16181c;
-  --prisme-rouge: #ff5a3c;
+  --chrome-noir: #050507;
+  --chrome-halo: rgba(255, 246, 228, 0.34);
+  --chrome-halo-froid: rgba(60, 216, 255, 0.18);
+  --prisme-jaune: #fff27a;
   --prisme-or: #ffc93c;
-  --prisme-cyan: #3cd8ff;
+  --prisme-rouge: #ff5a3c;
+  --prisme-magenta: #d44cff;
   --prisme-bleu: #4a6cff;
+  --prisme-cyan: #3cd8ff;
+  --prisme-vert: #5dffa8;
 
   /* Espacement (échelle 4px) */
   --s1: 4px;
