@@ -143,6 +143,11 @@ export type RunPilotChatDeps = {
    * était perdu et l'utilisateur devait relancer lui-même.
    */
   relancerTachesDeFond?: (conversationId: string, taches: TacheDeFondARelancer[]) => void
+  /**
+   * Écrit les avis de l'app retenus pendant la préparation du tour (`avis-avant-tour.ts`), appelé
+   * dès que le tour a commencé : avant, le message envoyé n'est pas encore dans le fil.
+   */
+  libererLesAvisDAvantTour?: (conversationId: string) => void
 }
 
 /**
@@ -862,6 +867,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         // par l'utilisateur le 2026-08-30. Le tri est correct, c'est la donnee qui arrivait tard.
         broadcast({ type: 'refresh', scope: 'conversations' })
       }
+      // Le tour a commencé : les avis retenus pendant sa préparation entrent sous le message envoyé,
+      // au-dessus de la réponse encore vierge (`avis-avant-tour.ts`).
+      if (conversationId) deps.libererLesAvisDAvantTour?.(conversationId)
       const applyDurableEvent = (pilotEvent: PilotEvent): void => {
         if (!conversationId || !os.conversations.get(conversationId)) return
         let durableEvent: ChatTurnEvent | undefined

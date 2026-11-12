@@ -106,6 +106,7 @@ import {
 import { anciensPlansDuChef, plansPourLaListe, type IssueDuTour } from '../../shared/plan-de-lots'
 import { phrasesDesLots } from '../../shared/phrase-du-fil'
 import { lancerSansAttendre } from '../chat/lancer-sans-attendre'
+import { creerAvisAvantTour } from '../chat/avis-avant-tour'
 import { demarrerPointEntreeLocal } from '../app/point-entree-local'
 import { modeleDuTour } from '../chat/modele-de-conversation'
 import { creerRelanceurSurDisque, type RelanceurTachesDeFond } from '../chat/relance-taches-de-fond'
@@ -2135,6 +2136,12 @@ Le fil reprend ensuite normalement.`
   const reparationDuRefus: {
     envoyerTour?: Parameters<typeof lancerLaReparationDuRefus>[0]['envoyerTour']
   } = {}
+  /** Les avis écrits avant le départ d'un tour passent sous le message envoyé, jamais au-dessus. */
+  const avisAvantTour = creerAvisAvantTour({
+    fil: os.conversations,
+    rafraichir: (conversationId) =>
+      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+  })
   const lancerTour = createRunPilotChat({
     os,
     pilot,
@@ -2159,7 +2166,8 @@ Le fil reprend ensuite normalement.`
       void relanceur
         .relancer(conversationId, taches)
         .catch((erreur) => console.warn('[taches de fond] relance en échec :', erreur))
-    }
+    },
+    libererLesAvisDAvantTour: (conversationId) => avisAvantTour.liberer(conversationId)
   })
   /**
    * SILENCE INTERDIT : un rangement qui ne pilote PAS le dossier de travail doit le DIRE.
@@ -2181,8 +2189,7 @@ Le fil reprend ensuite normalement.`
     if (dossiersDejaAvertis.get(conversationId) === empreinte) return
     dossiersDejaAvertis.set(conversationId, empreinte)
     try {
-      os.conversations.append(conversationId, { role: 'assistant', content: texte })
-      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+      avisAvantTour.annoncer(conversationId, texte)
     } catch {
       // Un avertissement manque ne doit JAMAIS empecher le tour de partir.
     }
@@ -2215,13 +2222,11 @@ Le fil reprend ensuite normalement.`
     if (!cite) return
     try {
       os.conversations.rangerDansDossier(conversationId, cite)
-      os.conversations.append(conversationId, {
-        role: 'assistant',
-        content:
-          `📂 Ta demande nomme ${cite}, qui n'était pas le dossier de travail de cette ` +
+      avisAvantTour.annoncer(
+        conversationId,
+        `📂 Ta demande nomme ${cite}, qui n'était pas le dossier de travail de cette ` +
           `conversation (${actif}). J'y bascule avant de traiter — c'est son AGENTS.md qui sera lu.`
-      })
-      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+      )
       broadcast({ type: 'refresh', scope: 'conversations' })
     } catch {
       // Une bascule ratee ne doit JAMAIS empecher le tour de partir : on reste sur le dossier d'avant.
@@ -2368,10 +2373,7 @@ Le fil reprend ensuite normalement.`
     // fix-ok: le dépôt est celui du fil, quel qu'il soit ; limité au dépôt d'Autowin, un autre dépôt git n'aurait jamais de copie.
     const depot =
       fil?.copieDuFil?.depot ?? dossierDeLectureDuFil(fil?.projectPath, os.executionWorkspace)
-    const annoncer = (ligne: string): void => {
-      os.conversations.append(conversationId, { role: 'assistant', content: ligne })
-      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
-    }
+    const annoncer = (ligne: string): void => avisAvantTour.annoncer(conversationId, ligne)
     const issue = await preparerLeDossierDuTour({
       fil,
       depotPartage: estUnDepotGit(depot) ? depot : null,
@@ -2581,6 +2583,10 @@ Le fil reprend ensuite normalement.`
         os.conversations.append(conversationId, { role: 'assistant', content: raison })
         broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
       })
+      // Les avis qui suivent (dossier basculé, copie ouverte, modèle indisponible) attendent le
+      // début du tour, où le message envoyé est enregistré (`avis-avant-tour.ts`) : libérés là par
+      // `run-pilot-chat.ts`, sinon dans le `finally` du tour, à côté de `finirTour()`.
+      avisAvantTour.retenir(conversationId)
       alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
       /*
@@ -2607,13 +2613,12 @@ Le fil reprend ensuite normalement.`
         )
         if (modele.kind === 'choisi') args[3] = modele.binding
         else if (modele.kind === 'indisponible') {
-          // Même forme que la bascule de dossier (`alignerDossierSurLaDemande`) : avis écrit
-          // dans le fil AVANT que le tour parte, puis rafraîchissement.
-          os.conversations.append(conversationId, {
-            role: 'assistant',
-            content: `⚠️ Le modèle choisi pour cette conversation (${modele.voulu.provider} · ${modele.voulu.model ?? 'modèle par défaut'}) n'est plus disponible : ${modele.motif}. Ce tour part sur le modèle par défaut de l'application.`
-          })
-          broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+          // Même forme que la bascule de dossier (`alignerDossierSurLaDemande`) : avis retenu
+          // jusqu'au départ du tour, sous le message envoyé.
+          avisAvantTour.annoncer(
+            conversationId,
+            `⚠️ Le modèle choisi pour cette conversation (${modele.voulu.provider} · ${modele.voulu.model ?? 'modèle par défaut'}) n'est plus disponible : ${modele.motif}. Ce tour part sur le modèle par défaut de l'application.`
+          )
         }
       }
       let finirTour!: () => void
@@ -2816,6 +2821,8 @@ Le fil reprend ensuite normalement.`
       } finally {
         retirerCopieALaDemande()
         finirTour()
+        // Un tour qui n'a pas commencé garde ses avis retenus : ils s'écrivent ici.
+        avisAvantTour.liberer(conversationId)
       }
     })
   /*
