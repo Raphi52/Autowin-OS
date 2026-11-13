@@ -181,6 +181,26 @@ describe('classement — un gel « inconnu » prend le nom de sa fonction', () =
     expect(texte).toContain('### Gels longs — la fonction qui tenait la fenêtre (profil CPU)')
     // Sans carte à côté du bundle de test, la source le DIT au lieu d'inventer une ligne.
     expect(texte).toContain('(carte absente)')
+
+    // La sortie machine porte la même source sur chaque profil, avec l'état de sa carte.
+    const ligneJson = []
+    expect(
+      principal(
+        [
+          '--journal',
+          join(dir, 'gels.jsonl'),
+          '--depuis',
+          '2026-11-06T00:00:00Z',
+          '--out',
+          dir,
+          '--json'
+        ],
+        (l) => ligneJson.push(l)
+      )
+    ).toBe(0)
+    const [profil] = JSON.parse(ligneJson.join('\n')).profils
+    expect(profil).toMatchObject({ fonction: 'readCurrentPathGenerations', carte: 'absente' })
+    expect(profil.sources[0]).toMatch(/^main\/index\.js:\d+:\d+ \(carte absente\)$/)
   })
 
   it('un gel court n est pas rapproché : seuls les gels de 10 s et plus ont un profil', () => {

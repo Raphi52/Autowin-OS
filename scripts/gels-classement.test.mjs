@@ -327,3 +327,58 @@ describe('principal — codes de sortie', () => {
     expect(lignes.join('\n')).toContain('Fenêtre figée : **30.7 s** en 1 gels')
   })
 })
+
+/*
+ * LA SORTIE `--json` EST LA SOURCE D'UN SCOUT OU D'UN CONTRÔLE : elle doit porter l'emplacement.
+ *
+ * Mesuré le 2026-11-13 : la sortie texte remontait `spawn powershell.exe` (325 s sur 7 jours) à
+ * `src/main/bureau/hdesk-tv.ts:297`, mais `--json` ne rendait que `main/index.js:34076:118`, une
+ * position du bundle que rien ne relit hors de ce script. Un lecteur machine devait donc reparser le
+ * tableau Markdown, ou se contenter des totaux.
+ */
+describe('principal --json — chaque appelant classé porte sa source', () => {
+  const sortieJson = (racine, gels, argv = []) => {
+    writeFileSync(join(racine, 'gels.jsonl'), gels.map((g) => JSON.stringify(g)).join('\n'))
+    const lignes = []
+    const code = principal(
+      [
+        '--journal',
+        join(racine, 'gels.jsonl'),
+        '--depuis',
+        '2026-10-01T00:00:00Z',
+        '--out',
+        racine,
+        '--json',
+        ...argv
+      ],
+      (l) => lignes.push(l)
+    )
+    expect(code).toBe(0)
+    return JSON.parse(lignes.join('\n'))
+  }
+
+  it('remonte les --top premiers appelants à src/…:ligne, comme le tableau', () => {
+    const { racine, carte } = bundleFactice()
+    utimesSync(carte, new Date('2026-10-20T08:00:00Z'), new Date('2026-10-20T08:00:00Z'))
+    const { appelants } = sortieJson(racine, [FENETRE], ['--top', '1'])
+    expect(appelants[0]).toMatchObject({
+      operation: 'spawn git status',
+      appelant: 'main/index.js:2:1 < main/index.js:1:1',
+      sources: ['src/main/a.ts:1'],
+      carte: 'en-vigueur'
+    })
+    // Au-delà de --top, rien n'est résolu : chaque carte lue coûte, le tableau s'arrête au même rang.
+    expect(appelants[1].operation).toBe('renameSync')
+    expect(appelants[1]).not.toHaveProperty('sources')
+  })
+
+  it('une carte réécrite après le gel ne donne AUCUNE source, jamais un emplacement faux', () => {
+    const { racine } = bundleFactice()
+    const { appelants } = sortieJson(racine, [FENETRE])
+    expect(appelants[0]).toMatchObject({
+      appelant: 'main/index.js:2:1 < main/index.js:1:1',
+      sources: [],
+      carte: 'posterieure-au-gel'
+    })
+  })
+})

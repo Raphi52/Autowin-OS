@@ -84,6 +84,16 @@
   l'événement `provider-journal` du même journal de tour.
 - `scripts/conversations-sur-disque.mjs` est un MODULE à importer
   (`texteDuMessage`, `lireArchives`, `ajouterArchives`), pas une commande : lancé seul, il ne sort rien.
+- Défauts et usage MESURÉS, la matière d'un scout sur ce dépôt (une source, un relevé) :
+  - gels de la fenêtre : `node scripts/gels-classement.mjs --jours 7` les classe par appelant, remonté
+    au fichier:ligne des sources ; `--json` donne `sources` et `carte` à ses `--top` premiers appelants ;
+  - erreurs d'outil qui reviennent d'un fil à l'autre : `murs-rencontres.json`, chaque mur daté
+    porte `derniereFois` (une chaîne seule = ancien format, sans date) ;
+  - pistes déjà proposées, prises ou ignorées : `scout-pistes.json` ; une piste reproposée se compte
+    en valeurs distinctes de `run`, jamais en lignes ;
+  - saisies de l'utilisateur : `saisies-utilisateur.jsonl` (`voie` : `message` ou `orientation`) ;
+    la remise de chaque consigne envoyée pendant un tour : `orientations-en-cours.jsonl` (`par` :
+    `controle` = à l'outil suivant, `tour` = entre deux appels au modèle, `rendue` = en fin de tour).
 
 ## Conventions
 - Français partout : commentaires, libellés, messages de commit.

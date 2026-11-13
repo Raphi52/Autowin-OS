@@ -225,6 +225,29 @@ const PAIRES: Paire[] = [
     verifier: () => expect(lire('src/main/app/app-data.ts')).toContain("'.autowin-data'")
   },
   {
+    fait: '`--json` donne `sources` et `carte` à ses `--top` premiers appelants',
+    // Le comportement est prouvé par `scripts/gels-classement.test.mjs` ; ici, que le fait cité
+    // désigne bien la branche `--json` qui résout les appelants jusqu'au rang `top`.
+    verifier: () =>
+      expect(lire('scripts/gels-classement.mjs')).toMatch(
+        /rang < top \? \{ \.\.\.a, \.\.\.sourcesFiables\(a\.appelant/
+      )
+  },
+  {
+    fait: 'porte `derniereFois` (une chaîne seule = ancien format, sans date)',
+    verifier: () =>
+      expect(lire('src/main/runs/murs-store.ts')).toContain(
+        'export type EntreeDeMur = string | { signature: string; derniereFois: string }'
+      )
+  },
+  {
+    fait: "`controle` = à l'outil suivant, `tour` = entre deux appels au modèle, `rendue` = en fin de tour",
+    verifier: () =>
+      expect(lire('src/shared/orientations-en-cours.ts')).toContain(
+        "par: 'controle' | 'tour' | 'rendue'"
+      )
+  },
+  {
     fait: '`scripts/conversations-sur-disque.mjs` est un MODULE à importer',
     verifier: async () => {
       const module = await import(

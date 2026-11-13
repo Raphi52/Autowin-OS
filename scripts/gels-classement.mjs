@@ -1,7 +1,7 @@
 /**
  * CLASSEMENT DES GELS — la première étape de la skill `/gel` (skills/gel/SKILL.md).
  *
- * Pourquoi ce script (conv-1036, 2026-10-21) : 13 fils « /heal j'ai eu un freeze » ont tous refait
+ * Pourquoi ce script (2026-10-21) : 13 fils « /heal j'ai eu un freeze » ont tous refait
  * la même enquête à la main — découvrir `gels.jsonl`, l'agréger avec un `node -e` jetable, puis
  * chercher dans `src/` d'où venait `main/index.js:16278`. Les deux outils existaient déjà sans
  * procédure : le journal (src/main/gel/gel-main.ts) et les cartes `.map` à côté du bundle
@@ -28,6 +28,10 @@
  * fonction qui tenait la fenêtre (scripts/gels-profils.mjs).
  * `--cartes` : l'archive des cartes de chaque construction (défaut : `gels-cartes/` à côté du
  * journal, remplie par le build — scripts/gels-cartes-archive.mjs).
+ * `--json` : le classement pour une machine (scout, contrôle). Les `--top` premiers appelants et tous
+ * les profils y portent `sources` et `carte`, comme le tableau : `src/…:ligne`, une frame restée
+ * brute quand sa carte manque (« (carte absente) »), aucune quand la carte est suspecte. Sans eux,
+ * il ne restait que des positions du bundle que personne d'autre ne relit.
  * Sortie 0 = classement rendu ; 2 = journal absent ; 3 = ni gel ni démarrage de l'instrument dans la
  * période (un journal muet ne prouve alors rien).
  */
@@ -45,7 +49,7 @@ const SOURCES_DE_L_INSTRUMENT = /(^|\/)gel-(main|detector)\.ts$/
  * État de la carte d'une pile entière : il ne fait que MONTER, frame après frame.
  *
  * Une seule frame remontée par une carte postérieure au gel rend toute la pile suspecte, même si une
- * autre frame n'a pas de carte du tout. Avant (2026-10-21, conv-1036), la frame sans carte écrasait
+ * autre frame n'a pas de carte du tout. Avant (2026-10-21), la frame sans carte écrasait
  * ce constat : un gel du 15/10 sortait vers `conversation-file-trace-spool.ts:68`, une ligne sans
  * aucun rapport, affichée comme une source.
  */
@@ -53,7 +57,7 @@ const GRAVITE_DE_LA_CARTE = [
   'sans-objet',
   'en-vigueur',
   // La carte du bundle qui tournait, retrouvée dans l'archive des constructions
-  // (scripts/gels-cartes-archive.mjs, conv-1055) : aussi fiable qu'une carte en vigueur.
+  // (scripts/gels-cartes-archive.mjs) : aussi fiable qu'une carte en vigueur.
   'archivee',
   'absente',
   'posterieure-au-demarrage',
@@ -127,7 +131,7 @@ export function classerGels(gels, { depuisMs, trancheMin } = {}) {
   const rendu = new Map()
   const appelants = new Map()
   /*
-   * Les gels se lisent par FENÊTRE de temps, pas en cumul (leçon du Brain). conv-1598, 2026-11-05 :
+   * Les gels se lisent par FENÊTRE de temps, pas en cumul (leçon du Brain). 2026-11-05 :
    * 754 s figées sur la matinée, presque toutes après 08:10 UTC — la bascule ne se voyait qu'avec un
    * `node -e` jetable. Mêmes filtres que les totaux, appels unitaires exclus ; tranches vides omises.
    */
@@ -260,13 +264,13 @@ export function fichierDuBundle(frame, racineOut) {
  * Remonte un appelant du bundle à ses sources `src/…:ligne`, grâce aux `.map`.
  *
  * `carte` dit si la position est FIABLE : une carte réécrite APRÈS le gel (`posterieure-au-gel`), ou
- * après le démarrage `demarrageMs` qui le précède (`posterieure-au-demarrage`, juge de conv-1043),
+ * après le démarrage `demarrageMs` qui le précède (`posterieure-au-demarrage`),
  * décrit un autre bundle que celui que l'app avait chargé — la ligne obtenue tombe alors à côté.
  *
  * `archive` ({ dossier, entrees }, scripts/gels-cartes-archive.mjs) rend la carte du bundle CHARGÉ :
  * celle de la dernière construction écrite avant le démarrage qui précède le gel. Elle n'est
  * consultée QUE si ce démarrage est connu : sans lui, on garde la carte de `out/` et ses étiquettes
- * de prudence. Sans archive, chaque reconstruction rendait les gels plus anciens illisibles (conv-1055).
+ * de prudence. Sans archive, chaque reconstruction rendait les gels plus anciens illisibles.
  */
 export function resoudreAppelant(
   appelant,
@@ -306,7 +310,7 @@ export function resoudreAppelant(
         ? demarrageMs
         : undefined
     // L'archive ne sert que si le DÉMARRAGE qui précède le gel est connu : sans lui, la dernière
-    // construction avant le gel peut n'avoir jamais tourné (revue de conv-1055). On retombe alors
+    // construction avant le gel peut n'avoir jamais tourné. On retombe alors
     // sur la carte de `out/` et ses étiquettes de prudence, comme avant.
     const archivee =
       archive && chargeMs !== undefined
@@ -361,6 +365,33 @@ export function resoudreAppelant(
   return { sources, carte }
 }
 
+/**
+ * Les sources d'une pile, telles qu'on peut les RENDRE : aucune quand la carte est suspecte.
+ *
+ * Une carte réécrite après le gel donne des sources FAUSSES, pas approximatives : mesuré le
+ * 2026-10-21, un gel du processus principal y remontait vers `ask-choices.ts`, un fichier de
+ * l'interface. Même règle pour une carte écrite après le démarrage qui précède le gel. Le tableau
+ * et la sortie `--json` passent tous deux par ici : un emplacement faux enverrait corriger
+ * ailleurs, quel que soit le lecteur.
+ */
+export function sourcesFiables(appelant, gelTs, { racineOut, archive, demarragesMs, cache }) {
+  if (!appelant) return { sources: [], carte: 'sans-objet' }
+  const resolu = resoudreAppelant(appelant, {
+    racineOut,
+    gelTs,
+    demarrageMs: demarrageAvant(demarragesMs, gelTs),
+    archive,
+    cache
+  })
+  return CARTES_SUSPECTES.has(resolu.carte) ? { sources: [], carte: resolu.carte } : resolu
+}
+
+/** La colonne « Source » du tableau : la frame brute quand la carte est suspecte. */
+function celluleSource(appelant, { sources, carte }) {
+  if (CARTES_SUSPECTES.has(carte)) return `\`${appelant}\` (non résolu)`
+  return sources.length ? sources.map((s) => `\`${s}\``).join(' < ') : '—'
+}
+
 const secondes = (ms) => `${(ms / 1000).toFixed(1)} s`
 const pourcent = (part) => `${Math.round((part ?? 0) * 100)} %`
 const jour = (ts) => (typeof ts === 'string' ? ts.slice(0, 16).replace('T', ' ') : '')
@@ -403,28 +434,13 @@ export function rendreClassement(
     '| Appel | Appels | Cumul | Source | Carte |',
     '|---|---|---|---|---|'
   )
+  const contexte = { racineOut, archive, demarragesMs: classement.demarragesMs, cache }
   for (const a of classement.appelants.slice(0, top)) {
-    const { sources, carte } = a.appelant
-      ? resoudreAppelant(a.appelant, {
-          racineOut,
-          gelTs: a.dernierTs,
-          demarrageMs: demarrageAvant(classement.demarragesMs, a.dernierTs),
-          archive,
-          cache
-        })
-      : { sources: [], carte: 'sans-objet' }
-    /*
-     * Une carte réécrite après le gel donne des sources FAUSSES, pas approximatives : mesuré le
-     * 2026-10-21, un gel du processus principal y remontait vers `ask-choices.ts`, un fichier de
-     * l'interface. On rend alors la frame brute — un emplacement faux enverrait corriger ailleurs.
-     * Même règle pour une carte écrite après le démarrage qui précède le gel (juge de conv-1043).
-     */
-    const source = CARTES_SUSPECTES.has(carte)
-      ? `\`${a.appelant}\` (non résolu)`
-      : sources.length
-        ? sources.map((s) => `\`${s}\``).join(' < ')
-        : '—'
-    l.push(`| \`${a.operation}\` | ${a.appels} | ${secondes(a.cumulMs)} | ${source} | ${carte} |`)
+    const resolu = sourcesFiables(a.appelant, a.dernierTs, contexte)
+    const source = celluleSource(a.appelant, resolu)
+    l.push(
+      `| \`${a.operation}\` | ${a.appels} | ${secondes(a.cumulMs)} | ${source} | ${resolu.carte} |`
+    )
   }
   if (nommes.length) {
     l.push(
@@ -435,21 +451,9 @@ export function rendreClassement(
       '|---|---|---|---|---|---|---|---|'
     )
     for (const { gel, analyse } of nommes.slice(-top).reverse()) {
-      const { sources, carte } = analyse.appelant
-        ? resoudreAppelant(analyse.appelant, {
-            racineOut,
-            gelTs: gel.ts,
-            demarrageMs: demarrageAvant(classement.demarragesMs, gel.ts),
-            archive,
-            cache
-          })
-        : { sources: [], carte: 'sans-objet' }
-      // Même prudence que pour les appelants : une carte postérieure rend la frame brute.
-      const source = CARTES_SUSPECTES.has(carte)
-        ? `\`${analyse.appelant}\` (non résolu)`
-        : sources.length
-          ? sources.map((s) => `\`${s}\``).join(' < ')
-          : '—'
+      const resolu = sourcesFiables(analyse.appelant, gel.ts, contexte)
+      const { carte } = resolu
+      const source = celluleSource(analyse.appelant, resolu)
       const tete = (analyse.profil?.tete ?? [])
         .slice(0, 2)
         .map((t) => `\`${t.fonction}\` ${pourcent(t.part)}`)
@@ -531,17 +535,27 @@ export function principal(argv = process.argv.slice(2), sortie = console.log) {
   }
   const classement = classerGels(gels, { depuisMs, trancheMin: argument(argv, '--tranches') })
   const periode = `depuis ${new Date(depuisMs).toISOString().slice(0, 16).replace('T', ' ')} (UTC)`
+  const archive = { dossier: dossierArchive, entrees: lireArchive(dossierArchive) }
   if (argv.includes('--json')) {
+    const contexte = { racineOut, archive, demarragesMs: classement.demarragesMs, cache: new Map() }
+    // Au-delà de --top, comme le tableau : chaque construction différente coûte une carte à lire.
+    const appelants = classement.appelants.map((a, rang) =>
+      rang < top ? { ...a, ...sourcesFiables(a.appelant, a.dernierTs, contexte) } : a
+    )
     const parProfil = nommes.map((n) => ({
       ts: n.gel.ts,
       blocageMs: n.gel.blocageMs,
-      ...n.analyse
+      ...n.analyse,
+      ...sourcesFiables(n.analyse.appelant, n.gel.ts, contexte)
     }))
     sortie(
-      JSON.stringify({ journal, periode, illisibles, ...classement, profils: parProfil }, null, 2)
+      JSON.stringify(
+        { journal, periode, illisibles, ...classement, appelants, profils: parProfil },
+        null,
+        2
+      )
     )
   } else {
-    const archive = { dossier: dossierArchive, entrees: lireArchive(dossierArchive) }
     sortie(rendreClassement(classement, { racineOut, archive, top, periode, nommes }))
     if (illisibles) sortie(`\n${illisibles} ligne(s) illisible(s) dans le journal.`)
   }
