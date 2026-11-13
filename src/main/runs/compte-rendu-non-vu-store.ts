@@ -35,11 +35,12 @@ export function compteRenduNonVuStorePath(base = ensureAutowinAppData()): string
   return store.chemin(base)
 }
 
+/** La note ET son heure de dépôt : sans elle, une note d'un mois revenait comme un fait du jour. */
 export function lireCompteRenduNonVu(
   conversationId: string,
   base = ensureAutowinAppData()
-): string | undefined {
-  return store.lire(base)[conversationId]?.texte
+): CompteRenduNonVu | undefined {
+  return store.lire(base)[conversationId]
 }
 
 export function deposerCompteRenduNonVu(
