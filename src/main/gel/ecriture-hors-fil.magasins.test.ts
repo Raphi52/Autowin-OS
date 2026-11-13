@@ -7,7 +7,11 @@ import { attendreFichier, viderFichiersEnAttente } from './ecriture-hors-fil'
 import { configureRememberDepositStore, forgetSessionDeposits } from '../brain/brain-remember'
 import { enregistrerMur, chargerMurs, oublierMurs, mursStorePath } from '../runs/murs-store'
 import { loadChatSessions, saveChatSession } from '../runs/chat-session-store'
-import { configureSessionMemoryEcho, noteRemembered, rememberedFacts } from '../brain/session-memory-echo'
+import {
+  configureSessionMemoryEcho,
+  noteRemembered,
+  rememberedFacts
+} from '../brain/session-memory-echo'
 import { cheminFichierPlans, stockageFichier } from '../orchestration/plans-de-lots-app'
 import {
   coutDuTourDepuisCumul,
@@ -63,13 +67,16 @@ afterEach(async () => {
   rmSync(dir, { recursive: true, force: true })
 })
 
+/** Une entrée du registre des murs telle qu'écrite sur disque : sa date est celle de l'horloge. */
+const mur = (signature: string): unknown => ({ signature, derniereFois: expect.any(String) })
+
 describe('json-index-store — murs et sessions du chat', () => {
   it('écrit sans appel bloquant', async () => {
     enregistrerMur('conv-1', 'run::refus', dir)
     aucunBloquant()
     await attendreFichier()
     expect(JSON.parse(readFileSync(mursStorePath(dir), 'utf8'))).toEqual({
-      'conv-1': ['run::refus']
+      'conv-1': [mur('run::refus')]
     })
   })
 
@@ -81,8 +88,8 @@ describe('json-index-store — murs et sessions du chat', () => {
     expect(chargerMurs('conv-1', dir)).toEqual(['premier', 'second'])
     await attendreFichier()
     expect(JSON.parse(readFileSync(mursStorePath(dir), 'utf8'))).toEqual({
-      'conv-1': ['premier', 'second'],
-      'conv-2': ['autre fil']
+      'conv-1': [mur('premier'), mur('second')],
+      'conv-2': [mur('autre fil')]
     })
   })
 
@@ -270,6 +277,6 @@ describe('fermeture de l’app', () => {
   it('vide tous les magasins sur place', () => {
     enregistrerMur('conv-1', 'mur', dir)
     viderFichiersEnAttente()
-    expect(JSON.parse(readFileSync(mursStorePath(dir), 'utf8'))).toEqual({ 'conv-1': ['mur'] })
+    expect(JSON.parse(readFileSync(mursStorePath(dir), 'utf8'))).toEqual({ 'conv-1': [mur('mur')] })
   })
 })

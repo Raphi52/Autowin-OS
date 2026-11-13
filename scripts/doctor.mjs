@@ -2,7 +2,7 @@
 /**
  * DOCTOR — le bilan d'installation et de réglage d'Autowin OS, en LECTURE SEULE.
  *
- * Demande du 2026-10-31 (conv-1368) : un `/doctor` « comme claude.exe ». Claude Code sépare deux
+ * Demande du 2026-10-31 : un `/doctor` « comme claude.exe ». Claude Code sépare deux
  * gestes et on garde cette séparation : `claude doctor` mesure sans rien changer (ce script),
  * `/doctor` rend ses constats puis ne répare qu'après accord (skills/doctor/SKILL.md).
  *
@@ -150,7 +150,7 @@ export function ecartsAvecLeLock(pkg, lock) {
 export function cheminsCites(texte) {
   const motif =
     /(?<![\w./\\-])(?:src|scripts|skills|bench)\/[\w./-]+\.(?:ts|tsx|mjs|mts|js|ps1|py|md|json)\b/gu
-  // Une ligne qui raconte une disparition cite ce chemin EXPRÈS (skills/arena, conv-1368).
+  // Une ligne qui raconte une disparition cite ce chemin EXPRÈS (skills/arena).
   const vivantes = texte
     .split('\n')
     .filter((l) => !/absent|n.existe|disparu|retiré|supprimé/iu.test(l))
@@ -171,8 +171,8 @@ export function descriptionDeSkill(md) {
 }
 
 /**
- * Vrais refus des fils les plus récents, classés par fils touchés. Le journal n'est pas daté, mais
- * ses clés sont des `conv-N` : le rang tient lieu de date. Il mêle aussi tous les échecs d'outils
+ * Vrais refus des fils les plus récents, classés par fils touchés. Les entrées anciennes du journal
+ * ne sont pas datées, mais ses clés sont des `conv-N` : le rang tient lieu de date. Il mêle aussi tous les échecs d'outils
  * (test rouge, fichier absent), qui ne disent rien des permissions : seuls les refus comptent.
  */
 export function refusRecents(murs, nombreDeFils = 100) {
@@ -182,7 +182,10 @@ export function refusRecents(murs, nombreDeFils = 100) {
     .slice(0, nombreDeFils)
   const comptes = new Map()
   for (const id of fils) {
-    for (const signature of new Set(murs[id])) {
+    // Une entrée est une signature seule (ancien format) ou `{ signature, derniereFois }`.
+    const signatures = murs[id].map((m) => (typeof m === 'string' ? m : m?.signature))
+    for (const signature of new Set(signatures)) {
+      if (typeof signature !== 'string') continue
       if (!/refus|interdit|bloqu|non autoris|denied|permission/iu.test(signature)) continue
       comptes.set(signature, (comptes.get(signature) ?? 0) + 1)
     }
@@ -277,7 +280,7 @@ function dossiersDeSkills(racine) {
 /*
  * LA PREMIÈRE QUESTION DU BILAN. Sans dossier de données, presque toutes les sondes rendent
  * « inconnu » et aucune ne rend « ko » : le script sortait en 0, comme un poste sain. C'est le cas
- * de toute copie de travail, où `.autowin-data` n'existe pas (juge du 2026-10-31, conv-1368).
+ * de toute copie de travail, où `.autowin-data` n'existe pas (juge du 2026-10-31).
  */
 function sondeDonnees({ data }) {
   const journal = join(data, 'conversations.json.journal.jsonl')
@@ -298,7 +301,9 @@ function sondeDonnees({ data }) {
     titre: abimees
       ? `Journal des conversations : ${abimees} ligne(s) illisible(s)`
       : 'Dossier de données présent, journal des conversations lisible',
-    reparation: abimees ? 'Le démarrage écarte ces lignes : `/heal` pour trouver leur origine.' : undefined
+    reparation: abimees
+      ? 'Le démarrage écarte ces lignes : `/heal` pour trouver leur origine.'
+      : undefined
   }
 }
 
@@ -465,7 +470,8 @@ function sondeDisque({ racine }) {
   return {
     statut: pire < SEUILS.disqueKoGo ? 'ko' : pire < SEUILS.disqueAttentionGo ? 'attention' : 'ok',
     titre: `Espace libre : ${uniques.map((l) => `${l.disque} ${l.go.toFixed(0)} Go`).join(' · ')}`,
-    reparation: pire < SEUILS.disqueAttentionGo ? '`/gc` déplace les déchets en corbeille.' : undefined
+    reparation:
+      pire < SEUILS.disqueAttentionGo ? '`/gc` déplace les déchets en corbeille.' : undefined
   }
 }
 
@@ -534,7 +540,7 @@ function sondeTaches({ data, maintenant }) {
   const recentes = occurrences.filter((o) => o.scheduledFor >= depuis)
   /*
    * « missed » veut dire que l'app était fermée à l'échéance (mode active-only) : ce n'est pas une
-   * panne de la tâche. Les compter comme des échecs accusait trois tâches saines (conv-1368).
+   * panne de la tâche. Les compter comme des échecs accusait trois tâches saines.
    */
   const manquees = recentes.filter((o) => o.status === 'missed').length
   const echecs = new Map()
@@ -707,7 +713,8 @@ function sondeMode({ racine }) {
     return {
       statut: 'ko',
       titre: 'Agents lancés sans autorisation du CLI, et sans garde d’Autowin',
-      reparation: 'Rétablir `src/main/hooks/default-gate-hooks.ts` et `src/main/gates` avant tout run.'
+      reparation:
+        'Rétablir `src/main/hooks/default-gate-hooks.ts` et `src/main/gates` avant tout run.'
     }
   }
   return {
@@ -762,7 +769,10 @@ function sondeCout({ data, maintenant }) {
 function sondeQuota({ appData, maintenant }) {
   const chemin = appData ? join(appData, 'Claude', 'plan-usage-history.json') : ''
   if (!chemin || !existsSync(chemin)) {
-    return { statut: 'inconnu', titre: 'Quota du forfait illisible : aucun relevé local sur ce poste' }
+    return {
+      statut: 'inconnu',
+      titre: 'Quota du forfait illisible : aucun relevé local sur ce poste'
+    }
   }
   const dernier = lireJson(chemin).samples?.at(-1)
   const semaine = dernier?.u?.sd
@@ -772,7 +782,8 @@ function sondeQuota({ appData, maintenant }) {
     return { statut: 'inconnu', titre: `Relevé de quota vieux de ${age.toFixed(0)} jours` }
   }
   // La fenêtre de 5 h est finie depuis longtemps sur un relevé plus vieux qu'elle.
-  const cinqHeures = age * 24 < 5 && typeof dernier.u.fh === 'number' ? `, ${dernier.u.fh} % sur 5 heures` : ''
+  const cinqHeures =
+    age * 24 < 5 && typeof dernier.u.fh === 'number' ? `, ${dernier.u.fh} % sur 5 heures` : ''
   const frais = age <= SEUILS.quotaReleveFraisJours
   const haut = frais && semaine >= SEUILS.quotaAttention
   return {

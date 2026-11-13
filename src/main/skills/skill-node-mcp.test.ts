@@ -223,6 +223,61 @@ describe('appel d’outil', () => {
   })
 })
 
+/**
+ * Ce que le CLI Claude 2.1.323 envoie VRAIMENT (sonde du 2026-11-13) : d'abord `server/discover` au
+ * protocole du 2026-07-28, puis, faute de réponse moderne, `initialize` en proposant `2025-11-25`.
+ */
+describe('protocole MCP — négociation de version et méthodes inconnues', () => {
+  const initialiser = async (protocolVersion: string): Promise<unknown> => {
+    const rep = await traiterMessageMcp(
+      { jsonrpc: '2.0', id: 0, method: 'initialize', params: { protocolVersion } },
+      lanceur()
+    )
+    return (rep.corps as { result: { protocolVersion: unknown } }).result.protocolVersion
+  }
+
+  it.each(['2025-11-25', '2025-06-18', '2025-03-26'])(
+    'initialize rend la version %s que le client propose, puisque le serveur la sert',
+    async (version) => {
+      expect(await initialiser(version)).toBe(version)
+    }
+  )
+
+  it.each(['2026-07-28', '1900-01-01'])(
+    'une version proposée que le serveur ne sert pas (%s) n’est jamais renvoyée : il rend sa plus récente',
+    async (version) => {
+      expect(await initialiser(version)).toBe('2025-11-25')
+    }
+  )
+
+  it('server/discover reçoit « méthode inconnue » (-32601), pas un faux succès vide', async () => {
+    const rep = await traiterMessageMcp(
+      {
+        jsonrpc: '2.0',
+        id: 'server-discover-probe-1',
+        method: 'server/discover',
+        params: { _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28' } }
+      },
+      lanceur()
+    )
+    expect(rep.statut).toBe(200)
+    const corps = rep.corps as { id: unknown; result?: unknown; error?: { code: number } }
+    expect(corps.id).toBe('server-discover-probe-1')
+    expect(corps.result).toBeUndefined()
+    expect(corps.error?.code).toBe(-32601)
+  })
+
+  it('toute autre méthode inconnue avec un id reçoit -32601', async () => {
+    const rep = await traiterMessageMcp({ id: 7, method: 'resources/list' }, lanceur())
+    expect((rep.corps as { error?: { code: number } }).error?.code).toBe(-32601)
+  })
+
+  it('ping reste un succès vide : c’est une méthode du protocole, pas une inconnue', async () => {
+    const rep = await traiterMessageMcp({ jsonrpc: '2.0', id: 8, method: 'ping' }, lanceur())
+    expect(rep.corps).toEqual({ jsonrpc: '2.0', id: 8, result: {} })
+  })
+})
+
 describe('transport', () => {
   const poster = async (
     url: string,
@@ -272,6 +327,27 @@ describe('transport', () => {
       expect(entree.type).toBe('http')
       expect(entree.url).toBe(serveur.url)
       expect(entree.headers['X-Autowin-Token']).toBe(serveur.jeton)
+    } finally {
+      await serveur.arreter()
+    }
+  })
+
+  it('un GET (flux d’événements que le serveur n’offre pas) reçoit 405 ; le POST reste servi', async () => {
+    const serveur = await demarrerServeurOutilsNoeudSkill(lanceur())
+    try {
+      const get = await fetch(serveur.url, {
+        method: 'GET',
+        headers: { accept: 'text/event-stream', 'X-Autowin-Token': serveur.jeton }
+      })
+      expect(get.status).toBe(405)
+      const decouverte = await poster(
+        serveur.url,
+        { jsonrpc: '2.0', id: 'd', method: 'server/discover' },
+        serveur.jeton
+      )
+      // 200 et non 404 : au protocole du 2026-07-28, un 404 portant -32601 désigne un serveur MODERNE.
+      expect(decouverte.statut).toBe(200)
+      expect(JSON.parse(decouverte.texte).error.code).toBe(-32601)
     } finally {
       await serveur.arreter()
     }

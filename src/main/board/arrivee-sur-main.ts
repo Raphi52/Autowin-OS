@@ -10,6 +10,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ConversationPourLaCarte, MessageStockePourLaCarte } from './carte-des-besoins'
+import { dossierDeLectureDuFil } from '../conversations/bascule-dossier-conversation'
+import { depotPrincipalSurDisque } from '../git/depot-git'
+import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 import type { StatutDemande } from '../../shared/carte-des-besoins'
 import { interruptionSansDefaut } from '../../shared/arret-par-stop'
 import {
@@ -25,6 +28,8 @@ import { execFileHorsFil } from '../gel/execution-hors-fil'
  */
 export type ArriveeDuTour = ((conversationId: string, turnId: string) => boolean | undefined) & {
   filApres?: (conversationId: string, depuis: number) => boolean | undefined
+  /** Le dossier dont le journal de main a été lu : `filApres` ne répond que pour les fils de ce dépôt. */
+  depotDuJournal?: string
 }
 
 /** Les seuls champs d'un run qui disent s'il a publié quelque chose. */
@@ -264,6 +269,30 @@ function estEnAttenteDePublication(action: ActionDuFil): boolean {
 }
 
 /**
+ * Le journal de main lu est celui d'UN dépôt (`depotDuJournal`, le dépôt de l'app) : il ne juge que les
+ * fils qui y travaillent. Pour un fil rangé dans un autre projet ou hors de tout dépôt, il ne contient
+ * pas les commits du fil : y lire « aucun commit après la demande » le refusait à tort.
+ * Le dossier du fil suit la règle de ses tours (`dossierDeLectureDuFil`) : sans dossier utilisable, il
+ * travaille dans le dépôt de l'app. Sinon on compare les dépôts PRINCIPAUX, lus sur disque sans lancer
+ * git (la carte se calcule dans le fil principal) : une copie de fil posée sous le dossier de l'app peut
+ * appartenir à un autre dépôt, ce qu'une comparaison de chemins ne verrait pas.
+ */
+// fix-ok: cause mesurée — `filApres` lisait le journal de main du seul dépôt de l'app pour TOUT fil : sur le
+// rejeu des 1636 fils du poste, la demande d'un fil rangé hors de tout dépôt sortait « refusé — pas encore
+// arrivé sur main » d'après un commit de ce fil antérieur à la demande dans le dépôt de l'app (5 tests rouges).
+function travailleDansLeDepotDuJournal(
+  conversation: ConversationPourLaCarte,
+  depotDuJournal: string | undefined
+): boolean {
+  const dossierRange = dossierDeLectureDuFil(conversation.projectPath, '')
+  if (!dossierRange) return true
+  if (!depotDuJournal) return false
+  const depotDuFil = depotPrincipalSurDisque(dossierRange)
+  const depot = depotPrincipalSurDisque(depotDuJournal)
+  return depotDuFil !== undefined && depot !== undefined && memeCheminSurDisque(depotDuFil, depot)
+}
+
+/**
  * « L'état suit le travail réel », pour les demandes dont le travail est en attente de publication ou
  * a été coupé :
  *  - arrivé sur main → prouvé, quel que soit le constat du fil ;
@@ -311,7 +340,10 @@ export function arbitrerParLArrivee(
   // fix-ok: cause mesurée — la règle « travail arrivé sur main → prouvé » contredit « sans lien → sans preuve » :
   // sur le rejeu des données réelles, deux demandes en attente sans trace de run sortaient sans preuve alors
   // qu'un commit du fil était arrivé après elles. Le constat garde le niveau de lien réel.
-  const arrive = debut === undefined ? undefined : arrivee.filApres?.(conversation.id, debut)
+  const arrive =
+    debut === undefined || !travailleDansLeDepotDuJournal(conversation, arrivee.depotDuJournal)
+      ? undefined
+      : arrivee.filApres?.(conversation.id, debut)
   if (arrive === false) return refuse
   if (arrive === true)
     return {

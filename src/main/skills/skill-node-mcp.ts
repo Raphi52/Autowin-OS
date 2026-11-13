@@ -70,8 +70,29 @@ export function porteLesOutilsNatifs(provider: string): boolean {
 /** Nom du serveur cote client. Les outils apparaissent donc en `mcp__autowin__<commande>`. */
 export const NOM_SERVEUR_MCP = 'autowin'
 
-/** Version de protocole rendue par defaut si le client n'en propose aucune. */
-const PROTOCOLE_DEFAUT = '2025-06-18'
+/**
+ * Les versions MCP que ce serveur sert, la plus recente d'abord : celles du transport « Streamable
+ * HTTP » a poignee de main `initialize` (2025-03-26 a 2025-11-25), ou `tools/list` et `tools/call`,
+ * nos deux seules methodes, n'ont pas change. Recopiee de `SUPPORTED_PROTOCOL_VERSIONS` du SDK
+ * TypeScript MCP (branche v1.x, `src/types.ts`), sans les versions du transport HTTP+SSE.
+ *
+ * Le protocole du 2026-07-28 n'y est PAS : il supprime `initialize` et exige a chaque requete des
+ * metadonnees et des en-tetes que ce serveur ne lit pas. Le servir est un chantier a part ; d'ici la,
+ * le client le sonde par `server/discover`, recoit -32601 et se replie sur `initialize` (mesure sur le
+ * CLI Claude 2.1.323, qui propose alors 2025-11-25).
+ */
+const VERSIONS_SERVIES = ['2025-11-25', '2025-06-18', '2025-03-26'] as const
+
+/**
+ * La regle de negociation de la specification : la version proposee si on la sert, sinon notre plus
+ * recente. Renvoyer une version qu'on ne sert pas ferait croire au client qu'on parle sa langue.
+ */
+function versionNegociee(proposee: unknown): string {
+  return VERSIONS_SERVIES.find((version) => version === proposee) ?? VERSIONS_SERVIES[0]
+}
+
+/** Code JSON-RPC « methode inconnue ». */
+const METHODE_INCONNUE = -32601
 
 export interface ServeurOutilsNoeudSkill {
   /** URL a mettre dans `--mcp-config`. */
@@ -460,7 +481,12 @@ function enTexte(valeur: unknown): string {
  * qui doit ouvrir un socket finit par ne plus etre joue.
  */
 export async function traiterMessageMcp(
-  message: { method?: string; id?: unknown; params?: { name?: string; arguments?: unknown } },
+  message: {
+    jsonrpc?: string
+    method?: string
+    id?: unknown
+    params?: { name?: string; arguments?: unknown; protocolVersion?: unknown; _meta?: unknown }
+  },
   lanceur: LanceurCommandeSkill,
   observer?: (appel: AppelMcpObserve) => void,
   perimetre: PerimetreOutils = PERIMETRE_NOEUD_SKILL
@@ -473,7 +499,7 @@ export async function traiterMessageMcp(
   switch (message.method) {
     case 'initialize':
       return repondre({
-        protocolVersion: PROTOCOLE_DEFAUT,
+        protocolVersion: versionNegociee(message.params?.protocolVersion),
         capabilities: { tools: {} },
         serverInfo: { name: NOM_SERVEUR_MCP, version: '1.0.0' }
       })
@@ -565,10 +591,25 @@ export async function traiterMessageMcp(
         })
       }
     }
+    case 'ping':
+      if (typeof id === 'undefined') return { statut: 202 }
+      return repondre({})
     default:
       // Notification (aucun `id`) : rien a rendre, et surtout pas une erreur.
       if (typeof id === 'undefined') return { statut: 202 }
-      return repondre({})
+      /*
+       * Une methode inconnue est une ERREUR, jamais un succes vide : un `{}` a `server/discover`
+       * annoncait un serveur moderne sans aucune version. En HTTP 200 et non 404 : au protocole du
+       * 2026-07-28, un 404 portant -32601 designe un serveur moderne, ce que ce serveur n'est pas.
+       */
+      return {
+        statut: 200,
+        corps: {
+          jsonrpc: '2.0',
+          id,
+          error: { code: METHODE_INCONNUE, message: `Method not found: ${message.method ?? ''}` }
+        }
+      }
   }
 }
 
@@ -629,6 +670,13 @@ export async function demarrerServeurOutilsNoeudSkill(
         // Un port en loopback est joignable par tout process de la machine : le jeton n'est pas
         // decoratif.
         res.writeHead(401).end('jeton invalide')
+        return
+      }
+      // fix-ok: cause mesurée — le CLI 2.1.323 ouvre un GET (flux d'événements) après `initialize` ;
+      // sans ce refus, son corps vide passait pour une notification (202) et un `{}` répondait à
+      // `server/discover`. La spécification veut 405 pour un flux qu'on n'offre pas.
+      if (req.method !== 'POST') {
+        res.writeHead(405, { allow: 'POST' }).end()
         return
       }
       let message: Record<string, unknown>
