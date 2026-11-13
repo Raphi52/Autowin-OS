@@ -58,7 +58,11 @@ async function tourQuiFinitSur(outcome: Record<string, unknown> | undefined) {
   }
   const os = avecRepli({
     waitUntilReady: async () => {},
-    roles: { bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }), routageChatLectureSeuleActif: () => false, getBinding: () => ({ provider: 'claude', model: 'modele-test' }) },
+    roles: {
+      bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }),
+      routageChatLectureSeuleActif: () => false,
+      getBinding: () => ({ provider: 'claude', model: 'modele-test' })
+    },
     conversations: store,
     executionSupervisor: { currentSignal: () => undefined },
     runChatTurn: async (_contenu: string, _signal: AbortSignal, lancer: () => unknown) => lancer()
@@ -85,7 +89,10 @@ async function tourQuiFinitSur(outcome: Record<string, unknown> | undefined) {
 function planAvecLeLotDans(fil: string) {
   const lu = lirePlanDeLots({
     plafondTours: 3,
-    lots: [{ demande: '/build lot 1' }, { demande: '/build lot 2' }]
+    lots: [
+      { demande: '/build lot 1', critere: 'le résultat se constate et ses tests passent' },
+      { demande: '/build lot 2', critere: 'le résultat se constate et ses tests passent' }
+    ]
   })
   if (!lu.ok) throw new Error(lu.erreur)
   const plan = { ...creerPlan(lu.plan, { id: 'plan-1', chef: 'conv-chef', maintenant: 1 }) }
@@ -152,10 +159,10 @@ describe('tour de chat → plan de lots : l’orchestration coupée par la limit
     expect(note.plan.statut).not.toBe('suspendu-quota')
   })
 
-  it('une orchestration réussie ne porte aucune erreur : le lot est fait', async () => {
+  it('une orchestration réussie ne porte aucune erreur : le lot est rendu, à recevoir par le chef', async () => {
     const { fil, resultat } = await tourQuiFinitSur({ status: 'succeeded', valid: true })
     const issue = issueDuResultat(resultat)
     expect(issue.echecOrchestration).toBeUndefined()
-    expect(noterFinDeTour(planAvecLeLotDans(fil), fil, issue, 3).lot?.etat).toBe('fait')
+    expect(noterFinDeTour(planAvecLeLotDans(fil), fil, issue, 3).lot?.etat).toBe('a-recevoir')
   })
 })

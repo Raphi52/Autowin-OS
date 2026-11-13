@@ -82,12 +82,20 @@ function banc(
   }
 }
 
+/** Ce que le chef a constaté : la preuve de sa réception (`validerLot`). */
+const PREUVE = 'capture lue : l’écran rendu tient son critère'
+
+/** Le chef reçoit le lot par son outil, comme l'agent du fil chef. */
+const recevoir = (b: Banc, rang: number, chef = 'conv-1'): Promise<Record<string, unknown>> =>
+  b.coord.outil(chef, { action: 'valider', lot: rang, preuve: PREUVE })
+
 const plan4 = {
   titre: 'Traduction',
   parallele: 2,
   lots: [1, 2, 3, 4].map((n) => ({
     titre: `Écrans ${n}`,
     demande: `/build traduis le groupe ${n}`,
+    critere: 'le résultat se constate et ses tests passent',
     fichiers: [`src/groupe-${n}.tsx`]
   }))
 }
@@ -179,11 +187,13 @@ describe('CoordinateurDesPlans — 4 lots, 2 en parallèle', () => {
     const messages = b.journal()
     expect(messages).toHaveLength(1)
     expect(messages[0]).toMatchObject({ a: 'conv-1', de: { fil: 'conv-100' } })
-    expect(String(messages[0].texte)).toMatch(/Lot 1\/4 « Écrans 1 » : fait dans conv-100/)
+    expect(String(messages[0].texte)).toMatch(
+      /Lot 1\/4 « Écrans 1 » : à recevoir par le chef dans conv-100/
+    )
     expect(String(messages[0].texte)).toMatch(/code 0/)
     expect(b.lancements[3].prompt).toMatch(/message de l’app, pas de l’utilisateur/)
     const plan = b.coord.plans()[0]
-    expect(plan.lots.map((l) => l.etat)).toEqual(['fait', 'en-cours', 'en-cours', 'a-faire'])
+    expect(plan.lots.map((l) => l.etat)).toEqual(['a-recevoir', 'en-cours', 'en-cours', 'a-faire'])
   })
 
   it('fin en double, ou fin d’un fil hors plan : aucun effet', async () => {
@@ -208,9 +218,24 @@ describe('CoordinateurDesPlans — 4 lots, 2 en parallèle', () => {
     await b.coord.surFinDeTour('conv-1', { ok: true })
     expect(reveils()).toBe(1)
     const reveil = b.lancements.filter((l) => l.fil === 'conv-1')[0].prompt
-    expect(reveil).toMatch(/lot 1 « Écrans 1 » : fait/)
+    expect(reveil).toMatch(/lot 1 « Écrans 1 » : à recevoir par le chef/)
     expect(reveil).toMatch(/lot 2 « Écrans 2 » : échec \(tests rouges\)/)
-    // La fin du tour de réveil ne relance rien de plus.
+    // Le réveil a fini sans recevoir le lot 1 : UN rappel, puis plus rien — pas de boucle.
+    await b.coord.surFinDeTour('conv-1', { ok: true })
+    expect(reveils()).toBe(2)
+    expect(b.lancements.filter((l) => l.fil === 'conv-1')[1].prompt).toMatch(
+      /À RECEVOIR, leurs dépendants attendent ton geste : lot 1 « Écrans 1 »/
+    )
+    await b.coord.surFinDeTour('conv-1', { ok: true })
+    expect(reveils()).toBe(2)
+  })
+
+  it('jumeau : un réveil qui a reçu ses lots ne déclenche aucun rappel', async () => {
+    const b = await demarre()
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    const reveils = (): number => b.lancements.filter((l) => l.fil === 'conv-1').length
+    expect(reveils()).toBe(1)
+    await recevoir(b, 1)
     await b.coord.surFinDeTour('conv-1', { ok: true })
     expect(reveils()).toBe(1)
   })
@@ -273,15 +298,57 @@ describe('CoordinateurDesPlans — 4 lots, 2 en parallèle', () => {
 
   it('tous les lots finis : plan terminé et dernier réveil du chef avec le bilan', async () => {
     const b = await demarre()
-    for (const fil of ['conv-100', 'conv-101', 'conv-102', 'conv-103']) {
+    let derniere: Record<string, unknown> = {}
+    for (const [i, fil] of ['conv-100', 'conv-101', 'conv-102', 'conv-103'].entries()) {
       await b.coord.surFinDeTour(fil, { ok: true })
+      derniere = await recevoir(b, i + 1)
       await b.coord.surFinDeTour('conv-1', { ok: true })
     }
     const plan = b.coord.plans()[0]
     expect(plan.statut).toBe('termine')
+    // Le dernier réveil annonçait le lot 4 à recevoir ; la réception rend le bilan final au chef.
     const dernier = b.lancements.filter((l) => l.fil === 'conv-1').at(-1)?.prompt ?? ''
-    expect(dernier).toMatch(/4 faits, 0 en échec, 0 en cours, 0 à faire sur 4/)
-    expect(dernier).toMatch(/Statut du plan : terminé/)
+    expect(dernier).toMatch(/3 faits, 0 en échec, 0 en cours, 0 à faire, 1 à recevoir sur 4/)
+    expect(String(derniere.detail)).toMatch(/4 faits, 0 en échec, 0 en cours, 0 à faire sur 4/)
+    expect(derniere.plan).toMatchObject({ statut: 'terminé' })
+  })
+
+  it('le lot dépendant ne part qu’à la réception de son prérequis ; un refus le renvoie avec son motif', async () => {
+    const b = banc()
+    const deps = {
+      ...plan4,
+      lots: [plan4.lots[0], { ...plan4.lots[1], apres: [1] }]
+    }
+    await b.coord.outil('conv-1', { plan: deps })
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100'])
+    await b.coord.surFinDeTour('conv-100', { ok: true, texte: 'Groupe 1 traduit.' })
+    // Rendu, pas reçu : le lot 2 ne part pas, seul le chef est réveillé.
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-1'])
+    const motif = 'le groupe 1 garde 3 chaînes en dur dans src/groupe-1.tsx (lignes 12, 40, 41)'
+    const r = await b.coord.outil('conv-1', { action: 'refuser', lot: 1, motif })
+    expect(String(r.detail)).toMatch(/lot 1 refusé : il repart dans conv-100 avec ton motif/)
+    const relance = b.lancements.at(-1)
+    expect(relance?.fil).toBe('conv-100')
+    expect(relance?.prompt).toContain(`REFUSÉ par le chef. Son motif : ${motif}`)
+    await b.coord.surFinDeTour('conv-100', { ok: true, texte: 'Chaînes retirées.' })
+    expect(b.coord.plans()[0].lots[1].etat).toBe('a-faire')
+    await recevoir(b, 1)
+    expect(b.coord.plans()[0].lots.map((l) => l.etat)).toEqual(['fait', 'en-cours'])
+    expect(b.lancements.at(-1)?.fil).toBe('conv-101')
+  })
+
+  it('refuser : seul le chef, et un motif qui dit ce qui manque', async () => {
+    const b = await demarre()
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    await expect(
+      b.coord.outil('conv-100', { action: 'refuser', lot: 1, motif: 'il manque les coffres' })
+    ).rejects.toThrow(/seul le fil chef refuse/)
+    await expect(
+      b.coord.outil('conv-1', { action: 'refuser', lot: 1, motif: 'non' })
+    ).rejects.toThrow(/« motif » attendu/)
+    await expect(b.coord.outil('conv-1', { action: 'refuser', motif: 'x' })).rejects.toThrow(
+      /numéro du lot à refuser/
+    )
   })
 })
 
@@ -342,7 +409,7 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
     const r = await redemarre()
     await r.coord.surFinDeTour('conv-100', { ok: true, repris: true, texte: 'Groupe 1 traduit.' })
     const plan = r.coord.plans()[0]
-    expect(plan.lots.map((l) => l.etat)).toEqual(['fait', 'interrompu', 'a-faire', 'a-faire'])
+    expect(plan.lots.map((l) => l.etat)).toEqual(['a-recevoir', 'interrompu', 'a-faire', 'a-faire'])
     expect(plan.statut).toBe('interrompu')
     expect(r.journal()).toHaveLength(1)
     expect(r.journal()[0]).toMatchObject({ a: 'conv-1', de: { fil: 'conv-100' } })
@@ -366,7 +433,7 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
     // Sa fin, une fois le fil relâché, note le lot 2 et lance le lot suivant.
     r.actifs.delete('conv-101')
     await r.coord.surFinDeTour('conv-101', { ok: true, repris: true })
-    expect(r.coord.plans()[0].lots[1].etat).toBe('fait')
+    expect(r.coord.plans()[0].lots[1].etat).toBe('a-recevoir')
     expect(r.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-102', 'conv-1'])
   })
 
@@ -406,6 +473,7 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
     await b.coord.accepter('conv-1', a.plan.id)
     await b.coord.surFinDeTour('conv-100', { ok: false, erreur: 'build rouge' })
     await b.coord.surFinDeTour('conv-101', { ok: true })
+    await recevoir(b, 2)
     await b.coord.surFinDeTour('conv-1', { ok: true })
     const avant = b.coord.plans()[0]
     expect(avant.statut).toBe('termine')
@@ -456,8 +524,18 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
     titre: 'Chantier',
     parallele: 1,
     lots: [
-      { titre: 'Cœur', demande: '/build le cœur', fichiers: ['src/coeur.ts'] },
-      { titre: 'Écran', demande: '/build l’écran', fichiers: ['src/ecran.tsx'] }
+      {
+        titre: 'Cœur',
+        demande: '/build le cœur',
+        critere: 'le résultat se constate et ses tests passent',
+        fichiers: ['src/coeur.ts']
+      },
+      {
+        titre: 'Écran',
+        demande: '/build l’écran',
+        critere: 'le résultat se constate et ses tests passent',
+        fichiers: ['src/ecran.tsx']
+      }
     ],
     ...extra
   })
@@ -476,6 +554,8 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
     // Jumeau : plan fini, le fil redevient libre de mener un chantier à lui.
     await b.coord.surFinDeTour('conv-100', { ok: true })
     await b.coord.surFinDeTour('conv-101', { ok: true })
+    await recevoir(b, 1)
+    await recevoir(b, 2)
     expect(b.coord.plans()[0].statut).toBe('termine')
     expect(b.coord.deposer('conv-100', plan4).ok).toBe(true)
   })
@@ -509,21 +589,33 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
     await b.coord.outil('conv-1', { plan: plan2({ parallele: 2 }) })
     expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101'])
     await expect(
-      b.coord.outil('conv-100', { action: 'ajouter', plan: { lots: [{ demande: 'x' }] } })
+      b.coord.outil('conv-100', {
+        action: 'ajouter',
+        plan: { lots: [{ demande: 'x', critere: 'le résultat se constate et ses tests passent' }] }
+      })
     ).rejects.toThrow(/seul le fil chef/)
     const r = (await b.coord.outil('conv-1', {
       action: 'ajouter',
       plan: JSON.stringify({
         lots: [
-          { titre: 'Tests', demande: '/build les tests', fichiers: ['src/x.test.ts'], apres: [1] }
+          {
+            titre: 'Tests',
+            demande: '/build les tests',
+            critere: 'le résultat se constate et ses tests passent',
+            fichiers: ['src/x.test.ts'],
+            apres: [1]
+          }
         ]
       })
     })) as { detail: string }
     expect(r.detail).toMatch(/1 lot ajouté \(rang 3\), plafond porté à 6 tours/)
     const plan = b.coord.plans()[0]
     expect(plan.lots[2]).toMatchObject({ rang: 3, etat: 'a-faire', apres: [1] })
-    // Il attend le lot 1 : il part dès sa fin, sans geste du chef.
+    // Il attend le lot 1 : sa fin ne suffit pas, il part à la réception du chef.
     await b.coord.surFinDeTour('conv-100', { ok: true })
+    const partiAvant = b.lancements.some((l) => l.fil === 'conv-102')
+    expect(partiAvant).toBe(false)
+    await recevoir(b, 1)
     expect(
       b.lancements.some((l) => l.fil === 'conv-102' && l.prompt.startsWith('/build les tests'))
     ).toBe(true)
@@ -556,6 +648,7 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
     ;(plan3.lots as unknown[]).push({
       titre: 'Tests',
       demande: '/build les tests',
+      critere: 'le résultat se constate et ses tests passent',
       fichiers: ['src/t.test.ts']
     })
     await b.coord.outil('conv-1', { plan: plan3 })
@@ -648,10 +741,33 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
       tour: 'tour-ordre',
       texte: 'Fait : carte.ts créé.'
     })
-    expect(b.coord.plans()[0].lots[0].etat).toBe('fait')
+    expect(b.coord.plans()[0].lots[0].etat).toBe('a-recevoir')
     const cr = b.journal().slice(avant)
     expect(cr.map((m) => [(m.de as { fil: string }).fil, m.a])).toEqual([['conv-100', 'conv-1']])
-    expect(String(cr[0].texte)).toMatch(/^Lot 1\/2 « Cœur » : fait dans conv-100/)
+    expect(String(cr[0].texte)).toMatch(/^Lot 1\/2 « Cœur » : à recevoir par le chef dans conv-100/)
+  })
+
+  it('l’ordre du chef à un lot RENDU vaut refus : son texte est le motif, sa fin le rend à recevoir', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: plan2() })
+    await b.coord.surFinDeTour('conv-100', { ok: true, texte: 'Cœur écrit.' })
+    expect(b.coord.plans()[0].lots[0].etat).toBe('a-recevoir')
+    const corrige = 'le cœur ne gère pas le plan vide : ajoute ce cas et son test'
+    const lances: Array<{ fil: string; prompt: string }> = []
+    const r = await b.coord.lancerParOrdre('conv-1', 'conv-100', corrige, async (fil, prompt) => {
+      lances.push({ fil, prompt })
+      return { ok: true, turnId: 'tour-refus' }
+    })
+    expect(r.ok).toBe(true)
+    expect(lances[0].prompt.startsWith(corrige)).toBe(true)
+    expect(lances[0].prompt).toMatch(/l’ordre ci-dessus est le motif du refus de ton lot/)
+    expect(b.coord.plans()[0].lots[0]).toMatchObject({
+      etat: 'en-cours',
+      refus: corrige,
+      tour: 'tour-refus'
+    })
+    await b.coord.surFinDeTour('conv-100', { ok: true, tour: 'tour-refus' })
+    expect(b.coord.plans()[0].lots[0].etat).toBe('a-recevoir')
   })
 
   /*
@@ -847,6 +963,7 @@ describe('CoordinateurDesPlans — le bouton du workflow intelligent', () => {
     lots: Array.from({ length: n }, (_, i) => ({
       titre: `${nom} ${i + 1}`,
       demande: `Traite ce candidat issu du scout interne d'Autowin :\n\n1. ${nom} ${i + 1}`,
+      critere: 'le résultat se constate et ses tests passent',
       fichiers: [`src/${nom.toLowerCase()}-${i + 1}.ts`]
     }))
   })
@@ -904,7 +1021,9 @@ describe('CoordinateurDesPlans — le bouton du workflow intelligent', () => {
     ])
     const r = await apres.reprendre('conv-1', vu!.plan.id)
     expect(r.ok).toBe(true)
-    expect(apres.planDuFil('conv-1')?.plan.lots.filter((l) => l.etat === 'en-cours')).toHaveLength(3)
+    expect(apres.planDuFil('conv-1')?.plan.lots.filter((l) => l.etat === 'en-cours')).toHaveLength(
+      3
+    )
   })
 
   it('dans le fil d’un lot, le plan est refusé et l’écran sait qu’il peut enchaîner dans ce fil', async () => {

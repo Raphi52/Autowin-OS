@@ -1016,6 +1016,7 @@ describe('relance — le plan de lots du fil suit le run repris', () => {
       lots: [1, 2].map((n) => ({
         titre: `Étape ${n}`,
         demande: `/build étape ${n}`,
+        critere: 'le résultat se constate et ses tests passent',
         fichiers: [`src/etape-${n}.ts`],
         apres: n > 1 ? [n - 1] : []
       }))
@@ -1043,9 +1044,17 @@ describe('relance — le plan de lots du fil suit le run repris', () => {
     })
     await b.relance()
     await finAnnoncee
-    expect(apres.plans()[0].lots.map((l) => l.etat)).toEqual(['fait', 'en-cours'])
+    // Rendu, pas reçu : seul le chef est réveillé ; le lot 2 part à la réception.
+    expect(apres.plans()[0].lots.map((l) => l.etat)).toEqual(['a-recevoir', 'a-faire'])
     expect(apres.plans()[0].statut).toBe('en-cours')
-    expect(lancements).toEqual(['conv-100', 'conv-101', 'conv-chef'])
+    expect(lancements).toEqual(['conv-100', 'conv-chef'])
+    await apres.outil('conv-chef', {
+      action: 'valider',
+      lot: 1,
+      preuve: 'capture lue : les lecteurs sont explicites, tests verts'
+    })
+    expect(apres.plans()[0].lots.map((l) => l.etat)).toEqual(['fait', 'en-cours'])
+    expect(lancements).toEqual(['conv-100', 'conv-chef', 'conv-101'])
   })
 
   /**
@@ -1079,8 +1088,19 @@ describe('relance — le plan de lots du fil suit le run repris', () => {
       titre: 'RAM',
       parallele: 1,
       lots: [
-        { titre: 'Lecteurs', demande: '/build lecteurs', fichiers: ['src/a.ts'] },
-        { titre: 'Bascule', demande: '/build bascule', fichiers: ['src/b.ts'], apres: [1] }
+        {
+          titre: 'Lecteurs',
+          demande: '/build lecteurs',
+          critere: 'le résultat se constate et ses tests passent',
+          fichiers: ['src/a.ts']
+        },
+        {
+          titre: 'Bascule',
+          demande: '/build bascule',
+          critere: 'le résultat se constate et ses tests passent',
+          fichiers: ['src/b.ts'],
+          apres: [1]
+        }
       ]
     })
     if (!depot.ok) throw new Error(depot.erreur)

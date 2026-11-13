@@ -150,9 +150,18 @@ const plan3 = {
   lots: [1, 2, 3].map((n) => ({
     titre: `Écrans ${n}`,
     demande: `/build traduis le groupe ${n}`,
+    critere: 'le résultat se constate et ses tests passent',
     fichiers: [`src/groupe-${n}.tsx`]
   }))
 }
+
+/** Le chef reçoit le lot par son outil (`validerLot`), pendant son tour de réveil. */
+const recevoir = (b: ReturnType<typeof bancReel>, rang: number): Promise<unknown> =>
+  b.coord.outil('conv-1', {
+    action: 'valider',
+    lot: rang,
+    preuve: 'capture lue : l’écran rendu tient son critère'
+  })
 
 const reveilsDuChef = (b: ReturnType<typeof bancReel>): string[] =>
   b.lancements.filter((l) => l.fil === 'conv-1').map((l) => l.prompt)
@@ -178,9 +187,10 @@ describe('plans de lots — chef occupé, avec le vrai registre des tours', () =
     expect(reveilsDuChef(b)).toEqual([])
     await b.finir('conv-1')
     expect(reveilsDuChef(b)).toHaveLength(1)
-    expect(reveilsDuChef(b)[0]).toMatch(/lot 1 « Écrans 1 » : fait/)
+    expect(reveilsDuChef(b)[0]).toMatch(/lot 1 « Écrans 1 » : à recevoir par le chef/)
     expect(b.turns.isInFlight('conv-1')).toBe(true)
-    // La fin du tour de réveil, sans rien de neuf, ne relance pas le chef.
+    // La fin du tour de réveil qui a reçu son lot, sans rien de neuf, ne relance pas le chef.
+    await recevoir(b, 1)
     await b.finir('conv-1')
     expect(reveilsDuChef(b)).toHaveLength(1)
     expect(b.turns.isInFlight('conv-1')).toBe(false)
@@ -193,16 +203,20 @@ describe('plans de lots — chef occupé, avec le vrai registre des tours', () =
     // Pendant le réveil du chef, le lot 2 finit : pas de second réveil en même temps.
     await b.finir('conv-101')
     expect(reveilsDuChef(b)).toHaveLength(1)
+    await recevoir(b, 1)
     await b.finir('conv-1')
     expect(reveilsDuChef(b)).toHaveLength(2)
-    expect(reveilsDuChef(b)[1]).toMatch(/lot 2 « Écrans 2 » : fait/)
+    expect(reveilsDuChef(b)[1]).toMatch(/lot 2 « Écrans 2 » : à recevoir par le chef/)
     // Le DERNIER lot finit pendant le 2e réveil : son compte rendu attend, puis part.
     await b.finir('conv-102')
     expect(reveilsDuChef(b)).toHaveLength(2)
+    await recevoir(b, 2)
     await b.finir('conv-1')
     expect(reveilsDuChef(b)).toHaveLength(3)
-    expect(reveilsDuChef(b)[2]).toMatch(/lot 3 « Écrans 3 » : fait/)
-    expect(reveilsDuChef(b)[2]).toMatch(/Statut du plan : terminé/)
+    expect(reveilsDuChef(b)[2]).toMatch(/lot 3 « Écrans 3 » : à recevoir par le chef/)
+    // Sa réception termine le plan ; la fin de ce dernier réveil ne relance rien.
+    await recevoir(b, 3)
+    expect(b.coord.plans()[0].statut).toBe('termine')
     await b.finir('conv-1')
     expect(reveilsDuChef(b)).toHaveLength(3)
   })
@@ -229,14 +243,18 @@ describe('plans de lots — redémarrage, avec le vrai registre des tours et de 
     expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100'])
     expect(b.coord.plans()[0].lots[1].etat).toBe('en-cours')
     await finDeLaReprise({ ok: true, texte: 'Groupe 2 traduit.' })
-    expect(b.coord.plans()[0].lots[1].etat).toBe('fait')
+    expect(b.coord.plans()[0].lots[1].etat).toBe('a-recevoir')
     expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-102', 'conv-1'])
   })
 
   it('l’agent repris du lot 1 finit avant tout clic : lot noté, chef réveillé, rien ne repart seul', async () => {
     const b = await apresRedemarrage()
     await b.reprise('conv-100')({ ok: true })
-    expect(b.coord.plans()[0].lots.map((l) => l.etat)).toEqual(['fait', 'interrompu', 'a-faire'])
+    expect(b.coord.plans()[0].lots.map((l) => l.etat)).toEqual([
+      'a-recevoir',
+      'interrompu',
+      'a-faire'
+    ])
     expect(b.lancements.map((l) => l.fil)).toEqual(['conv-1'])
   })
 
@@ -272,6 +290,7 @@ describe('plans de lots — le plan suit l’agent qui a survécu au redémarrag
     lots: [1, 2, 3].map((n) => ({
       titre: `Étape ${n}`,
       demande: `/build étape ${n}`,
+      critere: 'le résultat se constate et ses tests passent',
       fichiers: [`src/etape-${n}.ts`],
       apres: n > 1 ? [n - 1] : []
     }))
@@ -312,11 +331,17 @@ describe('plans de lots — le plan suit l’agent qui a survécu au redémarrag
       reprisDesLeChargement: ['conv-100']
     })
     await b.finDeReprise('conv-100')({ ok: true, texte: 'Étape 1 livrée.' })
+    // Rendu, pas reçu : le lot 2 attend le geste du chef, seul réveillé.
+    expect(etats(b)).toEqual(['a-recevoir', 'a-faire', 'a-faire'])
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-1'])
+    expect(reveilsDuChef(b)[0]).toMatch(/lot 1 « Étape 1 » : à recevoir par le chef/)
+    await recevoir(b, 1)
     expect(etats(b)).toEqual(['fait', 'en-cours', 'a-faire'])
-    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-101', 'conv-1'])
-    expect(reveilsDuChef(b)[0]).toMatch(/lot 1 « Étape 1 » : fait/)
-    // La chaîne continue : le lot 2 fini, le lot 3 part à son tour.
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-1', 'conv-101'])
+    // La chaîne continue : le lot 2 fini et reçu, le lot 3 part à son tour.
     await b.finir('conv-101')
+    expect(etats(b)).toEqual(['fait', 'a-recevoir', 'a-faire'])
+    await recevoir(b, 2)
     expect(etats(b)).toEqual(['fait', 'fait', 'en-cours'])
   })
 
@@ -332,6 +357,8 @@ describe('plans de lots — le plan suit l’agent qui a survécu au redémarrag
     expect(etats(b)).toEqual(['en-cours', 'a-faire', 'a-faire'])
     expect(b.lancements).toEqual([])
     await b.coord.surFinDeTour('conv-100', { ok: true, repris: true })
+    expect(etats(b)).toEqual(['a-recevoir', 'a-faire', 'a-faire'])
+    await recevoir(b, 1)
     expect(etats(b)).toEqual(['fait', 'en-cours', 'a-faire'])
   })
 
@@ -358,9 +385,10 @@ describe('plans de lots — le plan suit l’agent qui a survécu au redémarrag
     expect(b.coord.plans()[0].statut).toBe('interrompu')
     expect(etats(b)).toEqual(['en-cours', 'interrompu', 'a-faire'])
     await b.coord.surFinDeTour('conv-100', { ok: true, repris: true })
-    expect(etats(b)).toEqual(['fait', 'interrompu', 'a-faire'])
-    // Rien ne repart seul pour le lot mort ; le chef, lui, est prévenu.
+    expect(etats(b)).toEqual(['a-recevoir', 'interrompu', 'a-faire'])
+    // Rien ne repart seul pour le lot mort ; le chef, lui, est prévenu et reçoit le survivant.
     expect(b.lancements.map((l) => l.fil)).toEqual(['conv-1'])
+    await recevoir(b, 1)
     await b.finir('conv-1')
     await b.coord.reprendre('conv-1', b.coord.plans()[0].id)
     await laisserFiler()
@@ -380,7 +408,7 @@ describe('plans de lots — le plan suit l’agent qui a survécu au redémarrag
     expect(etats(b)).toEqual(['en-cours', 'a-faire', 'a-faire'])
     await b.coord.surFinDeTour('conv-100', { ok: true, repris: true })
     expect(b.coord.plans()[0].statut).toBe('arrete')
-    expect(etats(b)).toEqual(['fait', 'a-faire', 'a-faire'])
+    expect(etats(b)).toEqual(['a-recevoir', 'a-faire', 'a-faire'])
     expect(b.lancements.map((l) => l.fil)).toEqual(['conv-1'])
   })
 

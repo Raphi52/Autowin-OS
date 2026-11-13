@@ -19,8 +19,19 @@ const planDeDeux = (plafondTours: number) => ({
   parallele: 1,
   plafondTours,
   lots: [
-    { titre: 'Masquage', demande: '/build masque les valeurs', fichiers: ['src/a.ts'] },
-    { titre: 'Revue', demande: '/build relis le coffre', fichiers: [], apres: [1] }
+    {
+      titre: 'Masquage',
+      demande: '/build masque les valeurs',
+      critere: 'le résultat se constate et ses tests passent',
+      fichiers: ['src/a.ts']
+    },
+    {
+      titre: 'Revue',
+      demande: '/build relis le coffre',
+      critere: 'le résultat se constate et ses tests passent',
+      fichiers: [],
+      apres: [1]
+    }
   ]
 })
 
@@ -70,7 +81,7 @@ async function lotEnEchec(b: ReturnType<typeof banc>, plafondTours: number): Pro
 }
 
 describe('lot en échec rattrapé dans son propre fil', () => {
-  it('un travail validé par le contrôle final passe le lot « fait », le chef le sait et le lot suivant part', async () => {
+  it('un travail validé par le contrôle final rend le lot à recevoir ; le chef le reçoit et le lot suivant part', async () => {
     const b = banc()
     await lotEnEchec(b, 3)
     expect(b.plan()?.statut).toBe('bloque')
@@ -84,19 +95,28 @@ describe('lot en échec rattrapé dans son propre fil', () => {
       orchestrationReussie: true
     })
 
-    expect(b.lot(1)?.etat).toBe('fait')
-    expect(b.lot(1)?.raison).toBeUndefined()
-    // Le rattrapage n'a pas été lancé par le plan : il ne coûte aucun tour au plafond…
-    expect(b.plan()?.toursLances).toBe((toursAvant ?? 0) + 1)
-    // … et le seul tour en plus est celui du lot 2, qui attendait le lot 1.
-    expect(b.lot(2)?.etat).toBe('en-cours')
+    // Validé par le contrôle final du fil, pas encore par le chef : le lot 2 attend sa réception.
+    expect(b.lot(1)?.etat).toBe('a-recevoir')
+    expect(b.lot(1)?.raison).toMatch(/le chef le vérifie sur son critère/)
+    expect(b.lot(2)?.etat).toBe('a-faire')
     expect(b.plan()?.statut).toBe('en-cours')
+    // Le rattrapage n'a pas été lancé par le plan : il ne coûte aucun tour au plafond.
+    expect(b.plan()?.toursLances).toBe(toursAvant)
     const compteRendu = b.ecrits.slice(ecritsAvant).find((e) => e.a === 'conv-1')
     expect(compteRendu?.de).toBe('conv-100')
     expect(compteRendu?.texte).toMatch(/Lot repris et validé/)
+    await b.coord.outil('conv-1', {
+      action: 'valider',
+      lot: 1,
+      preuve: 'capture lue : le coffre masque les valeurs, tests verts'
+    })
+    expect(b.lot(1)?.etat).toBe('fait')
+    // Le seul tour en plus est celui du lot 2, qui attendait le lot 1.
+    expect(b.plan()?.toursLances).toBe((toursAvant ?? 0) + 1)
+    expect(b.lot(2)?.etat).toBe('en-cours')
   })
 
-  it('plan arrêté par le plafond : le lot passe « fait », le plan reste arrêté', async () => {
+  it('plan arrêté par le plafond : le lot est rendu puis reçu, le plan reste arrêté', async () => {
     const b = banc()
     await lotEnEchec(b, 2)
     // Relancé une fois par le chef, refusé de nouveau : les 2 tours du plan sont épuisés.
@@ -117,6 +137,13 @@ describe('lot en échec rattrapé dans son propre fil', () => {
       orchestrationReussie: true
     })
 
+    expect(b.lot(1)?.etat).toBe('a-recevoir')
+    expect(b.plan()?.statut).toBe('plafond-atteint')
+    await b.coord.outil('conv-1', {
+      action: 'valider',
+      lot: 1,
+      preuve: 'capture lue : le coffre masque les valeurs, tests verts'
+    })
     expect(b.lot(1)?.etat).toBe('fait')
     expect(b.plan()?.statut).toBe('plafond-atteint')
     expect(b.plan()?.toursLances).toBe(2)

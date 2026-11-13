@@ -24,6 +24,7 @@ export const TEXTES_FR = {
   // donc en français côté moteur ; `ChatFilsEtLots.langue.test.tsx` vérifie qu'ils ne divergent pas.
   'lots.etat.a-faire': 'à faire',
   'lots.etat.en-cours': 'en cours',
+  'lots.etat.a-recevoir': 'à recevoir par le chef',
   'lots.etat.fait': 'fait',
   'lots.etat.echec': 'échec',
   'lots.etat.interrompu': 'interrompu',
@@ -45,10 +46,13 @@ export const TEXTES_FR = {
   'lots.bilan.interrompus.plusieurs': ', {n} interrompus',
   'lots.bilan.attendChef.un': ', {n} attend le chef',
   'lots.bilan.attendChef.plusieurs': ', {n} attendent le chef',
+  'lots.bilan.aRecevoir': ', {n} à recevoir',
+  'lots.bilan.attendPublication.un': ', {n} attend sa publication',
+  'lots.bilan.attendPublication.plusieurs': ', {n} attendent leur publication',
   'lots.bilan.tours.un': '{n} tour',
   'lots.bilan.tours.plusieurs': '{n} tours',
   'lots.bilan.texte':
-    '{faits}, {echecs} en échec, {enCours} en cours, {aFaire} à faire{interrompus}{attendChef} sur {total} — {tours} sur {plafond}',
+    '{faits}, {echecs} en échec, {enCours} en cours, {aFaire} à faire{aRecevoir}{interrompus}{attendChef}{attendPublication} sur {total} — {tours} sur {plafond}',
   'lots.parallele.un': '{n} fil en parallèle',
   'lots.parallele.plusieurs': '{n} fils en parallèle',
   'lots.cout.titre':
@@ -279,6 +283,7 @@ export const TEXTES_FR = {
 export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'lots.etat.a-faire': 'to do',
   'lots.etat.en-cours': 'running',
+  'lots.etat.a-recevoir': 'awaiting lead review',
   'lots.etat.fait': 'done',
   'lots.etat.echec': 'failed',
   'lots.etat.interrompu': 'interrupted',
@@ -300,10 +305,13 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'lots.bilan.interrompus.plusieurs': ', {n} interrupted',
   'lots.bilan.attendChef.un': ', {n} waiting for the lead',
   'lots.bilan.attendChef.plusieurs': ', {n} waiting for the lead',
+  'lots.bilan.aRecevoir': ', {n} awaiting lead review',
+  'lots.bilan.attendPublication.un': ', {n} waiting to be published',
+  'lots.bilan.attendPublication.plusieurs': ', {n} waiting to be published',
   'lots.bilan.tours.un': '{n} turn',
   'lots.bilan.tours.plusieurs': '{n} turns',
   'lots.bilan.texte':
-    '{faits}, {echecs} failed, {enCours} running, {aFaire} to do{interrompus}{attendChef} out of {total} — {tours} of {plafond}',
+    '{faits}, {echecs} failed, {enCours} running, {aFaire} to do{aRecevoir}{interrompus}{attendChef}{attendPublication} out of {total} — {tours} of {plafond}',
   'lots.parallele.un': '{n} thread in parallel',
   'lots.parallele.plusieurs': '{n} threads in parallel',
   'lots.cout.titre':
@@ -551,6 +559,14 @@ export function texteDuBilan(plan: PlanDeLots, langue: Langue): string {
     echecs: b.echecs,
     enCours: b.enCours,
     aFaire: b.aFaire,
+    aRecevoir: b.aRecevoir ? t('lots.bilan.aRecevoir', { n: b.aRecevoir }) : '',
+    attendPublication: b.attendPublication
+      ? pluriel(
+          b.attendPublication,
+          'lots.bilan.attendPublication.un',
+          'lots.bilan.attendPublication.plusieurs'
+        )
+      : '',
     interrompus: b.interrompus
       ? pluriel(b.interrompus, 'lots.bilan.interrompus.un', 'lots.bilan.interrompus.plusieurs')
       : '',

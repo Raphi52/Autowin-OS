@@ -87,7 +87,11 @@ function plan(): PlanDeLots {
   const lu = lirePlanDeLots({
     titre: 'Traduction anglaise',
     parallele: 2,
-    lots: [1, 2, 3].map((n) => ({ titre: `Écrans ${n}`, demande: `/build groupe ${n}` }))
+    lots: [1, 2, 3].map((n) => ({
+      titre: `Écrans ${n}`,
+      demande: `/build groupe ${n}`,
+      critere: 'le résultat se constate et ses tests passent'
+    }))
   })
   if (!lu.ok) throw new Error(lu.erreur)
   return creerPlan(lu.plan, { id: 'plan-a', chef: 'conv-1', maintenant: 1 })
@@ -153,6 +157,23 @@ describe('TableauDesLots', () => {
     expect(relance?.disabled).toBe(false)
     await act(async () => relance.click())
     expect(appels.at(-1)).toEqual(['relancer', 'conv-1', 'plan-a', 1])
+    fin()
+  })
+
+  it('un lot rendu attend sa réception : son état à lui, la raison qui dit pourquoi la suite attend, sans « Relancer »', async () => {
+    let p: PlanDeLots = { ...plan(), statut: 'en-cours' }
+    p = marquerLance(p, 1, 'conv-100', 2)
+    p = noterFinDeTour(p, 'conv-100', { ok: true, texte: 'Écrans 1 traduits.' }, 3).plan
+    poserApi({ 'conv-1': { plan: p, role: 'chef' } })
+    const { hote, fin } = await monter('conv-1')
+    const lot1 = hote.querySelector('[data-lot-etat="a-recevoir"]')
+    expect(lot1?.classList.contains('tdl-lot--a-recevoir')).toBe(true)
+    expect(lot1?.querySelector('.tdl-pastille')?.textContent).toBe('à recevoir par le chef')
+    expect(lot1?.textContent).toContain('le chef le vérifie sur son critère')
+    expect(hote.textContent).toContain(
+      '0 fait, 0 en échec, 0 en cours, 2 à faire, 1 à recevoir sur 3'
+    )
+    expect(hote.querySelector('[data-testid="tdl-lot-1-relancer"]')).toBeNull()
     fin()
   })
 

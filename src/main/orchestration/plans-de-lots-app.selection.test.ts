@@ -47,6 +47,7 @@ const selection = (nom = 'Piste'): unknown => ({
   lots: [1, 2].map((n) => ({
     titre: `${nom} ${n}`,
     demande: `Traite ce candidat issu du scout interne d'Autowin :\n\n1. ${nom} ${n}`,
+    critere: 'le résultat se constate et ses tests passent',
     fichiers: [`src/${nom.toLowerCase()}-${n}.ts`]
   }))
 })
@@ -63,6 +64,12 @@ describe('lancerSelection — un clic de trop ne repaie rien', () => {
     await b.coord.lancerSelection('chef', selection())
     await b.coord.surFinDeTour('lot-1', { ok: true, texte: 'fait' })
     await b.coord.surFinDeTour('lot-2', { ok: true, texte: 'fait' })
+    for (const lot of [1, 2])
+      await b.coord.outil('chef', {
+        action: 'valider',
+        lot,
+        preuve: 'capture lue : le résultat tient son critère'
+      })
     expect(b.coord.planDuFil('chef')?.plan.statut).toBe('termine')
 
     const r = await b.coord.lancerSelection('chef', selection())

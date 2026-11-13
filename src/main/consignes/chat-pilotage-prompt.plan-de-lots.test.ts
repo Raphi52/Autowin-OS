@@ -93,6 +93,7 @@ describe('règle « tâche longue → plan de lots » dans la consigne du chat',
       lots: [1, 2].map((n) => ({
         titre: `Lot ${n}`,
         demande: `/build traduis l'écran ${n}`,
+        critere: 'le résultat se constate et ses tests passent',
         fichiers: [`src/ecran-${n}.tsx`]
       }))
     })

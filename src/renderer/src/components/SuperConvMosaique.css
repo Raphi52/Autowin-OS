@@ -27,6 +27,7 @@
 }
 .scm-etat--interrompu,
 .scm-etat--attend-chef,
+.scm-etat--a-recevoir,
 .scm-etat--attend-publication {
   --scm-c: var(--warn);
 }
@@ -245,6 +246,7 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--scm-c) 55%, transparent);
 }
 .scm-bloc.scm-etat--attend-chef,
+.scm-bloc.scm-etat--a-recevoir,
 .scm-bloc.scm-etat--attend-publication,
 .scm-bloc.scm-etat--interrompu {
   background: color-mix(in srgb, var(--scm-c) 11%, transparent);
@@ -257,6 +259,7 @@
    3,16:1 en NieR (mesuré au pixel). */
 .scm-bloc.scm-etat--echec,
 .scm-bloc.scm-etat--attend-chef,
+.scm-bloc.scm-etat--a-recevoir,
 .scm-bloc.scm-etat--attend-publication,
 .scm-bloc.scm-etat--interrompu {
   color: color-mix(in srgb, var(--scm-c) 46%, var(--text));

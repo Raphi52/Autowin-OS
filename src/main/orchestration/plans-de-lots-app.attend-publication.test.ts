@@ -25,9 +25,16 @@ const plan2 = {
     {
       titre: 'Injection',
       demande: '/build injecte les clés',
+      critere: 'le résultat se constate et ses tests passent',
       fichiers: ['src/main/providers/claude.ts']
     },
-    { titre: 'Revue', demande: '/build relis le coffre', fichiers: [], apres: [1] }
+    {
+      titre: 'Revue',
+      demande: '/build relis le coffre',
+      critere: 'le résultat se constate et ses tests passent',
+      fichiers: [],
+      apres: [1]
+    }
   ]
 }
 
@@ -141,7 +148,7 @@ describe('lot vérifié mais bloqué par le travail non commité d’un autre fi
     expect(b.lot(1)?.etat).toBe('attend-publication')
   })
 
-  it('le travail gardé de côté finit publié : le lot est fait et le lot suivant part', async () => {
+  it('le travail gardé de côté finit publié : le lot est à recevoir, le suivant part à sa réception', async () => {
     const b = banc({ proprietaires: ['conv-1650'] })
     await lotBloqueParLaBase(b)
     await b.coord.surFinDeTour('conv-1', { ok: true })
@@ -156,12 +163,22 @@ describe('lot vérifié mais bloqué par le travail non commité d’un autre fi
       { agentId: 'run-a', conversationId: 'conv-100', publication: 'published', verdict: 'green' }
     ])
     await new Promise((r) => setTimeout(r, 0))
+    // Publié n'est pas reçu : le chef le vérifie comme tout lot rendu.
+    expect(b.lot(1)?.etat).toBe('a-recevoir')
+    expect(b.lancements.map((l) => l.fil)).not.toContain('conv-101')
+    expect(
+      b.ecrits.some(
+        (e) => e.a === 'conv-1' && /Lot 1\/2 « Injection » : à recevoir par le chef/.test(e.texte)
+      )
+    ).toBe(true)
+    await b.coord.outil('conv-1', {
+      action: 'valider',
+      lot: 1,
+      preuve: 'capture lue : le coffre masque les valeurs, tests verts'
+    })
     expect(b.lot(1)?.etat).toBe('fait')
     expect(b.lot(2)?.fil).toBe('conv-101')
     expect(b.lancements.map((l) => l.fil)).toContain('conv-101')
-    expect(
-      b.ecrits.some((e) => e.a === 'conv-1' && /Lot 1\/2 « Injection » : fait/.test(e.texte))
-    ).toBe(true)
   })
 
   it('un ancien run du même fil déjà publié avant le blocage ne fait pas passer le lot', async () => {
@@ -208,7 +225,7 @@ describe('lot vérifié mais bloqué par le travail non commité d’un autre fi
         verdict: 'green'
       }
     ])
-    expect(relu.plans()[0].lots[0].etat).toBe('fait')
+    expect(relu.plans()[0].lots[0].etat).toBe('a-recevoir')
   })
 
   it('aucun fil connu ne tient les fichiers : aucune demande, et le chef apprend qu’il faut les commiter', async () => {

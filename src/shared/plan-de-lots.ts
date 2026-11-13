@@ -47,11 +47,29 @@ const NOM_DE_MODELE = /^[a-z0-9][a-z0-9.-]{1,59}$/i
 export const COMPTE_RENDU_MAX = 2_000
 const RAISON_MAX = 300
 const TITRE_MAX = 80
+/**
+ * LE CRITÈRE DE RÉCEPTION D'UN LOT (2026-11-13, demande de l'utilisateur : « rends le travail en lot
+ * parfait », après un remake noté 8/10 et pourtant plus pauvre que l'original). Ce que l'utilisateur
+ * pourra constater quand le lot est fini, et comment le chef le vérifie. Sans lui, un lot se
+ * jugeait « fait » sur sa seule demande, tests verts. Assez long pour être vérifiable, assez court
+ * pour se lire.
+ */
+export const CRITERE_MIN = 20
+export const CRITERE_MAX = 600
+/** Le motif d'un refus du chef : ce qui manque, remis tel quel au fil du lot. */
+export const MOTIF_MAX = 1_000
 
 /**
  * `attend-chef` (2026-10-29) : le lot a posé sa question au chef et s'est arrêté sur
  * MARQUEUR_ATTENTE_CHEF. Ni fini ni cassé : sa reprise vient de la réponse du chef (ordre), ou d'une
  * relance.
+ */
+/**
+ * `a-recevoir` (2026-11-13) : le tour du lot a fini sans blocage, mais rien ne le déclare encore
+ * « fait ». Mesuré sur les 47 plans du poste : 240 lots « faits » sur 279 l'étaient par la seule fin
+ * de leur tour, et leurs dépendants partaient AVANT que le chef ait regardé — le réveil du chef
+ * n'arrêtait rien. Le lot attend donc le geste du chef : « valider » (preuve) le fait passer « fait »
+ * et libère ses dépendants ; « refuser » (motif) le renvoie dans son fil avec ce qui manque.
  */
 /**
  * `attend-publication` (2026-11-06) : le travail du lot est fini et vérifié, mais son intégration a
@@ -61,7 +79,14 @@ const TITRE_MAX = 80
  * 06/11 : 27 essais refusés sur 58, dont 9 sur 12 pour un seul lot.
  */
 export type EtatDuLot =
-  'a-faire' | 'en-cours' | 'fait' | 'echec' | 'interrompu' | 'attend-chef' | 'attend-publication'
+  | 'a-faire'
+  | 'en-cours'
+  | 'a-recevoir'
+  | 'fait'
+  | 'echec'
+  | 'interrompu'
+  | 'attend-chef'
+  | 'attend-publication'
 export type StatutDuPlan =
   | 'attente-accord'
   | 'en-cours'
@@ -84,6 +109,16 @@ export interface LotDuPlan {
   titre: string
   demande: string
   fichiers: string[]
+  /**
+   * Ce que l'utilisateur constatera quand le lot est fini, et comment le chef le vérifie
+   * (`CRITERE_MIN`). Exigé au dépôt ; absent d'un plan écrit sur disque avant ce champ.
+   */
+  critere?: string
+  /**
+   * Le motif du dernier refus du chef (`refuserLot`) : remis au fil du lot quand il repart, montré
+   * au chef quand le lot revient à recevoir. Effacé à la validation.
+   */
+  refus?: string
   /**
    * Rangs des lots qui doivent être FAITS avant que celui-ci parte (lot 2). Facultatif :
    * un plan écrit sur disque avant ce champ n'en porte pas.
@@ -156,6 +191,7 @@ export interface LotLu {
   titre: string
   demande: string
   fichiers: string[]
+  critere: string
   apres: number[]
   modele?: string
 }
@@ -175,6 +211,7 @@ export type LecturePlan =
 const LIBELLE_ETAT: Record<EtatDuLot, string> = {
   'a-faire': 'à faire',
   'en-cours': 'en cours',
+  'a-recevoir': 'à recevoir par le chef',
   fait: 'fait',
   echec: 'échec',
   interrompu: 'interrompu',
@@ -430,6 +467,24 @@ function lireLots(
       }
       apres = [...new Set(l.apres as number[])].sort((a, b) => a - b)
     }
+    // Un lot sans critère se jugeait sur sa seule demande : « tests verts » suffisait, même quand
+    // l'ensemble restait sous le but du plan.
+    if (typeof l.critere !== 'string' || !l.critere.trim())
+      return {
+        ok: false,
+        erreur: `lot ${rang} : critere vide — ce que l’utilisateur constatera quand ce lot sera fini, et comment le chef le vérifiera (un écran comparé à l’original, un parcours joué, une commande et son résultat). Le chef reçoit le lot sur ce point avant que ses dépendants partent.`
+      }
+    const critere = l.critere.trim().replace(/\s+/g, ' ')
+    if (critere.length < CRITERE_MIN)
+      return {
+        ok: false,
+        erreur: `lot ${rang} : critere de ${critere.length} caractères, ${CRITERE_MIN} au moins — « ça marche » ne se vérifie pas : dis ce qui se constate et comment.`
+      }
+    if (critere.length > CRITERE_MAX)
+      return {
+        ok: false,
+        erreur: `lot ${rang} : critere de ${critere.length} caractères, ${CRITERE_MAX} au plus.`
+      }
     let modele: string | undefined
     if (l.modele !== undefined) {
       if (typeof l.modele !== 'string' || !NOM_DE_MODELE.test(l.modele.trim()))
@@ -443,7 +498,7 @@ function lireLots(
       typeof l.titre === 'string'
         ? l.titre.trim().slice(0, TITRE_MAX)
         : (demande.split('\n')[0] ?? '').slice(0, 60)
-    lots.push({ titre, demande, fichiers, apres, ...(modele ? { modele } : {}) })
+    lots.push({ titre, demande, fichiers, critere, apres, ...(modele ? { modele } : {}) })
   }
   return { ok: true, lots }
 }
@@ -454,8 +509,9 @@ export function empreintePlan(plan: PlanLu): string {
     const base: unknown[] = [l.titre, l.demande, l.fichiers.map(normaliserChemin)]
     // Sans dépendance ni modèle, l'empreinte reste celle d'avant ces champs : un plan sur disque
     // garde sa clé (même règle pour le contexte).
-    if (l.apres.length || l.modele) base.push(l.apres)
-    if (l.modele) base.push(l.modele)
+    if (l.apres.length || l.modele || l.critere) base.push(l.apres)
+    if (l.modele || l.critere) base.push(l.modele ?? '')
+    if (l.critere) base.push(l.critere)
     return base
   })
   const champs: unknown[] = [plan.titre, plan.parallele, plan.plafondTours, lots]
@@ -753,7 +809,14 @@ function statutApres(plan: PlanDeLots): PlanDeLots {
   // est possible, et le DIT. Ni « terminé », ni « bloqué : un lot attendu a échoué ».
   const attendent = plan.lots.filter((l) => l.etat === 'attend-chef').map((l) => l.rang)
   const aPublier = plan.lots.filter((l) => l.etat === 'attend-publication').map((l) => l.rang)
-  if (!enCours && restants === 0 && attendent.length === 0 && aPublier.length === 0)
+  const aRecevoir = plan.lots.filter((l) => l.etat === 'a-recevoir').map((l) => l.rang)
+  if (
+    !enCours &&
+    restants === 0 &&
+    attendent.length === 0 &&
+    aPublier.length === 0 &&
+    aRecevoir.length === 0
+  )
     return { ...plan, statut: 'termine', raison: undefined }
   // Un lot qui attend sa publication n'a besoin d'aucun tour : le plan reste en cours, plafond
   // épuisé ou non, et ses dépendants partiront quand son travail sera dans la base.
@@ -784,6 +847,16 @@ function statutApres(plan: PlanDeLots): PlanDeLots {
       const relance = `relance-${blocages.length > 1 ? 'les' : 'le'} avec plan_de_lots (action « relancer »)`
       return { ...plan, statut: 'bloque', raison: `${qui.join(' ; ')} — ${relance}.` }
     }
+    // Un lot rendu attend le geste du chef, qui ne coûte aucun tour : le plan reste en cours,
+    // plafond épuisé ou non. Sans ce cas, ses dépendants à faire faisaient tomber le plan en
+    // « plafond atteint ».
+    if (aRecevoir.length) {
+      const qui = `${listeDeLots(aRecevoir)} ${aRecevoir.length > 1 ? 'attendent' : 'attend'}`
+      return {
+        ...plan,
+        raison: `${qui} la réception du chef : la suite part à sa validation, un refus renvoie le lot avec son motif.`
+      }
+    }
     return {
       ...plan,
       statut: 'plafond-atteint',
@@ -792,6 +865,10 @@ function statutApres(plan: PlanDeLots): PlanDeLots {
   }
   return plan
 }
+
+/** Ce que dit le tableau d'un lot rendu : l'utilisateur voit pourquoi la suite ne part pas encore. */
+const RAISON_A_RECEVOIR =
+  'travail rendu : le chef le vérifie sur son critère et le but du plan avant que la suite parte.'
 
 export interface IssueDuTour {
   ok: boolean
@@ -927,6 +1004,9 @@ export function raisonDAttenteDePublication(
  * Exception : dans le fil d'un lot en ÉCHEC, un tour dont l'`orchestrate` est validé le rattrape.
  * Un échec ne relance rien. Un mur de QUOTA suspend le plan entier : aucun lot ne repart seul.
  *
+ * Un tour réussi rend le lot « à recevoir », jamais « fait » : seul le chef le reçoit (`validerLot`),
+ * et ses dépendants attendent ce geste.
+ *
  * Exception : la fin du tour REPRIS d'un lot interrompu (son agent a survécu au redémarrage) est
  * notée — sinon son résultat et son compte rendu étaient perdus (objection du juge).
  * Le plan reste interrompu (rien ne repart seul), et se termine si plus aucun lot n'attend. Un
@@ -976,8 +1056,12 @@ export function noterFinDeTour(
     // Un rattrapage qui ne réussit pas laisse le lot tel quel : son échec d'origine reste la raison.
     if (!reussi) return { plan, effet: 'deja-note', lot }
     // Aucun tour rendu ni compté : le plan ne l'a pas lancé. Un plan bloqué par ce seul lot repart,
-    // ses dépendants peuvent partir ; arrêté par le plafond, il le reste.
-    const fait = avecLot(plan, lot.rang, { etat: 'fait', raison: undefined, fin: maintenant })
+    // ses dépendants partiront quand le chef l'aura reçu ; arrêté par le plafond, il le reste.
+    const fait = avecLot(plan, lot.rang, {
+      etat: 'a-recevoir',
+      raison: RAISON_A_RECEVOIR,
+      fin: maintenant
+    })
     const suivant = statutApres(plan.statut === 'bloque' ? { ...fait, statut: 'en-cours' } : fait)
     return { plan: suivant, effet: 'note', lot: suivant.lots.find((l) => l.rang === lot.rang) }
   }
@@ -997,12 +1081,18 @@ export function noterFinDeTour(
           : orchestrationRatee
             ? `le travail lancé a échoué : ${echecOrchestration}`.slice(0, RAISON_MAX)
             : issue.ok
-              ? undefined
+              ? RAISON_A_RECEVOIR
               : issue.annule
                 ? 'tour arrêté avant la fin'
                 : (erreur || 'le tour a échoué sans message').slice(0, RAISON_MAX)
   let suivant = avecLot(plan, lot.rang, {
-    etat: reussi ? 'fait' : attendChef ? 'attend-chef' : bloquants ? 'attend-publication' : 'echec',
+    etat: reussi
+      ? 'a-recevoir'
+      : attendChef
+        ? 'attend-chef'
+        : bloquants
+          ? 'attend-publication'
+          : 'echec',
     raison,
     fin: maintenant,
     runsAPublier: undefined
@@ -1066,7 +1156,8 @@ const RUN_PUBLIE: ReadonlySet<string> = new Set(['published', 'complete', 'clean
 /**
  * LE LOT SUIT SON TRAVAIL GARDÉ DE CÔTÉ. Pour chaque lot qui attend sa publication : un run de son
  * fil vu BLOQUÉ (jugé autrement que rouge) est retenu ; la publication d'un run retenu fait passer
- * le lot « fait ». Rend les rangs publiés, et le plan tel quel si rien ne change.
+ * le lot « à recevoir » : publié n'est pas reçu, le chef le vérifie comme tout lot rendu. Rend les
+ * rangs publiés, et le plan tel quel si rien ne change.
  */
 export function suivreLesPublications(
   plan: PlanDeLots,
@@ -1082,8 +1173,8 @@ export function suivreLesPublications(
     const retenus = lot.runsAPublier ?? []
     if (duFil.some((a) => retenus.includes(a.agentId) && RUN_PUBLIE.has(a.publication ?? ''))) {
       suivant = avecLot(suivant, lot.rang, {
-        etat: 'fait',
-        raison: undefined,
+        etat: 'a-recevoir',
+        raison: RAISON_A_RECEVOIR,
         runsAPublier: undefined,
         fin: maintenant
       })
@@ -1136,10 +1227,13 @@ export function interrompreAuDemarrage(plan: PlanDeLots): PlanDeLots {
   if (plan.statut !== 'en-cours' && !tournait) return plan
   // Aucun lot ne tournait et un lot attend le chef — rien n'a été interrompu. Le plan
   // reste en cours : la réponse du chef (un ordre) relance le lot sans clic « Reprendre ».
-  // Même chose pour un lot qui attend sa publication : sa suite vient de la base, pas d'un agent.
+  // Même chose pour un lot qui attend sa publication : sa suite vient de la base, pas d'un agent ;
+  // et pour un lot rendu : sa suite vient du geste du chef.
   if (
     !tournait &&
-    plan.lots.some((l) => l.etat === 'attend-chef' || l.etat === 'attend-publication')
+    plan.lots.some(
+      (l) => l.etat === 'attend-chef' || l.etat === 'attend-publication' || l.etat === 'a-recevoir'
+    )
   )
     return plan
   return {
@@ -1319,6 +1413,10 @@ export function relancerLot(
  * « Relancer », offert à l'utilisateur pour refaire un travail fini. La preuve du chef devient la
  * raison du lot. Aucun tour n'est compté : rien n'est lancé. Mêmes suites qu'un rattrapage
  * (`noterFinDeTour`) : un plan bloqué par ce seul lot repart, un plan arrêté par le plafond le reste.
+ *
+ * C'est aussi LA RÉCEPTION d'un lot rendu (« à recevoir », 2026-11-13) : le seul chemin vers « fait »
+ * d'un tour réussi. La preuve dit ce que le chef a constaté sur le critère du lot ; une preuve d'un
+ * mot (« ok », « vu ») ne dit rien de vérifiable et se refuse.
  */
 export function validerLot(
   plan: PlanDeLots,
@@ -1329,27 +1427,89 @@ export function validerLot(
   const lot = plan.lots.find((l) => l.rang === rang)
   if (!lot)
     return { ok: false, erreur: `lot ${rang} inconnu : le plan a ${plan.lots.length} lots.` }
-  if (lot.etat !== 'echec')
+  if (lot.etat !== 'echec' && lot.etat !== 'a-recevoir')
     return {
       ok: false,
-      erreur: `le lot ${rang} est ${LIBELLE_ETAT[lot.etat]} : seul un lot en échec se valide.`
+      erreur: `le lot ${rang} est ${LIBELLE_ETAT[lot.etat]} : seul un lot à recevoir ou en échec se valide.`
     }
   const texte = typeof preuve === 'string' ? preuve.replace(/\s+/g, ' ').trim() : ''
-  if (!texte)
+  if (texte.length < PREUVE_MIN)
     return {
       ok: false,
-      erreur:
-        '« preuve » attendue : ce que tu as vérifié sur le travail du lot (commande et code de sortie, fichier lu).'
+      erreur: `« preuve » attendue (${PREUVE_MIN} caractères au moins) : ce que tu as constaté sur le travail du lot${lot.critere ? `, contre son critère « ${lot.critere} »` : ''} (capture lue, parcours joué, commande et code de sortie).`
     }
   const fait = avecLot(plan, rang, {
     etat: 'fait',
     raison: `validé par le chef : ${texte}`.slice(0, RAISON_MAX),
+    refus: undefined,
     fin: maintenant
   })
+  // Même fin qu'un dernier lot repris après un redémarrage (`noterFinDeTour`) : un plan interrompu
+  // dont plus aucun lot n'attend se termine, au lieu d'attendre un « Reprendre » sans rien à
+  // reprendre.
+  const clos =
+    fait.statut === 'interrompu' && fait.lots.every((l) => l.etat === 'fait' || l.etat === 'echec')
+      ? { ...fait, statut: 'termine' as const, raison: undefined }
+      : fait
   return {
     ok: true,
-    plan: statutApres(plan.statut === 'bloque' ? { ...fait, statut: 'en-cours' } : fait)
+    plan: statutApres(clos.statut === 'bloque' ? { ...clos, statut: 'en-cours' } : clos)
   }
+}
+const PREUVE_MIN = 20
+
+/**
+ * LE REFUS D'UN LOT RENDU (2026-11-13, demande de l'utilisateur). Le chef a trouvé ce qui manque :
+ * le lot repart dans SON fil avec ce motif dans son message, juste après sa demande (`promptDuLot`),
+ * et ses dépendants continuent d'attendre. Mêmes bornes qu'une relance (`relancerLot`) : un tour
+ * compté au départ, refusé sur un plan suspendu par le quota ou au plafond — un refus qui ne
+ * pourrait pas relancer le lot se dit à l'utilisateur, il ne se range pas en silence.
+ */
+export function refuserLot(
+  plan: PlanDeLots,
+  rang: number,
+  motif: unknown
+): { ok: true; plan: PlanDeLots } | { ok: false; erreur: string } {
+  const lot = plan.lots.find((l) => l.rang === rang)
+  if (!lot)
+    return { ok: false, erreur: `lot ${rang} inconnu : le plan a ${plan.lots.length} lots.` }
+  if (lot.etat !== 'a-recevoir')
+    return {
+      ok: false,
+      erreur: `le lot ${rang} est ${LIBELLE_ETAT[lot.etat]} : seul un lot à recevoir se refuse${lot.etat === 'echec' ? ' — un lot en échec se relance (action « relancer »)' : ''}.`
+    }
+  const texte = typeof motif === 'string' ? motif.trim() : ''
+  if (texte.length < CRITERE_MIN)
+    return {
+      ok: false,
+      erreur: `« motif » attendu (${CRITERE_MIN} caractères au moins) : ce qui manque au lot, constaté, et ce qu’il doit rendre — son fil le recevra tel quel.`
+    }
+  if (texte.length > MOTIF_MAX)
+    return { ok: false, erreur: `motif de ${texte.length} caractères : ${MOTIF_MAX} au plus.` }
+  if (plan.statut === 'suspendu-quota')
+    return {
+      ok: false,
+      erreur:
+        'plan suspendu par la limite de quota : le lot ne pourrait pas repartir. Dis à l’utilisateur ce qui manque ; il reprendra le plan (bouton « Reprendre »).'
+    }
+  // Comme une relance : un plan interrompu ou arrêté ne repart que par le geste de l'utilisateur.
+  if (!['en-cours', 'termine', 'bloque'].includes(plan.statut))
+    return {
+      ok: false,
+      erreur: `plan ${LIBELLE_STATUT[plan.statut]} : le lot ne pourrait pas repartir. Dis à l’utilisateur ce qui manque au lot ${rang}.`
+    }
+  if (plan.toursLances >= plan.plafondTours)
+    return {
+      ok: false,
+      erreur: `plafond de ${plan.plafondTours} tours atteint : le lot ne pourrait pas repartir. Dis à l’utilisateur ce qui manque au lot ${rang}.`
+    }
+  const refuse = avecLot(plan, rang, {
+    etat: 'a-faire',
+    refus: texte,
+    raison: `refusé par le chef : ${texte.replace(/\s+/g, ' ')}`.slice(0, RAISON_MAX),
+    tour: undefined
+  })
+  return { ok: true, plan: statutApres({ ...refuse, statut: 'en-cours', raison: undefined }) }
 }
 
 export interface BilanDuPlan {
@@ -1363,6 +1523,8 @@ export interface BilanDuPlan {
   attendChef: number
   /** Lots au travail vérifié, gardé de côté jusqu'au commit des fichiers qui le bloquent. */
   attendPublication: number
+  /** Lots rendus que le chef n'a encore ni validés ni refusés. */
+  aRecevoir: number
   texte: string
 }
 
@@ -1376,10 +1538,12 @@ export function bilanDuPlan(plan: PlanDeLots): BilanDuPlan {
     aFaire: compte('a-faire'),
     interrompus: compte('interrompu'),
     attendChef: compte('attend-chef'),
-    attendPublication: compte('attend-publication')
+    attendPublication: compte('attend-publication'),
+    aRecevoir: compte('a-recevoir')
   }
   const texte =
     `${pluriel(b.faits, 'fait')}, ${b.echecs} en échec, ${b.enCours} en cours, ${b.aFaire} à faire` +
+    (b.aRecevoir ? `, ${b.aRecevoir} à recevoir` : '') +
     (b.interrompus ? `, ${pluriel(b.interrompus, 'interrompu')}` : '') +
     (b.attendChef ? `, ${b.attendChef} ${b.attendChef > 1 ? 'attendent' : 'attend'} le chef` : '') +
     (b.attendPublication
@@ -1427,6 +1591,17 @@ export function promptDuLot(plan: PlanDeLots, lot: LotDuPlan): string {
     `Lot ${lot.rang} sur ${plan.lots.length} du plan « ${plan.titre} », confié par le fil chef ${plan.chef} (${plan.id}).`,
     fichiers
   ]
+  // Le chef reçoit le lot sur ce critère avant que la suite parte : le lot sait sur quoi il sera jugé.
+  if (lot.critere)
+    lignes.push(
+      `Critère de réception : ${lot.critere}. Le chef reçoit ton lot sur ce point, et sur le but du plan, avant que les lots qui en dépendent partent : ta réponse finale en donne la preuve constatée.`
+    )
+  if (lot.refus)
+    lignes.push(
+      '',
+      `Ton essai précédent a été REFUSÉ par le chef. Son motif : ${lot.refus}`,
+      'Ton travail d’avant est déjà dans le dossier : corrige d’abord ce point, puis montre-le dans ta réponse finale.'
+    )
   if (plan.contexte) lignes.push('', ENTETE_CONTEXTE_COMMUN, plan.contexte)
   const decisions = plan.decisions ?? []
   if (decisions.length)
@@ -1507,10 +1682,17 @@ export function messageDeDecision(
  * l'ordre lui demandait d'écrire au chef EN PLUS, et le chef recevait deux comptes rendus.
  */
 export function suiteDeLOrdreAuLot(plan: PlanDeLots, lot: LotDuPlan): string {
+  // Un ordre à un lot rendu est un refus (`lancerParOrdre`) : « répond à ta question » serait faux.
+  const pourquoi = lot.refus
+    ? 'l’ordre ci-dessus est le motif du refus de ton lot par le chef : corrige ce point, le lot reprend.'
+    : 'l’ordre ci-dessus répond à ta question, le lot reprend.'
   return [
     '',
     '---',
-    `Ce fil fait le lot ${lot.rang} sur ${plan.lots.length} du plan « ${plan.titre} » (${plan.id}) : l’ordre ci-dessus répond à ta question, le lot reprend.`,
+    `Ce fil fait le lot ${lot.rang} sur ${plan.lots.length} du plan « ${plan.titre} » (${plan.id}) : ${pourquoi}`,
+    ...(lot.critere
+      ? [`Critère de réception : ${lot.critere}. Le chef le revérifiera avant que la suite parte.`]
+      : []),
     'Ta réponse finale sera remise au fil chef comme compte rendu : inutile de lui écrire en plus. Termine-la par un résumé court — ce qui est fait, la preuve, ce qui reste.'
   ].join('\n')
 }
@@ -1539,10 +1721,20 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
     )
   // Les décisions notées par les LOTS : le chef ne les a pas écrites, il doit les voir.
   const desLots = (plan.decisions ?? []).filter((d) => d.de !== 'chef')
+  // TOUS les lots à recevoir, pas seulement ceux de ce réveil : un lot laissé en plan au réveil
+  // précédent retient encore ses dépendants.
+  const aRecevoir = plan.lots
+    .filter((l) => l.etat === 'a-recevoir')
+    .map(
+      (l) =>
+        `lot ${l.rang} « ${l.titre} » (fil ${l.fil ?? '?'}) — critère : ${l.critere ?? `aucun écrit, juge-le sur le but du plan`}` +
+        (l.refus ? ` — refusé avant pour : ${l.refus.replace(/\s+/g, ' ').slice(0, 200)}` : '')
+    )
+  const bilan = bilanDuPlan(plan)
   return [
     `RÉVEIL DU PLAN DE LOTS « ${plan.titre} » (${plan.id}) — message de l’app, pas de l’utilisateur.`,
     `Lots qui viennent de finir : ${nouveaux.length ? nouveaux.join(' ; ') : 'aucun'}.`,
-    `Avancement : ${bilanDuPlan(plan).texte}. Statut du plan : ${LIBELLE_STATUT[plan.statut]}${plan.raison ? ` — ${plan.raison}` : ''}.`,
+    `Avancement : ${bilan.texte}. Statut du plan : ${LIBELLE_STATUT[plan.statut]}${plan.raison ? ` — ${plan.raison}` : ''}.`,
     `But du plan : ${butDuPlan(plan)}`,
     ...(desLots.length
       ? [
@@ -1555,9 +1747,15 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
     // « bon » lot après lot, avec « rien à faire de ton côté » jusqu'à la note finale.
     '- vérifie le résultat des lots finis (conversation_read sur leur fil) sans refaire leur travail, et mesure-le contre le but du plan, pas seulement contre la demande du lot : ce que l’utilisateur verra est-il au niveau ? Quand le plan refait un existant, compare au même écran de l’original ;',
     '- un résultat sous ce but se dit à l’utilisateur dès ce tour, en tête de ta réponse, avec la comparaison qui le montre et ce que tu proposes ; « rien à faire de ton côté » ne s’écrit que si le but est tenu ;',
+    // La porte entre les lots : sans ce geste, les dépendants d'un lot rendu ne partent pas.
+    ...(aRecevoir.length
+      ? [
+          `- À RECEVOIR, leurs dépendants attendent ton geste : ${aRecevoir.join(' ; ')}. Pour chacun, constate toi-même son critère et le but (capture lue, parcours joué, commande rejouée — son compte rendu seul ne prouve rien), puis plan_de_lots action « valider » (lot N, preuve : ce que tu as constaté) ; s’il manque quelque chose, action « refuser » (lot N, motif : ce qui manque et ce qu’il doit rendre) — il repart dans son fil avec ce motif. Aucun lot ne reste à recevoir à la fin de ton tour ;`
+        ]
+      : []),
     // Un découpage par couches (outils, logique, serveur, écrans) ne montre rien de jugeable avant
     // la fin ; passé un tiers des lots, ce silence est lui-même le défaut à corriger.
-    ...(bilanDuPlan(plan).faits >= Math.ceil(plan.lots.length / 3)
+    ...(bilan.faits + bilan.aRecevoir >= Math.ceil(plan.lots.length / 3)
       ? [
           '- le premier tiers du plan est passé : si rien de ce que l’utilisateur verra n’est encore jugeable contre ce but, c’est le découpage qui repousse le contrôle — ajoute ou avance un lot qui rend maintenant une tranche complète (un écran, un parcours) à juger ;'
         ]
@@ -1566,7 +1764,7 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
     // réveil disait « relance-le » et le chef attendait la fin de la limite pour un refus certain.
     ...(plan.statut === 'suspendu-quota'
       ? [
-          '- plan suspendu par la limite de quota : seul l’utilisateur le reprend (bouton « Reprendre » du tableau) ; « relancer » et « ajouter » sont refusés jusque-là, et n’attends pas la fin de la limite : aucune action de ta part ne lève la suspension ;',
+          '- plan suspendu par la limite de quota : seul l’utilisateur le reprend (bouton « Reprendre » du tableau) ; « relancer », « refuser » et « ajouter » sont refusés jusque-là (« valider » reste permis), et n’attends pas la fin de la limite : aucune action de ta part ne lève la suspension ;',
           '- rends-lui le bilan tout de suite : ce qui est fait, avec quelle preuve, ce qui reste, l’heure de fin de la limite si le compte rendu la donne, et le geste « Reprendre ».'
         ]
       : [
@@ -1581,9 +1779,9 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
           // gardait « échec » et « Relancer » pour l'utilisateur (`validerLot`).
           '- un lot en échec dont le travail est pourtant bon (bloqué par un rouge qui n’est pas le sien, par exemple) : vérifie-le, puis passe-le « fait » avec plan_de_lots (action « valider », lot N, preuve : ce que tu as vérifié) — aucun tour compté ;',
           '- une décision qui vaut pour les lots à venir : note-la (action « noter ») ; du travail qui manque au chantier : ajoute des lots (action « ajouter ») plutôt qu’un second plan ;',
-          '- les lots suivants partent seuls : n’en lance aucun à la main ;',
+          '- les lots suivants partent seuls dès que tu as reçu leurs prérequis : n’en lance aucun à la main ;',
           '- quand le plan est terminé ou arrêté, rends à l’utilisateur le bilan assemblé : ce qui est fait, avec quelle preuve, ce qui reste.',
-          'Si rien n’est à faire, réponds en une ligne.'
+          ...(aRecevoir.length ? [] : ['Si rien n’est à faire, réponds en une ligne.'])
         ])
   ].join('\n')
 }
@@ -1608,7 +1806,7 @@ export type GestePlanDeLots =
 export interface SelectionAPlanifier {
   titre: string
   contexte: string
-  lots: Array<{ titre: string; demande: string; fichiers: string[] }>
+  lots: Array<{ titre: string; demande: string; fichiers: string[]; critere: string }>
 }
 
 export type ReponsePlansDeLots =

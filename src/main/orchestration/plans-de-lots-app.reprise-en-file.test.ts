@@ -17,8 +17,19 @@ const plan2Lots = {
   parallele: 1,
   plafondTours: 6,
   lots: [
-    { titre: 'Lecteurs', demande: '/build rends explicites les lecteurs', fichiers: ['src/a.ts'] },
-    { titre: 'Bascule', demande: '/build bascule', fichiers: ['src/b.ts'], apres: [1] }
+    {
+      titre: 'Lecteurs',
+      demande: '/build rends explicites les lecteurs',
+      critere: 'le résultat se constate et ses tests passent',
+      fichiers: ['src/a.ts']
+    },
+    {
+      titre: 'Bascule',
+      demande: '/build bascule',
+      critere: 'le résultat se constate et ses tests passent',
+      fichiers: ['src/b.ts'],
+      apres: [1]
+    }
   ]
 }
 

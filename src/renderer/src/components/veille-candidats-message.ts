@@ -497,6 +497,10 @@ export function selectionAPlanifier(plan: readonly LotDeLancement[]): SelectionA
     lots: plan.map((lot, rang) => ({
       titre: titreDuLot(lot),
       demande: demandeBornee(lot, { numero: rang + 1, total: plan.length }),
+      // Le chef reçoit chaque lot sur ce point avant que la suite parte : une piste se juge sur sa
+      // preuve rejouée et sur l'effet qu'elle annonçait, pas sur le compte rendu du lot.
+      critere:
+        'Chaque piste du lot est commitée et publiée, sa commande de preuve rejouée au vert, et l’effet que la piste annonçait se constate dans le dépôt.',
       fichiers: [...new Set(lot.candidats.flatMap(fichiersDeLaPiste))].slice(0, FICHIERS_MAX)
     }))
   }

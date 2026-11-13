@@ -88,6 +88,7 @@ export const selonNombre = (
 export const CLE_ETAT: Record<EtatDuLot, CleChatFilsEtLots> = {
   'a-faire': 'lots.etat.a-faire',
   'en-cours': 'lots.etat.en-cours',
+  'a-recevoir': 'lots.etat.a-recevoir',
   fait: 'lots.etat.fait',
   echec: 'lots.etat.echec',
   interrompu: 'lots.etat.interrompu',

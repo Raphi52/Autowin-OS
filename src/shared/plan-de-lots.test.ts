@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CONTEXTE_MAX,
   CONTEXTE_MIN,
+  CRITERE_MAX,
   DECISIONS_MAX,
   DECISION_MAX,
   DEMANDE_MAX,
@@ -31,8 +32,10 @@ import {
   relancerLot,
   reprendrePlan,
   statutApresLancements,
+  refuserLot,
   validerLot,
-  type PlanDeLots
+  type PlanDeLots,
+  type PlanLu
 } from './plan-de-lots'
 
 /*
@@ -53,6 +56,7 @@ const CONTEXTE =
 const lot = (n: number, fichiers: string[] = [`src/ecran-${n}.tsx`]): Record<string, unknown> => ({
   titre: `Lot ${n}`,
   demande: `/build traduis l'écran ${n}`,
+  critere: 'le résultat se constate et ses tests passent',
   fichiers
 })
 
@@ -80,6 +84,26 @@ const avecPlafond = (plan: PlanDeLots, plafondTours: number): PlanDeLots => ({
 function lancerCeQuiPart(plan: PlanDeLots): PlanDeLots {
   let p = plan
   for (const rang of lotsAPartir(p)) p = marquerLance(p, rang, `conv-1${rang}0`, 2000)
+  return p
+}
+
+/** Le plan tel qu'un dépôt d'avant le critère l'aurait lu : sa clé sur disque ne doit pas changer. */
+const sansCritere = (plan: PlanLu): PlanLu => ({
+  ...plan,
+  lots: plan.lots.map((l) => ({ ...l, critere: '' }))
+})
+
+/** Ce que le chef a constaté : la preuve de sa réception. */
+const PREUVE = 'capture lue : l’écran rendu tient son critère'
+
+/** La réception par le chef (`validerLot`) : le seul chemin d'un tour réussi vers « fait ». */
+function recevoir(plan: PlanDeLots, ...rangs: number[]): PlanDeLots {
+  let p = plan
+  for (const rang of rangs) {
+    const v = validerLot(p, rang, PREUVE, 4000)
+    if (!v.ok) throw new Error(v.erreur)
+    p = v.plan
+  }
   return p
 }
 
@@ -130,11 +154,48 @@ describe('lirePlanDeLots — lecture stricte du plan déposé par le chef', () =
   it.each([
     [{ lots: [lot(1), 'lot deux'] }, /lot 2 : objet attendu/],
     [{ lots: [lot(1), { titre: 'sans demande' }] }, /lot 2 : demande vide/],
-    [{ lots: [lot(1), { demande: '   ' }] }, /lot 2 : demande vide/],
+    [
+      {
+        lots: [lot(1), { demande: '   ', critere: 'le résultat se constate et ses tests passent' }]
+      },
+      /lot 2 : demande vide/
+    ],
     [{ lots: [lot(1), { demande: 42 }] }, /lot 2 : demande vide/],
-    [{ lots: [lot(1), { demande: 'ok', titre: 7 }] }, /lot 2 : titre/],
-    [{ lots: [lot(1), { demande: 'ok', fichiers: 'a.ts' }] }, /lot 2 : fichiers/],
-    [{ lots: [lot(1), { demande: 'ok', fichiers: ['a.ts', 3] }] }, /lot 2 : fichiers/]
+    [
+      {
+        lots: [
+          lot(1),
+          { demande: 'ok', critere: 'le résultat se constate et ses tests passent', titre: 7 }
+        ]
+      },
+      /lot 2 : titre/
+    ],
+    [
+      {
+        lots: [
+          lot(1),
+          {
+            demande: 'ok',
+            critere: 'le résultat se constate et ses tests passent',
+            fichiers: 'a.ts'
+          }
+        ]
+      },
+      /lot 2 : fichiers/
+    ],
+    [
+      {
+        lots: [
+          lot(1),
+          {
+            demande: 'ok',
+            critere: 'le résultat se constate et ses tests passent',
+            fichiers: ['a.ts', 3]
+          }
+        ]
+      },
+      /lot 2 : fichiers/
+    ]
   ])('refuse un lot mal typé en nommant le lot et le champ (%j)', (brut, motif) => {
     const r = lirePlanDeLots(brut)
     expect(r.ok).toBe(false)
@@ -162,11 +223,41 @@ describe('lirePlanDeLots — lecture stricte du plan déposé par le chef', () =
   })
 
   it(`refuse une demande de plus de ${DEMANDE_MAX} caractères ; accepte la borne`, () => {
-    const longue = { demande: 'x'.repeat(DEMANDE_MAX + 1) }
+    const critere = 'le résultat se constate et ses tests passent'
+    const longue = { demande: 'x'.repeat(DEMANDE_MAX + 1), critere }
     const r = lirePlanDeLots({ lots: [lot(1), longue] })
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.erreur).toMatch(/lot 2 : demande de 4001 caractères/)
-    expect(lu({ lots: [lot(1), { demande: 'x'.repeat(DEMANDE_MAX) }] }).plan.lots).toHaveLength(2)
+    expect(
+      lu({ lots: [lot(1), { demande: 'x'.repeat(DEMANDE_MAX), critere }] }).plan.lots
+    ).toHaveLength(2)
+  })
+
+  it.each([
+    [undefined, /lot 2 : critere vide/],
+    ['   ', /lot 2 : critere vide/],
+    [42, /lot 2 : critere vide/],
+    ['ça marche', /lot 2 : critere de 9 caractères, 20 au moins/],
+    ['x'.repeat(CRITERE_MAX + 1), /lot 2 : critere de 601 caractères, 600 au plus/]
+  ])(
+    'refuse un lot sans critère de réception vérifiable (%j) : il se jugerait sur sa seule demande',
+    (critere, motif) => {
+      const r = lirePlanDeLots({ lots: [lot(1), { demande: '/build b', critere }] })
+      expect(r.ok).toBe(false)
+      if (!r.ok) expect(r.erreur).toMatch(motif)
+    }
+  )
+
+  it('garde le critère, espaces resserrés, et le porte jusqu’au lot du plan', () => {
+    const r = lu({
+      lots: [
+        lot(1),
+        { demande: '/build b', critere: '  l’écran   d’accueil montre\nla mascotte  ' }
+      ]
+    })
+    expect(r.plan.lots[1].critere).toBe('l’écran d’accueil montre la mascotte')
+    const plan = creerPlan(r.plan, { id: 'p', chef: 'c', maintenant: 1 })
+    expect(plan.lots[1].critere).toBe('l’écran d’accueil montre la mascotte')
   })
 
   it.each([0, -3, 2.5])('refuse un plafond de tours hors bornes (%j)', (plafond) => {
@@ -247,6 +338,10 @@ describe('lotsAPartir — parallélisme, fichiers partagés et plafond', () => {
     expect(lotsAPartir(p)).toEqual([])
     expect(p.statut).toBe('en-cours')
     p = noterFinDeTour(p, 'conv-120', { ok: true }, 3001).plan
+    // La réception ne coûte aucun tour : le plafond épuisé n'arrête pas le plan avant elle.
+    expect(p.statut).toBe('en-cours')
+    expect(p.raison).toMatch(/les lots 1 et 2 attendent la réception du chef/)
+    p = recevoir(p, 1, 2)
     expect(p.statut).toBe('plafond-atteint')
     expect(p.raison).toMatch(/plafond de 2 tours atteint : 1 lot restant/)
   })
@@ -256,11 +351,15 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
   const deuxEnCours = (): PlanDeLots =>
     lancerCeQuiPart(planAccepte({ parallele: 2, lots: [lot(1), lot(2), lot(3), lot(4)] }))
 
-  it('fin réussie : lot fait, et le lot suivant peut partir', () => {
+  it('fin réussie : lot À RECEVOIR, jamais « fait » tout seul ; sa place se libère pour un lot libre', () => {
     const r = noterFinDeTour(deuxEnCours(), 'conv-110', { ok: true, tour: 't1' }, 3000)
     expect(r.effet).toBe('note')
-    expect(r.lot?.etat).toBe('fait')
+    expect(r.lot?.etat).toBe('a-recevoir')
+    expect(r.lot?.raison).toMatch(/le chef le vérifie sur son critère/)
     expect(lotsAPartir(r.plan)).toEqual([3])
+    expect(bilanDuPlan(r.plan).texte).toMatch(
+      /^0 fait, 0 en échec, 1 en cours, 2 à faire, 1 à recevoir/
+    )
   })
 
   it('fin en double : la seconde est ignorée', () => {
@@ -310,7 +409,7 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
     expect(lotsAPartir(r.plan)).toEqual([])
     // Le lot 2 encore en cours peut finir : il est noté, et rien ne repart pour autant.
     const suite = noterFinDeTour(r.plan, 'conv-120', { ok: true }, 3001)
-    expect(suite.lot?.etat).toBe('fait')
+    expect(suite.lot?.etat).toBe('a-recevoir')
     expect(lotsAPartir(suite.plan)).toEqual([])
     expect(suite.plan.statut).toBe('suspendu-quota')
   })
@@ -433,11 +532,11 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
     if (repris.ok) expect(lotsAPartir(repris.plan)).toEqual([1, 2, 3])
   })
 
-  it('une réponse qui CITE la limite sans que le tour y ait buté reste « fait »', () => {
+  it('une réponse qui CITE la limite sans que le tour y ait buté n’est pas un échec : le lot est rendu', () => {
     // Un lot qui travaille sur la détection du quota écrit ce texte dans son résumé.
     const texte = `J’ai ajouté la forme « ${mur5h} » au détecteur ; tests verts.`
     const r = noterFinDeTour(deuxEnCours(), 'conv-110', { ok: true, texte }, 3000)
-    expect(r.lot?.etat).toBe('fait')
+    expect(r.lot?.etat).toBe('a-recevoir')
     expect(r.plan.statut).toBe('en-cours')
   })
 
@@ -501,7 +600,7 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
     expect(r.lot?.raison?.length).toBe(300)
   })
 
-  it('jumeaux : « bloqué » sans le marqueur, ou le marqueur dans une ligne invisible, laissent le lot fait', () => {
+  it('jumeaux : « bloqué » sans le marqueur, ou le marqueur dans une ligne invisible, laissent le lot rendu', () => {
     // L'entrée qui ferait échouer une lecture trop large (/bloqué/i) : un verdict ordinaire.
     const verdict = noterFinDeTour(
       deuxEnCours(),
@@ -509,7 +608,8 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
       { ok: true, texte: '- Verdict : fait — plus rien n’est bloqué, 12 tests verts.' },
       3000
     )
-    expect(verdict.lot).toMatchObject({ etat: 'fait', raison: undefined })
+    expect(verdict.lot?.etat).toBe('a-recevoir')
+    expect(verdict.lot?.raison).not.toMatch(/bloqué/)
     // Une suggestion invisible (retirée de l'affichage) n'est pas la réponse du fil.
     const suggestion = noterFinDeTour(
       deuxEnCours(),
@@ -520,14 +620,17 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
       },
       3000
     )
-    expect(suggestion.lot?.etat).toBe('fait')
+    expect(suggestion.lot?.etat).toBe('a-recevoir')
   })
 
-  it('tous les lots finis : plan terminé, bilan complet', () => {
+  it('tous les lots finis et reçus : plan terminé, bilan complet', () => {
     let p = lancerCeQuiPart(planAccepte({ parallele: 3, lots: [lot(1), lot(2), lot(3)] }))
     p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
     p = noterFinDeTour(p, 'conv-120', { ok: false, erreur: 'build rouge' }, 3001).plan
     p = noterFinDeTour(p, 'conv-130', { ok: true }, 3002).plan
+    // Tous les tours sont finis, mais deux lots n'ont pas été reçus : le plan n'est pas terminé.
+    expect(p.statut).toBe('en-cours')
+    p = recevoir(p, 1, 3)
     expect(p.statut).toBe('termine')
     const b = bilanDuPlan(p)
     expect(b).toMatchObject({ total: 3, faits: 2, echecs: 1, enCours: 0, aFaire: 0 })
@@ -585,6 +688,11 @@ describe('décisions de dépôt, relance, reprise et redémarrage', () => {
     let p = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2), lot(3)] }))
     p = noterFinDeTour(p, 'conv-110', { ok: false, erreur: 'rouge' }, 3000).plan
     p = noterFinDeTour(p, 'conv-120', { ok: true }, 3001).plan
+    // Un lot rendu ne se relance pas : le chef le refuse avec son motif (`refuserLot`).
+    const rendu = relancerLot(p, 2)
+    expect(rendu.ok).toBe(false)
+    if (!rendu.ok) expect(rendu.erreur).toMatch(/lot 2 est à recevoir par le chef/)
+    p = recevoir(p, 2)
     const ok = relancerLot(p, 1)
     expect(ok.ok).toBe(true)
     if (ok.ok) expect(lotsAPartir(ok.plan)).toEqual([1])
@@ -682,7 +790,7 @@ describe('redémarrage : lot dont l’agent a survécu', () => {
       5000
     )
     expect(r.effet).toBe('note')
-    expect(r.lot?.etat).toBe('fait')
+    expect(r.lot?.etat).toBe('a-recevoir')
     expect(r.plan.statut).toBe('interrompu')
     expect(lotsAPartir(r.plan)).toEqual([])
   })
@@ -714,11 +822,14 @@ describe('redémarrage : lot dont l’agent a survécu', () => {
     expect(r.lot).toMatchObject({ etat: 'echec', raison: 'agent perdu' })
   })
 
-  it('le dernier lot interrompu fini par son agent repris, sans lot restant : plan terminé', () => {
+  it('le dernier lot interrompu fini par son agent repris, sans lot restant : plan terminé à sa réception', () => {
     let p = interrompreAuDemarrage(lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] })))
     p = noterFinDeTour(p, 'conv-110', { ok: true, repris: true }, 5000).plan
     expect(p.statut).toBe('interrompu')
     p = noterFinDeTour(p, 'conv-120', { ok: false, repris: true, erreur: 'rouge' }, 5001).plan
+    // Plus aucun agent ne tourne, mais le lot 1 n'est pas reçu : rien n'est encore terminé.
+    expect(p.statut).toBe('interrompu')
+    p = recevoir(p, 1)
     expect(p.statut).toBe('termine')
     expect(bilanDuPlan(p)).toMatchObject({ faits: 1, echecs: 1, interrompus: 0 })
   })
@@ -843,7 +954,69 @@ describe('apres — dépendances explicites entre lots', () => {
     p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
     expect(lotsAPartir(p)).toEqual([])
     p = noterFinDeTour(p, 'conv-120', { ok: true }, 3001).plan
+    // Les deux prérequis sont rendus, pas reçus : le dépendant attend le geste du chef.
+    expect(lotsAPartir(p)).toEqual([])
+    p = recevoir(p, 1)
+    expect(lotsAPartir(p)).toEqual([])
+    p = recevoir(p, 2)
     expect(lotsAPartir(p)).toEqual([3])
+  })
+
+  it('un prérequis REFUSÉ par le chef repart dans son fil avec le motif ; son dépendant attend toujours', () => {
+    let p = lancerCeQuiPart(planAccepte({ parallele: 2, lots: [lot(1), dep(2, [1])] }))
+    p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
+    const motif = 'l’accueil n’a ni mascotte ni coffres, l’original les montre (note4-accueil.png)'
+    const r = refuserLot(p, 1, motif)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.plan.lots[0]).toMatchObject({ etat: 'a-faire', refus: motif, fil: 'conv-110' })
+    expect(r.plan.lots[0].raison).toMatch(/^refusé par le chef : l’accueil/)
+    // Il repart seul (un tour compté au départ), dans son fil ; le lot 2 ne part pas.
+    expect(lotsAPartir(r.plan)).toEqual([1])
+    p = marquerLance(r.plan, 1, 'conv-110', 3500)
+    expect(p.toursLances).toBe(2)
+    const message = promptDuLot(p, p.lots[0])
+    expect(message.startsWith("/build traduis l'écran 1")).toBe(true)
+    expect(message).toContain(`REFUSÉ par le chef. Son motif : ${motif}`)
+    // Rendu de nouveau : à recevoir, le motif reste visible au chef ; reçu, il s'efface.
+    p = noterFinDeTour(p, 'conv-110', { ok: true }, 4000).plan
+    expect(p.lots[0].etat).toBe('a-recevoir')
+    expect(promptDeReveil(p, [1])).toMatch(/refusé avant pour : l’accueil n’a ni mascotte/)
+    p = recevoir(p, 1)
+    expect(p.lots[0]).toMatchObject({ etat: 'fait', refus: undefined })
+    expect(lotsAPartir(p)).toEqual([2])
+  })
+
+  it('refuserLot : seul un lot à recevoir, avec un motif vérifiable, sur un plan qui peut le relancer', () => {
+    let p = lancerCeQuiPart(planAccepte({ parallele: 2, lots: [lot(1), lot(2)] }))
+    expect(refuserLot(p, 1, 'il manque l’écran des coffres').ok).toBe(false)
+    p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
+    const court = refuserLot(p, 1, 'non')
+    expect(court.ok).toBe(false)
+    if (!court.ok) expect(court.erreur).toMatch(/« motif » attendu/)
+    const inconnu = refuserLot(p, 9, 'il manque l’écran des coffres')
+    expect(inconnu.ok).toBe(false)
+    const plafond = refuserLot(avecPlafond(p, 2), 1, 'il manque l’écran des coffres')
+    expect(plafond.ok).toBe(false)
+    if (!plafond.ok) expect(plafond.erreur).toMatch(/plafond de 2 tours atteint/)
+    const arrete = refuserLot({ ...p, statut: 'arrete' }, 1, 'il manque l’écran des coffres')
+    expect(arrete.ok).toBe(false)
+    if (!arrete.ok) expect(arrete.erreur).toMatch(/Dis à l’utilisateur ce qui manque/)
+  })
+
+  it('validerLot sur un lot rendu : une preuve d’un mot ne dit rien de vérifiable', () => {
+    let p = lancerCeQuiPart(planAccepte({ parallele: 2, lots: [lot(1), dep(2, [1])] }))
+    p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
+    const vide = validerLot(p, 1, 'ok', 3100)
+    expect(vide.ok).toBe(false)
+    if (!vide.ok) expect(vide.erreur).toMatch(/contre son critère « le résultat se constate/)
+    expect(validerLot(p, 1, PREUVE, 3100).ok).toBe(true)
+  })
+
+  it('un redémarrage sans lot en cours n’interrompt pas un plan dont un lot attend sa réception', () => {
+    let p = lancerCeQuiPart(planAccepte({ parallele: 1, lots: [lot(1), dep(2, [1])] }))
+    p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
+    expect(interrompreAuDemarrage(p)).toBe(p)
   })
 
   it('un lot qui attend ne réserve pas ses fichiers', () => {
@@ -890,10 +1063,11 @@ describe('apres — dépendances explicites entre lots', () => {
   it('jumeau : l’échec d’un lot dont personne ne dépend laisse les autres finir, plan terminé', () => {
     let p = lancerCeQuiPart(planAccepte({ parallele: 3, lots: [lot(1), dep(2, [1]), lot(3)] }))
     p = noterFinDeTour(p, 'conv-130', { ok: false, erreur: 'rouge' }, 3000).plan
-    p = noterFinDeTour(p, 'conv-110', { ok: true }, 3001).plan
+    p = recevoir(noterFinDeTour(p, 'conv-110', { ok: true }, 3001).plan, 1)
     expect(p.statut).toBe('en-cours')
     expect(lotsAPartir(p)).toEqual([2])
     p = noterFinDeTour(lancerCeQuiPart(p), 'conv-120', { ok: true }, 3002).plan
+    p = recevoir(p, 2)
     expect(p.statut).toBe('termine')
   })
 
@@ -921,15 +1095,21 @@ describe('apres — dépendances explicites entre lots', () => {
     )
     p = noterFinDeTour(p, 'conv-110', { ok: false, erreur: 'rouge' }, 3000).plan
     p = noterFinDeTour(p, 'conv-130', { ok: true }, 3001).plan
+    expect(p.statut).toBe('en-cours')
+    p = recevoir(p, 3)
     expect(p.statut).toBe('plafond-atteint')
   })
 
   it('l’empreinte inclut « apres » ; sans dépendance, elle reste celle d’avant ce champ', () => {
-    const sans = lu({ lots: [lot(1), lot(2)] }).plan
+    const sans = sansCritere(lu({ lots: [lot(1), lot(2)] }).plan)
     // Valeur calculée avec la formule d'avant « apres » : les plans déjà sur disque gardent leur clé.
     expect(empreintePlan(sans)).toBe('63880bc3')
-    expect(empreintePlan(lu({ lots: [lot(1), dep(2, [])] }).plan)).toBe('63880bc3')
-    expect(empreintePlan(lu({ lots: [lot(1), dep(2, [1])] }).plan)).not.toBe('63880bc3')
+    expect(empreintePlan(sansCritere(lu({ lots: [lot(1), dep(2, [])] }).plan))).toBe('63880bc3')
+    expect(empreintePlan(sansCritere(lu({ lots: [lot(1), dep(2, [1])] }).plan))).not.toBe(
+      '63880bc3'
+    )
+    // Le critère compte : deux plans qui ne se reçoivent pas sur le même point ne sont pas le même.
+    expect(empreintePlan(lu({ lots: [lot(1), lot(2)] }).plan)).not.toBe('63880bc3')
     expect(empreintePlan(lu({ lots: [lot(1), lot(2), dep(3, [2, 1])] }).plan)).toBe(
       empreintePlan(lu({ lots: [lot(1), lot(2), dep(3, [1, 2, 1])] }).plan)
     )
@@ -952,7 +1132,7 @@ describe('textes remis aux fils', () => {
   it('un compte rendu tient en 2 000 caractères et renvoie au fil enfant quand il est coupé', () => {
     const fin = noterFinDeTour(p, 'conv-110', { ok: true }, 3000)
     const court = compteRenduDuLot(fin.plan, fin.lot!, 'Écran 1 traduit, 12 tests verts.')
-    expect(court).toMatch(/Lot 1\/3 « Lot 1 » : fait dans conv-110/)
+    expect(court).toMatch(/Lot 1\/3 « Lot 1 » : à recevoir par le chef dans conv-110/)
     expect(court).toMatch(/12 tests verts/)
     const long = compteRenduDuLot(fin.plan, fin.lot!, 'y'.repeat(5000))
     expect(long.length).toBeLessThanOrEqual(2000)
@@ -1018,15 +1198,40 @@ describe('textes remis aux fils', () => {
     const fin = noterFinDeTour(p, 'conv-110', { ok: true }, 3000)
     const cr = compteRenduDuLot(fin.plan, fin.lot!, 'AUTOWIN_BESOIN_V1: suite\nAUTOWIN_FIN_V1: ok')
     expect(cr).not.toMatch(/Réponse du fil/)
-    expect(cr).toMatch(/Lot 1\/3 « Lot 1 » : fait dans conv-110/)
+    expect(cr).toMatch(/Lot 1\/3 « Lot 1 » : à recevoir par le chef dans conv-110/)
   })
 
   it('le réveil du chef se présente comme un message de l’app et porte l’avancement', () => {
     const fin = noterFinDeTour(p, 'conv-110', { ok: true }, 3000)
     const texte = promptDeReveil(fin.plan, [1])
     expect(texte).toMatch(/message de l’app, pas de l’utilisateur/)
-    expect(texte).toMatch(/1 fait, 0 en échec, 1 en cours, 1 à faire sur 3/)
+    expect(texte).toMatch(/0 fait, 0 en échec, 1 en cours, 1 à faire, 1 à recevoir sur 3/)
     expect(texte).toMatch(/lot 1/i)
+  })
+
+  it('le réveil donne au chef chaque lot à recevoir avec son critère, et le geste qui libère la suite', () => {
+    const fin = noterFinDeTour(p, 'conv-110', { ok: true }, 3000)
+    const texte = promptDeReveil(fin.plan, [1])
+    expect(texte).toMatch(
+      /À RECEVOIR, leurs dépendants attendent ton geste : lot 1 « Lot 1 » \(fil conv-110\) — critère : le résultat se constate et ses tests passent/
+    )
+    expect(texte).toMatch(/action « valider » \(lot N, preuve : ce que tu as constaté\)/)
+    expect(texte).toMatch(/action « refuser » \(lot N, motif : ce qui manque/)
+    expect(texte).toMatch(/Aucun lot ne reste à recevoir à la fin de ton tour/)
+    // « Réponds en une ligne » inviterait à passer : il n'est offert que s'il n'y a rien à recevoir.
+    expect(texte).not.toMatch(/Si rien n’est à faire/)
+    const recu = promptDeReveil(recevoir(fin.plan, 1), [1])
+    expect(recu).not.toMatch(/À RECEVOIR/)
+    expect(recu).toMatch(/Si rien n’est à faire, réponds en une ligne/)
+  })
+
+  it('le message d’un lot lui donne son critère de réception ; un lot d’avant ce champ n’en parle pas', () => {
+    const texte = promptDuLot(p, p.lots[0])
+    expect(texte).toMatch(
+      /Critère de réception : le résultat se constate et ses tests passent\. Le chef reçoit ton lot sur ce point/
+    )
+    const ancien = { ...p.lots[0], critere: undefined }
+    expect(promptDuLot(p, ancien)).not.toMatch(/Critère de réception/)
   })
 })
 
@@ -1162,11 +1367,15 @@ describe('contexte commun et modèle par lot (conv-1284)', () => {
       }
       return h.toString(16).padStart(8, '0')
     }
-    const simple = lu({ lots: [lot(1), { ...lot(2), apres: [1] }] }).plan
+    const simple = sansCritere(lu({ lots: [lot(1), { ...lot(2), apres: [1] }] }).plan)
     expect(empreintePlan(simple)).toBe(avant(simple))
-    const avecModele = lu({ lots: [lot(1), { ...lot(2), apres: [1], modele: 'sonnet' }] }).plan
+    const avecModele = sansCritere(
+      lu({ lots: [lot(1), { ...lot(2), apres: [1], modele: 'sonnet' }] }).plan
+    )
     expect(empreintePlan(avecModele)).not.toBe(empreintePlan(simple))
-    const avecContexte = lu({ contexte: CONTEXTE, lots: [lot(1), { ...lot(2), apres: [1] }] }).plan
+    const avecContexte = sansCritere(
+      lu({ contexte: CONTEXTE, lots: [lot(1), { ...lot(2), apres: [1] }] }).plan
+    )
     expect(empreintePlan(avecContexte)).not.toBe(empreintePlan(simple))
   })
 })
@@ -1257,7 +1466,8 @@ describe('promptDuLot — ce que sait le fil d’un lot (conv-1284)', () => {
     if (!relance.ok) throw new Error(relance.erreur)
     expect(relance.plan.raison).toBeUndefined()
     const repart = lancerCeQuiPart(relance.plan)
-    expect(noterFinDeTour(repart, 'conv-110', { ok: true }, 4002).plan.statut).toBe('termine')
+    const rendus = noterFinDeTour(repart, 'conv-110', { ok: true }, 4002).plan
+    expect(recevoir(rendus, 1, 2).statut).toBe('termine')
     // Un lot qui en attend un autre en attente reste à faire, sans « bloqué ».
     const chaine = lancerCeQuiPart(planAccepte({ lots: [lot(1), { ...lot(2), apres: [1] }] }))
     const enAttente = noterFinDeTour(
@@ -1422,7 +1632,7 @@ describe('ajouterLots — un plan lancé grandit au lieu d’en exiger un second
   it('un plan terminé repart avec les lots ajoutés ; accepte aussi une liste nue en JSON texte', () => {
     let plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
     plan = noterFinDeTour(plan, 'conv-110', { ok: true }, 5).plan
-    plan = noterFinDeTour(plan, 'conv-120', { ok: true }, 6).plan
+    plan = recevoir(noterFinDeTour(plan, 'conv-120', { ok: true }, 6).plan, 1, 2)
     expect(plan.statut).toBe('termine')
     const r = ajouterLots(plan, JSON.stringify([lot(3)]))
     if (!r.ok) throw new Error(r.erreur)

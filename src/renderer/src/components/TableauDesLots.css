@@ -189,9 +189,10 @@
   color: var(--warn);
 }
 
-/* Le lot attend la réponse du chef, ou le commit des fichiers qui bloquent sa publication — ni
-   fini, ni cassé. */
+/* Le lot attend la réponse du chef, sa réception par le chef, ou le commit des fichiers qui
+   bloquent sa publication — ni fini, ni cassé. */
 .tdl-lot--attend-chef,
+.tdl-lot--a-recevoir,
 .tdl-lot--attend-publication {
   border-left-color: var(--warn);
   border-left-style: dashed;
@@ -199,6 +200,8 @@
 
 .tdl-lot--attend-chef .tdl-pastille,
 .tdl-lot--attend-chef .tdl-lot-raison,
+.tdl-lot--a-recevoir .tdl-pastille,
+.tdl-lot--a-recevoir .tdl-lot-raison,
 .tdl-lot--attend-publication .tdl-pastille,
 .tdl-lot--attend-publication .tdl-lot-raison {
   color: var(--warn);

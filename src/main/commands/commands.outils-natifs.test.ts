@@ -394,10 +394,10 @@ describe('(d) les vrais types sont publiés', () => {
     })
   })
 
-  it('plan_de_lots.plan n’exige que `lots` : « ajouter » n’a ni titre ni contexte', () => {
+  it('plan_de_lots.plan n’exige que `lots` : « ajouter » n’a ni titre ni contexte ; chaque lot porte sa demande et son critère de réception', () => {
     const plan = schemaDe('plan_de_lots').properties.plan
     expect(plan.required).toEqual(['lots'])
-    expect(plan.properties?.lots?.items?.required).toEqual(['demande'])
+    expect(plan.properties?.lots?.items?.required).toEqual(['demande', 'critere'])
   })
 
   describe('chaque commande accepte toujours aussi le texte', () => {
@@ -430,7 +430,12 @@ describe('(d) les vrais types sont publiés', () => {
     })
 
     it('plan_de_lots : le plan et le numéro de lot', async () => {
-      const plan = { lots: [{ demande: 'a' }, { demande: 'b' }] }
+      const plan = {
+        lots: [
+          { demande: 'a', critere: 'le résultat se constate et ses tests passent' },
+          { demande: 'b', critere: 'le résultat se constate et ses tests passent' }
+        ]
+      }
       expect(lirePlanDeLots(plan)).toMatchObject({ ok: true })
       expect(lirePlanDeLots(JSON.stringify(plan))).toMatchObject({ ok: true })
       const bus = nouveauBus()

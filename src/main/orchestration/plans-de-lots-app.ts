@@ -4,6 +4,7 @@ import { deposerFichier, relireFichier } from '../gel/ecriture-hors-fil'
 import { autowinAppDataRoot } from '../app/app-data'
 import {
   LIBELLE_STATUT,
+  MOTIF_MAX,
   adopterLotRepris,
   ajouterLots,
   bilanDuPlan,
@@ -27,6 +28,7 @@ import {
   noterTourDuLot,
   promptDeReveil,
   promptDuLot,
+  refuserLot,
   relancerLot,
   reprendrePlan,
   repriseAbandonnee as repriseAbandonneeDuPlan,
@@ -119,6 +121,7 @@ export function stockageFichier(chemin = cheminFichierPlans()): NonNullable<Deps
 const ETATS = new Set([
   'a-faire',
   'en-cours',
+  'a-recevoir',
   'fait',
   'echec',
   'interrompu',
@@ -180,6 +183,10 @@ export class CoordinateurDesPlans {
   readonly #enAttente = new Map<string, { planId: string; rangs: Set<number> }>()
   /** Chefs dont un tour de réveil est lancé et pas encore fini. */
   readonly #reveilEnCours = new Set<string>()
+  /** Les lots annoncés par le réveil en cours de chaque chef (`#rappelerLaReception`). */
+  readonly #rangsDuReveil = new Map<string, { planId: string; rangs: number[] }>()
+  /** Réceptions déjà rappelées une fois : « plan:rang:fin ». */
+  readonly #rappels = new Set<string>()
 
   constructor(deps: DepsPlans) {
     this.#deps = deps
@@ -246,6 +253,12 @@ export class CoordinateurDesPlans {
       if (apres !== p) change = true
       return apres
     })
+    // Un lot rendu avant le redémarrage attend toujours le chef : le prochain tour fini du chef le
+    // réveille pour lui (la file des réveils, elle, est morte avec l'app).
+    for (const p of this.#plans)
+      if (p.statut === 'en-cours')
+        for (const l of p.lots)
+          if (l.etat === 'a-recevoir') this.#noterAttente(p.chef, p.id, l.rang)
     if (change) this.#enregistrer()
   }
 
@@ -616,11 +629,35 @@ export class CoordinateurDesPlans {
       return {
         ok: true,
         plan: resume(apres),
-        detail: `lot ${rang} validé : « fait » dans le tableau, sans tour compté. ${bilanDuPlan(apres).texte}`
+        detail: `lot ${rang} validé : « fait » dans le tableau, sans tour compté ; les lots qui l’attendaient peuvent partir. ${bilanDuPlan(apres).texte}`
+      }
+    }
+    if (action === 'refuser') {
+      const vu = this.planDuFil(chef)
+      // Même règle que « valider » : le verdict sur un lot appartient au chef.
+      if (!vu || vu.role !== 'chef')
+        throw new Error('plan_de_lots : seul le fil chef refuse un lot de son plan.')
+      const rang = Number(args.lot)
+      if (!Number.isInteger(rang) || rang < 1)
+        throw new Error('plan_de_lots : « lot » — numéro du lot à refuser attendu (1, 2…).')
+      const r = refuserLot(vu.plan, rang, args.motif)
+      if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
+      this.#poser(r.plan)
+      await this.#lancerLesSuivants(r.plan.id)
+      const apres = this.#plan(r.plan.id) ?? r.plan
+      const lot = apres.lots.find((l) => l.rang === rang)
+      return {
+        ok: true,
+        plan: resume(apres),
+        detail:
+          (lot?.etat === 'en-cours'
+            ? `lot ${rang} refusé : il repart dans ${lot.fil ?? 'son fil'} avec ton motif (un tour compté) ; tu le recevras de nouveau à sa fin. `
+            : `lot ${rang} refusé : il repartira avec ton motif dès qu’une place se libère. `) +
+          bilanDuPlan(apres).texte
       }
     }
     throw new Error(
-      `plan_de_lots : action « ${action} » inconnue. Actions : deposer, etat, relancer, valider, noter, ajouter.`
+      `plan_de_lots : action « ${action} » inconnue. Actions : deposer, etat, relancer, valider, refuser, noter, ajouter.`
     )
   }
 
@@ -631,7 +668,9 @@ export class CoordinateurDesPlans {
   async surFinDeTour(fil: string, issue: IssueDuTour): Promise<void> {
     try {
       // 1. Le fil est un chef : son tour vient de finir, les comptes rendus en attente partent.
-      if (this.#reveilEnCours.delete(fil) || this.#enAttente.has(fil)) await this.#reveiller(fil)
+      const finDeReveil = this.#reveilEnCours.delete(fil)
+      if (finDeReveil) this.#rappelerLaReception(fil)
+      if (finDeReveil || this.#enAttente.has(fil)) await this.#reveiller(fil)
       // 2. Le fil fait un lot : en cours, interrompu dont l'agent a survécu au redémarrage, ou en
       //    échec et rattrapé par un travail validé dans son fil (`noterFinDeTour`).
       const plan = this.#plans.find((p) =>
@@ -712,8 +751,8 @@ export class CoordinateurDesPlans {
    * « réveiller directement un lot bloqué par la réponse du chef » au lieu de répondre puis relancer).
    * `ecrire_a_un_fil` (commands.ts) fait passer par ici le lancement du tour d'un ordre : si
    * l'expéditeur est le CHEF d'un plan et le destinataire le fil d'un de ses lots qui ATTEND sa
-   * réponse (« attend le chef ») ou en ÉCHEC, ce tour
-   * vaut relance — mêmes règles que `relancerLot` (plafond, quota), un tour compté, le lot marqué en
+   * réponse (« attend le chef »), en ÉCHEC ou À RECEVOIR (l'ordre vaut alors refus, `refuserLot`),
+   * ce tour vaut relance — mêmes règles que `relancerLot` (plafond, quota), un tour compté, le lot marqué en
    * cours AVANT le lancement (aucun second agent par `#lancerLesSuivants`), et sa fin notée comme
    * celle d'un lot. Tout autre ordre part tel quel. Un refus (plafond) ne lance rien : l'ordre reste
    * en attente et la raison remonte au chef par le détail de son envoi. Le tour part avec le MODÈLE
@@ -730,11 +769,16 @@ export class CoordinateurDesPlans {
     ) => Promise<{ ok: boolean; turnId?: string; error?: string }>
   ): Promise<{ ok: boolean; turnId?: string; error?: string }> {
     const reprenable = (l: LotDuPlan): boolean =>
-      l.fil === fil && (l.etat === 'attend-chef' || l.etat === 'echec')
+      l.fil === fil && (l.etat === 'attend-chef' || l.etat === 'echec' || l.etat === 'a-recevoir')
     const plan = this.#plans.find((p) => p.chef === de && p.lots.some(reprenable))
     const lot = plan?.lots.find(reprenable)
     if (!plan || !lot) return lancer(fil, prompt)
-    const relance = relancerLot(plan, lot.rang)
+    // Un ordre à un lot rendu est un refus : son texte en est le motif, et sa fin le rend de nouveau
+    // à recevoir. Sans ce cas, le tour partait hors du plan et le lot restait « à recevoir » dessous.
+    const relance =
+      lot.etat === 'a-recevoir'
+        ? refuserLot(plan, lot.rang, prompt.slice(0, MOTIF_MAX))
+        : relancerLot(plan, lot.rang)
     if (!relance.ok)
       return { ok: false, error: `lot ${lot.rang} du plan ${plan.id} : ${relance.erreur}` }
     const lance = this.#poser(marquerLance(relance.plan, lot.rang, fil, this.#maintenant()))
@@ -845,6 +889,29 @@ export class CoordinateurDesPlans {
       : plan
   }
 
+  /**
+   * UN RAPPEL, UN SEUL, PAR RÉCEPTION OUBLIÉE (2026-11-13). Un réveil du chef qui finit sans avoir
+   * validé ni refusé un lot rendu laisse ses dépendants à l'arrêt, et rien ne relancerait le chef :
+   * le plan s'endormait sans bruit. Ses lots encore « à recevoir » repartent une fois dans un
+   * nouveau réveil ; une seconde omission reste visible dans le tableau (« attend la réception du
+   * chef »), sans boucle de réveils. Clé : le lot ET sa fin — un lot refusé puis rendu de nouveau
+   * a droit à son propre rappel.
+   */
+  #rappelerLaReception(chef: string): void {
+    const reveil = this.#rangsDuReveil.get(chef)
+    this.#rangsDuReveil.delete(chef)
+    const plan = reveil && this.#plan(reveil.planId)
+    if (!reveil || !plan) return
+    for (const rang of reveil.rangs) {
+      const lot = plan.lots.find((l) => l.rang === rang)
+      if (lot?.etat !== 'a-recevoir') continue
+      const cle = `${plan.id}:${rang}:${lot.fin ?? ''}`
+      if (this.#rappels.has(cle)) continue
+      this.#rappels.add(cle)
+      this.#noterAttente(chef, plan.id, rang)
+    }
+  }
+
   #noterAttente(chef: string, planId: string, rang: number): void {
     const attente = this.#enAttente.get(chef)
     if (attente && attente.planId === planId) attente.rangs.add(rang)
@@ -869,6 +936,7 @@ export class CoordinateurDesPlans {
     if (this.#deps.tourActif(chef)) return
     this.#enAttente.delete(chef)
     this.#reveilEnCours.add(chef)
+    this.#rangsDuReveil.set(chef, { planId: attente.planId, rangs: [...attente.rangs] })
     let r: { ok: boolean; error?: string }
     try {
       r = await this.#deps.lancer(chef, promptDeReveil(plan, [...attente.rangs]))
@@ -879,6 +947,7 @@ export class CoordinateurDesPlans {
       // Pas de tour lancé : la fin de tour attendue ne viendra pas. Les rangs restent en attente
       // pour le prochain tour du chef, quel qu'il soit.
       this.#reveilEnCours.delete(chef)
+      this.#rangsDuReveil.delete(chef)
       for (const rang of attente.rangs) this.#noterAttente(chef, attente.planId, rang)
       this.#journal(`réveil du chef ${chef} non lancé`, r.error)
     }

@@ -26,8 +26,19 @@ function planLance(): PlanDeLots {
     parallele: 1,
     plafondTours: 2,
     lots: [
-      { titre: 'Injection', demande: '/build injecte', fichiers: ['src/a.ts'] },
-      { titre: 'Revue', demande: '/build relis', fichiers: [], apres: [1] }
+      {
+        titre: 'Injection',
+        demande: '/build injecte',
+        critere: 'le résultat se constate et ses tests passent',
+        fichiers: ['src/a.ts']
+      },
+      {
+        titre: 'Revue',
+        demande: '/build relis',
+        critere: 'le résultat se constate et ses tests passent',
+        fichiers: [],
+        apres: [1]
+      }
     ]
   })
   if (!lu.ok) throw new Error(lu.erreur)

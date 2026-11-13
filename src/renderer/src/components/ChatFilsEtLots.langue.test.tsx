@@ -32,7 +32,11 @@ function plan(): PlanDeLots {
   const lu = lirePlanDeLots({
     titre: 'Traduction anglaise',
     parallele: 2,
-    lots: [1, 2, 3].map((n) => ({ titre: `Écrans ${n}`, demande: `/build groupe ${n}` }))
+    lots: [1, 2, 3].map((n) => ({
+      titre: `Écrans ${n}`,
+      demande: `/build groupe ${n}`,
+      critere: 'le résultat se constate et ses tests passent'
+    }))
   })
   if (!lu.ok) throw new Error(lu.erreur)
   return creerPlan(lu.plan, { id: 'plan-a', chef: 'conv-1', maintenant: 1 })
@@ -96,9 +100,24 @@ describe('plan de lots et fils proposés — langue', () => {
 
   it('la carte des fils proposés passe en anglais, puis revient au français', async () => {
     const taches = [
-      { titre: 'Titre des fiches', demande: 'Corrige le titre', fichiers: ['a.tsx'] },
-      { titre: 'Tri par date', demande: 'Ajoute un tri', fichiers: ['b.tsx'] },
-      { titre: 'Libellé du tri', demande: 'Renomme le tri', fichiers: ['b.tsx'] }
+      {
+        titre: 'Titre des fiches',
+        demande: 'Corrige le titre',
+        critere: 'le résultat se constate et ses tests passent',
+        fichiers: ['a.tsx']
+      },
+      {
+        titre: 'Tri par date',
+        demande: 'Ajoute un tri',
+        critere: 'le résultat se constate et ses tests passent',
+        fichiers: ['b.tsx']
+      },
+      {
+        titre: 'Libellé du tri',
+        demande: 'Renomme le tri',
+        critere: 'le résultat se constate et ses tests passent',
+        fichiers: ['b.tsx']
+      }
     ]
     const carte = await monter(<PropositionDeFils taches={taches} source="essai-langue" />)
     const titre = () => carte.querySelector('.md-donnees__titre')?.textContent
@@ -136,7 +155,16 @@ describe('plan de lots et fils proposés — langue', () => {
   it('le français des états et du bilan reste MOT POUR MOT celui du moteur', () => {
     for (const statut of Object.keys(LIBELLE_STATUT) as StatutDuPlan[])
       expect(traduireChatFilsEtLots(`lots.statut.${statut}`, 'fr')).toBe(LIBELLE_STATUT[statut])
-    const etats: EtatDuLot[] = ['a-faire', 'en-cours', 'fait', 'echec', 'interrompu']
+    const etats: EtatDuLot[] = [
+      'a-faire',
+      'en-cours',
+      'a-recevoir',
+      'fait',
+      'echec',
+      'interrompu',
+      'attend-chef',
+      'attend-publication'
+    ]
     for (const etat of etats)
       expect(traduireChatFilsEtLots(`lots.etat.${etat}`, 'fr')).toBe(libelleEtat(etat))
     // Le bilan recomposé par l'écran = celui du moteur, au singulier comme au pluriel.
@@ -157,6 +185,31 @@ describe('plan de lots et fils proposés — langue', () => {
         lots: base.lots.map((l, i) => ({
           ...l,
           etat: (['fait', 'fait', 'interrompu'] as const)[i]
+        }))
+      },
+      // Lots rendus au chef et travail gardé de côté : le tableau les comptait en silence.
+      {
+        ...base,
+        toursLances: 3,
+        lots: base.lots.map((l, i) => ({
+          ...l,
+          etat: (['a-recevoir', 'attend-publication', 'attend-chef'] as const)[i]
+        }))
+      },
+      {
+        ...base,
+        toursLances: 3,
+        lots: base.lots.map((l, i) => ({
+          ...l,
+          etat: (['a-recevoir', 'a-recevoir', 'attend-publication'] as const)[i]
+        }))
+      },
+      {
+        ...base,
+        toursLances: 3,
+        lots: base.lots.map((l, i) => ({
+          ...l,
+          etat: (['attend-publication', 'attend-publication', 'fait'] as const)[i]
         }))
       }
     ]

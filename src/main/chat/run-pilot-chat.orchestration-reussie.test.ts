@@ -60,7 +60,11 @@ async function tourQuiFinitSur(outcome: Record<string, unknown> | undefined) {
   }
   const os = avecRepli({
     waitUntilReady: async () => {},
-    roles: { bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }), routageChatLectureSeuleActif: () => false, getBinding: () => ({ provider: 'claude', model: 'modele-test' }) },
+    roles: {
+      bindingDesPetitesTaches: () => ({ provider: 'claude', model: 'claude-haiku-5-5' }),
+      routageChatLectureSeuleActif: () => false,
+      getBinding: () => ({ provider: 'claude', model: 'modele-test' })
+    },
     conversations: store,
     executionSupervisor: { currentSignal: () => undefined },
     runChatTurn: async (_contenu: string, _signal: AbortSignal, lancer: () => unknown) => lancer()
@@ -88,7 +92,10 @@ async function tourQuiFinitSur(outcome: Record<string, unknown> | undefined) {
 function planAvecLeLotEnEchecDans(fil: string): PlanDeLots {
   const lu = lirePlanDeLots({
     plafondTours: 3,
-    lots: [{ demande: '/build lot 1' }, { demande: '/build lot 2' }]
+    lots: [
+      { demande: '/build lot 1', critere: 'le résultat se constate et ses tests passent' },
+      { demande: '/build lot 2', critere: 'le résultat se constate et ses tests passent' }
+    ]
   })
   if (!lu.ok) throw new Error(lu.erreur)
   const plan = creerPlan(lu.plan, { id: 'plan-1', chef: 'conv-chef', maintenant: 1 })
@@ -102,7 +109,7 @@ function planAvecLeLotEnEchecDans(fil: string): PlanDeLots {
 }
 
 describe('tour de chat → plan de lots : le travail validé dans le fil d’un lot en échec', () => {
-  it('l’issue porte la réussite de l’orchestration, et le lot en échec passe « fait »', async () => {
+  it('l’issue porte la réussite de l’orchestration, et le lot en échec est rendu au chef', async () => {
     const { fil, resultat } = await tourQuiFinitSur({ status: 'succeeded', valid: true })
     const issue = issueDuResultat(resultat)
     expect(issue.orchestrationReussie).toBe(true)
@@ -112,7 +119,7 @@ describe('tour de chat → plan de lots : le travail validé dans le fil d’un 
     expect(plan.lots[0].etat).toBe('echec')
     const note = noterFinDeTour(plan, fil, issue, 4)
     expect(note.effet).toBe('note')
-    expect(note.lot?.etat).toBe('fait')
+    expect(note.lot?.etat).toBe('a-recevoir')
   })
 
   it('jumeau : une orchestration refusée ne porte pas de réussite, le lot reste en échec', async () => {

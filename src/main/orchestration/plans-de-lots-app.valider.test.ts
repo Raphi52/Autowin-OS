@@ -27,8 +27,19 @@ const planDeDeux = () => ({
   parallele: 1,
   plafondTours: 3,
   lots: [
-    { titre: 'Cause A', demande: '/build corrige la cause A', fichiers: ['src/a.ts'] },
-    { titre: 'Bilan', demande: '/build fais le bilan', fichiers: [], apres: [1] }
+    {
+      titre: 'Cause A',
+      demande: '/build corrige la cause A',
+      critere: 'le résultat se constate et ses tests passent',
+      fichiers: ['src/a.ts']
+    },
+    {
+      titre: 'Bilan',
+      demande: '/build fais le bilan',
+      critere: 'le résultat se constate et ses tests passent',
+      fichiers: [],
+      apres: [1]
+    }
   ]
 })
 

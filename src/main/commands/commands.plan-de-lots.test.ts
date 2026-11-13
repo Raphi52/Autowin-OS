@@ -66,8 +66,18 @@ const plan = {
   titre: 'Démo',
   parallele: 2,
   lots: [
-    { titre: 'Un', demande: '/build lot un', fichiers: ['a.ts'] },
-    { titre: 'Deux', demande: '/build lot deux', fichiers: ['b.ts'] }
+    {
+      titre: 'Un',
+      demande: '/build lot un',
+      critere: 'le résultat se constate et ses tests passent',
+      fichiers: ['a.ts']
+    },
+    {
+      titre: 'Deux',
+      demande: '/build lot deux',
+      critere: 'le résultat se constate et ses tests passent',
+      fichiers: ['b.ts']
+    }
   ]
 }
 
@@ -93,13 +103,24 @@ describe('plan_de_lots par le bus', () => {
     expect(outil?.args?.plan).toMatch(/"apres"/)
   })
 
-  it('« apres » au site d’appel : le lot dépendant ne part qu’après la fin réussie de son prérequis', async () => {
+  it('« apres » au site d’appel : le lot dépendant ne part qu’après la réception de son prérequis', async () => {
     const { bus, coord, lances } = banc()
     const ordonne = {
       titre: 'Ordre',
       lots: [
-        { titre: 'Un', demande: '/build lot un', fichiers: ['a.ts'] },
-        { titre: 'Deux', demande: '/build lot deux', fichiers: ['b.ts'], apres: [1] }
+        {
+          titre: 'Un',
+          demande: '/build lot un',
+          critere: 'le résultat se constate et ses tests passent',
+          fichiers: ['a.ts']
+        },
+        {
+          titre: 'Deux',
+          demande: '/build lot deux',
+          critere: 'le résultat se constate et ses tests passent',
+          fichiers: ['b.ts'],
+          apres: [1]
+        }
       ]
     }
     const r = await bus.exec('plan_de_lots', { plan: ordonne }, 'conv-A')
@@ -107,6 +128,14 @@ describe('plan_de_lots par le bus', () => {
     await coord.accepter('conv-A', (r.data as { plan: { id: string } }).plan.id)
     expect(lances.map((l) => l.fil)).toEqual(['conv-L1'])
     await coord.surFinDeTour('conv-L1', { ok: true, texte: 'Lot un fait, code 0.' })
+    expect(lances.map((l) => l.fil)).not.toContain('conv-L2')
+    // La réception passe par l'outil du chef, comme son agent l'appelle.
+    const recu = await bus.exec(
+      'plan_de_lots',
+      { action: 'valider', lot: 1, preuve: 'capture lue : le résultat tient son critère' },
+      'conv-A'
+    )
+    expect(recu.ok).toBe(true)
     expect(lances.map((l) => l.fil)).toContain('conv-L2')
   })
 
