@@ -2,7 +2,7 @@
 /**
  * DOCTOR — le bilan d'installation et de réglage d'Autowin OS, en LECTURE SEULE.
  *
- * Demande du 2026-10-31 (conv-1368) : un `/doctor` « comme claude.exe ». Claude Code sépare deux
+ * Demande du 2026-10-31 : un `/doctor` « comme claude.exe ». Claude Code sépare deux
  * gestes et on garde cette séparation : `claude doctor` mesure sans rien changer (ce script),
  * `/doctor` rend ses constats puis ne répare qu'après accord (skills/doctor/SKILL.md).
  *
@@ -150,7 +150,7 @@ export function ecartsAvecLeLock(pkg, lock) {
 export function cheminsCites(texte) {
   const motif =
     /(?<![\w./\\-])(?:src|scripts|skills|bench)\/[\w./-]+\.(?:ts|tsx|mjs|mts|js|ps1|py|md|json)\b/gu
-  // Une ligne qui raconte une disparition cite ce chemin EXPRÈS (skills/arena, conv-1368).
+  // Une ligne qui raconte une disparition cite ce chemin EXPRÈS (skills/arena).
   const vivantes = texte
     .split('\n')
     .filter((l) => !/absent|n.existe|disparu|retiré|supprimé/iu.test(l))
@@ -280,7 +280,7 @@ function dossiersDeSkills(racine) {
 /*
  * LA PREMIÈRE QUESTION DU BILAN. Sans dossier de données, presque toutes les sondes rendent
  * « inconnu » et aucune ne rend « ko » : le script sortait en 0, comme un poste sain. C'est le cas
- * de toute copie de travail, où `.autowin-data` n'existe pas (juge du 2026-10-31, conv-1368).
+ * de toute copie de travail, où `.autowin-data` n'existe pas (juge du 2026-10-31).
  */
 function sondeDonnees({ data }) {
   const journal = join(data, 'conversations.json.journal.jsonl')
@@ -540,7 +540,7 @@ function sondeTaches({ data, maintenant }) {
   const recentes = occurrences.filter((o) => o.scheduledFor >= depuis)
   /*
    * « missed » veut dire que l'app était fermée à l'échéance (mode active-only) : ce n'est pas une
-   * panne de la tâche. Les compter comme des échecs accusait trois tâches saines (conv-1368).
+   * panne de la tâche. Les compter comme des échecs accusait trois tâches saines.
    */
   const manquees = recentes.filter((o) => o.status === 'missed').length
   const echecs = new Map()
