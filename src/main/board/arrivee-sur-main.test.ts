@@ -263,19 +263,52 @@ describe('creerLectureDesArrivees — le journal de main rejoint les runs', () =
     racine = undefined
   })
 
-  it('le journal lu sert le fil ; un journal qui échoue reste inconnu sans casser la lecture', () => {
+  it('le journal lu sert le fil ; un journal qui échoue reste inconnu sans casser la lecture', async () => {
     racine = mkdtempSync(join(tmpdir(), 'arrivee-'))
     const bon = creerLectureDesArrivees(join(racine, 'worktrees'), {
-      lireLog: () => JOURNAL_DE_MAIN
+      lireLog: async () => JOURNAL_DE_MAIN
     })()
+    await Promise.resolve()
     expect(bon.filApres?.('conv-1672', DEMANDE_1672)).toBe(true)
 
-    const casse = creerLectureDesArrivees(join(racine, 'worktrees'), {
-      lireLog: () => {
+    const rejete = creerLectureDesArrivees(join(racine, 'worktrees'), {
+      lireLog: async () => {
         throw new Error('git indisponible')
       }
     })()
+    await Promise.resolve()
+    expect(rejete.filApres?.('conv-1672', DEMANDE_1672)).toBeUndefined()
+
+    const casse = creerLectureDesArrivees(join(racine, 'worktrees'), {
+      lireLog: () => {
+        throw new Error('git introuvable')
+      }
+    })()
+    await Promise.resolve()
     expect(casse.filApres?.('conv-1672', DEMANDE_1672)).toBeUndefined()
+  })
+
+  it('un journal qui échoue après un journal lu redevient inconnu, jamais l’ancien qui dirait « rien »', async () => {
+    racine = mkdtempSync(join(tmpdir(), 'arrivee-'))
+    let maintenant = 0
+    let echouer = false
+    const lire = creerLectureDesArrivees(join(racine, 'worktrees'), {
+      maintenant: () => maintenant,
+      ttlMs: 30_000,
+      lireLog: async () => {
+        if (echouer) throw new Error('délai dépassé')
+        return JOURNAL_DE_MAIN
+      }
+    })
+    lire()
+    await Promise.resolve()
+    expect(lire().filApres?.('conv-1507', DEMANDE_1672)).toBe(false)
+
+    echouer = true
+    maintenant = 30_000
+    lire()
+    await Promise.resolve()
+    expect(lire().filApres?.('conv-1507', DEMANDE_1672)).toBeUndefined()
   })
 })
 

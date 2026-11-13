@@ -1,8 +1,16 @@
 import { useMemo, useState, useEffect } from 'react'
-import { conversationsCoupeesParQuota, situationsDeReprise } from '../../../shared/reprise-quota'
+import {
+  conversationsCoupeesParQuota,
+  coupuresParLimiteDeModele,
+  situationsDeReprise
+} from '../../../shared/reprise-quota'
 import { texteFil, traceSilentFailure } from './chat-view-outils'
 import type { Msg, RunEntry } from './chat-view-types'
-import { hydrateStoredAssistant, type OrchStep } from './chat-view-model'
+import {
+  hydrateStoredAssistant,
+  type OrchStep,
+  type OrchestratorModelOption
+} from './chat-view-model'
 import { lireLivrableDuRun, relireRun, fusionnerRelecture } from './run-ouvert-a-jour'
 
 // Extrait de ChatView.tsx tel quel, sans changement de comportement.
@@ -76,8 +84,19 @@ export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
      rater une coupure suivante. */
   const [repriseQuotaMasqueePour, setRepriseQuotaMasqueePour] = useState<string | null>(null)
   // L'état compte dans la clé : un fil masqué qui passe de « repart seul » à « à la main » revient.
-  const cleRepriseQuota = convsCoupeesParQuota
-    .map((c) => `${c.id}:${c.repriseQuota?.etat ?? ''}`)
+  /**
+   * LES FILS COUPÉS PAR LA LIMITE D'UN SEUL MODÈLE (« You've reached your Fable limit »). Le compte
+   * répond encore sur un autre modèle : ils ne repartent pas seuls, et le bouton du quota ne les
+   * reprend pas (même modèle, même refus). Leur ligne propose un autre modèle.
+   */
+  const coupuresParModele = useMemo(
+    () => coupuresParLimiteDeModele(convs, busyConversations),
+    [convs, busyConversations]
+  )
+  const cleRepriseQuota = [
+    ...convsCoupeesParQuota.map((c) => `${c.id}:${c.repriseQuota?.etat ?? ''}`),
+    ...coupuresParModele.flatMap(({ modele, ids }) => ids.map((id) => `${id}:limite-${modele}`))
+  ]
     .sort()
     .join('|')
   // Le compte-rendu de reprise est une information de l'INSTANT : lu, il n'a plus de raison
@@ -108,6 +127,45 @@ export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
       texteFil(cibles.length > 1 ? 'quota.reprisesFaites' : 'quota.repriseFaite', {
         n: cibles.length
       })
+    )
+  }
+  /**
+   * Reprend les fils bloqués par la limite d'un modèle SUR LE MODÈLE CHOISI. Seul ce clic change de
+   * modèle (règle de l'utilisateur : jamais de bascule automatique). Le choix est posé sur chaque
+   * fil AVANT sa reprise, que le processus principal relit au départ du tour (`modeleDuTour`) : un
+   * fil dont le choix n'est pas retenu ne repart pas, il retomberait sur le même refus.
+   */
+  async function reprendreSurUnAutreModele(
+    ids: readonly string[],
+    option: OrchestratorModelOption
+  ): Promise<void> {
+    if (ids.length === 0) return
+    const effort = option.reasoningEffort ?? option.defaultReasoningEffort
+    const retenus = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const retenu = await window.api.conversationSetModel(
+            id,
+            option.provider,
+            option.model,
+            effort
+          )
+          return retenu ? id : null
+        } catch (error) {
+          traceSilentFailure('reprise-limite-modele', error)
+          return null
+        }
+      })
+    )
+    const partis = retenus.filter((id): id is string => id !== null)
+    for (const id of partis)
+      void resumePilotTurn(id).catch((error) => traceSilentFailure('reprise-limite-modele', error))
+    setRepriseQuotaNotice(
+      partis.length === 0
+        ? texteFil('quota.limiteModele.refuse', { modele: option.label })
+        : texteFil(partis.length > 1 ? 'quota.reprisesFaites' : 'quota.repriseFaite', {
+            n: partis.length
+          })
     )
   }
   // Le minuteur est armé AVANT que la fonction ne soit définie (ordre des déclarations) : il passe
@@ -223,6 +281,8 @@ export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
     setRepriseQuotaMasqueePour,
     cleRepriseQuota,
     reprendreConversationsCoupeesParQuota,
+    coupuresParModele,
+    reprendreSurUnAutreModele,
     resumePilotTurn,
     viewRun,
     relireRunOuvert

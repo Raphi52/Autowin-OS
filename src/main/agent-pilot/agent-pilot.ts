@@ -100,6 +100,7 @@ import {
   oublierSessionPersistee,
   persisterSessionDuChat
 } from './persistance-entre-tours'
+import type { CompteRenduNonVu } from '../runs/compte-rendu-non-vu-store'
 export {
   CAP_ITERATIONS_TOUR,
   DeltaCollageTracker,
@@ -199,7 +200,7 @@ export class AgentPilot {
    * note alors que la session, elle, etait rehydratee depuis le disque — le trou revenait. Les
    * methodes ci-dessous sont le SEUL acces : memoire d'abord, disque ensuite, oubli des deux.
    */
-  private readonly comptesRendusNonVus = new Map<string, string>()
+  private readonly comptesRendusNonVus = new Map<string, CompteRenduNonVu>()
 
   // Corps dans agent-pilot/persistance-entre-tours.ts (lot 1).
   private deposerCompteRendu(conversationId: string, texte: string): void {

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { conversationsCoupeesParQuota, estMurDeQuota } from './reprise-quota'
+import {
+  conversationsCoupeesParQuota,
+  coupuresParLimiteDeModele,
+  estMurDeQuota,
+  modeleDeLaLimite
+} from './reprise-quota'
+
+/** Recopié d'un journal de tour du 2026-11-12 (03:11) : le refus réellement stocké. */
+const COUPURE_FABLE =
+  "Claude a interrompu l'appel : You've reached your Fable limit. Switch to another model to continue."
 
 describe('estMurDeQuota', () => {
   it('reconnaît le vocabulaire du quota épuisé', () => {
@@ -78,5 +87,69 @@ describe('conversationsCoupeesParQuota', () => {
 
   it('écarte une conversation dont un tour tourne déjà', () => {
     expect(conversationsCoupeesParQuota(convs, new Set(['a'])).map((c) => c.id)).toEqual(['e'])
+  })
+})
+
+/**
+ * LA LIMITE D'UN SEUL MODÈLE. Le compte répond encore, sur un autre modèle : ce n'est pas le mur de
+ * quota (`estMurDeQuota` reste faux) et le fil ne repart pas seul. Ignorée, la coupure n'était ni
+ * reprise ni listée : deux fils ont été relancés à la main le 2026-11-12.
+ */
+describe('modeleDeLaLimite', () => {
+  it('nomme le modèle sur le texte RÉEL de la coupure', () => {
+    expect(modeleDeLaLimite(COUPURE_FABLE)).toBe('Fable')
+    // Jumeau : le compte reste ouvert, le mur de quota ne se ferme pas sur ce refus.
+    expect(estMurDeQuota(COUPURE_FABLE)).toBe(false)
+  })
+
+  it('lit aussi la forme « hit your … limit · resets » des guides publics', () => {
+    expect(modeleDeLaLimite("You've hit your Opus limit · resets 3:45pm")).toBe('Opus')
+  })
+
+  it('ne prend JAMAIS une limite du compte pour celle d’un modèle', () => {
+    for (const texte of [
+      "Claude a interrompu l'appel : You've hit your session limit · resets 2am (Europe/Paris)",
+      "You've hit your weekly limit · resets Sep 29, 2am (Europe/Paris)",
+      "You've hit your 5-hour limit · resets 11pm (Europe/Paris)",
+      'You have hit your usage limit for this month'
+    ])
+      expect(modeleDeLaLimite(texte), texte).toBeUndefined()
+  })
+
+  it('ne prend pas un nom de limite, ni une erreur ordinaire, pour un refus', () => {
+    expect(modeleDeLaLimite('Opus limit documentation')).toBeUndefined()
+    expect(modeleDeLaLimite('TypeError: undefined is not a function')).toBeUndefined()
+    expect(modeleDeLaLimite(undefined)).toBeUndefined()
+  })
+})
+
+describe('coupuresParLimiteDeModele', () => {
+  const convs = [
+    { id: 'a', lastAssistantStatus: 'failed' as const, lastAssistantError: COUPURE_FABLE },
+    { id: 'b', lastAssistantStatus: 'failed' as const, lastAssistantError: 'usage limit reached' },
+    { id: 'c', lastAssistantStatus: 'completed' as const, lastAssistantError: COUPURE_FABLE },
+    {
+      id: 'd',
+      lastAssistantStatus: 'failed' as const,
+      lastAssistantError: "You've hit your Opus limit · resets 3:45pm"
+    },
+    { id: 'e', lastAssistantStatus: 'failed' as const, lastAssistantError: COUPURE_FABLE }
+  ]
+
+  it('une ligne par modèle, dans l’ordre de la liste, sans les autres pastilles rouges', () => {
+    expect(coupuresParLimiteDeModele(convs)).toEqual([
+      { modele: 'Fable', ids: ['a', 'e'] },
+      { modele: 'Opus', ids: ['d'] }
+    ])
+  })
+
+  it('écarte un fil dont un tour tourne déjà', () => {
+    expect(coupuresParLimiteDeModele(convs, new Set(['a', 'd']))).toEqual([
+      { modele: 'Fable', ids: ['e'] }
+    ])
+  })
+
+  it('la reprise du quota, elle, ne reprend pas ces fils : même modèle, même refus', () => {
+    expect(conversationsCoupeesParQuota(convs).map((c) => c.id)).toEqual(['b'])
   })
 })

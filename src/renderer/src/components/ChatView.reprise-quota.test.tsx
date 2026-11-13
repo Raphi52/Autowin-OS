@@ -390,3 +390,128 @@ describe('bouton « Reprendre les conversations coupées par le quota »', () =>
     await vue.unmount()
   })
 })
+
+/**
+ * LA LIMITE D'UN SEUL MODÈLE (« You've reached your Fable limit. Switch to another model to
+ * continue. », relevé le 2026-11-12). Le compte répond encore sur un autre modèle : le fil ne repart
+ * pas seul, et le reprendre sur le même modèle retomberait sur le même refus. Ignorée, la coupure
+ * n'était ni listée ni reprise : deux fils ont été relancés à la main. Règle de l'utilisateur :
+ * jamais de bascule de modèle automatique, le changement reste son clic.
+ */
+describe('fils coupés par la limite d’un seul modèle', () => {
+  const FABLE =
+    "Claude a interrompu l'appel : You've reached your Fable limit. Switch to another model to continue."
+  const catalogue = [
+    { id: 'claude-fable-5', provider: 'claude', model: 'claude-fable-5', label: 'Claude Fable 5' },
+    {
+      id: 'claude-opus-5',
+      provider: 'claude',
+      model: 'claude-opus-5',
+      label: 'Claude Opus 5',
+      reasoningEfforts: ['low', 'high'],
+      defaultReasoningEffort: 'high'
+    }
+  ]
+  const ligne = (c: HTMLElement): HTMLElement | null =>
+    c.querySelector('[data-testid="conv-reprise-modele"]')
+  const choix = (c: HTMLElement): HTMLSelectElement =>
+    c.querySelector('[data-testid="conv-reprise-modele-choix"]') as HTMLSelectElement
+  const reprendre = (c: HTMLElement): HTMLButtonElement =>
+    c.querySelector('[data-testid="conv-reprise-modele-bouton"]') as HTMLButtonElement
+  async function choisir(c: HTMLElement, valeur: string): Promise<void> {
+    await act(async () => {
+      const liste = choix(c)
+      liste.value = valeur
+      liste.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
+  it('les liste à part du quota, sans le modèle bloqué parmi les choix', async () => {
+    const vue = await mountChat(
+      chatApi({
+        conversations: vi
+          .fn()
+          .mockResolvedValue([
+            coupee('F', FABLE),
+            coupee('G', FABLE),
+            coupee('Q', 'insufficient_quota'),
+            coupee('E', 'TypeError: boom')
+          ]),
+        models: vi.fn().mockResolvedValue(catalogue)
+      })
+    )
+    await vi.waitFor(() => expect(ligne(vue.container)?.textContent).toContain('Fable'))
+    expect(ligne(vue.container)?.textContent).toContain('2')
+    // Le bouton du quota ne compte que le vrai mur du compte.
+    expect(bouton(vue.container)?.textContent).toContain('(1)')
+    const valeurs = [...choix(vue.container).options].map((option) => option.value)
+    expect(valeurs).toContain('claude:claude-opus-5')
+    expect(valeurs).not.toContain('claude:claude-fable-5')
+    await vue.unmount()
+  })
+
+  it('ne change rien sans un choix ET un clic, puis pose le modèle AVANT de reprendre', async () => {
+    const conversationSetModel = vi
+      .fn()
+      .mockResolvedValue({ provider: 'claude', model: 'claude-opus-5' })
+    const resumePilotChat = vi.fn().mockResolvedValue({ ok: true, cancelled: false, turnId: 't' })
+    const vue = await mountChat(
+      chatApi({
+        conversations: vi
+          .fn()
+          .mockResolvedValue([
+            coupee('F', FABLE),
+            coupee('Q', 'insufficient_quota'),
+            coupee('G', FABLE)
+          ]),
+        models: vi.fn().mockResolvedValue(catalogue),
+        conversationSetModel,
+        resumePilotChat
+      })
+    )
+    await vi.waitFor(() => expect(ligne(vue.container)).not.toBeNull())
+    // Aucun modèle choisi : rien n'est cliquable, rien n'est parti.
+    expect(reprendre(vue.container).disabled).toBe(true)
+    expect(conversationSetModel).not.toHaveBeenCalled()
+    expect(resumePilotChat).not.toHaveBeenCalled()
+
+    await choisir(vue.container, 'claude:claude-opus-5')
+    // Choisir ne suffit pas : le clic reste le seul départ.
+    expect(conversationSetModel).not.toHaveBeenCalled()
+    await vue.click('[data-testid="conv-reprise-modele-bouton"]')
+    await vi.waitFor(() => expect(resumePilotChat).toHaveBeenCalledTimes(2))
+    expect(conversationSetModel.mock.calls).toEqual([
+      ['F', 'claude', 'claude-opus-5', 'high'],
+      ['G', 'claude', 'claude-opus-5', 'high']
+    ])
+    // Le fil coupé par le quota n'est pas emporté par cette reprise.
+    expect(resumePilotChat.mock.calls.map(([id]) => id)).toEqual(['F', 'G'])
+    for (const rang of [0, 1])
+      expect(conversationSetModel.mock.invocationCallOrder[rang]).toBeLessThan(
+        resumePilotChat.mock.invocationCallOrder[rang]
+      )
+    await vue.unmount()
+  })
+
+  it('jumeau : un modèle refusé pour un fil ne le relance pas sur le modèle bloqué', async () => {
+    const conversationSetModel = vi.fn().mockResolvedValue(null)
+    const resumePilotChat = vi.fn().mockResolvedValue({ ok: true, cancelled: false, turnId: 't' })
+    const vue = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([coupee('F', FABLE)]),
+        models: vi.fn().mockResolvedValue(catalogue),
+        conversationSetModel,
+        resumePilotChat
+      })
+    )
+    await vi.waitFor(() => expect(ligne(vue.container)).not.toBeNull())
+    await choisir(vue.container, 'claude:claude-opus-5')
+    await vue.click('[data-testid="conv-reprise-modele-bouton"]')
+    await vi.waitFor(() => expect(conversationSetModel).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(resumePilotChat).not.toHaveBeenCalled()
+    await vue.unmount()
+  })
+})

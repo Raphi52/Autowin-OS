@@ -37,13 +37,59 @@ export function estMurDeQuota(texte: string | undefined | null): boolean {
   // « Opus limit » est EXCLU à dessein : c'est la limite d'UN modèle, alors que
   // le mur que ce vocabulaire ferme est celui du COMPTE entier (`quotaWallKey`, registry.ts) — il
   // refuserait aussi Sonnet et Haiku jusqu'à l'heure annoncée. Sa vraie réponse est de changer de
-  // modèle, ce qu'aucun code ne sait faire aujourd'hui.
+  // modèle : c'est `modeleDeLaLimite`, plus bas, qui la reconnaît.
   // « 5-hour limit » (2026-10-28) : la limite de session du compte sous sa formulation
   // actuelle (« You've hit your 5-hour limit · resets 11pm »), relevée dans 14 journaux de tour.
   // Ignorée, un plan de lots notait ses lots coupés « fait » et brûlait son plafond sur le mur.
   return /usage[_ ]limit|session limit|purchase more credits|hit your (?:usage|session|weekly|\d+-hour)|insufficient_quota|quota (?:exceeded|épuisé|epuise)|plan limit/i.test(
     t
   )
+}
+
+/** Les noms que porte une limite du COMPTE : ceux-là ferment tous les modèles, pas un seul. */
+const LIMITE_DU_COMPTE = /^(?:usage|session|weekly|daily|monthly|plan|rate|\d+-hour)$/i
+
+/**
+ * LE MODÈLE QUI A ATTEINT SA LIMITE, quand le refus ne vise que lui.
+ *
+ * Texte réellement stocké le 2026-11-12 : « You've reached your Fable limit. Switch to
+ * another model to continue. ». Il n'annonce aucune heure : seul un autre modèle répond. Ce n'est
+ * donc ni le mur du compte (`estMurDeQuota` reste faux, les autres modèles restent ouverts) ni un fil
+ * qui repart seul. Rend le nom du modèle tel que le refus l'écrit, ou rien.
+ */
+export function modeleDeLaLimite(texte: string | undefined | null): string | undefined {
+  const t = (texte ?? '').trim()
+  if (!t || estMurDeQuota(t)) return undefined
+  // La forme du refus, pas le nom seul : « Opus limit documentation » n'a rien refusé.
+  const refus = /\b(?:reached|hit) your ([A-Za-z][\w.-]*(?: [\w.-]+)?) limit\b/i.exec(t)
+  if (!refus) return undefined
+  const nom = refus[1]
+  return nom.split(' ').some((mot) => LIMITE_DU_COMPTE.test(mot)) ? undefined : nom
+}
+
+/** Une ligne du bandeau de reprise : les fils coupés par la limite d'un même modèle. */
+export interface CoupureParLimiteDeModele {
+  modele: string
+  ids: string[]
+}
+
+/**
+ * Les fils dont le dernier tour est mort sur la limite d'UN modèle, groupés par modèle, dans l'ordre
+ * de la liste. Un fil dont un tour tourne déjà est écarté, comme pour le quota. Rien ne les relance :
+ * changer de modèle reste le geste de l'utilisateur.
+ */
+export function coupuresParLimiteDeModele(
+  conversations: readonly ConversationCandidateQuota[],
+  enCours: ReadonlySet<string> = new Set()
+): CoupureParLimiteDeModele[] {
+  const parModele = new Map<string, string[]>()
+  for (const c of conversations) {
+    if (c.lastAssistantStatus !== 'failed' || enCours.has(c.id)) continue
+    const modele = modeleDeLaLimite(c.lastAssistantError)
+    if (!modele) continue
+    parModele.set(modele, [...(parModele.get(modele) ?? []), c.id])
+  }
+  return [...parModele].map(([modele, ids]) => ({ modele, ids }))
 }
 
 /**

@@ -7,7 +7,6 @@
  * (le même que celui du message de réponse). Un run « complete » dont le SHA de l'agent est la base
  * n'a rien apporté : il ne prouve rien.
  */
-import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ConversationPourLaCarte, MessageStockePourLaCarte } from './carte-des-besoins'
@@ -17,6 +16,7 @@ import {
   attendSeulementSaPublication,
   type OrchestrationOutcome
 } from '../../shared/orchestration-outcome'
+import { execFileHorsFil } from '../gel/execution-hors-fil'
 
 /**
  * Vrai = le travail du tour est arrivé ; faux = un run existe mais rien n'est arrivé ; inconnu = aucune
@@ -83,15 +83,33 @@ export function filApresDesCommits(
 }
 
 /**
- * Le journal de `main` du dépôt où vit `dossier`. Lecture seule ; une erreur git remonte, et la lecture
- * des arrivées la traite comme un journal inconnu.
+ * D'habitude 0,1 à 0,4 s ; `gels.jsonl` du 2026-11-13 a mesuré un même `git log` tenu 60 s puis 120 s.
+ * Au-delà de ce délai, la commande est tuée et le journal reste inconnu jusqu'à la relecture suivante.
  */
-export function lireLogDeMain(dossier: string): string {
-  return execFileSync(
+const DELAI_MAX_DU_JOURNAL_MS = 15_000
+
+/**
+ * Le journal de `main` du dépôt où vit `dossier`. Lecture seule, hors du fil principal
+ * (`execution-hors-fil.ts`) : en synchrone, ce `git log` a figé toute la fenêtre jusqu'à 120 s.
+ * Une erreur git (ou le délai dépassé) rejette, et la lecture des arrivées la traite comme un journal
+ * inconnu.
+ */
+export async function lireLogDeMain(
+  dossier: string,
+  executer: typeof execFileHorsFil = execFileHorsFil
+): Promise<string> {
+  const { stdout } = await executer(
     'git',
     ['log', 'main', '--format=%aI%x09%s', '--fixed-strings', '--grep=(conv-'],
-    { cwd: dossier, encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 }
+    {
+      cwd: dossier,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: DELAI_MAX_DU_JOURNAL_MS,
+      maxBuffer: 64 * 1024 * 1024
+    }
   )
+  return stdout
 }
 
 /** Les runs de tous les dépôts du dossier `worktrees` (un sous-dossier `.runs` par dépôt). */
@@ -135,14 +153,47 @@ function lireUnRun(chemin: string): RunPourArrivee | undefined {
 /**
  * Le Board relit les runs à chaque calcul : une lecture sert `ttlMs` (30 s). Une publication qui vient
  * d'arriver peut donc tarder de 30 s à se voir, ce qui est sans conséquence pour une carte.
+ *
+ * Le journal de main se lit EN FOND et la carte ne l'attend jamais : elle répond avec le dernier journal
+ * lu (inconnu tant que le premier n'est pas arrivé), et un journal qui arrive sert dès l'appel suivant,
+ * sans attendre l'échéance. Une seule lecture est en vol à la fois : un git figé ne s'empile pas.
  */
 export function creerLectureDesArrivees(
   racineWorktrees: string,
-  options: { maintenant?: () => number; ttlMs?: number; lireLog?: () => string } = {}
+  options: { maintenant?: () => number; ttlMs?: number; lireLog?: () => Promise<string> } = {}
 ): () => ArriveeDuTour {
   const maintenant = options.maintenant ?? Date.now
   const ttlMs = options.ttlMs ?? 30_000
   let cache: { quand: number; arrivee: ArriveeDuTour } | undefined
+  let filApres = filApresDesCommits(undefined)
+  let journalEnVol = false
+  const relireLeJournal = (): void => {
+    const lireLog = options.lireLog
+    if (!lireLog || journalEnVol) return
+    journalEnVol = true
+    let lecture: Promise<string>
+    try {
+      lecture = lireLog()
+    } catch (erreur) {
+      lecture = Promise.reject(erreur)
+    }
+    lecture.then(
+      (journal) => {
+        journalEnVol = false
+        filApres = filApresDesCommits(journal)
+      },
+      (erreur: unknown) => {
+        journalEnVol = false
+        // Journal illisible (git absent, dépôt introuvable, délai dépassé) : le fil ne répond pas, il
+        // reste inconnu — jamais un ancien journal qui dirait « rien n'est arrivé » à tort.
+        filApres = filApresDesCommits(undefined)
+        console.warn(
+          '[board] journal de main illisible pour les arrivées :',
+          erreur instanceof Error ? erreur.message : erreur
+        )
+      }
+    )
+  }
   return () => {
     const quand = maintenant()
     if (cache && quand - cache.quand < ttlMs) return cache.arrivee
@@ -157,24 +208,14 @@ export function creerLectureDesArrivees(
         erreur instanceof Error ? erreur.message : erreur
       )
     }
-    // Journal de main illisible (git absent, dépôt introuvable) : le fil ne répond pas, il reste inconnu.
-    let journal: string | undefined
-    try {
-      journal = options.lireLog?.()
-    } catch (erreur) {
-      console.warn(
-        '[board] journal de main illisible pour les arrivées :',
-        erreur instanceof Error ? erreur.message : erreur
-      )
-    }
+    relireLeJournal()
     const tours = arriveesDepuisLesRuns(runs)
-    const filApres = filApresDesCommits(journal)
     cache = {
       quand,
       arrivee: Object.assign(
         (conversationId: string, turnId: string) => tours(conversationId, turnId),
         {
-          filApres
+          filApres: (conversationId: string, depuis: number) => filApres(conversationId, depuis)
         }
       )
     }

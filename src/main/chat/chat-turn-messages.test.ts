@@ -264,6 +264,26 @@ describe('buildTurnMessages', () => {
     expect(entries.some((entry) => entry.includes("tu en connais déjà l'historique"))).toBe(false)
   })
 
+  it('avec un compte-rendu non vu, renvoie à SA date au lieu de l’imposer comme un fait frais', () => {
+    // Mesure du 2026-11-13 : 79 notes sur 152 avaient plus de 7 jours. La note porte sa date en
+    // tête (`consommerCompteRenduEnAttente`) ; « traite-le comme un fait établi » juste au-dessus
+    // contredisait son « revérifie avant de t'y fier ».
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [],
+      resumeSessionId: 'sess-123',
+      compteRenduNonVu:
+        '[Exécuté par l’app le 16/10/2026 14:03, il y a 28 jours ; l’état a pu changer depuis, revérifie avant de t’y fier.]\nWorkflow termine — run r-42',
+      lastUserMessage: 'et alors ?'
+    })
+    const bloc = entries.find((entry) => entry.includes('run r-42'))
+    expect(bloc).toBeDefined()
+    expect(bloc).not.toContain('fait établi')
+    expect(bloc).toContain('date en tête')
+  })
+
   it('sans compte-rendu non vu, le chemin de reprise reste INCHANGE', () => {
     // Le cas courant ne doit pas payer ce correctif : aucune entree en plus, aucun mot en moins.
     const entries = buildTurnMessages({

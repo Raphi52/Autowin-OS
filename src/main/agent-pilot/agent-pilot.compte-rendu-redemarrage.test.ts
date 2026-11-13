@@ -105,6 +105,10 @@ describe('le compte-rendu d’un tour exécuté sans le modèle survit au redém
     expect(dernier).toContain('Suite de NOTRE conversation')
     expect(dernier).toContain('PISTE-UNIQUE')
     expect(dernier).toContain('hors de ta session')
+    // La note relue du disque arrive datée : le modèle sait de quand date le tour manquant.
+    expect(dernier).toMatch(
+      /\[Exécuté par l’app le \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}, il y a \d+ min\.\]/
+    )
   })
 
   it('la note n’est remise qu’une fois, même après redémarrage', async () => {
