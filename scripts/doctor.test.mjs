@@ -622,6 +622,14 @@ describe('doctor — les calculs', () => {
     expect(classement).toEqual([['run::refusé', 2]])
   })
 
+  it('lit les entrées datées du registre comme les anciennes signatures seules', () => {
+    const { classement } = refusRecents({
+      'conv-1': [{ signature: 'run::refusé', derniereFois: '2026-11-13T09:30:00.000Z' }],
+      'conv-2': ['run::refusé']
+    })
+    expect(classement).toEqual([['run::refusé', 2]])
+  })
+
   it('ne garde que les fils les plus récents : le rang de conv-N tient lieu de date', () => {
     const murs = { 'conv-9': ['run::refusé'], 'conv-10': ['outil::bloqué'], 'conv-2': ['run::refusé'] }
     expect(refusRecents(murs, 1).classement).toEqual([['outil::bloqué', 1]])

@@ -171,8 +171,8 @@ export function descriptionDeSkill(md) {
 }
 
 /**
- * Vrais refus des fils les plus récents, classés par fils touchés. Le journal n'est pas daté, mais
- * ses clés sont des `conv-N` : le rang tient lieu de date. Il mêle aussi tous les échecs d'outils
+ * Vrais refus des fils les plus récents, classés par fils touchés. Les entrées anciennes du journal
+ * ne sont pas datées, mais ses clés sont des `conv-N` : le rang tient lieu de date. Il mêle aussi tous les échecs d'outils
  * (test rouge, fichier absent), qui ne disent rien des permissions : seuls les refus comptent.
  */
 export function refusRecents(murs, nombreDeFils = 100) {
@@ -182,7 +182,10 @@ export function refusRecents(murs, nombreDeFils = 100) {
     .slice(0, nombreDeFils)
   const comptes = new Map()
   for (const id of fils) {
-    for (const signature of new Set(murs[id])) {
+    // Une entrée est une signature seule (ancien format) ou `{ signature, derniereFois }`.
+    const signatures = murs[id].map((m) => (typeof m === 'string' ? m : m?.signature))
+    for (const signature of new Set(signatures)) {
+      if (typeof signature !== 'string') continue
       if (!/refus|interdit|bloqu|non autoris|denied|permission/iu.test(signature)) continue
       comptes.set(signature, (comptes.get(signature) ?? 0) + 1)
     }

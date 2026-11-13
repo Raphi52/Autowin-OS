@@ -17,7 +17,15 @@ import { creerIndexStore } from './json-index-store'
  * type, son validateur, et le plafond par conversation.
  */
 
-export type MursIndex = Record<string, string[]>
+/**
+ * Un mur et la date ISO de sa DERNIERE occurrence. Sans date, un mur dont la cause est corrigee
+ * restait compte indefiniment par ceux qui relisent le registre entre conversations (le diagnostic) :
+ * rien ne distinguait un mur d'hier d'un mur d'il y a trois mois. Une chaine seule est l'ancien
+ * format : relue telle quelle, jamais datee apres coup — une date inventee serait fausse.
+ */
+export type EntreeDeMur = string | { signature: string; derniereFois: string }
+
+export type MursIndex = Record<string, EntreeDeMur[]>
 
 /**
  * Le registre est BORNE par conversation. Sans cap, une conversation longue et bruyante ferait
@@ -27,10 +35,25 @@ export type MursIndex = Record<string, string[]>
  */
 export const CAP_MURS_PAR_CONVERSATION = 40
 
-const estListeDeMurs = (valeur: unknown): valeur is string[] =>
-  Array.isArray(valeur) && valeur.every((m) => typeof m === 'string' && !!m)
+const estEntreeDeMur = (valeur: unknown): valeur is EntreeDeMur => {
+  if (typeof valeur === 'string') return !!valeur
+  if (!valeur || typeof valeur !== 'object' || Array.isArray(valeur)) return false
+  const { signature, derniereFois } = valeur as Record<string, unknown>
+  return (
+    typeof signature === 'string' &&
+    !!signature &&
+    typeof derniereFois === 'string' &&
+    !Number.isNaN(Date.parse(derniereFois))
+  )
+}
 
-const store = creerIndexStore<string[]>('murs-rencontres.json', estListeDeMurs)
+const estListeDeMurs = (valeur: unknown): valeur is EntreeDeMur[] =>
+  Array.isArray(valeur) && valeur.every(estEntreeDeMur)
+
+const signatureDe = (entree: EntreeDeMur): string =>
+  typeof entree === 'string' ? entree : entree.signature
+
+const store = creerIndexStore<EntreeDeMur[]>('murs-rencontres.json', estListeDeMurs)
 
 export function mursStorePath(base = ensureAutowinAppData()): string {
   return store.chemin(base)
@@ -39,10 +62,13 @@ export function mursStorePath(base = ensureAutowinAppData()): string {
 /** Les murs deja rencontres dans CETTE conversation. Une conversation inconnue n'en a aucun. */
 export function chargerMurs(conversationId: string, base = ensureAutowinAppData()): string[] {
   if (!conversationId) return []
-  return store.lire(base)[conversationId] ?? []
+  return (store.lire(base)[conversationId] ?? []).map(signatureDe)
 }
 
-/** Enregistre un mur. Idempotent : le meme mur deux fois reste une seule entree. */
+/**
+ * Enregistre un mur, date de cette rencontre. Le meme mur deux fois reste une seule entree : sa date
+ * avance et il passe en dernier, pour que le plafond garde les murs les plus recemment VUS.
+ */
 export function enregistrerMur(
   conversationId: string,
   signature: string,
@@ -50,9 +76,10 @@ export function enregistrerMur(
 ): void {
   if (!conversationId || !signature) return
   const index = store.lire(base)
-  const connus = index[conversationId] ?? []
-  if (connus.includes(signature)) return
-  index[conversationId] = [...connus, signature].slice(-CAP_MURS_PAR_CONVERSATION)
+  const autres = (index[conversationId] ?? []).filter((m) => signatureDe(m) !== signature)
+  index[conversationId] = [...autres, { signature, derniereFois: new Date().toISOString() }].slice(
+    -CAP_MURS_PAR_CONVERSATION
+  )
   store.ecrire(index, base)
 }
 
