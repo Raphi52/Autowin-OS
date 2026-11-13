@@ -28,5 +28,13 @@ export function arriveesDuPoste(dossierDuDepot: () => string): ArriveeDuTour {
       lecture = () => () => undefined
     }
   }
-  return lecture()
+  const arrivee = lecture()
+  // Le journal lu est celui de `dossierDuDepot` : la carte ne le consulte que pour les fils de ce dépôt.
+  return Object.assign(
+    (conversationId: string, turnId: string) => arrivee(conversationId, turnId),
+    {
+      ...(arrivee.filApres ? { filApres: arrivee.filApres } : {}),
+      depotDuJournal: dossierDuDepot()
+    }
+  )
 }
