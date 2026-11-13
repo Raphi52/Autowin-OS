@@ -59,8 +59,12 @@ function ilYA(ecartMs: number): string {
 /**
  * La note sort DATÉE : sa date de dépôt, à l'heure du poste, et son âge. Au-delà d'un jour, elle dit
  * aussi que l'état a pu changer : mesuré le 2026-11-13, 79 notes sur 152 avaient plus de 7 jours (la
- * plus vieille 28), et le message du tour les présente comme « un fait établi ». Le fait reste vrai —
- * le tour manque bien à la session du modèle —, c'est sa fraîcheur qui ne l'est plus.
+ * plus vieille 28), présentées sans date comme des faits frais. Le fait reste vrai — le tour manque
+ * bien à la session du modèle —, c'est sa fraîcheur qui ne l'est plus. Le message du tour renvoie à
+ * cette date (`buildTurnMessageBlocks`, chat-turn-messages.ts).
+ *
+ * fix-ok: cause mesurée — `lireCompteRenduNonVu` rendait le seul texte, l'heure `at` écrite au dépôt
+ * n'était jamais relue (3 cas rouges sur 4 dans persistance-entre-tours.test.ts avant ce correctif).
  */
 function noteDatee(note: CompteRenduNonVu, maintenant: number): string {
   const depot = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(
