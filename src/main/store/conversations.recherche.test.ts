@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ConversationStore } from './conversations'
+import { ConversationStore, motCorrespondant } from './conversations'
 
 /**
  * DEFAUT VECU le 2026-08-26. L'orchestrateur a recu « remake les pastilles de
@@ -470,5 +470,26 @@ describe('rechercherParContenu (appartenance, pour la barre laterale)', () => {
   it('trouve un terme court, la ou la recherche tokenisee ecarte les mots de moins de 3 lettres', () => {
     const store = magasinPeuple()
     expect(store.rechercherParContenu('ZOX').map((t) => t.id).length).toBe(1)
+  })
+})
+
+/**
+ * Les mots d'un message sont gardés en UNE chaîne (séparés par une espace) plutôt qu'en tableau : le
+ * tableau retenait, par ses sous-chaînes, une copie repliée de chaque message (150 Mo sur le corpus réel).
+ *
+ * ENTRÉE QUI FAIT ÉCHOUER CE TEST SI LA LECTURE EST FAUSSE : « reconversion conversation » avec la racine
+ * « conv ». Une recherche de sous-chaîne sans frontière de mot rendrait « conversion » (dans
+ * « reconversion ») ; la bonne réponse est le premier MOT qui commence par la racine.
+ */
+describe('motCorrespondant sur les mots joints', () => {
+  it('rend le premier mot qui COMMENCE par la racine, jamais un milieu de mot', () => {
+    expect(motCorrespondant('reconversion conversation convoi', 'conv')).toBe('conversation')
+  })
+  it('prend le premier mot de la chaîne quand il correspond', () => {
+    expect(motCorrespondant('convoi conversation', 'conv')).toBe('convoi')
+  })
+  it('rend undefined sans porteur, et sur un message sans mot', () => {
+    expect(motCorrespondant('pastille badge', 'conv')).toBeUndefined()
+    expect(motCorrespondant('', '')).toBeUndefined()
   })
 })

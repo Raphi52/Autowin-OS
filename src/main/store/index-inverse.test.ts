@@ -49,3 +49,30 @@ describe('index inverse', () => {
     expect([...(index.candidates(['pastil']) ?? [])]).toEqual(['conv-2'])
   })
 })
+
+/**
+ * Les porteurs d'une racine sont des NUMÉROS de conversation, rangés dans l'ordre : un message qui arrive
+ * dans une ancienne conversation, après d'autres, s'insère à sa place sans doublon.
+ *
+ * ENTRÉE QUI FAIT ÉCHOUER CE TEST SI L'INSERTION EST FAUSSE : la conversation 1, la 2, puis la 1 de nouveau sur la
+ * même racine, puis le retrait de la 1 — un doublon oublié par le retrait la laisserait candidate.
+ */
+describe('index inverse — messages arrivés dans le désordre', () => {
+  it('un retour dans une ancienne conversation ne laisse pas de doublon au retrait', () => {
+    const index = creerIndexInverse()
+    index.ajouter('conv-1', ['pastil'])
+    index.ajouter('conv-2', ['pastil'])
+    index.ajouter('conv-1', ['pastil', 'zephyr'])
+    index.ajouter('conv-3', ['zephyr'])
+    expect([...(index.candidates(['pastil', 'zephyr']) ?? [])].sort()).toEqual([
+      'conv-1',
+      'conv-2',
+      'conv-3'
+    ])
+    index.retirer('conv-1')
+    expect([...(index.candidates(['pastil', 'zephyr']) ?? [])].sort()).toEqual(['conv-2', 'conv-3'])
+    index.ajouter('conv-1', ['zephyr'])
+    expect([...(index.candidates(['pastil']) ?? [])]).toEqual(['conv-2'])
+    expect([...(index.candidates(['zephyr']) ?? [])].sort()).toEqual(['conv-1', 'conv-3'])
+  })
+})

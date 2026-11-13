@@ -24,11 +24,33 @@ export interface IndexInverse {
   retirer(conversationId: string): void
 }
 
+/*
+ * Les porteurs d'une racine sont des NUMÉROS de conversation dans un tableau trié, plus des ensembles d'ids.
+ * Mesure du 13/11 sur le corpus réel (1630 fils) : la forme précédente, un `Set` d'ids par racine plus un
+ * `Set` de racines par conversation (pour `retirer`), pesait 108 Mo — un `Set` par racine, alors que la
+ * plupart des racines n'ont qu'un ou deux porteurs. `retirer`, rare (le store remet l'index à zéro à la
+ * suppression d'un fil), parcourt les racines au lieu de tenir un second index.
+ */
 export function creerIndexInverse(): IndexInverse {
-  /** racine -> ids de conversations qui la portent. */
-  const parRacine = new Map<string, Set<string>>()
-  /** id -> racines vues, pour pouvoir retirer proprement. */
-  const parConversation = new Map<string, Set<string>>()
+  /** racine -> numéros des conversations qui la portent, triés, sans doublon. */
+  const parRacine = new Map<string, number[]>()
+  /** numéro -> id ; un numéro n'est jamais réattribué. */
+  const ids: string[] = []
+  const numeros = new Map<string, number>()
+
+  /** Place du numéro dans le tableau trié : son rang s'il y est, sinon `-(rang d'insertion) - 1`. */
+  const chercher = (porteurs: readonly number[], numero: number): number => {
+    let bas = 0
+    let haut = porteurs.length - 1
+    while (bas <= haut) {
+      const milieu = (bas + haut) >>> 1
+      const valeur = porteurs[milieu]
+      if (valeur === numero) return milieu
+      if (valeur < numero) bas = milieu + 1
+      else haut = milieu - 1
+    }
+    return -bas - 1
+  }
 
   return {
     candidates(racines) {
@@ -37,38 +59,45 @@ export function creerIndexInverse(): IndexInverse {
       for (const racine of racines) {
         const porteurs = parRacine.get(racine)
         if (!porteurs) continue
-        for (const id of porteurs) reunion.add(id)
+        for (const numero of porteurs) reunion.add(ids[numero])
       }
       return reunion
     },
 
     ajouter(conversationId, racines) {
-      let vues = parConversation.get(conversationId)
-      if (!vues) {
-        vues = new Set()
-        parConversation.set(conversationId, vues)
+      let numero = numeros.get(conversationId)
+      if (numero === undefined) {
+        numero = ids.length
+        ids.push(conversationId)
+        numeros.set(conversationId, numero)
       }
       for (const racine of racines) {
-        vues.add(racine)
-        let porteurs = parRacine.get(racine)
+        const porteurs = parRacine.get(racine)
         if (!porteurs) {
-          porteurs = new Set()
-          parRacine.set(racine, porteurs)
+          parRacine.set(racine, [numero])
+          continue
         }
-        porteurs.add(conversationId)
+        // Cas courant (construction fil par fil, nouveau message du dernier fil) : en fin de tableau.
+        const dernier = porteurs[porteurs.length - 1]
+        if (dernier === numero) continue
+        if (dernier < numero) {
+          porteurs.push(numero)
+          continue
+        }
+        const place = chercher(porteurs, numero)
+        if (place < 0) porteurs.splice(-place - 1, 0, numero)
       }
     },
 
     retirer(conversationId) {
-      const vues = parConversation.get(conversationId)
-      if (!vues) return
-      for (const racine of vues) {
-        const porteurs = parRacine.get(racine)
-        if (!porteurs) continue
-        porteurs.delete(conversationId)
-        if (porteurs.size === 0) parRacine.delete(racine)
+      const numero = numeros.get(conversationId)
+      if (numero === undefined) return
+      for (const [racine, porteurs] of parRacine) {
+        const place = chercher(porteurs, numero)
+        if (place < 0) continue
+        if (porteurs.length === 1) parRacine.delete(racine)
+        else porteurs.splice(place, 1)
       }
-      parConversation.delete(conversationId)
     }
   }
 }
