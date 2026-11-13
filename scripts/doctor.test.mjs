@@ -571,7 +571,13 @@ describe('doctor — aucun secret dans le bilan', () => {
   })
 
   it('une erreur de sonde est masquée comme le reste', () => {
-    const casse = ['usage', 'casse', () => { throw new Error('refus token=abc123') }]
+    const casse = [
+      'usage',
+      'casse',
+      () => {
+        throw new Error('refus token=abc123')
+      }
+    ]
     expect(diagnostic({ sondes: [casse] })[0].detail).not.toContain('abc123')
   })
 })
@@ -631,7 +637,11 @@ describe('doctor — les calculs', () => {
   })
 
   it('ne garde que les fils les plus récents : le rang de conv-N tient lieu de date', () => {
-    const murs = { 'conv-9': ['run::refusé'], 'conv-10': ['outil::bloqué'], 'conv-2': ['run::refusé'] }
+    const murs = {
+      'conv-9': ['run::refusé'],
+      'conv-10': ['outil::bloqué'],
+      'conv-2': ['run::refusé']
+    }
     expect(refusRecents(murs, 1).classement).toEqual([['outil::bloqué', 1]])
   })
 

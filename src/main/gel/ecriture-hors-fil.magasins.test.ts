@@ -7,7 +7,11 @@ import { attendreFichier, viderFichiersEnAttente } from './ecriture-hors-fil'
 import { configureRememberDepositStore, forgetSessionDeposits } from '../brain/brain-remember'
 import { enregistrerMur, chargerMurs, oublierMurs, mursStorePath } from '../runs/murs-store'
 import { loadChatSessions, saveChatSession } from '../runs/chat-session-store'
-import { configureSessionMemoryEcho, noteRemembered, rememberedFacts } from '../brain/session-memory-echo'
+import {
+  configureSessionMemoryEcho,
+  noteRemembered,
+  rememberedFacts
+} from '../brain/session-memory-echo'
 import { cheminFichierPlans, stockageFichier } from '../orchestration/plans-de-lots-app'
 import {
   coutDuTourDepuisCumul,

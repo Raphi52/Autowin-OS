@@ -301,7 +301,9 @@ function sondeDonnees({ data }) {
     titre: abimees
       ? `Journal des conversations : ${abimees} ligne(s) illisible(s)`
       : 'Dossier de données présent, journal des conversations lisible',
-    reparation: abimees ? 'Le démarrage écarte ces lignes : `/heal` pour trouver leur origine.' : undefined
+    reparation: abimees
+      ? 'Le démarrage écarte ces lignes : `/heal` pour trouver leur origine.'
+      : undefined
   }
 }
 
@@ -468,7 +470,8 @@ function sondeDisque({ racine }) {
   return {
     statut: pire < SEUILS.disqueKoGo ? 'ko' : pire < SEUILS.disqueAttentionGo ? 'attention' : 'ok',
     titre: `Espace libre : ${uniques.map((l) => `${l.disque} ${l.go.toFixed(0)} Go`).join(' · ')}`,
-    reparation: pire < SEUILS.disqueAttentionGo ? '`/gc` déplace les déchets en corbeille.' : undefined
+    reparation:
+      pire < SEUILS.disqueAttentionGo ? '`/gc` déplace les déchets en corbeille.' : undefined
   }
 }
 
@@ -710,7 +713,8 @@ function sondeMode({ racine }) {
     return {
       statut: 'ko',
       titre: 'Agents lancés sans autorisation du CLI, et sans garde d’Autowin',
-      reparation: 'Rétablir `src/main/hooks/default-gate-hooks.ts` et `src/main/gates` avant tout run.'
+      reparation:
+        'Rétablir `src/main/hooks/default-gate-hooks.ts` et `src/main/gates` avant tout run.'
     }
   }
   return {
@@ -765,7 +769,10 @@ function sondeCout({ data, maintenant }) {
 function sondeQuota({ appData, maintenant }) {
   const chemin = appData ? join(appData, 'Claude', 'plan-usage-history.json') : ''
   if (!chemin || !existsSync(chemin)) {
-    return { statut: 'inconnu', titre: 'Quota du forfait illisible : aucun relevé local sur ce poste' }
+    return {
+      statut: 'inconnu',
+      titre: 'Quota du forfait illisible : aucun relevé local sur ce poste'
+    }
   }
   const dernier = lireJson(chemin).samples?.at(-1)
   const semaine = dernier?.u?.sd
@@ -775,7 +782,8 @@ function sondeQuota({ appData, maintenant }) {
     return { statut: 'inconnu', titre: `Relevé de quota vieux de ${age.toFixed(0)} jours` }
   }
   // La fenêtre de 5 h est finie depuis longtemps sur un relevé plus vieux qu'elle.
-  const cinqHeures = age * 24 < 5 && typeof dernier.u.fh === 'number' ? `, ${dernier.u.fh} % sur 5 heures` : ''
+  const cinqHeures =
+    age * 24 < 5 && typeof dernier.u.fh === 'number' ? `, ${dernier.u.fh} % sur 5 heures` : ''
   const frais = age <= SEUILS.quotaReleveFraisJours
   const haut = frais && semaine >= SEUILS.quotaAttention
   return {

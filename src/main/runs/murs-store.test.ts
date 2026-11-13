@@ -2,7 +2,13 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { CAP_MURS_PAR_CONVERSATION, chargerMurs, enregistrerMur, mursStorePath, oublierMurs } from './murs-store'
+import {
+  CAP_MURS_PAR_CONVERSATION,
+  chargerMurs,
+  enregistrerMur,
+  mursStorePath,
+  oublierMurs
+} from './murs-store'
 import { relireFichier } from '../gel/ecriture-hors-fil'
 
 let base = ''
@@ -31,7 +37,8 @@ describe('registre des murs — un mur du tour 1 doit être connu au tour 5', ()
   })
 
   it('le registre est BORNÉ : au-delà du cap, les murs les plus anciens tombent', () => {
-    for (let i = 0; i < CAP_MURS_PAR_CONVERSATION + 5; i++) enregistrerMur('conv-A', `mur-${i}`, base)
+    for (let i = 0; i < CAP_MURS_PAR_CONVERSATION + 5; i++)
+      enregistrerMur('conv-A', `mur-${i}`, base)
     const murs = chargerMurs('conv-A', base)
     expect(murs.length).toBe(CAP_MURS_PAR_CONVERSATION)
     // Les plus RÉCENTS survivent : un mur qu'on vient de rencontrer compte plus qu'un mur ancien.
