@@ -12,6 +12,13 @@ La reference est `package-lock.json` : chaque paquet NON optionnel qu'il liste d
 `package.json` sur disque, et chaque executable declare par un paquet de premier niveau son
 raccourci `.bin/<nom>.cmd`. Existence seulement, pas de comparaison de versions : un faux positif
 coute une reinstallation (~1 min) a CHAQUE lancement.
+
+UNE exception : la version d'Electron (`MOTEUR`). Monter son correctif (44.5.1 -> 44.11.3, les
+correctifs de securite de Chromium) n'ajoute ni ne retire aucun paquet : sans cette comparaison, le
+lock change et l'app de ce poste continue de tourner sur l'ancien moteur, puisqu'une
+reinstallation app ouverte est refusee (scripts/garde-npm-modules.mjs). Le faux positif reste
+borne : `npm install --no-save` pose exactement la version du lock, l'ecart se referme au premier
+lancement.
 """
 
 from __future__ import annotations
@@ -22,11 +29,25 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+MOTEUR = "node_modules/electron"
+
+
+def _ecart_du_moteur(racine: Path, attendue: object) -> str | None:
+    """`node_modules/electron@<lock> (installe : <disque>)` si les deux versions se lisent et different."""
+    try:
+        installee = json.loads((racine / MOTEUR / "package.json").read_text(encoding="utf-8")).get("version")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not isinstance(attendue, str) or not isinstance(installee, str) or installee == attendue:
+        return None
+    return f"{MOTEUR}@{attendue} (installe : {installee})"
+
 
 def dependances_manquantes(racine: Path, limite: int = 10) -> list[str]:
     """Jusqu'a `limite` elements manquants de `node_modules`, selon `package-lock.json`.
 
-    Lock illisible -> [] : on ne repare pas sur une reference qu'on ne sait pas lire.
+    Lock illisible -> [] : on ne repare pas sur une reference qu'on ne sait pas lire. De meme pour
+    la version d'Electron : illisible d'un cote ou de l'autre, elle n'est pas comparee.
     """
     try:
         paquets = json.loads((racine / "package-lock.json").read_text(encoding="utf-8")).get("packages", {})
@@ -40,7 +61,12 @@ def dependances_manquantes(racine: Path, limite: int = 10) -> list[str]:
             continue
         if not (racine / chemin / "package.json").is_file():
             manquants.append(chemin)
-        elif chemin.count("node_modules/") == 1:
+            if len(manquants) >= limite:
+                break
+            continue
+        if chemin == MOTEUR and (ecart := _ecart_du_moteur(racine, info.get("version"))):
+            manquants.append(ecart)
+        if chemin.count("node_modules/") == 1:
             binaires = info.get("bin")
             noms = binaires.keys() if isinstance(binaires, dict) else []
             for nom in noms:

@@ -25,8 +25,15 @@
  *                  n'a aucun défaut à corriger. La fiche coupe la raison avant la vraie cause : on
  *                  relit l'erreur entière dans le journal de tour (turn-journals/<conv>/*.jsonl,
  *                  événement « outcome ») et on la juge avec `interruptionSansDefaut()` de
- *                  src/shared/arret-par-stop.ts, chargée telle quelle (voir chargerLeClasseur).
+ *                  src/shared/arret-par-stop.ts, chargée telle quelle (voir chargerLesOutils).
  * Les gels de l'app (gels.jsonl, ≥ 2 s) n'ont pas de fil : ils sont comptés à part.
+ *
+ * Gestes répétés, eux aussi à part : le MÊME texte court tapé au moins 5 fois sur les 7 jours qui
+ * finissent la période (« /git », « reprend »). Les signaux ci-dessus se lisent fil par fil et ne
+ * voient pas un geste refait dans dix fils ; c'est pourtant ce geste-là qu'un outil peut supprimer.
+ * Les envois du mode auto n'en sont pas : l'agent les écrit lui-même, l'utilisateur n'a rien tapé.
+ * Ni recadrage ni geste ne s'affiche sans passer par `redigerTexte` (src/shared/trace-redact.ts) :
+ * une clé collée dans le chat ressortirait sinon en clair dans la maintenance et le kaizen.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -74,6 +81,39 @@ export function jourParis(instant) {
 
 export function hier(maintenant = Date.now()) {
   return jourParis(maintenant - 24 * 3600 * 1000)
+}
+
+/** Le jour civil `n` jours avant ou après `jour` (AAAA-MM-JJ), sans dépendre du fuseau. */
+function decalerLeJour(jour, n) {
+  return new Date(Date.parse(`${jour}T12:00:00Z`) + n * 24 * 3600 * 1000).toISOString().slice(0, 10)
+}
+
+/**
+ * Seuils du signal « geste répété ». Au-delà de 120 signes, un texte identique est un modèle envoyé
+ * par un bouton ou un plan, pas un geste tapé : il n'y a rien à automatiser de plus.
+ */
+export const GESTE = { fois: 5, jours: 7, longueurMax: 120 }
+
+/**
+ * Forme comparable d'une saisie : « /git », « /Git. » et « /git » sont le même geste, comme
+ * « /check conv-1790 » et « /check conv-1812 » (le numéro du fil change, pas le geste).
+ * `undefined` pour un texte trop long pour être un geste.
+ */
+export function formeDuGeste(texte) {
+  const t = String(texte ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!t || t.length > GESTE.longueurMax) return undefined
+  const forme = t
+    .toLowerCase()
+    .replace(/\bconv-\d+\b/g, 'conv-#')
+    .replace(/[\s.!?…]+$/, '')
+  return forme || undefined
+}
+
+/** Un envoi du mode auto : marqué à l'envoi (`origine`), ou signé dans son texte avant ce marquage. */
+function envoiAutomatique(saisie, estEnvoiAuto) {
+  return saisie.origine === 'mode-auto' || Boolean(estEnvoiAuto?.(saisie.texte))
 }
 
 /**
@@ -124,7 +164,7 @@ function mediane(valeurs) {
 /** Seule la raison d'un « Fan-out … aucun modèle » est coupée avant la vraie cause. */
 const REFUS_SANS_SORTIE = /aucun modèle n['’]a produit de sortie/
 
-function motifDInterruption(refus, conversationId, { lireErreur, classer } = {}) {
+function motifDInterruption(refus, conversationId, { lireErreur, classer }) {
   if (!lireErreur || !classer || !REFUS_SANS_SORTIE.test(refus.cause)) return undefined
   const debut = espaces(refus.cause.replace(/^échec : /, ''))
   const erreur = lireErreur({ conversationId, instant: refus.instant, debut })
@@ -138,12 +178,17 @@ function motifDInterruption(refus, conversationId, { lireErreur, classer } = {})
  * @param {{saisies:any[], demandes:any[], verdicts:any[], couts:any[], gels:any[]}} traces
  * @param {(fiche:string) => string | undefined} [lireFiche]
  * @param {{lireErreur?:(refus:{conversationId:string, instant:number}) => string | undefined,
- *          classer?:(erreur:string) => string | undefined}} [interruptions]
+ *          classer?:(erreur:string) => string | undefined,
+ *          estEnvoiAuto?:(texte:string) => boolean,
+ *          rediger?:(texte:string) => string}} [outils]
  *   `lireErreur` rend l'erreur COMPLÈTE d'un refus (la fiche la coupe) ; `classer` dit si c'est une
  *   interruption sans défaut (`interruptionSansDefaut`). Sans eux, aucun refus n'est reclassé.
+ *   `estEnvoiAuto` reconnaît un envoi du mode auto antérieur au champ `origine` ; `rediger` masque
+ *   les secrets d'un texte tapé avant qu'il ne sorte du relevé (identité par défaut, pour les tests).
  */
-export function releverLaPeriode(periode, traces, lireFiche = () => undefined, interruptions = {}) {
+export function releverLaPeriode(periode, traces, lireFiche = () => undefined, outils = {}) {
   const { du, au } = periode
+  const { estEnvoiAuto, rediger = (t) => t } = outils
   const dans = (instant) => {
     const j = jourParis(instant)
     return Boolean(j) && j >= du && j <= au
@@ -169,7 +214,26 @@ export function releverLaPeriode(periode, traces, lireFiche = () => undefined, i
     if (!dans(s.ts) || !s.conversationId || s.conversationId === 'nouvelle-conversation') continue
     const f = fil(s.conversationId)
     f.saisies++
-    if (estRecadrage(s.texte)) f.recadrage.push(String(s.texte).replace(/\s+/g, ' ').slice(0, 140))
+    // Le texte d'un envoi du mode auto cite la demande et ses consignes (« pourquoi », « j'ai
+    // demandé ») : le prendre pour un recadrage comptait l'agent comme l'utilisateur qui le corrige.
+    if (!envoiAutomatique(s, estEnvoiAuto) && estRecadrage(s.texte))
+      f.recadrage.push(rediger(String(s.texte).replace(/\s+/g, ' ').slice(0, 140)))
+  }
+
+  // Les 7 jours qui finissent la période, ou toute la période si elle est plus longue : un relevé
+  // d'une seule journée ne verrait jamais un geste refait 5 fois dans la semaine.
+  const gestesDu = [du, decalerLeJour(au, 1 - GESTE.jours)].sort()[0]
+  const gestes = new Map()
+  for (const s of traces.saisies) {
+    if (typeof s.texte !== 'string' || envoiAutomatique(s, estEnvoiAuto)) continue
+    const jour = jourParis(s.ts)
+    const forme = formeDuGeste(s.texte)
+    if (!jour || jour < gestesDu || jour > au || !forme) continue
+    const g = gestes.get(forme) ?? { geste: rediger(forme), fois: 0, fils: new Set() }
+    g.fois++
+    if (s.conversationId && s.conversationId !== 'nouvelle-conversation')
+      g.fils.add(s.conversationId)
+    gestes.set(forme, g)
   }
 
   // Une demande a plusieurs lignes au fil de sa vie : seul son DERNIER état compte.
@@ -193,7 +257,7 @@ export function releverLaPeriode(periode, traces, lireFiche = () => undefined, i
     const lus = refusDeLaFiche(lireFiche(fiche)).filter((r) => r.jour >= du && r.jour <= au)
     analyses.set(
       fiche,
-      lus.map((r) => ({ ...r, motif: motifDInterruption(r, conversationId, interruptions) }))
+      lus.map((r) => ({ ...r, motif: motifDInterruption(r, conversationId, outils) }))
     )
   }
 
@@ -271,6 +335,13 @@ export function releverLaPeriode(periode, traces, lireFiche = () => undefined, i
       gels: gels.length,
       gelMaxMs: gels.reduce((m, g) => Math.max(m, g.blocageMs ?? 0), 0)
     },
+    gestesDu,
+    // Classés par nombre de frappes : un geste refait cinq fois dans un même fil coûte autant de
+    // gestes à l'utilisateur que cinq fois dans cinq fils.
+    gestes: [...gestes.values()]
+      .filter((g) => g.fois >= GESTE.fois)
+      .map((g) => ({ geste: g.geste, fois: g.fois, fils: [...g.fils] }))
+      .sort((a, b) => b.fois - a.fois || b.fils.length - a.fils.length),
     // Une cause vue dans plusieurs fils passe devant une cause répétée dans un seul.
     causes: [...causes.values()]
       .map((c) => ({ cause: c.cause, fois: c.fois, fils: [...c.fils] }))
@@ -283,8 +354,8 @@ export function releverLaPeriode(periode, traces, lireFiche = () => undefined, i
   }
 }
 
-export function releverLaJournee(jour, traces, lireFiche) {
-  return releverLaPeriode({ du: jour, au: jour }, traces, lireFiche)
+export function releverLaJournee(jour, traces, lireFiche, outils) {
+  return releverLaPeriode({ du: jour, au: jour }, traces, lireFiche, outils)
 }
 
 export function lireTraces(dossier) {
@@ -341,18 +412,29 @@ export function lecteurDErreurs(dossier) {
 }
 
 /**
- * `interruptionSansDefaut` vit en TypeScript (src/shared/arret-par-stop.ts) et `node` seul ne lit
- * ni ce format ni ses imports sans extension. Plutôt que de recopier ses motifs (la copie
- * dériverait), on COMPILE le vrai fichier avec esbuild, déjà dans le dépôt, et on l'importe.
- * Rend `undefined` si la compilation échoue : le relevé marche, sans reclasser.
+ * Trois fonctions de l'app, en TypeScript dans src/shared, que `node` seul ne lit pas (ni ce format
+ * ni ses imports sans extension) : `interruptionSansDefaut` (arret-par-stop.ts),
+ * `estUnEnvoiDuModeAuto` (envoi-du-mode-auto.ts) et `redigerTexte` (trace-redact.ts). Plutôt que de
+ * recopier leurs motifs (la copie dériverait), on COMPILE les vrais fichiers avec esbuild, déjà dans
+ * le dépôt, et on les importe. Rend `{}` si la compilation échoue : le relevé marche, sans reclasser
+ * ni reconnaître les anciens envois du mode auto, et `principal` masque alors les textes tapés.
  */
-export async function chargerLeClasseur(
+export async function chargerLesOutils(
   racine = join(dirname(fileURLToPath(import.meta.url)), '..')
 ) {
   try {
     const { build } = await import('esbuild')
+    const partage = (fichier) => JSON.stringify(`./src/shared/${fichier}`)
     const { outputFiles } = await build({
-      entryPoints: [join(racine, 'src', 'shared', 'arret-par-stop.ts')],
+      stdin: {
+        contents: [
+          `export { interruptionSansDefaut } from ${partage('arret-par-stop.ts')}`,
+          `export { estUnEnvoiDuModeAuto } from ${partage('envoi-du-mode-auto.ts')}`,
+          `export { redigerTexte } from ${partage('trace-redact.ts')}`
+        ].join('\n'),
+        resolveDir: racine,
+        loader: 'js'
+      },
       bundle: true,
       write: false,
       format: 'esm',
@@ -361,10 +443,14 @@ export async function chargerLeClasseur(
     })
     const code = Buffer.from(outputFiles[0].text).toString('base64')
     const module = await import(`data:text/javascript;base64,${code}`)
-    return module.interruptionSansDefaut
+    return {
+      classer: module.interruptionSansDefaut,
+      estEnvoiAuto: module.estUnEnvoiDuModeAuto,
+      rediger: module.redigerTexte
+    }
   } catch (e) {
-    console.error(`Interruptions non reclassées (arret-par-stop.ts non chargé) : ${e.message}`)
-    return undefined
+    console.error(`Outils de src/shared non chargés (interruptions non reclassées) : ${e.message}`)
+    return {}
   }
 }
 
@@ -387,6 +473,16 @@ function lisible(r, top) {
     l.push('Interruptions (limite d’usage, arrêt voulu : rien à corriger, hors des causes) :')
     for (const c of r.interruptions)
       l.push(`  ${c.fois}× dans ${c.fils.length} fil(s) — ${c.motif}  (${c.fils.join(', ')})`)
+    l.push('')
+  }
+  if (r.gestes.length) {
+    l.push(
+      `Gestes répétés (≥ ${GESTE.fois} fois du ${r.gestesDu} au ${r.au}, envois du mode auto exclus) :`
+    )
+    for (const g of r.gestes.slice(0, top))
+      l.push(
+        `  ${g.fois}× dans ${g.fils.length} fil(s) — « ${g.geste} »  (${g.fils.slice(0, 4).join(', ')})`
+      )
     l.push('')
   }
   for (const f of r.fils.slice(0, top)) {
@@ -426,10 +522,13 @@ async function principal(argv) {
     return 2
   }
   const top = Number(arg('--top') ?? 10)
-  const classer = await chargerLeClasseur()
+  const { classer, estEnvoiAuto, rediger } = await chargerLesOutils()
   const r = releverLaPeriode({ du, au }, lireTraces(dossier), lecteurDeFiches(dossier), {
     lireErreur: lecteurDErreurs(dossier),
-    classer
+    classer,
+    estEnvoiAuto,
+    // Sans la rédaction de l'app, aucun texte tapé ne sort : mieux vaut un relevé muet qu'une clé.
+    rediger: rediger ?? (() => '[texte masqué : redigerTexte non chargé]')
   })
   console.log(
     argv.includes('--json')

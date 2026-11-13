@@ -63,6 +63,22 @@ with tempfile.TemporaryDirectory() as tmp:
         "panne du 2026-10-05 : @babel/core absent -> detecte",
     )
 
+    # Montee de correctif d'Electron : aucun paquet ne manque, seule la version du moteur a change.
+    paquet(r, "node_modules/@babel/core")
+    lock_moteur = {"packages": {"node_modules/electron": {"version": "44.11.3"}, "node_modules/autre": {"version": "2.0.0"}}}
+    (r / "package-lock.json").write_text(json.dumps(lock_moteur), encoding="utf-8")
+    for chemin, version in (("node_modules/electron", "44.5.1"), ("node_modules/autre", "1.0.0")):
+        paquet(r, chemin)
+        (r / chemin / "package.json").write_text(json.dumps({"version": version}), encoding="utf-8")
+    verifie(
+        dependances_manquantes(r) == ["node_modules/electron@44.11.3 (installe : 44.5.1)"],
+        "electron 44.5.1 installe, 44.11.3 au lock -> reinstallation ; un autre paquet en retard, non",
+    )
+    (r / "node_modules" / "electron" / "package.json").write_text('{"version": "44.11.3"}', encoding="utf-8")
+    verifie(dependances_manquantes(r) == [], "electron a la version du lock : rien a reparer")
+    (r / "node_modules" / "electron" / "package.json").write_text("{illisible", encoding="utf-8")
+    verifie(dependances_manquantes(r) == [], "version installee illisible : on ne repare pas a l'aveugle")
+
     (r / "package-lock.json").write_text("{pas du json", encoding="utf-8")
     verifie(dependances_manquantes(r) == [], "lock illisible : on ne repare pas sur une reference inconnue")
 

@@ -3,8 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import {
-  chargerLeClasseur,
+  chargerLesOutils,
   estRecadrage,
+  formeDuGeste,
   lecteurDErreurs,
   jourParis,
   normaliserCause,
@@ -243,7 +244,7 @@ describe('relevé des ratés de la veille', () => {
     })
 
     it('reconnaît avec la vraie interruptionSansDefaut, sans recopier ses motifs', async () => {
-      const vraie = await chargerLeClasseur()
+      const { classer: vraie } = await chargerLesOutils()
       expect(vraie).toBeTypeOf('function')
       expect(vraie(ERREUR_LIMITE)).toBe('limite-d-usage')
       expect(vraie(ERREUR_PANNE)).toBeUndefined()
@@ -255,6 +256,95 @@ describe('relevé des ratés de la veille', () => {
       )
       expect(r.interruptions.map((i) => i.motif)).toEqual(['limite-d-usage'])
       expect(r.causes).toHaveLength(1)
+    })
+  })
+  describe('gestes répétés : le même texte court tapé dans plusieurs fils', () => {
+    const saisie = (iso, conversationId, texte, extra = {}) => ({
+      schema: 'autowin.saisie/v1',
+      ts: T(iso),
+      conversationId,
+      texte,
+      voie: 'message',
+      ...extra
+    })
+    const traces = (saisies) => ({ saisies, demandes: [], verdicts: [], couts: [], gels: [] })
+    const AUTO =
+      "Pourquoi tu t'arrêtes ? (Mode auto — dernière demande de l'utilisateur : « ajoute le tri ».)"
+
+    it('ramène les variantes d’un même geste à une seule forme', () => {
+      expect(formeDuGeste(' /Git. ')).toBe('/git')
+      expect(formeDuGeste('/check conv-1790')).toBe(formeDuGeste('/check conv-1812'))
+      expect(formeDuGeste('x'.repeat(121))).toBeUndefined()
+      expect(formeDuGeste('...')).toBeUndefined()
+    })
+
+    it('compte un geste vu 5 fois sur les 7 derniers jours, sans les envois du mode auto', () => {
+      const r = releverLaJournee(
+        '2026-11-12',
+        traces([
+          // 5 « /git » dans la semaine, dont un le premier jour de la fenêtre.
+          saisie('2026-11-06T09:00:00Z', 'conv-1', '/git'),
+          saisie('2026-11-08T09:00:00Z', 'conv-2', '/Git'),
+          saisie('2026-11-10T09:00:00Z', 'conv-2', '/git.'),
+          saisie('2026-11-11T09:00:00Z', 'conv-3', '/git'),
+          saisie('2026-11-12T09:00:00Z', 'nouvelle-conversation', '/git'),
+          // Hors fenêtre (8 jours avant) : ne compte pas.
+          saisie('2026-11-05T09:00:00Z', 'conv-4', 'reprend'),
+          ...['conv-1', 'conv-2', 'conv-3', 'conv-5'].map((c) =>
+            saisie('2026-11-09T09:00:00Z', c, 'reprend')
+          ),
+          // Un cinquième « reprend », mais envoyé par le mode auto : ce n'est pas un geste tapé.
+          saisie('2026-11-09T10:00:00Z', 'conv-6', 'reprend', { origine: 'mode-auto' }),
+          ...[1, 2, 3, 4, 5].map((i) => saisie(`2026-11-1${i % 3}T08:00:00Z`, 'conv-7', AUTO))
+        ]),
+        undefined,
+        { estEnvoiAuto: (t) => t.includes('(Mode auto — ') }
+      )
+      expect(r.gestesDu).toBe('2026-11-06')
+      expect(r.gestes).toEqual([{ geste: '/git', fois: 5, fils: ['conv-1', 'conv-2', 'conv-3'] }])
+    })
+
+    it('élargit la fenêtre à toute la période quand elle dépasse 7 jours', () => {
+      const r = releverLaPeriode(
+        { du: '2026-11-01', au: '2026-11-12' },
+        traces([1, 2, 3, 4, 5].map((j) => saisie(`2026-11-0${j}T09:00:00Z`, 'conv-1', 'vazy')))
+      )
+      expect(r.gestesDu).toBe('2026-11-01')
+      expect(r.gestes.map((g) => [g.geste, g.fois])).toEqual([['vazy', 5]])
+    })
+
+    it('ne prend pas l’envoi du mode auto pour un recadrage de l’utilisateur', () => {
+      const r = releverLaJournee(
+        '2026-11-10',
+        traces([
+          saisie('2026-11-10T08:00:00Z', 'conv-1', AUTO),
+          saisie('2026-11-10T09:00:00Z', 'conv-1', 'pourquoi', { origine: 'mode-auto' }),
+          saisie('2026-11-10T10:00:00Z', 'conv-2', 'pourquoi ça marche pas')
+        ]),
+        undefined,
+        { estEnvoiAuto: (t) => t.includes('(Mode auto — ') }
+      )
+      expect(r.fils.map((f) => [f.conversationId, f.recadrage.length])).toEqual([['conv-2', 1]])
+    })
+
+    it('masque une clé collée, avec la vraie rédaction et la vraie signature du mode auto', async () => {
+      const { rediger, estEnvoiAuto } = await chargerLesOutils()
+      expect(rediger).toBeTypeOf('function')
+      expect(estEnvoiAuto(AUTO)).toBe(true)
+      const cle = 'sk-or-v1-FAUXFAUXFAUXFAUXFAUXFAUXFAUXFAUX'
+      const r = releverLaJournee(
+        '2026-11-10',
+        traces([
+          ...[1, 2, 3, 4, 5].map((h) => saisie(`2026-11-10T0${h}:00:00Z`, 'conv-1', cle)),
+          saisie('2026-11-10T08:00:00Z', 'conv-1', `ça marche pas avec ${cle}`)
+        ]),
+        undefined,
+        { estEnvoiAuto, rediger }
+      )
+      const sortie = JSON.stringify(r)
+      expect(sortie).not.toContain('FAUXFAUX')
+      expect(r.gestes).toEqual([{ geste: '[REDACTED]', fois: 5, fils: ['conv-1'] }])
+      expect(r.fils[0].recadrage[0]).toContain('[REDACTED]')
     })
   })
 })
