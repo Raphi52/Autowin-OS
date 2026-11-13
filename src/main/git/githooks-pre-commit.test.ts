@@ -183,6 +183,46 @@ describe('.githooks/pre-commit : interface qui ne suivrait pas les thèmes', () 
 })
 
 /**
+ * Appel bloquant AU COMMIT (`scripts/appels-bloquants.mjs`) : un `execFileSync` de plus dans
+ * `src/main` fige la fenêtre, comme le `git log` du Board le 2026-11-13 (120 s d'un bloc).
+ */
+describe('.githooks/pre-commit : appel bloquant dans le processus principal', () => {
+  const NOUVEAU = 'src/main/lecture-neuve-du-test.ts'
+  const BLOQUANT =
+    "import { execFileSync } from 'node:child_process'\nexport const sha = (): string => execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' })\n"
+
+  it('REFUSE un fichier nouveau qui lance git en execFileSync', () => {
+    const { git, ecrire } = depot()
+    ecrire(NOUVEAU, BLOQUANT)
+    git('add', NOUVEAU)
+    const r = git('commit', '-m', 'lecture neuve')
+    expect(r.status).not.toBe(0)
+    expect(String(r.stderr)).toContain(`${NOUVEAU} : 1 appel(s) bloquant(s), 0 au plus`)
+    expect(String(git('rev-list', '--count', 'HEAD').stdout).trim()).toBe('1')
+  })
+
+  it('laisse passer le même fichier quand il ne fait que nommer la fonction (commentaire, test)', () => {
+    const { git, ecrire } = depot()
+    ecrire(
+      NOUVEAU,
+      '// un execFileSync ici figeait la fenêtre : lecture disque à la place\nexport const x = 1\n'
+    )
+    ecrire('src/main/lecture-neuve-du-test.test.ts', BLOQUANT)
+    git('add', '-A')
+    const r = git('commit', '-q', '-m', 'lecture neuve')
+    expect(r.status, String(r.stderr)).toBe(0)
+  })
+
+  it("ne s'applique pas dans une copie de travail d'agent", () => {
+    const { git, ecrire } = depot('agent__run-x-1')
+    ecrire(NOUVEAU, BLOQUANT)
+    git('add', NOUVEAU)
+    const r = git('commit', '-q', '-m', 'agent')
+    expect(r.status, String(r.stderr)).toBe(0)
+  })
+})
+
+/**
  * Nom ou terme d'entreprise AU COMMIT. Le pré-envoi ne le voit qu'au moment de publier, quand il est déjà
  * dans l'historique ; le crochet doit donc le refuser dans le commit lui-même, dans le dossier principal ET
  * dans une copie de travail, dont les commits partent ensuite vers GitHub. Le profil est FICTIF (`acme`) et

@@ -1,0 +1,17 @@
+{
+  "src/main/app/env-reload.ts": 2,
+  "src/main/brain/brain-source-sha.ts": 1,
+  "src/main/fichiers/reservation-fichiers-app.ts": 2,
+  "src/main/index.ts": 1,
+  "src/main/ipc/chat.ts": 2,
+  "src/main/orchestration/fixture-orchestration.ts": 3,
+  "src/main/prod/sqlcmd-runner.ts": 1,
+  "src/main/providers/outils-agent-direct.ts": 1,
+  "src/main/providers/workspace-mutation-evidence.ts": 1,
+  "src/main/scout/scout-plafond.ts": 1,
+  "src/main/store/worktree-manager-compensation.ts": 9,
+  "src/main/store/worktree-manager-empreintes.ts": 3,
+  "src/main/store/worktree-manager-outils.ts": 2,
+  "src/main/store/worktree-repository.ts": 1,
+  "src/main/verify/verify-extinction.ts": 2
+}

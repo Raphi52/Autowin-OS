@@ -57,6 +57,9 @@
   littéral de `theme.css` n'ait pas de valeur claire. Plafonds par fichier :
   `scripts/couleurs-en-dur.plancher.json` ; `--baisser` enregistre une baisse, sans jamais monter.
   Le commit d'une copie de travail d'agent n'y passe pas : seule la suite l'y tient.
+- `scripts/appels-bloquants.mjs` : même cliquet pour `execFileSync`, `execSync` et `spawnSync` dans
+  `src/main` hors tests (ils figent la fenêtre) — plafonds : `scripts/appels-bloquants.plancher.json`.
+  À la place : `execFileHorsFil` (`src/main/gel/execution-hors-fil.ts`) avec un délai maximal.
 
 ## Règles du dépôt — refusées par le hook des agents (`src/shared/garde-git-destructeur.ts`)
 - Arrêt d'Electron/node PAR NOM, `git stash`, `reset --hard`, `checkout`/`restore` de tout l'arbre,

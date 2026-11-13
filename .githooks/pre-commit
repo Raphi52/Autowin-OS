@@ -43,5 +43,13 @@ fi
 # Second garde-fou, né d'un constat du 2026-10-31 : une interface nouvelle suit les thèmes. Pas d'intégration
 # continue ici et un agent ne joue que les tests de ses fichiers : sans le commit, rien ne le verrait.
 couleurs="$(dirname "$0")/../scripts/couleurs-en-dur.mjs"
-[ -f "$couleurs" ] || exit 0
-exec node "$couleurs" --commit
+if [ -f "$couleurs" ]; then
+  node "$couleurs" --commit || exit 1
+fi
+# Troisième, né des gels du 2026-11-13 : aucun appel bloquant de plus (execFileSync…) dans src/main.
+# Code 1 = refus ; 2 = le contrôle n'a pas pu tourner et l'a dit lui-même : le commit passe.
+bloquants="$(dirname "$0")/../scripts/appels-bloquants.mjs"
+[ -f "$bloquants" ] || exit 0
+node "$bloquants" --commit
+[ "$?" = 1 ] && exit 1
+exit 0

@@ -33,6 +33,7 @@ import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { depassements, plancherBaisse, plusHaut, total } from './cliquet-par-fichier.mjs'
 
 const ICI = dirname(fileURLToPath(import.meta.url))
 const RACINE_DEPOT = resolve(ICI, '..')
@@ -116,38 +117,8 @@ export function lirePlancher() {
   return JSON.parse(readFileSync(FICHIER_PLANCHER, 'utf8'))
 }
 
-/** Fichiers au-dessus de leur plafond ; un fichier absent du plancher a pour plafond zéro. */
-export function depassements(mesure, plancher) {
-  return Object.entries(mesure)
-    .map(([chemin, compte]) => ({ chemin, compte, plafond: plancher[chemin] ?? 0 }))
-    .filter(({ compte, plafond }) => compte > plafond)
-}
-
-/**
- * Pour chaque fichier, le plus haut de deux mesures.
- *
- * Un plafond ne descend jamais sous ce que la version COMMITÉE porte encore. L'arbre est partagé : le
- * nettoyage non commité d'un autre fil y fait baisser le compte, et une copie propre tirée de cette
- * version partirait rouge sur un fichier qu'elle n'a pas touché. Vécu à la première mesure
- * (conv-1386) : `SuperConvMosaique.css`, 9 couleurs commitées pour un plafond de 3.
- */
-export function plusHaut(a, b) {
-  const haut = { ...a }
-  for (const [chemin, compte] of Object.entries(b))
-    haut[chemin] = Math.max(haut[chemin] ?? 0, compte)
-  return haut
-}
-
-/** Le plancher après baisse : aucun plafond ne monte, les fichiers disparus s'en vont. */
-export function plancherBaisse(mesure, plancher, existe) {
-  const suivant = {}
-  for (const [chemin, plafond] of Object.entries(plancher)) {
-    if (!existe(chemin)) continue
-    const compte = Math.min(mesure[chemin] ?? 0, plafond)
-    if (compte > 0) suivant[chemin] = compte
-  }
-  return suivant
-}
+// Le cliquet lui-même est partagé avec `appels-bloquants.mjs` ; son test passe encore par ici.
+export { depassements, plancherBaisse, plusHaut }
 
 /**
  * Jetons sans valeur claire ASSUMÉS : `--on-accent` est le blanc posé sur un aplat vif, et les trois
@@ -239,7 +210,6 @@ if (lanceDirectement) {
     const mesure = plusHaut(mesurer(), commite)
     const apres = plancherBaisse(mesure, avant, (chemin) => presents.has(chemin))
     writeFileSync(FICHIER_PLANCHER, `${JSON.stringify(apres, null, 2)}\n`)
-    const total = (p) => Object.values(p).reduce((somme, n) => somme + n, 0)
     process.stdout.write(`Plancher : ${total(avant)} → ${total(apres)} couleurs en dur.\n`)
   } else {
     const constat = process.argv.includes('--commit') ? constatDuCommit() : constatDeLArbre()

@@ -478,6 +478,12 @@ export const TEXTES_FR = {
   'menu.marquerPrive': 'Marquer privé au village',
   'menu.retirerPrive': 'Ne plus marquer privé',
   'menu.prive.titre': 'Les collègues voient toujours son tanuki, mais plus le titre de ce fil',
+  'menu.signaler': 'Signaler un problème sur ce fil',
+  'menu.signaler.titre':
+    'Ouvre un fil neuf prérempli avec /kaizen et le numéro de ce fil : écris ce qui n’a pas marché, puis envoie',
+  'selection.signaler': 'Signaler un problème ({n})',
+  'selection.signaler.titre':
+    'Ouvre un fil neuf prérempli avec /kaizen et les numéros des fils sélectionnés',
   'menu.selectionner': 'Sélectionner',
   'menu.supprimer': 'Supprimer',
   'branches.aria': 'Branches du depot',
@@ -1050,6 +1056,12 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'menu.marquerPrive': 'Mark private in the village',
   'menu.retirerPrive': 'Unmark private',
   'menu.prive.titre': 'Teammates still see its tanuki, but no longer the title of this thread',
+  'menu.signaler': 'Report a problem with this thread',
+  'menu.signaler.titre':
+    'Opens a new thread prefilled with /kaizen and this thread’s number: write what went wrong, then send',
+  'selection.signaler': 'Report a problem ({n})',
+  'selection.signaler.titre':
+    'Opens a new thread prefilled with /kaizen and the numbers of the selected threads',
   'menu.selectionner': 'Select',
   'menu.supprimer': 'Delete',
   'branches.aria': 'Repository branches',

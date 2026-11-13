@@ -206,6 +206,7 @@ import { useRepriseDesTours } from './chat-view-reprise'
 import { useToursEtEnvoi } from './chat-view-envoi'
 import { useListeDesConversations } from './chat-view-liste'
 import { ConvListeProgressive } from './ConvListeProgressive'
+import { demandeDeSignalement } from './signaler-fils'
 import { useRenduMosaique } from './chat-view-mosaique'
 import { useRepriseDeLecture } from './chat-view-defilement'
 import { useFluxDuPilote } from './chat-view-flux-pilote'
@@ -3247,9 +3248,10 @@ export function ChatView({
   /**
    * NOUVELLE conversation DANS la mosaique. Elle est creee tout de suite cote store (au lieu d'un
    * brouillon sans identite) : une fenetre a besoin d'un id des sa premiere frappe — c'est lui qui
-   * porte le brouillon, les pieces jointes, le tour et sa peinture.
+   * porte le brouillon, les pieces jointes, le tour et sa peinture. `brouillon` : texte posé dans
+   * la saisie de la fenêtre neuve (« Signaler un problème »).
    */
-  async function nouvelleFenetreMosaique(): Promise<void> {
+  async function nouvelleFenetreMosaique(brouillon?: string): Promise<void> {
     const identity = await refreshRuntimeIdentity()
     const creee = await window.api.conversationsCreate({
       // Reste en français : titre PROVISOIRE que le stockage reconnaît pour le remplacer par le
@@ -3282,6 +3284,44 @@ export function ChatView({
     )
     liveMessagesRef.current.set(creee.id, [])
     await ouvrirDansMosaique(creee.id)
+    if (brouillon) poserDansFenetreMosaique(creee.id, brouillon)
+  }
+
+  /**
+   * Pose un brouillon dans la saisie d'une fenêtre de la mosaïque, curseur en fin de texte. La
+   * fenêtre vient souvent d'être ajoutée : son composer peut n'être pas encore monté au premier
+   * repaint. On retente quelques images avant d'abandonner, plutôt qu'un délai deviné.
+   */
+  function poserDansFenetreMosaique(id: string, texte: string): void {
+    setDraftInput(id, texte)
+    let restantes = 5
+    const poser = (): void => {
+      const composer = composersMosaiqueRef.current.get(id)
+      if (composer) {
+        composer.setInput(texte)
+        composer.focusAt(-1)
+        return
+      }
+      if (--restantes > 0) requestAnimationFrame(poser)
+    }
+    requestAnimationFrame(poser)
+  }
+
+  /**
+   * « Signaler un problème » sur un fil ou une sélection : un fil NEUF prérempli de
+   * `/kaizen conv-N …` (`signaler-fils.ts`), jamais envoyé, car c'est à l'utilisateur de dire ce
+   * qui n'a pas marché. En mosaïque, le fil neuf est une fenêtre de plus, comme « Nouveau fil ».
+   */
+  function signalerFils(ids: readonly string[]): void {
+    if (ids.length === 0) return
+    const demande = demandeDeSignalement(ids)
+    if (convViewModeRef.current === 'mosaic') {
+      void nouvelleFenetreMosaique(demande)
+      return
+    }
+    newConv()
+    setDraftInput(NEW_DRAFT_KEY, demande)
+    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
   }
 
   /** Le MEME clic ouvre ou referme : en mosaique la liste est un jeu d'interrupteurs. */
@@ -3376,24 +3416,12 @@ export function ChatView({
           if (!convsRef.current.some((conversation) => conversation.id === id)) await refreshConvs()
           await ouvrirDansMosaique(id)
           if (!prompt) return
-          setDraftInput(id, prompt)
           if (detail.send) {
+            setDraftInput(id, prompt)
             void send(prompt, { targetConversationId: id })
             return
           }
-          // La fenetre vient d'etre ajoutee : son composer peut n'etre pas encore monte au premier
-          // repaint. On retente quelques images avant d'abandonner, plutot qu'un delai devine.
-          let restantes = 5
-          const poser = (): void => {
-            const composer = composersMosaiqueRef.current.get(id)
-            if (composer) {
-              composer.setInput(prompt)
-              composer.focus()
-              return
-            }
-            if (--restantes > 0) requestAnimationFrame(poser)
-          }
-          requestAnimationFrame(poser)
+          poserDansFenetreMosaique(id, prompt)
         })()
         return
       }
@@ -4130,6 +4158,20 @@ export function ChatView({
               </button>
               <button
                 type="button"
+                className="conv-date-sort"
+                data-testid="conv-bulk-signaler"
+                disabled={selectedConvIds.size === 0}
+                title={texteFil('selection.signaler.titre')}
+                onClick={() => {
+                  const ids = [...selectedConvIds]
+                  quitterModeSelection()
+                  signalerFils(ids)
+                }}
+              >
+                {texteFil('selection.signaler', { n: selectedConvIds.size })}
+              </button>
+              <button
+                type="button"
                 className="conv-date-sort conv-bulk-del"
                 disabled={selectedConvIds.size === 0}
                 onClick={() => setBulkDeleteAsking(true)}
@@ -4419,6 +4461,21 @@ export function ChatView({
                 {convMenu.conv.prive
                   ? texteFil('menu.retirerPrive')
                   : texteFil('menu.marquerPrive')}
+              </button>
+              <button
+                role="menuitem"
+                data-testid="conv-menu-signaler"
+                title={texteFil('menu.signaler.titre')}
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  signalerFils([conv.id])
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  ⚑
+                </span>
+                {texteFil('menu.signaler')}
               </button>
               {/*
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
