@@ -1,152 +1,71 @@
 /**
- * LE FOND DE L'ACCUEIL, CHOISI DANS SES RÉGLAGES.
+ * LE FOND DE L'ACCUEIL : LE QUARTIER, ET RIEN À CHOISIR.
  *
- * DEMANDE DE L'UTILISATEUR (2026-10-19) : « je veux dans les settings de l'accueil un menu
- * pour choisir un fond noir ou l'image cyberpunk ou les planetes ». Jusque-là, la direction du fond
- * n'avait AUCUN réglage : elle ne changeait qu'en éditant le stockage à la main, et `DecorDeFond` ne
- * la lisait qu'une fois par session.
+ * Le menu « Fond » des réglages de l'Accueil a été retiré le 2026-11-13 (« on doit avoir que le
+ * fond Le Quartier, donc pas de menu select ») : « Aucun » et « Nier Automata (radar) » ne sont plus
+ * des fonds, et un poste qui les avait choisis retombe sur le Quartier.
  *
- * CE MODULE EST LA SEULE SOURCE du choix, lue à la fois par le menu (`HomeView`) et par le fond
- * (`DecorDeFond`) : deux lectures recopiées finiraient par se contredire, comme la clé recopiée à la
- * main l'avait déjà fait (voir `CLE_FOND_ACCUEIL`). Il ne charge PAS three.js : le menu n'a pas besoin
- * du moteur 3D pour savoir quel fond est choisi.
+ * CE MODULE EST LA SEULE SOURCE du fond affiché, lue à la fois par l'Accueil (`HomeView`) et par
+ * le décor (`DecorDeFond`) : deux lectures recopiées finiraient par se contredire, comme la clé
+ * recopiée à la main l'avait déjà fait (voir `CLE_FOND_ACCUEIL`). Il ne charge PAS three.js.
+ *
+ * Seule exception au Quartier : une direction 3D du catalogue (`limbe`, `poussiere`…) enregistrée
+ * à la main sous `CLE_FOND_ACCUEIL`. Aucun écran ne la propose.
  */
 import { autowinStorageKey } from '../storage-keys'
-import { langueCourante } from '../langue'
-import { traduireAccueil } from '../textes-ecrans/accueil'
 import type { DecorVariant } from './home-decor-scene'
 
 /**
- * Le décor spatial de repli, celui d'avant les planètes : il prend la place d'une valeur enregistrée
- * qu'aucune direction ne reconnaît. Il n'est proposé dans aucun menu ; `home-decor-scene.ts` le ré-exporte.
+ * Le décor spatial de repli : il prend la place d'une direction enregistrée qu'aucune scène ne
+ * reconnaît. `home-decor-scene.ts` le ré-exporte.
  */
 export const DECOR_DEFAUT: DecorVariant = 'poussiere'
 
-/**
- * Un fond d'Accueil : une direction du décor 3D, le noir qui n'en monte aucune, ou le Quartier, une
- * scène peinte qui n'est pas de la 3D (`quartier-scene.ts`).
- */
-export type FondAccueil = DecorVariant | 'noir' | 'nier' | 'falaise'
+/** Un fond d'Accueil : le Quartier, scène peinte (`quartier-scene.ts`), ou une direction 3D. */
+export type FondAccueil = DecorVariant | 'falaise'
 
-/** Le noir : aucune scène 3D, l'hôte du décor peint un aplat noir (theme.css). */
-export const FOND_NOIR = 'noir' satisfies FondAccueil
-
-/**
- * Le Quartier : la Falaise peinte, où vivent les vrais agents, et dont les objets ouvrent
- * les vues. C'est le fond par défaut depuis le 2026-11-01 (« Branche la Falaise sur l'Accueil »).
- */
+/** Le Quartier : la Falaise peinte, où vivent les vrais agents, et dont les objets ouvrent les vues. */
 export const FOND_FALAISE = 'falaise' satisfies FondAccueil
 
-/**
- * Le radar du Pod du thème Nier Automata (2026-10-22) : aucune scène 3D, l'hôte du décor
- * peint le papier beige, le radar animé et la devise (theme-nier-automata.css). C'est le fond par
- * défaut sous ce thème tant que rien n'a été choisi dans le menu.
- */
-export const FOND_NIER = 'nier' satisfies FondAccueil
-
-/** Le fond affiché tant que personne n'en a choisi un autre. */
+/** Le fond affiché tant que rien d'autre n'a été enregistré à la main. */
 export const FOND_DEFAUT: FondAccueil = FOND_FALAISE
-
-/**
- * Les fonds qui ne montent aucune scène 3D : l'hôte du décor les peint en CSS.
- *
- * Garde de TYPE, pas un simple booléen (2026-10-22) : `DecorDeFond` sort tôt sur
- * `fondSansScene(variante)` puis passe la variante à `monterDecor(…: DecorVariant)`. Avec un `boolean`,
- * TypeScript ne retirait pas `'noir' | 'nier'` du type, et le typage web était rouge depuis 5a4086cb.
- */
-export function fondSansScene(fond: FondAccueil): fond is typeof FOND_NOIR | typeof FOND_NIER {
-  return fond === FOND_NOIR || fond === FOND_NIER
-}
 
 /**
  * LA MÊME CLÉ QUE LE DÉCOR L'A TOUJOURS LUE.
  *
  * Une clé de stockage se dérive, elle ne se recopie pas : une première version de `DecorDeFond`
  * avait écrit `'autowin:decor-variant'` à la main pendant que l'Accueil lisait une autre clé, et la
- * direction choisie était ignorée en silence.
- *
- * `v2` le 2026-08-25, pour que le nouveau défaut `actuel` atteigne les machines qui gardaient
- * `poussiere` ; `v3` le 2026-10-17, pour que l'avenue atteigne celles qui gardaient
- * `actuel`. Le choix du menu s'écrit sous la même clé : c'est celle que le décor lit.
- *
- * `v4` le 2026-11-01, pour que le Quartier atteigne les postes qui gardaient l'avenue.
- * Cette fois, un choix délibéré est repris tel quel : voir `reprendreFondPrecedent`.
+ * direction choisie était ignorée en silence. `v4` depuis le 2026-11-01, pour que le Quartier
+ * atteigne les postes qui gardaient l'avenue.
  */
 export const CLE_FOND_ACCUEIL = autowinStorageKey('home.decor.v4')
-
-/** La clé d'avant : relue une fois, pour ne pas écraser un fond sans décor choisi exprès. */
-export const CLE_FOND_V3 = autowinStorageKey('home.decor.v3')
-
-/**
- * « Aucun » et le radar sont des choix : personne ne les a par défaut, sauf le radar sous son thème, qui
- * n'est jamais enregistré. L'avenue et les planètes, eux, ont été des défauts successifs : rien ne
- * distingue un poste qui les a choisis d'un poste qui les a reçus. Ceux-là passent au Quartier, et le
- * menu les rend en un clic.
- */
-function reprendreFondPrecedent(): FondAccueil | null {
-  const ancien = window.localStorage.getItem(CLE_FOND_V3)
-  return ancien === FOND_NOIR || ancien === FOND_NIER ? ancien : null
-}
 
 /**
  * L'événement émis quand le fond CHANGE, dans la même fenêtre.
  *
  * Le navigateur n'émet `storage` que pour les AUTRES fenêtres : le décor, monté à côté de l'Accueil,
- * ne verrait jamais le choix du menu, et le fond ne changerait qu'au redémarrage.
+ * ne verrait jamais le changement, et le fond ne changerait qu'au redémarrage.
  */
 export const EVENEMENT_FOND_ACCUEIL = 'autowin:fond-accueil'
 
 /**
- * Les choix du menu, dans l'ordre affiché, avec les mots de la demande.
- *
- * Le fond sans scène s'affiche « Aucun » et non plus « Noir » (2026-10-22 : « desfois c
- * pas noir selon le theme ») : Holographique blanc le peint en blanc (#fdfdff, couche générée). Son
- * identifiant reste `noir` : c'est la valeur déjà enregistrée sur les postes qui l'ont choisi.
+ * Les fonds retirés : un poste qui les avait choisis retombe sur le Quartier, et leur scène ne
+ * monte jamais. `noir` (« Aucun ») et `nier` (le radar) étaient les derniers choix du menu.
  */
-export const FONDS_ACCUEIL: readonly { id: FondAccueil; nom: string }[] = [
-  // Les noms communs suivent la langue ; « Cyberpunk » et « Nier Automata » sont des
-  // noms propres, identiques dans les deux langues.
-  {
-    id: FOND_NOIR,
-    get nom() {
-      return traduireAccueil('fond.aucun', langueCourante())
-    }
-  },
-  {
-    id: FOND_FALAISE,
-    get nom() {
-      return traduireAccueil('fond.quartier', langueCourante())
-    }
-  },
-  { id: FOND_NIER, nom: 'Nier Automata (radar)' }
-]
+const FONDS_RETIRES: readonly string[] = ['avenue', 'actuel', 'noir', 'nier']
 
 /**
- * Les fonds retirés du menu : un poste qui les avait choisis retombe sur le Quartier, et leur scène
- * ne monte jamais.
- */
-const FONDS_RETIRES: readonly string[] = ['avenue', 'actuel']
-
-/**
- * Le fond choisi, ou le défaut si rien n'a jamais été enregistré.
- *
- * La valeur est rendue telle qu'enregistrée : une direction du catalogue absente du menu (`limbe`,
- * `orbites`…) reste affichée, et une valeur inconnue est ramenée au défaut par `createDecorScene`.
+ * Le fond affiché : le Quartier, sauf direction 3D enregistrée à la main. Une valeur inconnue est
+ * ramenée à `DECOR_DEFAUT` par `createDecorScene`.
  */
 export function lireFondAccueil(): FondAccueil {
   if (typeof window === 'undefined') return FOND_DEFAUT
   const enregistre = window.localStorage.getItem(CLE_FOND_ACCUEIL)
-  if (enregistre)
-    return FONDS_RETIRES.includes(enregistre) ? FOND_FALAISE : (enregistre as FondAccueil)
-  const repris = reprendreFondPrecedent()
-  if (repris) return repris
-  // Rien de choisi : le thème Nier Automata prend son radar, les autres le défaut.
-  return document.documentElement.getAttribute('data-theme') === 'nier-automata'
-    ? FOND_NIER
-    : FOND_DEFAUT
+  if (!enregistre || FONDS_RETIRES.includes(enregistre)) return FOND_DEFAUT
+  return enregistre as FondAccueil
 }
 
-/** Enregistre le fond choisi et prévient la fenêtre : le décor change sans redémarrer. */
+/** Enregistre une direction et prévient la fenêtre : le décor change sans redémarrer. */
 export function choisirFondAccueil(fond: FondAccueil): void {
   window.localStorage.setItem(CLE_FOND_ACCUEIL, fond)
   window.dispatchEvent(new Event(EVENEMENT_FOND_ACCUEIL))

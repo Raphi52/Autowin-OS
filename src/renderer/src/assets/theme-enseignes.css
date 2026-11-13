@@ -151,9 +151,6 @@
   background: linear-gradient(180deg, #c4e4f8 0, #dbeefd 38%, #e6f2fc 100%) fixed;
   color: var(--text);
 }
-:root[data-theme='enseignes'][data-base='clair'] .decor-de-fond[data-fond='noir'] {
-  background: #dbeefd;
-}
 :root[data-theme='enseignes'][data-base='clair'] ::selection {
   background: color-mix(in srgb, var(--sb-signe) 28%, transparent);
   color: #1b2a3c;

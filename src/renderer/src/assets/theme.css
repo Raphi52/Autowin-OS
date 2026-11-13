@@ -988,18 +988,3 @@ details:not(
   height: 100%;
 }
 
-/* FOND NOIR choisi dans les réglages de l'Accueil (« un fond noir ou l'image cyberpunk ou
-   les planetes ») : aucune scène 3D n'est montée, l'hôte peint l'aplat. Sans lui, le fond 2D du
-   `body` (la galaxie PNG du thème d'origine) reparaissait à la place du noir demandé. */
-.decor-de-fond[data-fond='noir'] {
-  background: #000;
-}
-
-/* Fond d'accueil « Nier Automata (radar) » (menu Fond de l'Accueil, defaut sous ce theme) : le radar
-   du Pod (balayage anime en SMIL) et la devise YoRHa, peints sur l'hote du decor, sans scene 3D. */
-.decor-de-fond[data-fond='nier'] {
-  background:
-    url('./nier-automata-devise.svg') left 240px bottom 18px / 420px auto no-repeat,
-    url('./nier-automata-radar.svg') right -12vmin center / 95vmin 95vmin no-repeat,
-    #dad4bb;
-}

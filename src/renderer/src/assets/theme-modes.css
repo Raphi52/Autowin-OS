@@ -912,29 +912,23 @@
    l'accueil pas le theme choisi »). Lave a 86-90 %, le decor n'etait plus le fond choisi dans le
    menu de l'Accueil (Cyberpunk, Planetes) mais des formes grises propres au theme clair. Le decor
    s'affiche donc tel quel sous tous les themes, et c'est ce qui est POSE dessus qui s'eclaircit :
-   les etiquettes des tuiles, juste en dessous. Le fond « Aucun » garde l'aplat du theme.
+   les etiquettes des tuiles, juste en dessous.
    ============================================================================ */
 /* Etiquettes des tuiles (titre, filet, compteur, « Actualiser ») : posees a meme le decor, hors des
-   panneaux. Encre claire tant qu'une scene est affichee ; sur « Aucun » (`data-fond='noir'`), elles
-   gardent l'encre du theme. Le decor est le frere qui PRECEDE le contenu dans `.shell` (App.tsx),
-   d'ou le `~` plutot qu'un `:has` sur la racine. */
-:root[data-base='clair'] .decor-de-fond:not([data-fond]) ~ * .home-tile .home-tile__label {
+   panneaux, en encre claire sur la scene. Le decor est le frere qui PRECEDE le contenu dans `.shell`
+   (App.tsx), d'ou le `~` plutot qu'un `:has` sur la racine. */
+:root[data-base='clair'] .decor-de-fond ~ * .home-tile .home-tile__label {
   --text: #ece8f7;
   --text-dim: #b9b2d4;
   --line: rgba(255, 255, 255, 0.18);
   --line-strong: rgba(255, 255, 255, 0.3);
 }
-:root[data-base='clair'] .decor-de-fond:not([data-fond]) ~ * .home-tile .home-tile__label h2 {
+:root[data-base='clair'] .decor-de-fond ~ * .home-tile .home-tile__label h2 {
   color: var(--text);
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95);
 }
-:root[data-base='clair'] .decor-de-fond:not([data-fond]) ~ * .home-tile .home-tile__action {
+:root[data-base='clair'] .decor-de-fond ~ * .home-tile .home-tile__action {
   background: rgba(255, 255, 255, 0.045);
-}
-/* « Aucun » en clair : l'aplat de la page du theme, pas le noir de la base sombre (theme.css).
-   `:where` garde le poids le plus faible : les themes qui posent leur propre aplat le gardent. */
-:root[data-base='clair'] :where(.decor-de-fond[data-fond='noir']) {
-  background: var(--bg-0);
 }
 
 /* SPECIAL MALVOYANT -- deux themes d accessibilite. Texte courant >= 7:1 (AAA), texte
@@ -1091,13 +1085,8 @@
   background: var(--bg-2);
 }
 /* Fond decoratif (image galaxie du body) : du bruit visuel derriere le texte. On le remplace par
-   l'aplat du theme. Le decor 3D de l'Accueil n'est PLUS retire ici (2026-10-22 : « c le
-   select de l'accueil qui fait foi pour le fond de l'accueil pas le theme choisi ») : il suit le
-   menu Fond de l'Accueil, dont « Aucun » reprend cet aplat. */
+   l'aplat du theme. Le decor de l'Accueil n'est PAS retire ici : le Quartier reste son fond. */
 :root[data-theme^='malvoyant-'] body {
-  background: var(--bg-0);
-}
-:root[data-theme^='malvoyant-'] .decor-de-fond[data-fond='noir'] {
   background: var(--bg-0);
 }
 

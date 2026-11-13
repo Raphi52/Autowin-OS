@@ -624,10 +624,10 @@ const COMPLEMENT_CLAIR = `
 /* LE DECOR DE L'ACCUEIL REVIENT EN BLANC (2026-10-22 : « dans le theme holographique
    blanc faut aussi le fond d'accueil cyberpunk », puis « c le select de l'accueil qui fait foi pour
    le fond de l'accueil pas le theme choisi »). Il etait cache ici depuis le « Le plus blanc »
-   (0e753829, 2026-10-11). Il suit maintenant le menu Fond de l'Accueil, sans voile ; l'encre claire
-   des etiquettes de tuiles posees sur le decor est commune aux themes clairs (theme-modes.css). Le
-   titre garde ici son neon, que la regle commune eteindrait. « Aucun » reste l'aplat #fdfdff. */
-:root[data-theme='${CLAIR_ID}'] .decor-de-fond:not([data-fond='noir']) ~ * .home-tile .home-tile__label h2 {
+   (0e753829, 2026-10-11). Il s'affiche maintenant sans voile ; l'encre claire des etiquettes de
+   tuiles posees sur le decor est commune aux themes clairs (theme-modes.css). Le titre garde ici
+   son neon, que la regle commune eteindrait. */
+:root[data-theme='${CLAIR_ID}'] .decor-de-fond ~ * .home-tile .home-tile__label h2 {
   color: color-mix(in srgb, var(--nv-neon-a) 30%, #ffffff);
   text-shadow:
     0 0 3px var(--nv-neon-a),

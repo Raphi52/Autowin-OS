@@ -17,8 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * un thème clair posait des symboles foncés sur la ville sombre de l'Accueil.
  *
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : ne plus signaler la scène depuis `DecorDeFond`, la
- * signaler aussi en veille (hors de l'Accueil) ou sur « Aucun », ou éclaircir aussi les thèmes
- * sombres, qui ont déjà leurs propres symboles clairs.
+ * signaler aussi en veille (hors de l'Accueil), ou éclaircir aussi les thèmes sombres, qui ont déjà
+ * leurs propres symboles clairs.
  */
 
 vi.mock('./home-decor-scene', () => ({
@@ -89,12 +89,12 @@ describe('couleur des boutons de fenêtre selon le fond de l Accueil', () => {
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
   })
 
-  it('thème clair : clairs aussi sur une autre scène 3D, foncés sur « Aucun »', async () => {
+  it('thème clair : clairs aussi sur une autre scène, foncés hors de l Accueil', async () => {
     poserTheme('vanilla-claude', '#141413')
     choisirFondAccueil('poussiere')
     await rendre(true)
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
-    await act(async () => choisirFondAccueil('noir'))
+    await rendre(false)
     expect(derniere()).toBe('#141413')
   })
 

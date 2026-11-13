@@ -20,17 +20,15 @@ import { tableDeTextes } from '../textes'
  *  - les erreurs internes du son système (`jarvis-moteur-whisper.ts`) : jamais affichées,
  *    `codeErreurMicro` n'en lit que le `name` ;
  *  - `auteur: 'moi'` d'un message Outlook (`outlook-model.ts`) : une valeur, jamais affichée ;
- *  - les noms propres : « Autowin », « Cyberpunk », « Nier Automata (radar) », le nom de l'assistant.
+ *  - les noms propres : « Autowin », le nom de l'assistant.
  */
 export const TEXTES_FR = {
   // — Accueil : en-tête, réglages, tuiles (HomeView) —
   'entete.accueil': 'Accueil',
   'reglages.ariaBouton': 'Réglages de l’accueil',
   'reglages.titreBouton':
-    "Réglages de l'accueil : fond, widgets affichés, nom de l'assistant, disposition",
+    "Réglages de l'accueil : widgets affichés, nom de l'assistant, disposition",
   'reglages.ariaPanneau': "Réglages de l'accueil",
-  'reglages.fond': 'Fond',
-  'reglages.ariaFond': "Fond de l'accueil",
   // L'animal de mes agents, vu aussi par les collègues.
   'reglages.animal': 'Animal de mes agents',
   'reglages.ariaAnimal': 'Animal qui représente mes agents, vu aussi par mes collègues',
@@ -78,8 +76,6 @@ export const TEXTES_FR = {
   'reglages.rappel': "Rappeler l'aide",
   'aide.tuiles':
     'Prenez une tuile n’importe où et posez-la : elle reste exactement là où vous la lâchez. Les huit bords la redimensionnent, les flèches aussi (Maj pour la taille).',
-  'fond.aucun': 'Aucun',
-  'fond.quartier': 'Le Quartier',
   'quartier.ouvre': 'Ouvre {vue}',
   'quartier.sortir': 'Sortir le widget de sa tour',
   'quartier.rentrer': 'Rentrer le widget dans sa tour',
@@ -381,10 +377,8 @@ export type CleAccueil = keyof typeof TEXTES_FR
 export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'entete.accueil': 'Home',
   'reglages.ariaBouton': 'Home settings',
-  'reglages.titreBouton': 'Home settings: background, widgets shown, assistant name, layout',
+  'reglages.titreBouton': 'Home settings: widgets shown, assistant name, layout',
   'reglages.ariaPanneau': 'Home settings',
-  'reglages.fond': 'Background',
-  'reglages.ariaFond': 'Home background',
   'reglages.animal': 'Animal for my agents',
   'reglages.ariaAnimal': 'Animal that stands for my agents, also seen by my colleagues',
   'reglages.animalAide': 'Your colleagues see this animal too.',
@@ -428,8 +422,6 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'reglages.rappel': 'Show the help again',
   'aide.tuiles':
     'Pick up a tile anywhere and put it down: it stays exactly where you release it. The eight edges resize it, and so do the arrow keys (Shift for the size).',
-  'fond.aucun': 'None',
-  'fond.quartier': 'The Quarter',
   'quartier.ouvre': 'Opens {vue}',
   'quartier.sortir': 'Bring the widget out of its tower',
   'quartier.rentrer': 'Put the widget back in its tower',

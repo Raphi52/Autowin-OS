@@ -219,22 +219,12 @@ describe('le fond suit le choix fait dans les réglages de l Accueil (conv-346)'
     expect(vi.mocked(createDecorScene).mock.calls.at(-1)?.[0]).toBe('limbe')
   })
 
-  it('Noir : aucune scène construite, l hôte peint le noir', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'noir')
-    const hote = await monter()
-    expect(creees).toHaveLength(0)
-    const fond = hote.querySelector('.decor-de-fond') as HTMLElement
-    expect(fond.dataset.fond).toBe('noir')
-    expect(fond.querySelector('canvas')).toBeNull()
-  })
-
-  it('passer d une scène à Noir libère la scène ; revenir la reconstruit', async () => {
+  it('« Aucun » enregistré avant le retrait du menu ne peint plus d aplat : le Quartier le remplace', async () => {
     const hote = await monter()
     await choisir('noir')
+    // La scène 3D est libérée et aucune autre direction n'est construite à sa place.
     expect(creees[0].dispose).toHaveBeenCalledTimes(1)
-    expect(hote.querySelector('.decor-de-fond canvas')).toBeNull()
-    await choisir('poussiere')
-    expect(creees).toHaveLength(2)
+    expect(creees).toHaveLength(1)
     expect((hote.querySelector('.decor-de-fond') as HTMLElement).dataset.fond).toBeUndefined()
   })
 })

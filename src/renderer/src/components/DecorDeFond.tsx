@@ -5,10 +5,10 @@ import {
   abonnerFondAccueil,
   FOND_DEFAUT,
   FOND_FALAISE,
-  fondSansScene,
-  lireFondAccueil
+  lireFondAccueil,
+  type FondAccueil
 } from './fond-accueil'
-import { createDecorScene, type DecorScene, type DecorVariant } from './home-decor-scene'
+import { createDecorScene, type DecorScene } from './home-decor-scene'
 import { creerSceneQuartier } from '../quartier/quartier-scene'
 import { signalerSceneSousLaBarre } from '../theme-mode'
 
@@ -35,9 +35,9 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
   /** Lu par la boucle d'images à chaque battement : hors de l'Accueil, elle s'arrête. */
   const actifRef = useRef(actif)
   /**
-   * LE FOND CHOISI dans les réglages de l'Accueil (menu « Fond »), SUIVI en direct : le
+   * LE FOND AFFICHÉ (le Quartier, sauf direction 3D enregistrée à la main), SUIVI en direct : le
    * changer libère la scène et monte la nouvelle, sans redémarrer. La clé, son historique et
-   * l'événement vivent dans `fond-accueil.ts`, la même source que le menu.
+   * l'événement vivent dans `fond-accueil.ts`, la même source que l'Accueil.
    */
   const variante = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => FOND_DEFAUT)
 
@@ -72,11 +72,10 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
 
   /**
    * Seules les directions « spatiales » relisent les teintes du thème à leur création : changer de
-   * thème les reconstruit. Le noir ne monte aucune scène, et le Quartier est une peinture : ni l'un ni
-   * l'autre ne suit le thème, et les reconstruire pour rien coûterait une scène entière.
+   * thème les reconstruit. Le Quartier est une peinture : il ne suit pas le thème, et le reconstruire
+   * pour rien coûterait une scène entière.
    */
-  const cleTheme =
-    variante === FOND_FALAISE || fondSansScene(variante) ? 'palette-propre' : themeApplique
+  const cleTheme = variante === FOND_FALAISE ? 'palette-propre' : themeApplique
 
   useEffect(() => {
     actifRef.current = actif
@@ -84,20 +83,18 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
   }, [actif])
 
   /*
-   * LES BOUTONS DE FENETRE suivent ce qui est sous eux : une scene affichee sur
-   * l'Accueil les eclaircit dans un theme clair ; une autre vue, « Aucun » ou le decor demonte les
-   * rend au theme. Voir `signalerSceneSousLaBarre` dans theme-mode.ts.
+   * LES BOUTONS DE FENETRE suivent ce qui est sous eux : la scene affichee sur l'Accueil les
+   * eclaircit dans un theme clair ; une autre vue ou le decor demonte les rend au theme. Voir
+   * `signalerSceneSousLaBarre` dans theme-mode.ts.
    */
-  const sceneAffichee = actif && !fondSansScene(variante)
   useEffect(() => {
-    signalerSceneSousLaBarre(sceneAffichee)
+    signalerSceneSousLaBarre(actif)
     return () => signalerSceneSousLaBarre(false)
-  }, [sceneAffichee])
+  }, [actif])
 
   useEffect(() => {
     const host = hostRef.current
-    // FOND NOIR : aucune scène, aucun contexte WebGL, aucune boucle — l'hôte peint l'aplat noir.
-    if (!host || fondSansScene(variante)) return
+    if (!host) return
     /*
      * UNE SEULE CONSTRUCTION, MEME SOUS STRICTMODE (2026-10-17).
      *
@@ -129,7 +126,6 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
       className="decor-de-fond"
       ref={hostRef}
       aria-hidden="true"
-      data-fond={fondSansScene(variante) ? variante : undefined}
       style={actif ? undefined : { display: 'none' }}
     />
   )
@@ -148,7 +144,7 @@ interface DecorMonte {
  */
 function monterDecor(
   host: HTMLDivElement,
-  choisie: DecorVariant | typeof FOND_FALAISE,
+  choisie: FondAccueil,
   estActif: () => boolean
 ): DecorMonte | null {
   const scene: DecorScene | null =

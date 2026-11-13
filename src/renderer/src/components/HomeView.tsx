@@ -44,15 +44,7 @@ import {
 } from './home-widgets-visibility'
 import { EVENEMENT_NOM_JARVIS, lireNomJarvis } from './jarvis-nom'
 import { memoriserOuvertureReglages, reglagesSontOuverts } from './home-reglages-ouverture'
-import {
-  abonnerFondAccueil,
-  choisirFondAccueil,
-  FOND_DEFAUT,
-  FOND_FALAISE,
-  FONDS_ACCUEIL,
-  lireFondAccueil,
-  type FondAccueil
-} from './fond-accueil'
+import { abonnerFondAccueil, FOND_DEFAUT, FOND_FALAISE, lireFondAccueil } from './fond-accueil'
 import { piloteQuartier } from '../quartier/quartier-pont'
 import { useQuartierAccueil } from '../quartier/useQuartierAccueil'
 import {
@@ -353,9 +345,8 @@ export function HomeView({
     lireVisibilite(window.localStorage)
   )
   /**
-   * LE FOND DE L'ACCUEIL (« un menu pour choisir un fond noir ou l'image cyberpunk ou les
-   * planetes »). Lu à la même source que le décor (`fond-accueil.ts`) : le menu montre le fond
-   * réellement affiché, et le choisir change le décor sans redémarrer.
+   * LE FOND DE L'ACCUEIL, lu à la même source que le décor (`fond-accueil.ts`). Le Quartier est le
+   * seul fond proposé, sans menu ; seule une direction 3D enregistrée à la main en sort.
    */
   const fond = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => FOND_DEFAUT)
   /** Sur le Quartier, les tuiles vivent dans leurs tours : elles ne s'affichent que sorties. */
@@ -1258,28 +1249,6 @@ export function HomeView({
             aria-label={t('reglages.ariaPanneau')}
             data-testid="home-settings-panel"
           >
-            <section className="home-settings__bloc">
-              <h3>{t('reglages.fond')}</h3>
-              <label className="home-settings__champ">
-                <select
-                  value={fond}
-                  aria-label={t('reglages.ariaFond')}
-                  data-testid="home-fond"
-                  onChange={(event) => choisirFondAccueil(event.target.value as FondAccueil)}
-                >
-                  {FONDS_ACCUEIL.map((choix) => (
-                    <option key={choix.id} value={choix.id}>
-                      {choix.nom}
-                    </option>
-                  ))}
-                  {/* Une direction du catalogue absente du menu (enregistrée à la main) reste
-                      nommée : un menu qui afficherait « Noir » sur un autre fond mentirait. */}
-                  {FONDS_ACCUEIL.some((choix) => choix.id === fond) ? null : (
-                    <option value={fond}>{fond}</option>
-                  )}
-                </select>
-              </label>
-            </section>
             <section className="home-settings__bloc">
               <h3>{t('reglages.animal')}</h3>
               <label className="home-settings__champ">
