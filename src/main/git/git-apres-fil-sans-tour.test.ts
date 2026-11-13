@@ -5,10 +5,11 @@ import {
   redacteurDeCommit,
   refusDAppartenance,
   titreDuModele,
+  type DepsDesCommitsLocaux,
   type DepsSansTour
 } from './git-apres-fil-sans-tour'
 import type { ProprietaireDeFichier } from '../fichiers/proprietaire-fichier'
-import type { GitRunner } from '../runs/run-autoclose'
+import type { GitRunner, PlageDesCommitsLocaux } from '../runs/run-autoclose'
 
 /** Un fichier écrit seul, diff encore le sien : il part. */
 function fichier(partiel: Partial<ProprietaireDeFichier> = {}): ProprietaireDeFichier {
@@ -401,6 +402,190 @@ describe('publierSansTour', () => {
 
     expect(issue.publie).toBe(true)
     expect(commiter.mock.calls[0]![1]).toEqual(['src/a.ts'])
+  })
+})
+
+describe('publierSansTour — les commits restés sur la branche locale', () => {
+  const plage: PlageDesCommitsLocaux = {
+    branche: 'main',
+    amont: 'b'.repeat(40),
+    base: 'b'.repeat(40),
+    tete: 't'.repeat(40),
+    fichiers: ['src/porte.ts'],
+    commits: [
+      { sha: 't'.repeat(40), parents: 1, sujet: 'feat(x): passage (conv-1)', porte: 'conv-1' },
+      { sha: 'u'.repeat(40), parents: 1, sujet: 'fix(y): à la main' }
+    ]
+  }
+  function locaux(partiel: Partial<DepsDesCommitsLocaux> = {}) {
+    const pousser = vi.fn<DepsDesCommitsLocaux['pousser']>(async (p, git) => {
+      await git(['push', 'origin', `${p.tete}:refs/heads/main`], 'D:/depot', {
+        env: { ALLOW_MAIN_PUSH: '1' }
+      })
+      return { status: 'pushed', branch: 'main', files: p.fichiers.length, mode: 'direct' }
+    })
+    const typer = vi.fn<DepsDesCommitsLocaux['typer']>(async () => ({ statut: 'sans-objet' }))
+    const verifier = vi.fn<DepsDesCommitsLocaux['verifier']>(async () => ({
+      statut: 'vert',
+      commande: 'vitest',
+      testsJoues: 2
+    }))
+    const commitsLocaux: DepsDesCommitsLocaux = {
+      lire: async () => plage,
+      classer: () => 'oui',
+      typer,
+      verifier,
+      pousser,
+      ...partiel
+    }
+    return { commitsLocaux, pousser, typer, verifier }
+  }
+
+  it('un commit qu’aucun fil publiable ne réclame retient toute la branche, et se dit', async () => {
+    const { commitsLocaux, pousser, typer } = locaux({
+      classer: (commit) => (commit.porte ? 'oui' : 'non')
+    })
+    const issue = await publierSansTour(deps({ commitsLocaux }).d, passeDePorte)
+    expect(issue.publie).toBe(false)
+    expect(issue.aTrier).toEqual([
+      'commits restés sur main local : uuuuuuuuu « fix(y): à la main » n’est réclamé par aucun fil qui peut publier'
+    ])
+    expect(typer).not.toHaveBeenCalled()
+    expect(pousser).not.toHaveBeenCalled()
+  })
+
+  it('le distant a avancé : rien n’est contrôlé ni poussé, la branche est à réaligner', async () => {
+    const { commitsLocaux, pousser, typer } = locaux({
+      lire: async () => ({ ...plage, amont: 'c'.repeat(40) })
+    })
+    const issue = await publierSansTour(deps({ commitsLocaux }).d, passeDePorte)
+    expect(issue.aTrier).toEqual([
+      'commits restés sur main local : origin/main a avancé (ccccccccc), la branche locale est à réaligner avant tout envoi'
+    ])
+    expect(typer).not.toHaveBeenCalled()
+    expect(pousser).not.toHaveBeenCalled()
+  })
+
+  it('un commit d’un plan en cours fait attendre la branche, sans note à trier', async () => {
+    const { commitsLocaux, pousser } = locaux({
+      classer: (commit) => (commit.porte ? 'oui' : 'plus-tard')
+    })
+    const issue = await publierSansTour(deps({ commitsLocaux }).d, passeDePorte)
+    expect(issue).toMatchObject({ publie: false, aTrier: [] })
+    expect(issue.notes).toEqual([
+      'commits restés sur main local : 1 commit(s) d’un plan en cours, la branche part à sa fin'
+    ])
+    expect(pousser).not.toHaveBeenCalled()
+  })
+  const passeDePorte = {
+    fil: 'conv-1',
+    fichiers: [],
+    fils: ['conv-1'],
+    travaux: 0,
+    commitsLocaux: true
+  }
+
+  it('contrôle la plage lue, puis pousse sa pointe et rend la ligne git lancée', async () => {
+    const { commitsLocaux, pousser, typer, verifier } = locaux()
+    const { d, commiter } = deps({ commitsLocaux })
+    const issue = await publierSansTour(d, passeDePorte)
+    expect(issue).toMatchObject({ publie: true, aTrier: [], notes: [] })
+    expect(typer).toHaveBeenCalledWith(plage)
+    expect(verifier).toHaveBeenCalledWith(plage)
+    expect(pousser.mock.calls[0]![0]).toBe(plage)
+    expect(issue.lignesShell).toEqual([
+      `ALLOW_MAIN_PUSH=1 git push origin ${plage.tete}:refs/heads/main`
+    ])
+    expect(commiter).not.toHaveBeenCalled()
+  })
+
+  it('un typage ou des tests rouges retiennent les commits, et le disent', async () => {
+    const rougeTypage = locaux({
+      typer: async () => ({ statut: 'echec', projets: [], commande: 'tsc', erreurs: ['TS2304 x'] })
+    })
+    const issueTypage = await publierSansTour(
+      deps({ commitsLocaux: rougeTypage.commitsLocaux }).d,
+      passeDePorte
+    )
+    expect(issueTypage.publie).toBe(false)
+    expect(issueTypage.aTrier).toEqual([
+      'commits restés sur main local : typage rouge (tsc) : TS2304 x'
+    ])
+    expect(rougeTypage.pousser).not.toHaveBeenCalled()
+
+    const rougeTests = locaux({
+      verifier: async () => ({
+        statut: 'echec',
+        commande: 'vitest',
+        detail: '1 suite rouge',
+        testsEnEchec: ['a.test.ts']
+      })
+    })
+    const issueTests = await publierSansTour(
+      deps({ commitsLocaux: rougeTests.commitsLocaux }).d,
+      passeDePorte
+    )
+    expect(issueTests.aTrier).toEqual([
+      'commits restés sur main local : tests rouges (vitest) : a.test.ts'
+    ])
+    expect(rougeTests.pousser).not.toHaveBeenCalled()
+  })
+
+  it('un envoi refusé ou une lecture qui casse restent à trier, jamais tus', async () => {
+    const refuse = locaux({
+      pousser: async () => ({ status: 'skipped', reason: 'secret-detected' })
+    })
+    const issueRefus = await publierSansTour(
+      deps({ commitsLocaux: refuse.commitsLocaux }).d,
+      passeDePorte
+    )
+    expect(issueRefus.aTrier).toEqual([
+      'envoi des commits restés sur main local refusé : secret-detected'
+    ])
+
+    const illisible = locaux({ lire: async () => Promise.reject(new Error('git absent')) })
+    const issueLecture = await publierSansTour(
+      deps({ commitsLocaux: illisible.commitsLocaux }).d,
+      passeDePorte
+    )
+    expect(issueLecture.aTrier).toEqual(['commits locaux illisibles : git absent'])
+    expect(illisible.pousser).not.toHaveBeenCalled()
+  })
+
+  it('rien d’avance sur le distant, ou aucun passage de porte : rien n’est poussé', async () => {
+    const rien = locaux({ lire: async () => undefined })
+    const issue = await publierSansTour(deps({ commitsLocaux: rien.commitsLocaux }).d, passeDePorte)
+    expect(issue).toMatchObject({ publie: false, aTrier: [], lignesShell: [] })
+    expect(rien.typer).not.toHaveBeenCalled()
+
+    const sansPorte = locaux()
+    await publierSansTour(deps({ commitsLocaux: sansPorte.commitsLocaux }).d, passe)
+    expect(sansPorte.pousser).not.toHaveBeenCalled()
+  })
+
+  it('un fichier du fil retenu retient aussi la branche, qui en dépend peut-être', async () => {
+    const { commitsLocaux, pousser } = locaux()
+    const { d } = deps({
+      commitsLocaux,
+      proprietaires: async (chemins) => ({
+        fichiers: chemins.map((chemin) =>
+          fichier({
+            chemin,
+            fils: [
+              { conversation: 'conv-1', le: '2', toi: true, diffInchange: true },
+              { conversation: 'conv-8', le: '1', toi: false, diffInchange: false }
+            ]
+          })
+        ),
+        copiesDeRunLues: 0,
+        copiesDeRunIllisibles: 0,
+        copiesDeFilLues: 0,
+        copiesDeFilIllisibles: 0
+      })
+    })
+    const issue = await publierSansTour(d, { ...passe, commitsLocaux: true })
+    expect(issue.aTrier).toEqual(['src/a.ts : aussi touché par conv-8'])
+    expect(pousser).not.toHaveBeenCalled()
   })
 })
 

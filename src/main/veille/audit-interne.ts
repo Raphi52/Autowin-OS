@@ -40,6 +40,8 @@ export interface ConstatInterne {
     | 'assertion-neutralisee'
     | 'classe-css-sans-regle'
     | 'impurete-au-rendu'
+    /** Lu dans le registre des murs, pas dans le code seul : voir `murs-recurrents.ts`. */
+    | 'mur-recurrent'
   titre: string
   /** `fichier:ligne` — l'ancrage vérifiable, à la place de l'URL d'une source web. */
   ancrage: string

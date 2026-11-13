@@ -4,6 +4,7 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   utimesSync,
   writeFileSync
@@ -15,7 +16,8 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import {
   AGE_COPIE_DE_BASE_ORPHELINE_MS,
   balayerCopiesDeBaseOrphelines,
-  ouvrirCopieDeBase
+  ouvrirCopieDeBase,
+  ouvrirCopieDesCommitsLocaux
 } from './comparaison-a-la-base'
 
 /**
@@ -143,5 +145,75 @@ describe('balayerCopiesDeBaseOrphelines — copies de base laissées par un proc
       racine: join(tmpdir(), 'racine-absente-aw-base-xyz')
     })
     expect(bilan).toEqual({ supprimees: [], echecs: [] })
+  })
+})
+
+describe('ouvrirCopieDesCommitsLocaux — juger des commits déjà sur la branche locale', () => {
+  it('copie au niveau du distant, fichiers des commits posés, arbre partagé ignoré', async () => {
+    const { depot, racine } = banc()
+    const base = git(depot, 'rev-parse', 'HEAD').trim()
+    writeFileSync(join(depot, 'src', 'a.ts'), 'export const a = 2\n')
+    writeFileSync(join(depot, 'src', 'é-neuf.ts'), 'export const n = 1\n')
+    git(depot, 'add', '-A')
+    git(depot, 'commit', '-q', '-m', 'commit local')
+    git(depot, 'rm', '-q', 'src/a.ts')
+    git(depot, 'commit', '-q', '-m', 'retire a')
+    git(depot, 'checkout', '-q', 'HEAD~1', '--', 'src/a.ts')
+    const tete = git(depot, 'rev-parse', 'HEAD~1').trim()
+    // L'arbre partagé porte encore un travail en cours d'un autre fil : il ne doit pas entrer.
+    writeFileSync(join(depot, 'src', 'é-neuf.ts'), 'en cours ailleurs\n')
+
+    const copie = await ouvrirCopieDesCommitsLocaux(
+      depot,
+      { base, tete, fichiers: ['src/a.ts', 'src/é-neuf.ts'] },
+      racine
+    )
+    // La copie suit le `core.autocrlf` du poste, comme toute copie de base : seul le contenu compte.
+    const lire = (...chemin: string[]): string =>
+      readFileSync(join(copie.chemin, ...chemin), 'utf8').replace(/\r\n/gu, '\n')
+    try {
+      expect(git(copie.chemin, 'rev-parse', 'HEAD').trim()).toBe(base)
+      expect(lire('src', 'a.ts')).toBe('export const a = 2\n')
+      expect(lire('src', 'é-neuf.ts')).toBe('export const n = 1\n')
+      // Une plage qui supprime un fichier le retire de la copie.
+      const derniere = git(depot, 'rev-parse', 'HEAD').trim()
+      const sansA = await ouvrirCopieDesCommitsLocaux(
+        depot,
+        { base, tete: derniere, fichiers: ['src/a.ts'] },
+        racine
+      )
+      try {
+        expect(existsSync(join(sansA.chemin, 'src', 'a.ts'))).toBe(false)
+      } finally {
+        await sansA.fermer()
+      }
+    } finally {
+      await copie.fermer()
+    }
+  })
+
+  it('un fichier devenu un dossier : l’ancien fichier part avant que le nouveau soit posé', async () => {
+    const { depot, racine } = banc()
+    writeFileSync(join(depot, 'src', 'x'), 'un fichier\n')
+    git(depot, 'add', '-A')
+    git(depot, 'commit', '-q', '-m', 'x est un fichier')
+    const base = git(depot, 'rev-parse', 'HEAD').trim()
+    git(depot, 'rm', '-q', 'src/x')
+    mkdirSync(join(depot, 'src', 'x'))
+    writeFileSync(join(depot, 'src', 'x', 'y.ts'), 'export const y = 1\n')
+    git(depot, 'add', '-A')
+    git(depot, 'commit', '-q', '-m', 'x devient un dossier')
+    const tete = git(depot, 'rev-parse', 'HEAD').trim()
+
+    const copie = await ouvrirCopieDesCommitsLocaux(
+      depot,
+      { base, tete, fichiers: ['src/x', 'src/x/y.ts'] },
+      racine
+    )
+    try {
+      expect(existsSync(join(copie.chemin, 'src', 'x', 'y.ts'))).toBe(true)
+    } finally {
+      await copie.fermer()
+    }
   })
 })

@@ -224,6 +224,7 @@ import { lireProprietairesDeFichiers } from '../fichiers/proprietaire-fichier'
 import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 import {
   blocDuTour,
+  classerCommitLocal,
   commitsPublies,
   decisionGitApresFil,
   depotsDesCopiesDeFil,
@@ -232,6 +233,7 @@ import {
   FileGitApresFil,
   filDeLaPasse,
   lireAmont,
+  planEnCoursDuFil,
   planTourneEncore,
   publicationInterditeDans,
   travauxParFil,
@@ -241,8 +243,14 @@ import {
   autoCloseBranch,
   autoCloseRun,
   defaultGitRunner,
+  plageDesCommitsLocaux,
+  publierLesCommitsLocaux,
   type AutoCloseReport
 } from '../runs/run-autoclose'
+import { ouvrirCopieDesCommitsLocaux } from '../git/comparaison-a-la-base'
+
+/** La copie des commits locaux porte déjà leurs fichiers : rien à y poser depuis l'arbre partagé. */
+const rienAPoser = (): void => undefined
 import {
   creerNotifieurDeFinDeTour,
   libelleDeBouton,
@@ -361,7 +369,8 @@ import { executerPasse } from '../veille/passe'
 import { genererCandidatsEnConversation } from '../veille/scout-visible'
 import { unePasseALaFois } from '../veille/une-passe-a-la-fois'
 import { lancerScoutVeille } from '../veille/scout-claude'
-import { candidatsInternesDuDepot } from '../veille/audit-depot'
+import { candidatsInternesDuDepot, lireRegistreDesMurs } from '../veille/audit-depot'
+import { mursStorePath } from '../runs/murs-store'
 import { dispatcherAvecVeille } from '../veille/dispatch-veille'
 import { deposerOrientationDuFil } from '../conversations/orientations-en-cours-app'
 import {
@@ -2767,7 +2776,8 @@ Le fil reprend ensuite normalement.`
                     suiviDesPlans.coordinateur?.planDuFil(conversationId)
                   ),
                   decision.fichiers,
-                  conversationId
+                  conversationId,
+                  { commitsLocaux: decision.commitsLocaux === true }
                 )
             })
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
@@ -3458,10 +3468,18 @@ Le fil reprend ensuite normalement.`
   const travauxTentes = travauxTentesSurDisque(
     join(autowinAppDataRoot(), 'git-apres-fil-travaux-tentes.json')
   )
+  // Le dossier d'un fil en copie EST sa copie, à tête détachée : la branche où la porte a fait entrer
+  // son travail, son amont et ses commits publiés vivent dans le dépôt de la copie.
+  const depotDeLaPasse = (fil: string): string =>
+    os.conversations.get(fil)?.copieDuFil?.depot ?? dossierDuTour(fil)
   suiviGitApresFil.file = new FileGitApresFil({
     publier: async (fil, passe) => {
       const repo = dossierDuTour(fil)
+      const depotDuFil = depotDeLaPasse(fil)
       const runGit = await defaultGitRunner()
+      const filDuRun = new Map(
+        os.getWorktreeActivity().map((agent) => [agent.agentId, agent.conversationId])
+      )
       return publierSansTour(
         {
           repo,
@@ -3488,9 +3506,51 @@ Le fil reprend ensuite normalement.`
               paths: fichiers,
               runGit: runGitTrace,
               direct: true
-            })
+            }),
+          // Les passages de porte restés sur la branche locale, jugés au niveau du distant.
+          commitsLocaux: {
+            lire: () => plageDesCommitsLocaux(depotDuFil, runGit),
+            classer: (commit) =>
+              classerCommitLocal(commit, {
+                filDuRun: (run) => filDuRun.get(run),
+                // Un fil archivé (inactif depuis 14 jours) ou supprimé n'est plus en mémoire : plus
+                // aucune demande ne peut y interdire de publier, et le refuser figerait la branche.
+                publiable: (autre) =>
+                  !publicationInterditeDans(
+                    (os.conversations.get(autre)?.messages ?? [])
+                      .filter((message) => message.role === 'user')
+                      .map((message) => String(message.content))
+                  ),
+                planEnCours: (autre) =>
+                  planEnCoursDuFil(suiviDesPlans.coordinateur?.planDuFil(autre))
+              }),
+            typer: (plage) =>
+              typerCeQuiPart({
+                repo: depotDuFil,
+                fichiers: plage.fichiers,
+                typer: typeurTsc(process.execPath),
+                ouvrirCopie: (depot) => ouvrirCopieDesCommitsLocaux(depot, plage),
+                appliquer: rienAPoser
+              }),
+            verifier: (plage) =>
+              verifierCeQuiPart(
+                depotDuFil,
+                plage.fichiers,
+                (racine, liste) => bus.verifierAvantPublication(racine, liste),
+                (depot) => ouvrirCopieDesCommitsLocaux(depot, plage),
+                rienAPoser
+              ),
+            pousser: (plage, runGitTrace) =>
+              publierLesCommitsLocaux({ repo: depotDuFil, plage, runGit: runGitTrace })
+          }
         },
-        { fil, fichiers: passe.fichiers, fils: passe.fils, travaux: passe.travaux.length }
+        {
+          fil,
+          fichiers: passe.fichiers,
+          fils: passe.fils,
+          travaux: passe.travaux.length,
+          commitsLocaux: passe.commitsLocaux === true
+        }
       )
     },
     // Le chef d'un plan qui tourne encore attend : ses lots écrivent toujours. La publication du
@@ -3500,9 +3560,9 @@ Le fil reprend ensuite normalement.`
       activeChatTurns.isInFlight(fil) ||
       publicationsEnVol.conversations().includes(fil) ||
       planTourneEncore(suiviDesPlans.coordinateur?.planDuFil(fil)),
-    lireAmont: async (fil) => lireAmont(await defaultGitRunner(), dossierDuTour(fil)),
+    lireAmont: async (fil) => lireAmont(await defaultGitRunner(), depotDeLaPasse(fil)),
     commitsDepuis: async (fil, depuis, fils) =>
-      commitsPublies(await defaultGitRunner(), dossierDuTour(fil), depuis, fils),
+      commitsPublies(await defaultGitRunner(), depotDeLaPasse(fil), depuis, fils),
     annoncer: (fil, contenu) => {
       os.conversations.append(fil, { role: 'assistant', content: contenu })
       broadcast({ type: 'refresh', scope: 'chat', convId: fil })
@@ -3599,7 +3659,10 @@ Le fil reprend ensuite normalement.`
       await genererCandidatsInternesVisibles()
       return executerPasse({
         lancerScout: lancerScoutVeille,
-        candidatsInternes: candidatsInternesDuDepot(os.executionWorkspace)
+        // Les murs qui reviennent d'un fil à l'autre, mesurés : voir `veille/murs-recurrents.ts`.
+        candidatsInternes: candidatsInternesDuDepot(os.executionWorkspace, {
+          murs: lireRegistreDesMurs(mursStorePath())
+        })
       })
     })
   })

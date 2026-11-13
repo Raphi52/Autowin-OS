@@ -44,10 +44,33 @@ describe('enchaînement auto du chat — câblage de fin de tour', () => {
     expect(apres).toMatch(/\.then\(\(rapport\) => \{\s*const decision = decisionGitApresFil\(\{/)
     expect(apres).toContain('accord: os.gitApresFilActif()')
     expect(apres).toContain('rapport\n')
-    // Un lot de plan est rendu au chef (`filDeLaPasse`), le fil d'origine suit.
+    // Un lot de plan est rendu au chef (`filDeLaPasse`), le fil d'origine suit, et un passage de
+    // porte resté sur main local voyage avec la passe.
     expect(apres).toMatch(
-      /if \(decision\.lancer\)\s*suiviGitApresFil\.file\?\.ajouter\(\s*filDeLaPasse\(\s*conversationId,[^;]*decision\.fichiers,\s*conversationId\s*\)/
+      /if \(decision\.lancer\)\s*suiviGitApresFil\.file\?\.ajouter\(\s*filDeLaPasse\(\s*conversationId,[^;]*decision\.fichiers,\s*conversationId,\s*\{ commitsLocaux: decision\.commitsLocaux === true \}\s*\)/
     )
+  })
+
+  it('la passe pousse les commits restés sur main local, jugés au niveau du distant', () => {
+    const debut = source.indexOf('suiviGitApresFil.file = new FileGitApresFil({')
+    const bloc = source.slice(debut, source.indexOf('noterTravauxTentes', debut))
+    // Le dossier d'un fil en copie est sa copie, à tête détachée : la branche, son amont et ses
+    // commits publiés (le bandeau) vivent dans le dépôt de la copie.
+    expect(source).toContain('os.conversations.get(fil)?.copieDuFil?.depot ?? dossierDuTour(fil)')
+    expect(bloc).toContain('const depotDuFil = depotDeLaPasse(fil)')
+    expect(bloc).toContain('lireAmont(await defaultGitRunner(), depotDeLaPasse(fil))')
+    expect(bloc).toContain(
+      'commitsPublies(await defaultGitRunner(), depotDeLaPasse(fil), depuis, fils)'
+    )
+    expect(bloc).toContain('lire: () => plageDesCommitsLocaux(depotDuFil, runGit)')
+    // Pousser la branche emporte tous ses commits : chacun est rattaché à un fil qui peut publier.
+    expect(bloc).toMatch(/classer: \(commit\) =>\s*classerCommitLocal\(commit, \{/)
+    expect(bloc).toContain('planEnCoursDuFil(suiviDesPlans.coordinateur?.planDuFil(autre))')
+    expect(bloc.match(/ouvrirCopieDesCommitsLocaux\(depot, plage\)/g)).toHaveLength(2)
+    expect(bloc).toContain(
+      'publierLesCommitsLocaux({ repo: depotDuFil, plage, runGit: runGitTrace })'
+    )
+    expect(bloc).toContain('commitsLocaux: passe.commitsLocaux === true')
   })
 
   it('relit les travaux d’agents à chaque fin de run, sous le même accord (conv-1544)', () => {

@@ -6,7 +6,13 @@ import { noterAppelCourt, signalerPanneAppelCourt } from '../orchestration/petit
 import type { ProprietaireDeFichier, ReponseProprietaire } from '../fichiers/proprietaire-fichier'
 import type { ProviderRegistry } from '../providers/registry'
 import type { RoleModelConfig } from '../profil/roles'
-import type { AutoCloseResult, GitRunner, VerificationAvantPublication } from '../runs/run-autoclose'
+import type {
+  AutoCloseResult,
+  CommitLocal,
+  GitRunner,
+  PlageDesCommitsLocaux,
+  VerificationAvantPublication
+} from '../runs/run-autoclose'
 import type { TypageAvantPublication } from '../verify/typage-avant-publication'
 
 /**
@@ -26,6 +32,10 @@ import type { TypageAvantPublication } from '../verify/typage-avant-publication'
  * run, travail d'agent hors branche) ne part PAS : la passe le dit dans une note, avec un bouton
  * `/git` que l'utilisateur clique lui-même. Tout ou rien : un fichier refusé retient la passe
  * entière, car publier la moitié d'un travail laisse main sans ce dont l'autre moitié dépend.
+ *
+ * Les commits déjà sur la branche locale (passage de porte d'un fil en copie, voir `git-apres-fil.ts`)
+ * partent ensuite, jugés sur une copie au niveau du distant où leurs fichiers sont posés : la même
+ * comparaison avant/après que pour les fichiers d'un tour, sans le travail en cours de l'arbre partagé.
  */
 
 /** Ce que la passe rend à la file (`FileGitApresFil`). */
@@ -47,6 +57,20 @@ export interface PasseSansTour {
   fils: readonly string[]
   /** Travaux d'agents restés hors de la branche : jamais repris sans tri par contenu. */
   travaux: number
+  /** Un passage de porte est entré dans la branche locale : pousser ce que le distant n'a pas. */
+  commitsLocaux?: boolean
+}
+
+/** Ce qu'il faut pour pousser les commits de la branche locale absents du distant. */
+export interface DepsDesCommitsLocaux {
+  /** `undefined` = rien d'avance sur le distant. */
+  lire(): Promise<PlageDesCommitsLocaux | undefined>
+  /** Pousser la branche emporte TOUS ses commits : chacun doit pouvoir partir (`classerCommitLocal`). */
+  classer(commit: CommitLocal): 'oui' | 'plus-tard' | 'non'
+  /** Typage et tests sur une copie au niveau du distant, les fichiers de la plage posés dessus. */
+  typer(plage: PlageDesCommitsLocaux): Promise<TypageAvantPublication>
+  verifier(plage: PlageDesCommitsLocaux): Promise<VerificationAvantPublication>
+  pousser(plage: PlageDesCommitsLocaux, runGit: GitRunner): Promise<AutoCloseResult>
 }
 
 export interface DepsSansTour {
@@ -64,6 +88,8 @@ export interface DepsSansTour {
    * Absent = aucun.
    */
   autreTourEnCours?(): boolean
+  /** Absent = la passe ne pousse jamais la branche locale, seulement ses propres commits. */
+  commitsLocaux?: DepsDesCommitsLocaux
 }
 
 export const CONSIGNE_MESSAGE_DE_COMMIT = [
@@ -195,8 +221,124 @@ export async function publierSansTour(
       `${passe.travaux} travail(s) d’agent resté(s) hors de la branche : à trier par contenu`
     )
   }
-  if (passe.fichiers.length === 0) return issue
+  const runGitTrace: GitRunner = (args, cwd, options) => {
+    if (args[0] === 'commit' || args[0] === 'push')
+      issue.lignesShell.push(ligneGit(args, options?.env))
+    return deps.runGit(args, cwd, options)
+  }
+  const refusAvant = issue.aTrier.length
+  if (passe.fichiers.length) await publierLesFichiers(deps, passe, issue, runGitTrace)
+  // Tout ou rien, ici aussi : un fichier du fil retenu retient la branche, qui en dépend peut-être.
+  if (passe.commitsLocaux && deps.commitsLocaux && issue.aTrier.length === refusAvant)
+    await pousserLesCommitsLocaux(deps.commitsLocaux, issue, runGitTrace)
+  return issue
+}
 
+/** Typage puis tests de ce qui part ; faux = un rouge est noté à trier, et rien ne part. */
+async function controler(
+  issue: IssueDePasse,
+  typer: () => Promise<TypageAvantPublication>,
+  verifier: () => Promise<VerificationAvantPublication>,
+  quoi?: string
+): Promise<boolean> {
+  const sur = quoi ? `${quoi} : ` : ''
+  const typage = await typer()
+  if (typage.statut === 'echec') {
+    issue.aTrier.push(
+      `${sur}typage rouge (${typage.commande}) : ${typage.erreurs.slice(0, 3).join(' ; ')}`
+    )
+    return false
+  }
+  if (typage.statut === 'non-verifie') issue.notes.push(`${sur}typage non joué : ${typage.raison}`)
+  const tests = await verifier()
+  if (tests.statut === 'echec') {
+    issue.aTrier.push(`${sur}tests rouges (${tests.commande}) : ${tests.testsEnEchec.join(', ')}`)
+    return false
+  }
+  if (tests.statut === 'non-verifie') issue.notes.push(`${sur}tests non joués : ${tests.raison}`)
+  return true
+}
+
+/** Ce que l'envoi a donné : publié, refusé (à trier) ou resté local (dit). */
+function noterLEnvoi(resultat: AutoCloseResult, issue: IssueDePasse, geste: string): void {
+  if (resultat.status === 'pushed') {
+    issue.publie = true
+    if (resultat.mode === 'pr')
+      issue.notes.push(
+        `poussé sur la branche ${resultat.branch}, pas sur la branche courante${resultat.directRefused ? ` (${resultat.directRefused})` : ''}`
+      )
+  } else if (resultat.status === 'committed') {
+    issue.notes.push('commit local seulement : rien n’est parti vers le distant')
+  } else if (resultat.status === 'skipped') {
+    issue.aTrier.push(
+      `${geste} refusé : ${resultat.reason}${resultat.detail ? ` (${resultat.detail})` : ''}`
+    )
+  } else {
+    issue.aTrier.push(`${geste} impossible : ${resultat.error}`)
+  }
+}
+
+async function pousserLesCommitsLocaux(
+  deps: DepsDesCommitsLocaux,
+  issue: IssueDePasse,
+  runGitTrace: GitRunner
+): Promise<void> {
+  let plage: PlageDesCommitsLocaux | undefined
+  try {
+    plage = await deps.lire()
+  } catch (erreur) {
+    issue.aTrier.push(
+      `commits locaux illisibles : ${erreur instanceof Error ? erreur.message : String(erreur)}`
+    )
+    return
+  }
+  if (!plage) return
+  const lue = plage
+  const quoi = `commits restés sur ${lue.branche} local`
+  // Le distant a des commits que la branche n'a pas : le push direct serait refusé, et la copie de
+  // contrôle jugerait contre une base dépassée. La branche est à réaligner avant tout envoi.
+  if (lue.amont !== lue.base) {
+    issue.aTrier.push(
+      `${quoi} : origin/${lue.branche} a avancé (${lue.amont.slice(0, 9)}), la branche locale est à réaligner avant tout envoi`
+    )
+    return
+  }
+  const classes = lue.commits.map((commit) => ({ commit, classe: deps.classer(commit) }))
+  const orphelins = classes.filter(({ classe }) => classe === 'non')
+  if (orphelins.length) {
+    issue.aTrier.push(
+      ...orphelins.map(
+        ({ commit }) =>
+          `${quoi} : ${commit.sha.slice(0, 9)} « ${commit.sujet} » n’est réclamé par aucun fil qui peut publier`
+      )
+    )
+    return
+  }
+  const attendent = classes.filter(({ classe }) => classe === 'plus-tard').length
+  if (attendent) {
+    issue.notes.push(
+      `${quoi} : ${attendent} commit(s) d’un plan en cours, la branche part à sa fin`
+    )
+    return
+  }
+  if (
+    !(await controler(
+      issue,
+      () => deps.typer(lue),
+      () => deps.verifier(lue),
+      quoi
+    ))
+  )
+    return
+  noterLEnvoi(await deps.pousser(lue, runGitTrace), issue, `envoi des ${quoi}`)
+}
+
+async function publierLesFichiers(
+  deps: DepsSansTour,
+  passe: PasseSansTour,
+  issue: IssueDePasse,
+  runGitTrace: GitRunner
+): Promise<void> {
   const autorises = new Set(passe.fils)
   // Relevé AVANT de lire le journal : un tour fini avant ce relevé y a déjà tout écrit.
   const autreTourEnCours = deps.autreTourEnCours?.() ?? false
@@ -211,28 +353,22 @@ export async function publierSansTour(
   })
   if (refus.length) {
     issue.aTrier.push(...refus)
-    return issue
+    return
   }
   const partants = sales.map((f) => f.chemin)
-  if (partants.length === 0) return issue
+  if (partants.length === 0) return
   const auteurs = passe.fils.filter((fil) =>
     sales.some((f) => f.fils.some((proprietaire) => proprietaire.conversation === fil))
   )
 
-  const typage = await deps.typer(partants)
-  if (typage.statut === 'echec') {
-    issue.aTrier.push(
-      `typage rouge (${typage.commande}) : ${typage.erreurs.slice(0, 3).join(' ; ')}`
-    )
-    return issue
-  }
-  if (typage.statut === 'non-verifie') issue.notes.push(`typage non joué : ${typage.raison}`)
-  const tests = await deps.verifier(partants)
-  if (tests.statut === 'echec') {
-    issue.aTrier.push(`tests rouges (${tests.commande}) : ${tests.testsEnEchec.join(', ')}`)
-    return issue
-  }
-  if (tests.statut === 'non-verifie') issue.notes.push(`tests non joués : ${tests.raison}`)
+  if (
+    !(await controler(
+      issue,
+      () => deps.typer(partants),
+      () => deps.verifier(partants)
+    ))
+  )
+    return
 
   let titre: string | undefined
   let panne = ''
@@ -248,32 +384,12 @@ export async function publierSansTour(
     issue.notes.push(`message de secours : le petit modèle n’a pas rédigé (${panne})`)
   }
 
-  const runGitTrace: GitRunner = (args, cwd, options) => {
-    if (args[0] === 'commit' || args[0] === 'push')
-      issue.lignesShell.push(ligneGit(args, options?.env))
-    return deps.runGit(args, cwd, options)
-  }
   const resultat = await deps.commiter(
     messageDeCommit(titre, auteurs.length ? auteurs : [passe.fil]),
     partants,
     runGitTrace
   )
-  if (resultat.status === 'pushed') {
-    issue.publie = true
-    if (resultat.mode === 'pr')
-      issue.notes.push(
-        `poussé sur la branche ${resultat.branch}, pas sur la branche courante${resultat.directRefused ? ` (${resultat.directRefused})` : ''}`
-      )
-  } else if (resultat.status === 'committed') {
-    issue.notes.push('commit local seulement : rien n’est parti vers le distant')
-  } else if (resultat.status === 'skipped') {
-    issue.aTrier.push(
-      `commit refusé : ${resultat.reason}${resultat.detail ? ` (${resultat.detail})` : ''}`
-    )
-  } else {
-    issue.aTrier.push(`commit impossible : ${resultat.error}`)
-  }
-  return issue
+  noterLEnvoi(resultat, issue, 'commit')
 }
 
 /** Le petit modèle d'Agent Studio, branché comme le condenseur du Brain (`brain-condenseur.ts`). */

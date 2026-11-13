@@ -419,25 +419,47 @@ export function bilanDesChoix(entree: {
  * runs en `defect`, d'où la réserve écrite dans la ligne : c'est l'état du run à sa clôture, et un
  * scout l'avait lue comme « vos pistes n'aboutissent pas ». Les pistes prises sans run ne sont pas
  * comptées comme traitées : elles se disent.
+ *
+ * LES RUNS SANS RÉSULTAT SE DISENT AUSSI (2026-11-13). Le journal des résultats, plein depuis le
+ * 03/11 (`outcome-learning-ledger.ts`, 8 Mio), n'avait plus rien noté : les 10 runs lancés depuis
+ * disparaissaient du compte, et un scout a conclu « 6 sur 7 n'aboutissent pas » sur les seuls runs
+ * d'octobre. La mémoire ne date pas le choix, seulement la proposition (`vuLe`) : la plus ancienne
+ * piste de ces runs sépare un run en cours d'un résultat jamais enregistré.
  */
 function livraisonDesPrises(
   prises: readonly EntreeMemoireScout[],
   resultatDuRun: LecteurResultatRun
 ): string {
   const runsFinis = new Map<string, ClasseResultatRun>()
+  /** Run sans résultat → la plus ancienne date de proposition de ses pistes. */
+  const sansResultat = new Map<string, string>()
   let pistes = 0
   for (const e of prises) {
-    const classe = e.traitePar ? resultatDuRun(e.traitePar) : undefined
-    if (!e.traitePar || classe === undefined) continue
+    if (!e.traitePar) continue
+    const classe = resultatDuRun(e.traitePar)
+    if (classe === undefined) {
+      const connu = sansResultat.get(e.traitePar)
+      if (connu === undefined || e.vuLe < connu) sansResultat.set(e.traitePar, e.vuLe)
+      continue
+    }
     runsFinis.set(e.traitePar, classe)
     pistes += 1
   }
-  if (runsFinis.size === 0) return ''
+  const lances = sansResultat.size
+  const plusAncien = [...sansResultat.values()].sort()[0]?.slice(0, 10)
+  const sansResultatTexte =
+    lances > 0
+      ? `${lances} ${lances > 1 ? 'runs lancés' : 'run lancé'} sans résultat noté, sur des pistes proposées dès le ${plusAncien} (en cours, ou résultat jamais enregistré)`
+      : ''
+  const sansRun = prises.filter((e) => !e.traitePar).length
+  const sansSuivi =
+    sansRun > 0 ? `, ${sansRun} ${sansRun > 1 ? 'pistes' : 'piste'} sans run suivi` : ''
+  if (runsFinis.size === 0)
+    return sansResultatTexte ? `prises traitées : ${sansResultatTexte}${sansSuivi}` : ''
   const classes = [...runsFinis.values()]
   const livres = classes.filter((c) => c === 'delivered').length
   const enEchec = classes.filter((c) => c === 'defect').length
   const autres = classes.length - livres - enEchec
-  const sansRun = prises.filter((e) => !e.traitePar).length
   const nomRuns = classes.length > 1 ? 'runs finis' : 'run fini'
   const resultats = [
     `${livres} ${livres > 1 ? 'livrés' : 'livré'}`,
@@ -446,9 +468,7 @@ function livraisonDesPrises(
   ].join(', ')
   const reserve =
     'résultat du run à sa clôture, pas de chaque piste : un run refusé a pu être publié ensuite'
-  const sansSuivi =
-    sansRun > 0 ? `, ${sansRun} ${sansRun > 1 ? 'pistes' : 'piste'} sans run suivi` : ''
-  return `prises traitées : ${pistes} ${pistes > 1 ? 'pistes' : 'piste'} dans ${classes.length} ${nomRuns} : ${resultats} (${reserve})${sansSuivi}`
+  return `prises traitées : ${pistes} ${pistes > 1 ? 'pistes' : 'piste'} dans ${classes.length} ${nomRuns} : ${resultats} (${reserve})${sansSuivi}${sansResultatTexte ? `, ${sansResultatTexte}` : ''}`
 }
 
 /** Le bilan d'une voie : pistes prises traitées par un run FINI, et combien de ces runs ont livré. */

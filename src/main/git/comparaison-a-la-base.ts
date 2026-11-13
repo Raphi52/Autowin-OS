@@ -84,7 +84,9 @@ async function git(repo: string, args: readonly string[]): Promise<string> {
  */
 export async function ouvrirCopieDeBase(
   repo: string,
-  racine: string = tmpdir()
+  racine: string = tmpdir(),
+  /** Le commit de la copie ; un autre que HEAD sert à juger des commits déjà faits. */
+  commit = 'HEAD'
 ): Promise<CopieDeBase> {
   const parent = realpathSync.native(mkdtempSync(join(racine, PREFIXE_COPIE_DE_BASE)))
   const chemin = join(parent, 'copie')
@@ -103,7 +105,7 @@ export async function ouvrirCopieDeBase(
     )
   }
   try {
-    await git(repo, ['-c', 'core.longpaths=true', 'worktree', 'add', '--detach', chemin, 'HEAD'])
+    await git(repo, ['-c', 'core.longpaths=true', 'worktree', 'add', '--detach', chemin, commit])
     const liaison = lierLesDependances(repo, chemin)
     if (liaison.fait === 'echec') throw new Error(`modules non reliés : ${liaison.raison}`)
   } catch (erreur) {
@@ -111,6 +113,56 @@ export async function ouvrirCopieDeBase(
     throw erreur
   }
   return { chemin, fermer }
+}
+
+/** Au-delà, la ligne de commande de `git checkout` approcherait la limite de Windows. */
+const CHEMINS_PAR_CHECKOUT = 100
+
+/**
+ * COPIE POUR JUGER DES COMMITS DÉJÀ FAITS : son dernier commit est `base` (ce que le distant a), et
+ * les fichiers de la plage y sont posés dans leur version de `tete`, comme les fichiers d'un tour.
+ * Une copie de HEAD comparerait ces commits à eux-mêmes : tout rouge qu'ils causent passerait pour
+ * « déjà présent ». Les fichiers sont lus dans les commits, jamais dans l'arbre partagé, où d'autres
+ * fils écrivent encore. Un fichier supprimé par la plage est retiré de la copie.
+ */
+export async function ouvrirCopieDesCommitsLocaux(
+  repo: string,
+  plage: { base: string; tete: string; fichiers: readonly string[] },
+  racine: string = tmpdir()
+): Promise<CopieDeBase> {
+  const copie = await ouvrirCopieDeBase(repo, racine, plage.base)
+  try {
+    const lots: string[][] = []
+    for (let i = 0; i < plage.fichiers.length; i += CHEMINS_PAR_CHECKOUT)
+      lots.push(plage.fichiers.slice(i, i + CHEMINS_PAR_CHECKOUT))
+    const presents = new Set<string>()
+    for (const lot of lots) {
+      // `-z` : sans lui, git cite entre guillemets un chemin accentué, qui ne se retrouverait plus.
+      const lus = await git(copie.chemin, [
+        'ls-tree',
+        '-r',
+        '-z',
+        '--name-only',
+        plage.tete,
+        '--',
+        ...lot
+      ])
+      for (const chemin of lus.split('\0').filter(Boolean)) presents.add(chemin)
+    }
+    // Les disparus d'abord : un fichier `a` devenu le dossier de `a/b.ts` empêcherait sinon de le poser.
+    for (const chemin of plage.fichiers) {
+      const cible = join(copie.chemin, chemin)
+      if (!presents.has(chemin) && existsSync(cible)) unlinkSync(cible)
+    }
+    for (const lot of lots) {
+      const aPoser = lot.filter((chemin) => presents.has(chemin))
+      if (aPoser.length) await git(copie.chemin, ['checkout', plage.tete, '--', ...aPoser])
+    }
+  } catch (erreur) {
+    await copie.fermer()
+    throw erreur
+  }
+  return copie
 }
 
 /**
