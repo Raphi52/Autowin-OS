@@ -806,6 +806,8 @@ describe('relance — le plan de lots du fil suit le run repris', () => {
       fins,
       dep: {
         agentRepris: (fil, tour) => adoptions.push([fil, tour]),
+        repriseEnFile: () => {},
+        repriseAbandonnee: () => false,
         finDuRun: (fil, issue) => fins.push([fil, issue])
       }
     }
@@ -831,7 +833,7 @@ describe('relance — le plan de lots du fil suit le run repris', () => {
         ...d,
         closeConvRun: (() => ordre.push('run clos')) as never,
         plansDeLots: {
-          agentRepris: s.dep.agentRepris,
+          ...s.dep,
           finDuRun: () => ordre.push('plan prévenu')
         }
       })
@@ -1033,6 +1035,8 @@ describe('relance — le plan de lots du fil suit le run repris', () => {
         ...d,
         plansDeLots: {
           agentRepris: (fil, tour) => apres.agentRepris(fil, tour),
+          repriseEnFile: (fil, tour) => apres.repriseEnFile(fil, tour),
+          repriseAbandonnee: (fil, tour) => apres.repriseAbandonnee(fil, tour),
           finDuRun: (fil, issue) => void apres.surFinDeTour(fil, issue).then(fini)
         }
       })
@@ -1042,6 +1046,73 @@ describe('relance — le plan de lots du fil suit le run repris', () => {
     expect(apres.plans()[0].lots.map((l) => l.etat)).toEqual(['fait', 'en-cours'])
     expect(apres.plans()[0].statut).toBe('en-cours')
     expect(lancements).toEqual(['conv-100', 'conv-101', 'conv-chef'])
+  })
+
+  /**
+   * Le scénario de plan-db54feb7 (12/11/2026) : la reprise du lot 1 attend dans la file, le chef le
+   * relance, puis la file arrive à l'ancienne reprise. Elle ne part pas : un seul agent dans le fil.
+   */
+  it('avec le vrai coordinateur : une reprise remplacée par une relance ne part plus', async () => {
+    let stocke = ''
+    const lancements: string[] = []
+    let tours = 0
+    const fils = new Set(['conv-chef'])
+    let prochain = 100
+    const deps: DepsPlans = {
+      creerFil: () => {
+        const fil = `conv-${prochain++}`
+        fils.add(fil)
+        return fil
+      },
+      lancer: async (fil) => {
+        lancements.push(fil)
+        return { ok: true, turnId: `tour-${++tours}` }
+      },
+      tourActif: () => false,
+      existe: (fil) => fils.has(fil),
+      ecrire: () => {},
+      stockage: { lire: () => stocke, ecrire: (c) => void (stocke = c) },
+      journaliser: () => {}
+    }
+    const avant = new CoordinateurDesPlans(deps)
+    const depot = avant.deposer('conv-chef', {
+      titre: 'RAM',
+      parallele: 1,
+      lots: [
+        { titre: 'Lecteurs', demande: '/build lecteurs', fichiers: ['src/a.ts'] },
+        { titre: 'Bascule', demande: '/build bascule', fichiers: ['src/b.ts'], apres: [1] }
+      ]
+    })
+    if (!depot.ok) throw new Error(depot.erreur)
+    await avant.accepter('conv-chef', depot.plan.id)
+    // L'app redémarre ; le run du lot (tour-1) est mis dans la file des reprises.
+    const apres = new CoordinateurDesPlans(deps)
+    apres.repriseEnFile('conv-100', 'tour-1')
+    expect(apres.plans()[0].lots[0].etat).toBe('en-cours')
+    const relance = await apres.relancer('conv-chef', 1)
+    expect(relance.ok).toBe(true)
+    expect(lancements).toEqual(['conv-100', 'conv-100'])
+
+    let fini!: () => void
+    const finAnnoncee = new Promise<void>((r) => (fini = r))
+    const b = banc({
+      etat: { conversationId: 'conv-100', turnId: 'tour-1' },
+      sabotage: (d) => ({
+        ...d,
+        plansDeLots: {
+          agentRepris: (fil, tour) => apres.agentRepris(fil, tour),
+          repriseEnFile: (fil, tour) => apres.repriseEnFile(fil, tour),
+          repriseAbandonnee: (fil, tour) => apres.repriseAbandonnee(fil, tour),
+          finDuRun: (fil, issue) => void apres.surFinDeTour(fil, issue).then(fini)
+        }
+      })
+    })
+    await b.relance()
+    await finAnnoncee
+    expect(b.observe.ordre).not.toContain('runTask')
+    expect(b.observe.oublis).toHaveLength(1)
+    // La fin de l'ancienne reprise ne touche pas au lot relancé, qui tourne dans tour-2.
+    expect(apres.plans()[0].lots[0]).toMatchObject({ etat: 'en-cours', tour: 'tour-2' })
   })
 })
 

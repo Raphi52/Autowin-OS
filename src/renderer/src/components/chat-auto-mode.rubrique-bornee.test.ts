@@ -71,6 +71,29 @@ describe('rubrique « Reste à faire » — bornée à elle-même', () => {
       '👉 Recommandé : b'
     ])
   })
+  /*
+   * « ❓ À ÉCLAIRCIR », facultative, entre « Reste à faire » et « Recommandé » : ses questions
+   * ne sont pas du travail restant. Entrée qui fait échouer une version sans ce titre dans les
+   * bornes : la question se retrouve dans « Reste à faire », pour les DEUX lectures.
+   */
+  it('les deux lectures s’arrêtent à l’intitulé « ❓ À éclaircir »', () => {
+    const t = '⏳ Reste à faire\n- a\n❓ À éclaircir\n1. Et les archives ?\n👉 Recommandé : b'
+    expect(lignesDeRubrique(t, 'Reste à faire')).toEqual(['- a'])
+    expect(lignesDeRubrique(t, 'Reste à faire', 'exacte')).toEqual(['- a'])
+    expect(lignesDeRubrique(`**❓️ À éclaircir**\n${t}`, 'Fait')).toEqual([])
+  })
+  it('« Reste à faire » entièrement fini, suivi de questions : la fin reste lue', () => {
+    const t =
+      '⏳ Reste à faire\n- Aucune suite nécessaire.\n❓ À éclaircir\n1. Et les archives ?\n👉 Recommandé\n- lance X'
+    expect(decision(t)).toMatchObject({ action: 'arreter', raison: 'reste-rien' })
+  })
+  // Choix de l'utilisateur : des questions ouvertes n'arrêtent pas le mode auto, la suite part.
+  // ENTRÉE QUI DOIT FAIRE ÉCHOUER : une porte d'arrêt ajoutée sur la seule présence de la rubrique.
+  it('des questions « ❓ À éclaircir » n’arrêtent pas le mode auto quand une suite existe', () => {
+    const t =
+      '⏳ Reste à faire\n- Brancher la vue Tickets\n❓ À éclaircir\n1. Et les archives ?\n👉 Recommandé\n- lance le banc'
+    expect(decision(t)).not.toMatchObject({ action: 'arreter' })
+  })
   it('sur plusieurs clôtures dans un message, seule la DERNIÈRE compte', () => {
     const t =
       '⏳ Reste à faire : rien.\n👉 Recommandé : suite.\n\n[phase build]\n⏳ Reste à faire\n- Brancher la vue Tickets\n👉 Recommandé\n- lance le banc'

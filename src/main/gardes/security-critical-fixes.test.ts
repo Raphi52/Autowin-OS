@@ -85,6 +85,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     'os:topology:set',
     'os:profiles:apply',
     'os:profiles:save',
+    'os:profiles:delete',
     'os:conversations:remove',
     'os:conversations:rename',
     'os:openFolder',
@@ -878,7 +879,12 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   (liste), `os:brain-affectations:enregistrer` (cwd + Brain equipe ou perso, valides avant
     //   `brain-affectation.ts`), `os:brain-affectations:retirer` (cwd). Un refus rend une raison
     //   lisible sans rien ecrire (`brain-affectation-canaux.ts`). `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(305)
+    // MISE A JOUR 2026-11-12 — 305 -> 306, MESURE par ce test (rouge a 306) : un seul ajout, aucun
+    //   retrait, dans `ipc/profiles.ts`, garde `assertTrustedRendererSender(event, 'Profiles')` des
+    //   sa PREMIERE ligne : `os:profiles:delete` — retire UN profil enregistre d'Agent Studio, id
+    //   valide par `guardString` ; le profil « Défaut », porte par le code, est refuse. Il ne
+    //   touche pas la topologie en place. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(306)
     expect(unguarded).toEqual([])
   })
 

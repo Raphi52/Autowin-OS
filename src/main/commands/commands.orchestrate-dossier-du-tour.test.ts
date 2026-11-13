@@ -51,7 +51,8 @@ function osQuiCaptureLeDossier(
     executionWorkspace: global,
     conversations: {
       get: (id: string) => (id === 'conv-1' ? conversation : undefined),
-      list: () => [conversation],
+      listAvecMessages: () => [conversation],
+      listAvecTexte: () => [conversation],
       attachRun: () => ({ id: 'conv-1', runPaths: [] })
     },
     registry: { ids: () => ['claude'] },

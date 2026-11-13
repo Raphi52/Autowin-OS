@@ -1,6 +1,7 @@
 // Les deux lectures d'une demande (`deux-lectures.ts`) pour UN tour de chat : appel
 // unique au petit modèle, question à boutons, ligne « Lecture retenue ». Sorti tel quel de
 // AgentPilot.chat() (lot 2).
+import { estUnEnvoiDuModeAuto } from '../../shared/envoi-du-mode-auto'
 import { estUnMessageDuPlan } from '../../shared/plan-de-lots'
 import { FLUX_LECTURE_RETENUE } from '../../shared/lecture-retenue'
 import { estUneRepriseAutomatique } from '../chat/relance-taches-de-fond'
@@ -133,8 +134,15 @@ export function lecturesDuTour(entree: {
     // l'app ou un agent, sans humain pour cliquer. (2026-10-27) s'y est arrêté net.
     !estUnMessageDuPlan(latestUserMessage) &&
     !estUnPromptDOrdre(latestUserMessage)
+  /*
+   * Jamais de QUESTION sur un envoi du mode auto : l'agent a écrit ce texte, aucune lecture n'est à
+   * départager, et le mode auto y répondrait seul (mesuré : 3 tours perdus sur 47 envois, dont un
+   * choix à l'opposé de la demande). La ligne de compréhension reste, la lecture dominante part.
+   */
   const questionPermise =
-    meriteUneLecture(latestUserMessage) && !suitUneQuestionDesLectures(history)
+    meriteUneLecture(latestUserMessage) &&
+    !suitUneQuestionDesLectures(history) &&
+    !estUnEnvoiDuModeAuto(latestUserMessage)
   let lecturesMemorisees: Promise<IssueDesLectures | undefined> | undefined
   // `moment` : celui du PREMIER appel, le seul qui interroge le petit modèle (promesse mémorisée).
   const deuxLecturesDuTour = (moment: MomentDeLaLecture): Promise<IssueDesLectures | undefined> => {

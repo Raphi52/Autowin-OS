@@ -3,13 +3,12 @@ import './AgentsTopologyView.css'
 import { langueCourante } from '../langue'
 import { riche } from '../textes'
 import { traduireAgentStudio, useTextesAgentStudio } from '../textes-ecrans/agent-studio'
+import { ID_DU_PROFIL_DEFAUT } from '../../../shared/profil-defaut-id'
 import { libraryModels } from './model-library'
 import { Spinner } from './Spinner'
 import { CeQueCaCouvre } from './CeQueCaCouvre'
-import {
-  OrchestratorModelSelector,
-  type OrchestratorProviderStatus
-} from './OrchestratorModelSelector'
+import type { OrchestratorProviderStatus } from './OrchestratorModelSelector'
+import { ModeleDeroulant } from './ModeleDeroulant'
 import type { OrchestratorModelOption } from './chat-view-model'
 // Même bloc que « Modèle des petites tâches » : mêmes classes (`.router-default`, `.router-hint`).
 import './RouterView.css'
@@ -82,9 +81,9 @@ const COUVERTURE: Readonly<
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
 
 /**
- * Le menu de modèle d'un rôle : le même que « Modèle des petites tâches » (et que l'en-tête du chat).
- * Composant à part, hors de la vue : défini dedans, il serait recréé à chaque rendu et refermerait
- * le menu ouvert.
+ * Le menu de modèle d'un rôle : le même menu déroulant que « Modèle des petites tâches » dans Agent
+ * Studio. Composant à part, hors de la vue : défini dedans, il serait recréé à chaque rendu et
+ * refermerait le menu ouvert.
  */
 function MenuDeRole({
   idBase,
@@ -109,7 +108,7 @@ function MenuDeRole({
 }): React.JSX.Element {
   const model = binding ? modelsById.get(binding.modelId) : undefined
   return (
-    <OrchestratorModelSelector
+    <ModeleDeroulant
       busy={false}
       catalogLoaded
       models={models}
@@ -143,11 +142,12 @@ function nextSubagentSlotId(topology: AgentTopology): string {
 
 export function AgentsTopologyView({
   active = true,
-  premiereLigne
+  carteVoisine
 }: {
   active?: boolean
-  /** Ligne posée avant celles des rôles (le modèle des petites tâches, dans Agent Studio). */
-  premiereLigne?: React.ReactNode
+  /** Carte posée juste après l'orchestrateur, sur sa rangée (le modèle des petites tâches, dans
+   *  Agent Studio). Pendant le chargement de la topologie, elle reste affichée seule. */
+  carteVoisine?: React.ReactNode
 } = {}): React.JSX.Element {
   const { t } = useTextesAgentStudio()
   const [models, setModels] = useState<ImportedModel[]>([])
@@ -166,6 +166,8 @@ export function AgentsTopologyView({
   const [appliedProfileId, setAppliedProfileId] = useState('')
   const [appliedFingerprint, setAppliedFingerprint] = useState('')
   const [pendingProfileId, setPendingProfileId] = useState('')
+  /** Profil dont la suppression attend confirmation : un profil supprimé ne se retrouve pas. */
+  const [profilASupprimer, setProfilASupprimer] = useState('')
   /** Nom du profil saisi DANS l'application : `window.prompt` bloque le processus de rendu et reste
    *  intestable — aucun test ne pouvait couvrir l'enregistrement d'un profil. */
   const [profileName, setProfileName] = useState('')
@@ -280,6 +282,21 @@ export function AgentsTopologyView({
       )
       setProfileName('')
       setNamingProfile(false)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+      setState('error')
+    }
+  }
+  async function deleteProfile(id: string): Promise<void> {
+    setError('')
+    try {
+      setProfiles((await window.api.deleteProfile(id)) as Profile[])
+      // La topologie en place reste telle quelle ; seule la pastille qui la nommait disparaît.
+      if (id === appliedProfileId) {
+        setAppliedProfileId('')
+        setAppliedFingerprint('')
+      }
+      if (id === pendingProfileId) setPendingProfileId('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
       setState('error')
@@ -430,10 +447,12 @@ export function AgentsTopologyView({
 
   function renderTargetPanel({
     target,
+    surtitre,
     title,
     description
   }: {
     target: Target
+    surtitre: string
     title: string
     description: string
   }): React.JSX.Element {
@@ -445,6 +464,7 @@ export function AgentsTopologyView({
         data-testid={`topology-panel-${target}`}
       >
         <header>
+          <span className="carte-surtitre">{surtitre}</span>
           <h3>{title}</h3>
           <small>{description}</small>
         </header>
@@ -573,7 +593,7 @@ export function AgentsTopologyView({
   if (!topology) {
     return (
       <>
-        {premiereLigne}
+        {carteVoisine}
         <div className="agents-topology-loading">
           {state === 'error' ? (
             `⛔ ${error}`
@@ -617,22 +637,45 @@ export function AgentsTopologyView({
           {profiles.map((profile) => {
             const enPlace = profile.id === appliedProfileId
             return (
-              <button
-                key={profile.id}
-                type="button"
-                className={`topology-profil${enPlace ? ' is-applique' : ''}${
-                  profile.id === pendingProfileId ? ' is-en-attente' : ''
-                }`}
-                data-profile-id={profile.id}
-                data-testid={enPlace ? 'topology-profile-applied' : undefined}
-                aria-pressed={enPlace}
-                disabled={unresolvedSlots.length > 0}
-                title={unresolvedSlots.length > 0 ? t('topo.profil.gelTitre') : undefined}
-                onClick={() => setPendingProfileId(enPlace ? '' : profile.id)}
-              >
-                {profile.name}
-                {enPlace && topologyDirty ? t('topo.profil.modifie') : ''}
-              </button>
+              <span className="topology-profil-groupe" key={profile.id}>
+                <button
+                  type="button"
+                  className={`topology-profil${enPlace ? ' is-applique' : ''}${
+                    profile.id === pendingProfileId ? ' is-en-attente' : ''
+                  }`}
+                  data-profile-id={profile.id}
+                  data-testid={enPlace ? 'topology-profile-applied' : undefined}
+                  aria-pressed={enPlace}
+                  disabled={unresolvedSlots.length > 0}
+                  title={unresolvedSlots.length > 0 ? t('topo.profil.gelTitre') : undefined}
+                  onClick={() => {
+                    setProfilASupprimer('')
+                    setPendingProfileId(enPlace ? '' : profile.id)
+                  }}
+                >
+                  {profile.name}
+                  {enPlace && topologyDirty ? t('topo.profil.modifie') : ''}
+                </button>
+                {/* « Défaut » est fourni par l'application : il n'a pas de croix. La croix reste
+                    active même gelée, car supprimer n'écrit rien dans la topologie. */}
+                {profile.id !== ID_DU_PROFIL_DEFAUT && (
+                  <button
+                    type="button"
+                    className={`topology-profil-supprimer${
+                      profile.id === profilASupprimer ? ' is-en-attente' : ''
+                    }`}
+                    data-testid={`topology-profile-delete-${profile.id}`}
+                    title={t('topo.profil.supprimer', { nom: profile.name })}
+                    aria-label={t('topo.profil.supprimer', { nom: profile.name })}
+                    onClick={() => {
+                      setPendingProfileId('')
+                      setProfilASupprimer(profile.id === profilASupprimer ? '' : profile.id)
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
             )
           })}
           {namingProfile ? (
@@ -711,6 +754,40 @@ export function AgentsTopologyView({
               </button>
             </span>
           )}
+          {profilASupprimer && (
+            <span
+              className="topology-profile-confirm"
+              role="alertdialog"
+              aria-label={t('topo.supprimer.aria')}
+              data-testid="topology-delete-confirm"
+            >
+              <span>
+                {t('topo.supprimer.question', {
+                  nom: profiles.find((p) => p.id === profilASupprimer)?.name ?? profilASupprimer
+                })}
+              </span>
+              <button
+                type="button"
+                className="topology-assign-button"
+                data-testid="topology-delete-yes"
+                onClick={() => {
+                  const id = profilASupprimer
+                  setProfilASupprimer('')
+                  void deleteProfile(id)
+                }}
+              >
+                {t('topo.supprimer.confirmer')}
+              </button>
+              <button
+                type="button"
+                className="topology-assign-button"
+                data-testid="topology-delete-no"
+                onClick={() => setProfilASupprimer('')}
+              >
+                {t('topo.profil.annuler')}
+              </button>
+            </span>
+          )}
         </div>
         <strong
           className={`topology-state is-${state}`}
@@ -767,14 +844,17 @@ export function AgentsTopologyView({
       {/* Chaque rôle se règle par son menu de modèle, le même que « Modèle des petites tâches » :
           un seul geste à connaître dans tout Agent Studio. */}
       <main className="topology-workspace">
-        {premiereLigne}
+        {/* L'orchestrateur d'abord : c'est le modèle qui répond dans le chat, le premier réglé. */}
         {renderTargetPanel({
           target: 'orchestrator',
+          surtitre: t('studio.surtitre.orchestrateur'),
           title: t('topo.orchestrateur.titre'),
           description: t('topo.orchestrateur.description')
         })}
+        {carteVoisine}
         {renderTargetPanel({
           target: 'subagents',
+          surtitre: t('studio.surtitre.sousAgents'),
           title: t('topo.sousAgents.titre'),
           description: t('topo.sousAgents.description')
         })}

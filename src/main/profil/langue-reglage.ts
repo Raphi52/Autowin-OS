@@ -111,6 +111,7 @@ export const REPERES_GARDES_EN_FRANCAIS = [
   '✅ Fait',
   '📍 Maintenant',
   '⏳ Reste à faire',
+  '❓ À éclaircir',
   '👉 Recommandé',
   'rien',
   'Grille :',

@@ -56,22 +56,16 @@ const rendre = async (active: boolean): Promise<void> => {
   await flush()
 }
 
-/** L'effort que montre le menu de l'orchestrateur : le point coché de sa grille modèle × effort. */
+/** L'effort que montre le menu de l'orchestrateur : la pastille cochée de son menu déroulant. */
 const effortDeLOrchestrateur = async (): Promise<string | null | undefined> => {
-  const menu = container.querySelector<HTMLDetailsElement>(
-    'details[data-testid="topology-modele-orchestrator"]'
+  const barre = container.querySelector<HTMLButtonElement>(
+    'button[data-testid="topology-modele-orchestrator"]'
   )!
-  await act(async () => {
-    menu.open = true
-    menu.dispatchEvent(new Event('toggle'))
-  })
-  const coche = document.body
-    .querySelector('[data-testid="effort-matrix"] [aria-checked="true"]')
+  await act(async () => barre.click())
+  const coche = container
+    .querySelector('[data-testid="topology-modele-orchestrator-liste"] [aria-checked="true"]')
     ?.getAttribute('data-effort')
-  await act(async () => {
-    menu.open = false
-    menu.dispatchEvent(new Event('toggle'))
-  })
+  await act(async () => barre.click())
   return coche
 }
 

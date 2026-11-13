@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Langue } from '../../../shared/langue'
 import {
+  lotRelancable,
   relancerLot,
   type EtatDuLot,
   type LotDuPlan,
@@ -245,15 +246,9 @@ export function relanceAuClic(
   lot: LotDuPlan,
   langue: Langue
 ): { possible: true } | { possible: false; raison: string } | null {
-  // Un lot qui attend le chef ou sa publication se relance aussi (même règle que `relancerLot`) :
-  // pour le second, c'est la sortie de l'utilisateur si personne ne commite les fichiers bloquants.
-  if (
-    lot.etat !== 'echec' &&
-    lot.etat !== 'interrompu' &&
-    lot.etat !== 'attend-chef' &&
-    lot.etat !== 'attend-publication'
-  )
-    return null
+  // Mêmes états que le geste (`lotRelancable`) : un lot qui attend le chef ou sa publication, ou un
+  // lot en cours dont la reprise attend encore dans la file, garde aussi son bouton.
+  if (!lotRelancable(lot)) return null
   if (relancerLot(plan, lot.rang).ok) return { possible: true }
   // Le seul refus qui garde un bouton : sans lui, l'utilisateur ne saurait pas pourquoi rien ne
   // repart. Les autres (quota, redémarrage, arrêt) ont déjà leur bouton « Reprendre ».

@@ -22,13 +22,12 @@ const os = (nombre: number): OsDouble =>
   ({
     executionWorkspace: process.cwd(),
     conversations: {
-      list: () =>
+      listResumes: () =>
         Array.from({ length: nombre }, (_, i) => ({
           id: `conv-${i}`,
           title: `une conversation au titre assez long pour peser son poids réel ${i}`,
           provider: 'claude',
-          updatedAt: 1792650600000 - i,
-          messages: []
+          updatedAt: 1792650600000 - i
         }))
     },
     registry: { ids: () => ['claude'] },

@@ -125,8 +125,16 @@ export function commandesNommees(demande: string): string[] {
 /** Plafond d'une description de commande remise au petit modèle. */
 const PLAFOND_DESCRIPTION = 400
 
-/** Plafond d'une lecture : c'est le libellé du bouton (`ask-options.ts`, PLAFOND_LIBELLE). */
+/** Plafond d'une lecture posée en BOUTON : son libellé (`ask-options.ts`, PLAFOND_LIBELLE). */
 const PLAFOND_LECTURE = 200
+/**
+ * Plafond d'une lecture ANNONCÉE dans le fil, qui n'est pas un bouton. La consigne demande 160
+ * caractères, mais le petit modèle ne compte pas les caractères : sur les demandes en plusieurs
+ * étapes, il rendait 220 à 230 caractères en JSON valide. Jetée à 200, sa réponse était payée,
+ * marquée « illisible » dans `cost.jsonl` (44 appels, 2026-11-12) et le fil restait sans ligne.
+ * Au-delà de ce plafond, ce n'est plus une phrase : la réponse reste refusée.
+ */
+export const PLAFOND_LECTURE_ANNONCEE = 400
 /** Extrait du dernier message de l'agent remis comme contexte : assez pour « nan, pas ça ». */
 const PLAFOND_CONTEXTE = 800
 
@@ -258,11 +266,12 @@ export function lectureAAnnoncer(
  * La décision tirée de la réponse du petit modèle, ou `undefined`.
  *
  * `undefined` dans TOUS les cas douteux — JSON illisible, aucune lecture, une lecture SANS
- * probabilité, deux lectures identiques, une lecture trop longue. Le travail part alors comme avant,
- * sans annonce : ce contrôle ne doit jamais devenir un mur.
+ * probabilité, deux lectures identiques, une lecture au-delà de `PLAFOND_LECTURE_ANNONCEE`. Le
+ * travail part alors comme avant, sans annonce : ce contrôle ne doit jamais devenir un mur.
  * UNE lecture valide : `retenue` sans lecture écartée. Deux lectures valides : `question`
- * si leur écart est de `ECART_MAX_POUR_DEMANDER` points ou moins ET qu'elles reprennent ses mots,
- * sinon `retenue` — la plus probable part, l'autre est nommée pour pouvoir corriger.
+ * si leur écart est de `ECART_MAX_POUR_DEMANDER` points ou moins, qu'elles reprennent ses mots ET
+ * tiennent dans un bouton ; sinon `retenue` — la plus probable part, l'autre est nommée pour
+ * pouvoir corriger.
  */
 export function lireLesLectures(reponse: unknown, demande: string): IssueDesLectures | undefined {
   if (typeof reponse !== 'string') return undefined
@@ -277,7 +286,7 @@ export function lireLesLectures(reponse: unknown, demande: string): IssueDesLect
   const lectures = (brut as { lectures?: unknown })?.lectures
   if (Array.isArray(lectures) && lectures.length === 1) {
     const seule = lireUneLecture(lectures[0])
-    if (!seule || seule.texte.length > PLAFOND_LECTURE) return undefined
+    if (!seule || seule.texte.length > PLAFOND_LECTURE_ANNONCEE) return undefined
     return { kind: 'retenue', retenue: seule.texte }
   }
   if (!Array.isArray(lectures) || lectures.length !== 2) return undefined
@@ -288,7 +297,7 @@ export function lireLesLectures(reponse: unknown, demande: string): IssueDesLect
   if (total <= 0) return undefined
   const [premiere, seconde] = [lues[0], lues[1]].sort((x, y) => y.proba - x.proba)
   const [a, b] = [premiere.texte, seconde.texte]
-  if (a.length > PLAFOND_LECTURE || b.length > PLAFOND_LECTURE) return undefined
+  if (a.length > PLAFOND_LECTURE_ANNONCEE || b.length > PLAFOND_LECTURE_ANNONCEE) return undefined
   const cle = (texte: string): string =>
     sansAccent(texte).toLowerCase().replace(/\W+/gu, ' ').trim()
   if (cle(a) === cle(b)) return undefined
@@ -296,7 +305,10 @@ export function lireLesLectures(reponse: unknown, demande: string): IssueDesLect
   // Les BOUTONS doivent être dans ses mots ; la ligne, non : sur le vrai
   // modèle, « met le tout le temps » lu « à chaque demande » perdait sa ligne faute du mot « temps ».
   const dansSesMots = reprendSesMots(a, demande) && reprendSesMots(b, demande)
-  return ecart <= ECART_MAX_POUR_DEMANDER && dansSesMots
+  // Un libellé de bouton est coupé à 200 caractères : une lecture plus longue ne se pose pas en
+  // question, elle s'annonce.
+  const tientDansUnBouton = a.length <= PLAFOND_LECTURE && b.length <= PLAFOND_LECTURE
+  return ecart <= ECART_MAX_POUR_DEMANDER && dansSesMots && tientDansUnBouton
     ? { kind: 'question', lectures: [a, b] }
     : { kind: 'retenue', retenue: a, ecartee: b }
 }

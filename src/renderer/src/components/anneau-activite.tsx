@@ -23,6 +23,8 @@ import React from 'react'
 import './anneau-activite.css'
 import {
   ANIMATIONS_D_ATTERRISSAGE,
+  ANIMATIONS_DE_VAGUE,
+  caleSurLHorlogeCommune,
   casesDuVerdict,
   groupesDeLegende,
   verdictDuRond,
@@ -117,6 +119,30 @@ export function LegendeDesOutils({
         </span>
       ))}
     </>
+  )
+}
+
+/**
+ * LA VAGUE DU CADRE : la lumiere qui traverse l'anneau en diagonale, d'un bord a l'autre (dessin dans
+ * anneau-activite.css) — le seul reflet de l'anneau. Deux calques : le halo dessous, la bande sur
+ * l'anneau dessus. A poser DANS chaque bloc encadre, en premier enfant de son `<summary>` quand le
+ * bloc est un `<details>` : hors du `summary`, un `<details>` replie ne l'afficherait pas.
+ * Chaque depart d'un passage est cale sur l'horloge commune, pour que tous les blocs du fil soient
+ * traverses par le MEME passage.
+ */
+export function VagueDuCadre(): React.JSX.Element {
+  return (
+    <span
+      className="cadre-vague"
+      aria-hidden="true"
+      onAnimationStart={(event) => {
+        if (ANIMATIONS_DE_VAGUE.includes(event.animationName))
+          caleSurLHorlogeCommune(event.target as Element)
+      }}
+    >
+      <span className="cadre-vague__lueur" />
+      <span className="cadre-vague__onde" />
+    </span>
   )
 }
 

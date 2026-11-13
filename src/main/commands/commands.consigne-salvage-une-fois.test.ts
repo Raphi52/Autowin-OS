@@ -16,7 +16,7 @@ type Travail = { agentId: string; date: string; fichiers: string[] }
 const osAvec = (travaux: () => Travail[]): ConstructorParameters<typeof AppCommandBus>[0] =>
   ({
     executionWorkspace: process.cwd(),
-    conversations: { list: () => [] },
+    conversations: { listResumes: () => [] },
     registry: { ids: () => ['claude'] },
     roles: { all: () => ({}), getBinding: () => undefined },
     runsWithGate: async () => [],

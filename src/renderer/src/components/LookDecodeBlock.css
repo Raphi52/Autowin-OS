@@ -2,10 +2,15 @@
  * Bloc « Décodage de l'image » (skill look) : à part du bloc « Raisonnement », ouvert par défaut.
  * Couleurs et polices par jetons de thème seulement : une couleur en dur casse le thème clair.
  */
+/* Le bord est l'anneau chrome partage des blocs du fil (anneau-activite.css, `::before`) : le
+   bord d'1 px garde la place, transparent, et l'anneau se pose dessus. */
 .look-decode-block {
+  position: relative;
+  isolation: isolate;
   margin: 6px 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 1px solid transparent;
+  --cadre-rayon: 10px;
+  border-radius: var(--cadre-rayon);
   color: var(--text-dim);
   font-family: var(--font);
   font-size: 0.9em;

@@ -154,8 +154,10 @@ export function registerCarteDesBesoinsIpc({
   const identiteDuDossier = creerIdentitesEnCache(undefined, undefined, undefined, true)
   const liens = racineDesLiens ? creerLiensWorkItems({ racine: racineDesLiens }) : null
   // Le type du store et celui de la carte décrivent le même JSON ; seul le typage des parts diffère.
+  // fix-ok: cause mesurée — `listAvecMessages` ne rend plus les fils archivés non relus (conversations.ts ;
+  // test conversations.archives-au-resume) : la carte lit leurs messages, elle prend donc la version texte.
   const lireConversations = (): readonly (ConversationPourLaCarte & { updatedAt?: number })[] =>
-    os.conversations.list() as unknown as readonly (ConversationPourLaCarte & {
+    os.conversations.listAvecTexte() as unknown as readonly (ConversationPourLaCarte & {
       updatedAt?: number
     })[]
   const lireLiens = (): EtatDesLiens => {

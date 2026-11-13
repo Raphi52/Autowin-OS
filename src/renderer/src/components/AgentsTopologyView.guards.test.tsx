@@ -73,21 +73,16 @@ const monter = async (): Promise<void> => {
   await flush()
 }
 
-/** Le geste réel : ouvrir le menu de modèle d'un rôle, puis cliquer un point modèle × effort. */
+/** Le geste réel : ouvrir le menu déroulant d'un rôle, puis cliquer une pastille d'effort. */
 async function choisirDansLeMenu(idBase: string, ligne: string, effort: string): Promise<void> {
-  const menu = container.querySelector<HTMLDetailsElement>(`details[data-testid="${idBase}"]`)
-  expect(menu).not.toBeNull()
-  await act(async () => {
-    menu!.open = true
-    menu!.dispatchEvent(new Event('toggle'))
-  })
-  const cran = document.body.querySelector<HTMLButtonElement>(
-    `[data-testid="effort-matrix"] [data-row="${ligne}"] [data-effort="${effort}"]`
+  const barre = container.querySelector<HTMLButtonElement>(`button[data-testid="${idBase}"]`)
+  expect(barre).not.toBeNull()
+  await act(async () => barre!.click())
+  const cran = container.querySelector<HTMLButtonElement>(
+    `[data-testid="${idBase}-liste"] [data-row="${ligne}"] [data-effort="${effort}"]`
   )
   expect(cran).not.toBeNull()
   await act(async () => cran!.click())
-  // Le clic referme le menu : on rejoue l'événement que le navigateur émet alors.
-  await act(async () => menu!.dispatchEvent(new Event('toggle')))
   await flush()
 }
 
@@ -283,6 +278,107 @@ describe('profils de topologie', () => {
 
     expect(prompt).not.toHaveBeenCalled()
     expect(saveProfile).toHaveBeenCalledWith(expect.objectContaining({ name: 'Nuit' }))
+  })
+
+  it('supprimer un profil se CONFIRME, retire sa pastille et ne touche pas la topologie', async () => {
+    const profilA = { id: 'p1', name: 'Profil A', updatedAt: '2026-01-01', topology: topologie() }
+    const defaut = { id: 'defaut', name: 'Défaut', updatedAt: '2026-01-01', topology: topologie() }
+    const deleteProfile = vi.fn(async () => [defaut])
+    const setTopology = vi.fn(async (next: unknown) => next)
+    api({ profiles: async () => [defaut, profilA], deleteProfile, setTopology })
+    await monter()
+
+    // « Défaut » est fourni par l'application : aucune croix ne propose de le supprimer.
+    expect(container.querySelector('[data-testid="topology-profile-delete-defaut"]')).toBeNull()
+
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="topology-profile-delete-p1"]')!
+        .click()
+    )
+    // Un clic sur la croix ne supprime rien : il demande.
+    expect(deleteProfile).not.toHaveBeenCalled()
+    expect(
+      container.querySelector('[data-testid="topology-delete-confirm"]')?.textContent
+    ).toContain('« Profil A »')
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-delete-yes"]')!.click()
+    )
+    await flush()
+
+    expect(deleteProfile).toHaveBeenCalledWith('p1')
+    expect(container.querySelector('[data-profile-id="p1"]')).toBeNull()
+    expect(container.querySelector('[data-profile-id="defaut"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="topology-delete-confirm"]')).toBeNull()
+    expect(setTopology).not.toHaveBeenCalled()
+  })
+
+  it('annuler la suppression garde le profil', async () => {
+    const deleteProfile = vi.fn(async () => [])
+    api({
+      profiles: async () => [
+        { id: 'p1', name: 'Profil A', updatedAt: '2026-01-01', topology: topologie() }
+      ],
+      deleteProfile
+    })
+    await monter()
+
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="topology-profile-delete-p1"]')!
+        .click()
+    )
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-delete-no"]')!.click()
+    )
+
+    expect(deleteProfile).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-profile-id="p1"]')).not.toBeNull()
+  })
+
+  it('un refus de suppression est AFFICHÉ, la pastille reste', async () => {
+    api({
+      profiles: async () => [
+        { id: 'p1', name: 'Profil A', updatedAt: '2026-01-01', topology: topologie() }
+      ],
+      deleteProfile: vi.fn(async () => {
+        throw new Error('disque plein')
+      })
+    })
+    await monter()
+
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="topology-profile-delete-p1"]')!
+        .click()
+    )
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-delete-yes"]')!.click()
+    )
+    await flush()
+
+    expect(container.querySelector('.topology-state')?.textContent).toContain('disque plein')
+    expect(container.querySelector('[data-profile-id="p1"]')).not.toBeNull()
+  })
+})
+
+describe('ordre des cartes', () => {
+  it('l’orchestrateur passe AVANT la carte voisine (petites tâches), puis les sous-agents', async () => {
+    api({})
+    await act(async () =>
+      root.render(<AgentsTopologyView carteVoisine={<section data-testid="carte-voisine" />} />)
+    )
+    await flush()
+
+    const ordre = [...container.querySelectorAll('.topology-workspace > *')].map(
+      (el) => el.getAttribute('data-testid') ?? el.className
+    )
+    expect(ordre.slice(0, 3)).toEqual([
+      'topology-panel-orchestrator',
+      'carte-voisine',
+      'topology-panel-subagents'
+    ])
   })
 })
 

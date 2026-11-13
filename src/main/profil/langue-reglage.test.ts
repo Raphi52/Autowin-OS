@@ -183,6 +183,7 @@ describe('langue de réponse choisie dans Settings · Interface (conv-1146)', ()
     '✅ Fait',
     '📍 Maintenant',
     '⏳ Reste à faire',
+    '❓ À éclaircir',
     '👉 Recommandé',
     'rien',
     'Grille :',

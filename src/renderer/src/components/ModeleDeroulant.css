@@ -1,0 +1,223 @@
+/*
+ * MENU DÉROULANT DE MODÈLE D'AGENT STUDIO (ModeleDeroulant.tsx).
+ * Une barre de verre pleine largeur et, ouverte, une liste soudée dessous, de la même largeur :
+ * la barre perd ses coins du bas, la liste reprend son contour violet et ses coins du bas.
+ * Verre de l'image de référence : fond voilé translucide, contour clair très fin, police
+ * d'interface — sans flou de fond, que l'interface s'interdit (`assets/aucun-flou.test.ts`).
+ * La liste, elle, a un fond plein : elle passe par-dessus la suite de la carte et doit se lire.
+ * Les sélecteurs portent la classe du menu en tête : les couches de thème qui repeignent les
+ * boutons ne passent pas devant.
+ */
+.modele-deroulant {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* Le fond de la liste, repris par ses intitulés collants. Mélange de deux couleurs OPAQUES
+     (`--bg-0` l'est dans chaque thème ; `--bg-1` est translucide et laissait voir la carte). */
+  --deroulant-fond: color-mix(in srgb, var(--violet) 12%, var(--bg-0));
+}
+
+.modele-deroulant .modele-deroulant-cache {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.modele-deroulant .modele-deroulant-ancre {
+  position: relative;
+}
+
+.modele-deroulant .modele-deroulant-barre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-0) 38%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.modele-deroulant .modele-deroulant-barre:hover:not(:disabled),
+.modele-deroulant.is-ouvert .modele-deroulant-barre {
+  border-color: color-mix(in srgb, var(--violet) 60%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--violet) 18%,
+    color-mix(in srgb, var(--bg-0) 38%, transparent)
+  );
+}
+
+/* Ouverte, la barre se soude à sa liste : plus de coins en bas, un filet discret à la jonction. */
+.modele-deroulant.is-ouvert .modele-deroulant-barre {
+  border-bottom-color: color-mix(in srgb, var(--violet) 22%, transparent);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.modele-deroulant .modele-deroulant-barre:disabled {
+  cursor: default;
+}
+
+.modele-deroulant .modele-deroulant-barre:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--violet) 75%, transparent);
+  outline-offset: 2px;
+}
+
+/* Le nom du modèle se lit d'abord. Serré, il s'abrège au lieu de pousser le chevron dehors. */
+.modele-deroulant .modele-deroulant-barre > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* L'effort : une petite puce violette à côté du nom. */
+.modele-deroulant .modele-deroulant-barre > em {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--violet) 22%, transparent);
+  color: color-mix(in srgb, var(--text) 85%, transparent);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* Le chevron au bout de la barre : vers le bas fermé, vers le haut ouvert. */
+.modele-deroulant .modele-deroulant-barre > .modele-deroulant-chevron,
+.modele-deroulant .modele-deroulant-barre > .aw-atom {
+  flex: none;
+  margin-left: auto;
+}
+
+.modele-deroulant .modele-deroulant-chevron {
+  width: 7px;
+  height: 7px;
+  border-right: 1.25px solid color-mix(in srgb, var(--text) 60%, transparent);
+  border-bottom: 1.25px solid color-mix(in srgb, var(--text) 60%, transparent);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 150ms ease;
+}
+
+.modele-deroulant.is-ouvert .modele-deroulant-chevron {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+/* LA LISTE, soudée sous la barre et de sa largeur exacte. */
+.modele-deroulant .modele-deroulant-liste {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  max-height: min(360px, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0 4px;
+  border: 1px solid color-mix(in srgb, var(--violet) 60%, transparent);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: var(--deroulant-fond);
+  box-shadow: 0 18px 36px color-mix(in srgb, var(--bg-0) 55%, transparent);
+  scrollbar-width: thin;
+}
+
+/* LA GRILLE PORTE LA CLASSE DE LA FENÊTRE DU CHAT (`model-select-menu`) : chaque thème habille les
+   points, les noms et la ligne choisie sous cette classe seulement, et l'utilisateur veut les points
+   de cette fenêtre. Elle en prend l'habillage, pas le cadre : ni position flottante, ni largeur, ni
+   fond, ni coins coupés, ni ombre — le cadre est celui de la liste. Quatre classes : les règles de
+   cadre des thèmes en ont trois. */
+.modele-deroulant .modele-deroulant-liste .model-select-menu.modele-deroulant-grille {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  clip-path: none;
+  animation: none;
+}
+
+/* LA GRILLE DU CHAT DANS LA LISTE (ModelEffortMatrix) : ses onglets, ses lignes et ses points
+   gardent les styles de la fenêtre du chat ; seules la marge et la ligne choisie s'accordent ici
+   au verre des cartes. */
+.modele-deroulant .modele-deroulant-liste .effort-matrix.is-inline {
+  padding: 4px 12px 2px;
+}
+
+/* Les onglets restent en haut pendant que la grille défile, sur le fond de la liste. */
+.modele-deroulant .modele-deroulant-liste .model-quota-providers {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -12px 6px;
+  padding: 6px 12px 0;
+  background: var(--deroulant-fond);
+}
+
+.modele-deroulant .modele-deroulant-liste .effort-matrix-row {
+  margin: 0 -8px;
+  padding: 5px 8px;
+  border-radius: 10px;
+}
+
+.modele-deroulant .modele-deroulant-liste .effort-matrix-row:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+/* Le modèle choisi : la ligne cerclée de violet, comme celle de la fenêtre du chat. */
+.modele-deroulant .modele-deroulant-liste .effort-matrix-row.is-active {
+  background: color-mix(in srgb, var(--violet) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--violet) 70%, transparent);
+}
+
+.modele-deroulant .modele-deroulant-liste .effort-cran:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--violet) 75%, transparent);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.modele-deroulant .modele-deroulant-liste .model-quota-provider-chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--violet) 75%, transparent);
+  outline-offset: 2px;
+}
+
+/* L'état (erreur, enregistrement, modèle introuvable) : une ligne sous la barre, dans le flux. */
+.modele-deroulant .modele-deroulant-etat:empty {
+  display: none;
+}
+
+.modele-deroulant .modele-deroulant-etat {
+  margin-top: 6px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-0) 55%, transparent);
+  color: var(--text);
+  font-size: 11px;
+}

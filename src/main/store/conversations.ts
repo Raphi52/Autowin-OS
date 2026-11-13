@@ -26,7 +26,7 @@ import { motsDe, replier } from '../../shared/mots'
 import { texteQuiNomme, titreApresMessage, type OrigineTitre } from '../../shared/titre-automatique'
 import { parseAskDecision } from '../../renderer/src/components/ask-choices'
 import { memeFamille } from './synonymes'
-import { construireVoisinage, type IndexVoisinage } from './voisinage'
+import { creerVoisinage, type IndexVoisinage } from './voisinage'
 import { creerIndexInverse, type IndexInverse } from './index-inverse'
 import type { EtatDeRepriseDuFil } from '../../shared/reprise-quota'
 
@@ -292,13 +292,45 @@ export interface Conversation {
   updatedAt: number
 }
 
-export type ConversationSummary = Omit<Conversation, 'messages'> & {
+/**
+ * Un fil SANS son historique : ses métadonnées (titre, dossier, copie, runs, dates...) et les champs
+ * DÉRIVÉS de ses messages (`ChampsDerivesDesMessages`), recalculés par `resumeDuFil` à chaque lecture.
+ * Le lecteur qui n'a besoin d'aucun message le prend par `listResumes`, pas par `listAvecMessages`. La
+ * projection de la liste (`ConversationSummary`) n'y ajoute qu'un champ, l'état de reprise, que ce magasin
+ * ne connaît pas.
+ */
+export type ConversationResume = Omit<Conversation, 'messages'> & ChampsDerivesDesMessages
+
+/**
+ * Les branches à rattacher : les fils qui ont un fil source (`forkedFrom`), ENTIERS, du plus récent
+ * au moins récent. `conversationId` ne garde que les branches de ce seul fil source.
+ *
+ * Entiers, parce que `rattacherLaBranche` lit les messages de la branche ET de sa source. Ils viennent
+ * de `get` (qui rend aussi un fil archivé), pas de `listAvecMessages` (qui ne couvre que les fils en mémoire).
+ * fix-ok: la liste est prise d'un coup, avant la première attente de l'appelant. Relire chaque fil
+ * par `get` pendant l'attente ferait sauter une branche supprimée entre-temps.
+ */
+export function branchesARattacher(
+  store: Pick<ConversationStore, 'listResumes' | 'get'>,
+  conversationId?: string
+): Conversation[] {
+  const branches: Conversation[] = []
+  for (const resume of store.listResumes()) {
+    const sourceId = resume.forkedFrom?.conversationId
+    if (!sourceId || (conversationId !== undefined && sourceId !== conversationId)) continue
+    const branche = store.get(resume.id)
+    if (branche) branches.push(branche)
+  }
+  return branches
+}
+
+/**
+ * Les champs qu'une liste affiche d'un fil et qui se DÉRIVENT de son historique. Ils restent dans
+ * le résumé : un fil dont les messages ne sont pas en mémoire doit quand même les afficher. Tant que
+ * ses messages sont en mémoire, `resumeDuFil` les recalcule à chaque lecture.
+ */
+export type ChampsDerivesDesMessages = {
   messageCount: number
-  /**
-   * Où en est un fil coupé par le quota. Ajouté par `os:conversations`, pas par `listSummaries` :
-   * il dépend des plans de lots et des runs, que ce magasin ne connaît pas.
-   */
-  repriseQuota?: EtatDeRepriseDuFil
   lastMessageRole?: Msg['role']
   lastAssistantStatus?: ChatTurnStatus
   /**
@@ -331,6 +363,18 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
 }
 
 /**
+ * La projection de la liste (`os:conversations`) : le résumé, plus l'état de reprise d'un fil coupé
+ * par le quota.
+ */
+export type ConversationSummary = ConversationResume & {
+  /**
+   * Où en est un fil coupé par le quota. Ajouté par `os:conversations`, pas par `listSummaries` :
+   * il dépend des plans de lots et des runs, que ce magasin ne connaît pas.
+   */
+  repriseQuota?: EtatDeRepriseDuFil
+}
+
+/**
  * AVIS DE L'APP (2026-11-05) : message assistant écrit par `append` — carte de
  * publication auto, bascule de dossier, modèle indisponible —, donc sans `status` ni `turnId`.
  * La réponse d'un tour porte les deux dès `beginTurn`. Un avis ne répond à rien : il ne doit pas
@@ -358,7 +402,49 @@ function attendUneDecision(messages: readonly Msg[]): boolean {
   )
 }
 
-/** Date du dernier tour de l'utilisateur, ou `undefined` s'il n'a encore rien écrit. */
+/**
+ * Le résumé d'un fil : ses métadonnées, puis les champs dérivés de son historique. `listResumes` et
+ * `listSummaries` passent par ici : une seule définition de ce qui compte comme « dernier tour ».
+ * fix-ok: cause mesurée — `ConversationResume` ne portait pas ces champs : la liste et la photo de
+ * l'état les recalculaient chacune à partir du fil entier. Le résumé les porte désormais, mais
+ * `resumeDuFil` les recalcule encore en parcourant les messages en mémoire à chaque lecture (≈ 6 ms
+ * pour les 1 597 fils de la copie des données réelles). Ce parcours ne disparaît que si ces champs
+ * sont calculés une seule fois, à l'archivage.
+ */
+export function resumeDuFil(conversation: Conversation): ConversationResume {
+  const { messages, ...metadonnees } = conversation
+  // Le dernier TOUR, pas la dernière carte de l'app posée après lui. Sans tour du
+  // tout, on retombe sur le dernier message assistant, comme avant.
+  const assistantsRecents = [...messages].reverse().filter((m) => m.role === 'assistant')
+  const dernierAssistant =
+    assistantsRecents.find((message) => !estAvisDeLApp(message)) ?? assistantsRecents[0]
+  const dateDeLUtilisateur = lastUserMessageAt(messages)
+  return {
+    ...metadonnees,
+    messageCount: messages.length,
+    // UNE CONSIGNE ÉCRITE PENDANT UN TOUR N'EST PAS UN TOUR EN ATTENTE (2026-09-09).
+    // Défaut vécu : « il m'indique un statut sans réponse alors qu'il a bien pris en compte mon
+    // message ». Le texte injecté pendant qu'un tour tourne est ajouté en FIN de fil avec
+    // `orientation: true` — le dernier message devenait donc `user`, et la pastille annonçait
+    // « Sans réponse » alors que la réponse était là, juste au-dessus. On ignore ces messages
+    // pour décider du rôle qui porte l'attente.
+    lastMessageRole: [...messages].reverse().find((m) => m.orientation !== true)?.role,
+    lastAssistantStatus: dernierAssistant?.status,
+    // Le MOTIF de l'échec, pas seulement le fait qu'il y en ait un : la liste ne peut pas
+    // distinguer un fil coupé par le quota (qui se relance tel quel) d'un fil tombé sur une
+    // vraie erreur sans lire ce texte. Servi uniquement quand le tour a échoué — sinon chaque
+    // résumé IPC porterait une erreur périmée.
+    ...(dernierAssistant?.status === 'failed' && dernierAssistant.error
+      ? { lastAssistantError: dernierAssistant.error }
+      : {}),
+    ...(dateDeLUtilisateur !== undefined ? { lastUserMessageAt: dateDeLUtilisateur } : {}),
+    ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {}),
+    ...(messages.some((m) => m.role === 'assistant' && m.status === 'streaming')
+      ? { hasStreamingTurn: true as const }
+      : {})
+  }
+}
+
 /** Un passage d'une conversation qui porte le terme cherche, avec de quoi le situer. */
 export interface ConversationExtrait {
   role: string
@@ -598,6 +684,7 @@ function fenetre(origine: string, position: number, longueur: number): string {
   return debutCoupe + coeur + finCoupee
 }
 
+/** Date du dernier tour de l'utilisateur, ou `undefined` s'il n'a encore rien écrit. */
 export function lastUserMessageAt(messages: readonly Msg[]): number | undefined {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
@@ -717,8 +804,194 @@ export function applyTurnEventToMessages(
  */
 export const LOT_SUPPRESSION_MAX = 200
 
+/**
+ * Combien de fils ARCHIVÉS relus à la demande restent entiers en mémoire. Au-delà, le plus anciennement
+ * relu rend sa place : il reste sur le disque, et `get` le relit encore. Un fil MODIFIÉ n'entre jamais
+ * dans ce compte : il redevient actif (`changed`), donc il n'est jamais évincé.
+ */
+export const LIMITE_FILS_ARCHIVES_RELUS = 20
+
+/**
+ * Options des recherches : classée (`search`), littérale et par contenu. Chaque recherche ne lit que les
+ * champs qui la concernent.
+ */
+interface OptionsRecherche {
+  limite?: number
+  extraitsParConversation?: number
+  /**
+   * Temps maximum accorde au parcours. Absent = pas de limite.
+   *
+   * Le cout croit avec le corpus : ~35 ms sur 1197 conversations aujourd'hui, le triple sur un
+   * corpus triple. Une garantie qui depend d'une taille de donnees est un sursis, pas une
+   * garantie. Sous budget, la recherche rend ce qu'elle a TROUVE au lieu de finir a tout prix.
+   *
+   * Compromis assume et nomme : le resultat peut etre INCOMPLET. Pour un rappel -- un confort,
+   * jamais une autorite -- un resultat partiel rendu a temps vaut mieux qu'une interface qui se
+   * figeait. C'est pourquoi ce budget est un PARAMETRE et non une valeur en dur : il serait
+   * inacceptable pour `conversation_search`, que l'agent appelle en attendant une reponse
+   * complete.
+   */
+  budgetMs?: number
+}
+
+/** Les deux index de la recherche classée, une fois construits. */
+interface IndexRecherche {
+  voisinage: IndexVoisinage
+  inverse: IndexInverse
+}
+
+/** Une conversation qui porte le terme, avec le nombre de ses occurrences (recherche par contenu). */
+interface TrouveeParContenu {
+  id: string
+  extrait: string
+  occurrences: number
+}
+
+/**
+ * LA RECHERCHE SE FAIT PAR TRANCHES, JAMAIS D'UN TRAIT.
+ *
+ * Un travail de recherche ou de construction des index rend la main au fil principal tous les
+ * `MESSAGES_PAR_TRANCHE` messages, ou plus tôt après `TRANCHE_MAX_MS` de calcul continu. Mesuré sur le corpus
+ * réel (1616 fils, 15 691 messages) : d'un trait, la première recherche classée bloquait le fil principal
+ * 3,5 s, et chaque recherche par frappe 300 ms.
+ */
+const MESSAGES_PAR_TRANCHE = 48
+const TRANCHE_MAX_MS = 8
+
+/** Décide quand rendre la main : une tranche pleine de messages, ou quelques millisecondes de calcul. */
+class Cadence {
+  private compte = 0
+  private debut = performance.now()
+
+  /** Vrai quand il faut céder la main avant de poursuivre. */
+  arret(): boolean {
+    this.compte += 1
+    if (this.compte < MESSAGES_PAR_TRANCHE && performance.now() - this.debut < TRANCHE_MAX_MS) {
+      return false
+    }
+    this.compte = 0
+    this.debut = performance.now()
+    return true
+  }
+}
+
+/**
+ * Mène un travail par tranches SANS rendre la main : pour les appelants qui ne peuvent pas attendre (le rappel
+ * du tour, les tests). Même résultat que `menerParTranches` ; `surTranche` compte les pauses.
+ */
+function menerAuBout<T>(travail: Generator<void, T, void>, surTranche?: () => void): T {
+  for (let etape = travail.next(); ; etape = travail.next()) {
+    if (etape.done) return etape.value
+    surTranche?.()
+  }
+}
+
+/**
+ * Mène un travail par tranches en rendant la main au fil principal entre deux tranches : aucun appel ne garde
+ * le fil principal plus longtemps qu'une tranche.
+ */
+async function menerParTranches<T>(
+  travail: Generator<void, T, void>,
+  surTranche?: () => void
+): Promise<T> {
+  for (let etape = travail.next(); ; etape = travail.next()) {
+    if (etape.done) return etape.value
+    surTranche?.()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+}
+
+/**
+ * LE TERME CHERCHÉ DANS LE TEXTE BRUT, sans copie repliée.
+ *
+ * Chaque caractère du terme replié devient la classe des caractères BRUTS qui se replient sur lui (accents,
+ * casse), suivie des marques combinantes qu'un repliage supprime. Une recherche ainsi formée trouve les mêmes
+ * messages et les mêmes occurrences que chercher le terme replié dans le texte replié, sans garder une seconde
+ * copie du corpus en mémoire : le cache du texte replié coûtait +90 Mo mesurés sur le corpus réel.
+ *
+ * Mesure sur le corpus réel (dix termes, dont accents et capitales) : mêmes messages, mêmes occurrences ;
+ * 30 à 80 ms par passe, contre 270 à 340 ms pour le repliage à chaque appel.
+ */
+const classesDeCaracteres = new Map<string, string>()
+
+/** Au-delà de ce point de code, aucun caractère brut ne se replie sur une lettre de base. */
+const PLAFOND_REPLIAGE = 0x1eff
+
+function motifDuTerme(terme: string): RegExp | undefined {
+  const aiguille = replier(terme).trim()
+  if (!aiguille) return undefined
+  return new RegExp([...aiguille].map(classeDuCaractere).join(''), 'gu')
+}
+
+/** La classe d'un caractère replié : ses formes brutes, puis les marques combinantes. Calculée une fois. */
+function classeDuCaractere(caractere: string): string {
+  const connue = classesDeCaracteres.get(caractere)
+  if (connue !== undefined) return connue
+  const formes = new Set<string>([caractere])
+  for (let code = 0; code <= PLAFOND_REPLIAGE; code++) {
+    if (code >= 0xd800 && code <= 0xdfff) continue
+    const brut = String.fromCharCode(code)
+    if (replier(brut) === caractere) formes.add(brut)
+  }
+  const classe = `(?:[${[...formes].map(echapperDansClasse).join('')}])[\\u0300-\\u036f]*`
+  classesDeCaracteres.set(caractere, classe)
+  return classe
+}
+
+/** Les caractères qui ont un sens dans une classe d'expression régulière : ils se précèdent d'une barre oblique. */
+const CARACTERES_A_ECHAPPER = new Set(['\\', ']', '[', '^', '-'])
+
+function echapperDansClasse(caractere: string): string {
+  return CARACTERES_A_ECHAPPER.has(caractere) ? `\\${caractere}` : caractere
+}
+
+/**
+ * Un fil ARCHIVÉ tenu sans son historique complet : son résumé (`listResumes`), et ses messages réduits
+ * à leur texte et à leur identité (`listAvecTexte`), qui suffisent à chercher et à lister. Le texte des
+ * `parts` est déjà dans `content` (hydratation) : la structure reste à l'archive, `get` la rend.
+ */
+interface FilArchive {
+  resume: ConversationResume
+  fil: Conversation
+}
+
+/** Ce qu'un fil archivé garde en mémoire, calculé pendant que son historique complet est là. */
+function filArchive(fil: Conversation): FilArchive {
+  return {
+    resume: resumeDuFil(fil),
+    fil: { ...fil, messages: fil.messages.map(messageLeger) }
+  }
+}
+
+/**
+ * Un message sans sa mécanique de tour : `parts` (le texte y est déjà dans `content`), le raisonnement,
+ * les journaux d'actions et de tests, les réponses remplacées. Aucun lecteur de la version texte ne les
+ * lit ; ils pèsent l'essentiel du disque, et `get` les rend au fil relu.
+ */
+function messageLeger(message: Msg): Msg {
+  const leger: Msg = { ...message }
+  delete leger.parts
+  delete leger.reponsesRemplacees
+  delete leger.runtime
+  delete leger.reasoning
+  delete leger.lookDecode
+  delete leger.actionsLog
+  delete leger.testsDuTerminal
+  return leger
+}
+
 export class ConversationStore {
   private readonly conversations = new Map<string, Conversation>()
+  /**
+   * Les fils archivés sur le disque, SANS leur historique complet. Un fil y entre à l'archivage ou au
+   * démarrage, et en sort quand on le touche (il redevient actif) ou qu'on le supprime.
+   */
+  private readonly archives = new Map<string, FilArchive>()
+  /**
+   * Les fils archivés relus à la demande et encore en mémoire, du moins récemment relu au plus récent.
+   * Leur entrée d'archive reste : une éviction ne fait que rendre la place.
+   */
+  private readonly archivesRelues = new Set<string>()
   private readonly now: () => number
   private nextId = 1
   /** Hook de persistance : porte uniquement la conversation mutée, jamais le corpus complet. */
@@ -758,12 +1031,15 @@ export class ConversationStore {
       finishedRunOutcome?: (turnId: string) => FinishedRunOutcome | undefined
     }
   ): boolean {
-    this.voisinageCache = undefined
     // Le corpus entier change de forme : la pre-selection ne peut pas etre rattrapee
     // par une mise a jour, elle est jetee.
-    this.indexInverseCache = undefined
+    this.invaliderIndex()
     const resumable = options?.resumableTurnIds
+    // fix-ok: cause mesurée — `hydrate` vidait `conversations` sans vider `archives` : un fil archivé de
+    // l'ancien corpus restait listé (test « hydrate remplace tout le corpus », rouge avant ce correctif).
     this.conversations.clear()
+    this.archives.clear()
+    this.archivesRelues.clear()
     let max = 0
     let migrated = false
     const usedMessageIds = new Set<string>()
@@ -952,8 +1228,13 @@ export class ConversationStore {
     urgency: 'immediate' | 'checkpoint' = 'immediate',
     journal?: ConversationChange['journal']
   ): void {
+    // Un fil archivé qu'on touche redevient ACTIF : le journal porte son fil entier (`conversations-disk`).
+    // Il n'est donc plus ni servi depuis son archive, ni candidat à l'éviction.
+    this.archivesRelues.delete(id)
+    this.archives.delete(id)
     this.onChange?.({
       id,
+      // Jamais de relecture ici : un fil absent du store est une suppression, pas un fil à charger.
       conversation: this.conversations.get(id),
       urgency,
       ...(journal ? { journal } : {})
@@ -1006,17 +1287,37 @@ export class ConversationStore {
   }
 
   /**
+   * Bascule des fils ACTIFS hors de la mémoire, une fois leur archive écrite sur le disque : le store ne
+   * garde plus que leur résumé et leur texte, et `get` les relit au besoin. Aucun événement : le disque
+   * porte déjà l'archive. Rend le nombre basculé.
+   */
+  archiverFils(ids: readonly string[]): number {
+    let basculees = 0
+    for (const id of ids) {
+      const fil = this.conversations.get(id)
+      if (!fil || this.archivesRelues.has(id)) continue
+      this.archives.set(id, filArchive(fil))
+      this.conversations.delete(id)
+      basculees += 1
+    }
+    return basculees
+  }
+
+  /**
    * Ajoute les conversations ARCHIVÉES relues APRÈS le démarrage (`conversations-disk.ts`).
    *
    * Aucun événement de changement : elles viennent du disque, les y réécrire n'aurait aucun sens.
    * Une conversation déjà présente GAGNE toujours — elle a été relue de l'instantané ou du journal,
    * donc elle est au moins aussi récente que son archive. Rend le nombre réellement ajouté.
    */
+  // fix-ok: cause mesurée — ce passage gardait le fil ENTIER de chaque archive dans `conversations` ;
+  // banc avant (scripts/banc-memoire-conversations.mjs, 1103 archives) : heap +342,8 Mo, RSS +453,4 Mo.
+  // Désormais seul le résumé et le texte restent ; le fil entier se relit par `get`.
   integrerArchives(archivees: readonly Conversation[]): number {
     let ajoutees = 0
     for (const conversation of archivees) {
-      if (this.conversations.has(conversation.id)) continue
-      this.conversations.set(conversation.id, conversation)
+      if (this.connait(conversation.id)) continue
+      this.archives.set(conversation.id, filArchive(conversation))
       // Les index de recherche déjà construits absorbent ces messages, comme ceux d'un tour.
       for (const message of conversation.messages)
         this.indexerMessage(conversation.id, message.content)
@@ -1036,17 +1337,17 @@ export class ConversationStore {
   private nextUniqueConversationId(): string {
     while (Number.isSafeInteger(this.nextId)) {
       const candidate = `conv-${this.nextId++}`
-      if (!this.conversations.has(candidate)) return candidate
+      if (!this.connait(candidate)) return candidate
     }
     let candidate: string
     do {
       candidate = `conv-${randomUUID()}`
-    } while (this.conversations.has(candidate))
+    } while (this.connait(candidate))
     return candidate
   }
 
   private hasMessageId(candidate: string): boolean {
-    return [...this.conversations.values()].some((conversation) =>
+    return this.filsSansTri().some((conversation) =>
       conversation.messages.some(({ messageId }) => messageId === candidate)
     )
   }
@@ -1103,7 +1404,7 @@ export class ConversationStore {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
     // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
     // principal -- le poste dominant du gel de l'interface.
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) {
       throw new Error(`Conversation inconnue: ${id}`)
     }
@@ -1193,7 +1494,7 @@ export class ConversationStore {
     runId: string,
     composer: (precedent: string | undefined) => string
   ): 'ajoute' | 'mis-a-jour' {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) {
       throw new Error(`Conversation inconnue: ${id}`)
     }
@@ -1229,7 +1530,7 @@ export class ConversationStore {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
     // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
     // principal -- le poste dominant du gel de l'interface.
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
     const previous = conversation.messages.at(-1)
@@ -1290,7 +1591,7 @@ export class ConversationStore {
       titre: conversation.title,
       origine: conversation.origineTitre,
       message: texteQuiNomme(message),
-      autresTitres: [...this.conversations.values()]
+      autresTitres: this.filsSansTri()
         .filter((autre) => autre.id !== conversation.id)
         .map((autre) => autre.title),
       quand: new Date(ts)
@@ -1311,7 +1612,7 @@ export class ConversationStore {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
     // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
     // principal -- le poste dominant du gel de l'interface.
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
     const previous = conversation.messages.at(-1)
@@ -1344,7 +1645,7 @@ export class ConversationStore {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
     // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
     // principal -- le poste dominant du gel de l'interface.
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     // L'heure (rail du tour) ne reste que sur l'evenement qui OUVRE une part : c'est cet
     // evenement-la qui part au journal, et le rejeu au demarrage redonne donc la meme heure.
@@ -1424,30 +1725,137 @@ export class ConversationStore {
    * l'AJOUT d'un message -- jamais jete. C'est ce qui supprime le parcours du corpus a chaque tour,
    * au lieu de le deporter ailleurs.
    */
-  private indexInverseCache?: IndexInverse
-
-  private indexInverse(): IndexInverse {
-    if (!this.indexInverseCache) {
-      const index = creerIndexInverse()
-      for (const conversation of this.conversations.values()) {
-        for (const message of conversation.messages) {
-          if (typeof message.content !== 'string') continue
-          index.ajouter(conversation.id, this.motsMemoises(message.content).map(racine))
-        }
-      }
-      this.indexInverseCache = index
-    }
-    return this.indexInverseCache
+  /**
+   * Les deux index de la recherche classée, une fois construits. Absents tant qu'ils ne le sont pas : la
+   * construction se fait par tranches (`construireIndexTranches`), jamais d'un trait sur le fil principal.
+   */
+  private index?: IndexRecherche
+  /** Incrémenté à chaque remise à zéro : une construction interrompue n'écrit jamais dans un index neuf. */
+  private generationIndex = 0
+  /** La construction en cours, reprise tranche par tranche ; absente quand il n'y en a pas. */
+  private constructionIndex?: Generator<void, void, void>
+  /** Messages arrivés PENDANT la construction : rejoués à la fin, pour qu'aucun ne manque. */
+  private fileIndex?: Array<{ id: string; contenu: string }>
+  /** Le préchauffage en arrière-plan en cours : un seul à la fois. */
+  private prechauffage?: Promise<void>
+  /** Tranches rendues au fil principal par les recherches et les constructions (mesure et tests). */
+  tranchesCedees = 0
+  private readonly compterTranche = (): void => {
+    this.tranchesCedees += 1
   }
 
-  /** Enregistre un message dans l'index sans rien reconstruire. Sans effet si l'index n'existe pas. */
+  /** Vrai quand les index de la recherche classée existent : la recherche ne construit alors plus rien. */
+  indexPret(): boolean {
+    return this.index !== undefined
+  }
+
+  /**
+   * Construit les index en arrière-plan, par tranches : le fil principal reste libre entre deux tranches.
+   * Le premier calcul part au tour suivant : l'appel lui-même ne fait aucun travail, il rend tout de suite.
+   * Idempotent : un préchauffage déjà en cours est attendu, et un index prêt ne coûte rien.
+   */
+  prechaufferIndex(): Promise<void> {
+    if (this.index) return Promise.resolve()
+    this.prechauffage ??= new Promise<void>((resolve) => setImmediate(resolve))
+      .then(() => menerParTranches(this.achevementIndex(), this.compterTranche))
+      .then(
+        () => undefined,
+        // Le rappel est un confort : un échec de la construction ne fait pas échouer le tour qui l'attend. La
+        // recherche classée restera indisponible, et l'erreur reste visible dans le journal.
+        (erreur: unknown) => {
+          console.warn('[conversations] préparation de l’index de recherche en échec', erreur)
+        }
+      )
+      .finally(() => {
+        this.prechauffage = undefined
+      })
+    return this.prechauffage
+  }
+
+  /**
+   * Remet les index à zéro : un changement qui n'est pas un simple ajout de message (suppression, relecture
+   * complète) les rendrait périmés. La prochaine recherche classée, ou le préchauffage, les reconstruit.
+   */
+  private invaliderIndex(): void {
+    this.index = undefined
+    this.constructionIndex = undefined
+    this.fileIndex = undefined
+    this.generationIndex += 1
+  }
+
+  /**
+   * Achève la construction des index, tranche par tranche, puis les rend. Une recherche classée passe par
+   * là : menée en asynchrone, elle cède la main pendant la construction.
+   */
+  private *achevementIndex(): Generator<void, IndexRecherche, void> {
+    for (;;) {
+      if (this.index) return this.index
+      this.constructionIndex ??= this.construireIndexTranches()
+      let etape: IteratorResult<void, void>
+      try {
+        etape = this.constructionIndex.next()
+      } catch (erreur) {
+        // Une construction qui échoue ne laisse aucun état à moitié écrit : la file et la construction repartent à zéro.
+        this.invaliderIndex()
+        throw erreur
+      }
+      if (etape.done) this.constructionIndex = undefined
+      else yield
+    }
+  }
+
+  /**
+   * Construction des deux index à partir d'une PHOTO du corpus (fils actifs et archivés légers), par tranches
+   * de messages. Les messages qui arrivent pendant la construction sont mis de côté, puis rejoués à la fin.
+   */
+  private *construireIndexTranches(): Generator<void, void, void> {
+    const generation = this.generationIndex
+    const photo = this.filsSansTri().map((fil) => ({
+      id: fil.id,
+      contenus: fil.messages.flatMap((message) =>
+        typeof message.content === 'string' ? [message.content] : []
+      )
+    }))
+    this.fileIndex = []
+    // Les mots ENTIERS au decoupage, la racine fournie a part : l'index compte alors la presence des deux, ce
+    // dont la ponderation par le mot rencontre a besoin pour discriminer.
+    const voisinage = creerVoisinage((texte) => this.motsMemoises(texte), racine)
+    const inverse = creerIndexInverse()
+    const cadence = new Cadence()
+    for (const { id, contenus } of photo) {
+      for (const contenu of contenus) {
+        voisinage.ajouter(contenu)
+        inverse.ajouter(id, this.motsMemoises(contenu).map(racine))
+        if (cadence.arret()) {
+          if (generation !== this.generationIndex) return
+          yield
+        }
+      }
+    }
+    if (generation !== this.generationIndex) return
+    for (const { id, contenu } of this.fileIndex ?? []) {
+      voisinage.ajouter(contenu)
+      inverse.ajouter(id, this.motsMemoises(contenu).map(racine))
+    }
+    this.fileIndex = undefined
+    this.index = { voisinage, inverse }
+  }
+
+  /**
+   * Enregistre un message dans les index, sans rien reconstruire. Sans effet tant que rien n'est construit ;
+   * pendant une construction, le message attend sa fin.
+   */
   private indexerMessage(conversationId: string, contenu: unknown): void {
     if (typeof contenu !== 'string') return
+    if (this.fileIndex) {
+      this.fileIndex.push({ id: conversationId, contenu })
+      return
+    }
+    if (!this.index) return
     // Le voisinage ABSORBE le message au lieu d'etre jete : c'etait le poste dominant du gel
     // (~90 ms par tour a reconstruire tout le corpus, contre O(mots du message) ici).
-    this.voisinageCache?.ajouter(contenu)
-    if (!this.indexInverseCache) return
-    this.indexInverseCache.ajouter(conversationId, this.motsMemoises(contenu).map(racine))
+    this.index.voisinage.ajouter(contenu)
+    this.index.inverse.ajouter(conversationId, this.motsMemoises(contenu).map(racine))
   }
 
   private motsMemoises(contenu: string): string[] {
@@ -1461,57 +1869,37 @@ export class ConversationStore {
   }
 
   /**
-   * Index de voisinage, construit a la PREMIERE recherche puis garde.
-   *
-   * Invalide des qu'un message arrive : un index perime rapprocherait selon un corpus qui n'existe
-   * plus, et c'est exactement le genre d'oracle en retard qui fait conclure faux avec assurance.
-   */
-  private voisinageCache?: IndexVoisinage
-
-  private voisinage(): IndexVoisinage {
-    if (!this.voisinageCache) {
-      const textes: string[] = []
-      for (const conversation of this.conversations.values()) {
-        for (const message of conversation.messages) {
-          if (typeof message.content === 'string') textes.push(message.content)
-        }
-      }
-      // Les mots ENTIERS au decoupage, la racine fournie a part : l'index compte alors la presence
-      // des deux, ce dont la ponderation par le mot rencontre a besoin pour discriminer.
-      this.voisinageCache = construireVoisinage(textes, (texte) => this.motsMemoises(texte), racine)
-    }
-    return this.voisinageCache
-  }
-
-  /**
    * Recherche LITTERALE, pour les termes que la tokenisation ecarte (moins de trois caracteres).
    *
-   * Pas d'index, pas de voisinage, pas d'elargissement : une sous-chaine sur la forme repliee. Le
-   * cout est celui d'un parcours du corpus, accepte parce que ce chemin est rare et qu'il remplace
-   * un resultat FAUX (« ca n'existe nulle part ») par un resultat vrai.
+   * Pas d'index, pas de voisinage, pas d'elargissement : une sous-chaine du texte, insensible aux accents
+   * et a la casse. Le cout est celui d'un parcours du corpus, mene par tranches, accepte parce que ce chemin
+   * est rare et qu'il remplace un resultat FAUX (« ca n'existe nulle part ») par un resultat vrai.
    */
-  private rechercheLitterale(
+  private *cercherLitterale(
     terme: string,
-    options?: { limite?: number; extraitsParConversation?: number }
-  ): ConversationRecherche[] {
-    const aiguille = replier(terme).trim()
-    if (!aiguille) return []
+    options?: OptionsRecherche
+  ): Generator<void, ConversationRecherche[], void> {
+    const motif = motifDuTerme(terme)
+    if (!motif) return []
     const limite = Math.max(1, Math.min(50, Math.floor(options?.limite ?? 10) || 10))
     const parConversation = Math.max(
       1,
       Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
     )
     const trouvees: ConversationRecherche[] = []
-    for (const conversation of this.list()) {
+    const cadence = new Cadence()
+    for (const conversation of this.listAvecTexte()) {
       const extraits: ConversationExtrait[] = []
       for (const message of conversation.messages) {
         if (typeof message.content !== 'string') continue
-        const position = replier(message.content).indexOf(aiguille)
-        if (position < 0) continue
+        if (cadence.arret()) yield
+        motif.lastIndex = 0
+        const occurrence = motif.exec(message.content)
+        if (!occurrence) continue
         extraits.push({
           role: message.role,
           ts: message.ts,
-          extrait: fenetre(message.content, position, aiguille.length)
+          extrait: fenetre(message.content, occurrence.index, occurrence[0].length)
         })
         if (extraits.length >= parConversation) break
       }
@@ -1548,28 +1936,45 @@ export class ConversationStore {
    * elargissement au voisinage ferait surligner des conversations qui ne contiennent pas le mot
    * tape, ce qui est exactement ce que l'utilisateur ne veut pas.
    */
-  rechercherParContenu(
+  rechercherParContenu(terme: string, options?: OptionsRecherche): TrouveeParContenu[] {
+    return menerAuBout(this.cercherParContenu(terme, options), this.compterTranche)
+  }
+
+  /** Même résultat que `rechercherParContenu`, mené par tranches : c'est la frappe de la barre laterale. */
+  rechercherParContenuAsync(
     terme: string,
-    options?: { limite?: number }
-  ): Array<{ id: string; extrait: string; occurrences: number }> {
-    const aiguille = replier(terme).trim()
-    if (!aiguille) return []
+    options?: OptionsRecherche
+  ): Promise<TrouveeParContenu[]> {
+    return menerParTranches(this.cercherParContenu(terme, options), this.compterTranche)
+  }
+
+  private *cercherParContenu(
+    terme: string,
+    options?: OptionsRecherche
+  ): Generator<void, TrouveeParContenu[], void> {
+    const motif = motifDuTerme(terme)
+    if (!motif) return []
     // Plafond LARGE : ce resultat sert a surligner une liste, pas a rendre un top-N. Le borner a 50
     // (comme `search`) ferait disparaitre des conversations qui contiennent pourtant le mot.
     const limite = Math.max(1, Math.min(5_000, Math.floor(options?.limite ?? 2_000) || 2_000))
-    const trouvees: Array<{ id: string; extrait: string; occurrences: number }> = []
-    for (const conversation of this.list()) {
+    const trouvees: TrouveeParContenu[] = []
+    const cadence = new Cadence()
+    for (const conversation of this.listAvecTexte()) {
       let extrait: string | undefined
       let occurrences = 0
       for (const message of conversation.messages) {
         if (typeof message.content !== 'string') continue
-        const replie = replier(message.content)
-        let position = replie.indexOf(aiguille)
-        if (position < 0) continue
-        if (extrait === undefined) extrait = fenetre(message.content, position, aiguille.length)
-        while (position >= 0) {
+        if (cadence.arret()) yield
+        motif.lastIndex = 0
+        for (
+          let occurrence = motif.exec(message.content);
+          occurrence;
+          occurrence = motif.exec(message.content)
+        ) {
+          if (extrait === undefined) {
+            extrait = fenetre(message.content, occurrence.index, occurrence[0].length)
+          }
           occurrences += 1
-          position = replie.indexOf(aiguille, position + aiguille.length)
         }
       }
       if (extrait === undefined) continue
@@ -1593,18 +1998,99 @@ export class ConversationStore {
    */
   archivesChargees: Promise<number> = Promise.resolve(0)
 
+  /**
+   * Un fil archivé non encore en mémoire est relu À LA DEMANDE depuis son archive, puis gardé entier
+   * dans la limite de `LIMITE_FILS_ARCHIVES_RELUS`. Une modification le rend actif (`changed`).
+   */
   get(id: string): Conversation | undefined {
     const conversation = this.conversations.get(id)
-    if (conversation || !this.chargeurDArchive) return conversation
+    if (conversation) {
+      this.toucherRelu(id)
+      return conversation
+    }
+    if (!this.chargeurDArchive) return undefined
     const archivee = this.chargeurDArchive(id)
     if (!archivee || archivee.id !== id) return undefined
-    this.integrerArchives([archivee])
-    return this.conversations.get(id)
+    return this.accueillirRelu(archivee)
   }
 
-  /** Liste toutes les conversations, triées par updatedAt décroissant. */
-  list(): Conversation[] {
+  /** Vrai si l'id désigne un fil du store, en mémoire ou archivé : jamais réattribué. */
+  private connait(id: string): boolean {
+    return this.conversations.has(id) || this.archives.has(id)
+  }
+
+  /** Un fil archivé relu vient d'être utilisé : il devient le plus récent, donc le dernier évincé. */
+  private toucherRelu(id: string): void {
+    if (!this.archivesRelues.has(id)) return
+    this.archivesRelues.delete(id)
+    this.archivesRelues.add(id)
+  }
+
+  /** Garde un fil archivé relu entier, et évince le plus ancien relu au-delà de la limite. */
+  private accueillirRelu(fil: Conversation): Conversation {
+    if (!this.archives.has(fil.id)) this.integrerArchives([fil])
+    this.conversations.set(fil.id, fil)
+    this.archivesRelues.add(fil.id)
+    while (this.archivesRelues.size > LIMITE_FILS_ARCHIVES_RELUS) {
+      const [ancien] = this.archivesRelues
+      this.archivesRelues.delete(ancien)
+      this.conversations.delete(ancien)
+    }
+    return fil
+  }
+
+  /**
+   * Lecture SANS messages : le résumé de CHAQUE fil, archivé ou non, du plus récemment touché au moins
+   * récent. Un fil archivé rend le résumé gardé à son archivage : il n'est pas relu pour cela.
+   */
+  listResumes(): ConversationResume[] {
+    const resumes = [...this.conversations.values()].map((fil) => resumeDuFil(fil))
+    for (const [id, archive] of this.archives) {
+      if (!this.conversations.has(id)) resumes.push(archive.resume)
+    }
+    return resumes.sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  /**
+   * Lecture AVEC messages : chaque fil ENTRÉ EN MÉMOIRE, entier, du plus récemment touché au moins récent.
+   * Un fil archivé non relu n'y figure pas : `get` le relit, `listAvecTexte` le rend en version légère.
+   * À prendre quand un message est lu AVEC ses `parts` (outils compris).
+   */
+  listAvecMessages(): Conversation[] {
+    return this.filsTriesParTouche()
+  }
+
+  /**
+   * Lecture AVEC texte : chaque fil, archivés compris, avec ses messages. Un fil archivé non relu rend sa
+   * copie légère (sans `parts` ni mécanique de tour) : elle suffit à chercher et à lire un texte. Ne jamais
+   * la rejouer ni la modifier : pour un fil entier, `get`.
+   */
+  listAvecTexte(): Conversation[] {
+    return this.filsSansTri().sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  /** Les fils en mémoire puis les archivés, sans ordre : pour un balayage qui n'a pas besoin de tri. */
+  private filsSansTri(): Conversation[] {
+    const fils = [...this.conversations.values()]
+    for (const [id, archive] of this.archives) {
+      if (!this.conversations.has(id)) fils.push(archive.fil)
+    }
+    return fils
+  }
+
+  /**
+   * Les fils EN MÉMOIRE, du plus récemment touché au moins récent. Les deux lectures partagent cet ordre
+   * sans s'appeler l'une l'autre : `listResumes` n'en garde que les métadonnées et les champs dérivés.
+   */
+  private filsTriesParTouche(): Conversation[] {
     return [...this.conversations.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  /**
+   * Alias de `listAvecMessages`, gardé tant que `conversations-disk.ts` et les tests l'appellent.
+   */
+  list(): Conversation[] {
+    return this.listAvecMessages()
   }
 
   /**
@@ -1622,28 +2108,22 @@ export class ConversationStore {
    * Insensible à la casse ET aux accents : celui qui tape « a jour » cherche « à jour ». Une
    * recherche qui punit la frappe rapide n'est pas utilisée deux fois.
    */
-  search(
+  search(terme: string, options?: OptionsRecherche): ConversationRecherche[] {
+    return menerAuBout(this.chercherClassee(terme, options), this.compterTranche)
+  }
+
+  /**
+   * Même résultat que `search`, mené par tranches : le fil principal reste libre pendant la recherche et pendant
+   * la construction des index. C'est la version des appelants qui tournent sur le fil principal (outil).
+   */
+  searchAsync(terme: string, options?: OptionsRecherche): Promise<ConversationRecherche[]> {
+    return menerParTranches(this.chercherClassee(terme, options), this.compterTranche)
+  }
+
+  private *chercherClassee(
     terme: string,
-    options?: {
-      limite?: number
-      extraitsParConversation?: number
-      /**
-       * Temps maximum accorde au parcours. Absent = pas de limite.
-       *
-       * Le cout croit avec le corpus : ~35 ms sur 1197 conversations aujourd'hui, le triple sur un
-       * corpus triple. Une garantie qui depend d'une taille de donnees est un sursis, pas une
-       * garantie. Sous budget, la recherche rend ce qu'elle a TROUVE au lieu de finir a tout prix.
-       *
-       * Compromis assume et nomme : le resultat peut etre INCOMPLET. Pour un rappel -- un confort,
-       * jamais une autorite -- un resultat partiel rendu a temps vaut mieux qu'une interface qui se
-       * figeait. C'est pourquoi ce budget est un PARAMETRE et non une valeur en dur : il serait
-       * inacceptable pour `conversation_search`, que l'agent appelle en attendant une reponse
-       * complete.
-       */
-      budgetMs?: number
-    }
-  ): ConversationRecherche[] {
-    const { demandes, elargis } = motsCherchables(terme, this.voisinage())
+    options?: OptionsRecherche
+  ): Generator<void, ConversationRecherche[], void> {
     /*
      * TERME TROP COURT POUR ETRE TOKENISE : chemin LITTERAL, jamais un silence.
      *
@@ -1656,11 +2136,14 @@ export class ConversationStore {
      * Un terme court ne s'INDEXE pas (il voisinerait avec tout), mais il se CHERCHE : sous-chaine
      * litterale sur la forme repliee. Le terme VIDE rend toujours [] -- rendre tout le corpus ne
      * serait pas une recherche, ce serait un dump.
+     *
+     * Ce chemin ne touche AUCUN index : il ne construit donc rien, même la première fois.
      */
-    if (demandes.length === 0) return this.rechercheLitterale(terme, options)
+    if (motsDe(terme).length === 0) return yield* this.cercherLitterale(terme, options)
+    const { voisinage: index, inverse } = yield* this.achevementIndex()
+    const { demandes, elargis } = motsCherchables(terme, index)
     // Un mot demande vaut trois mots ajoutes : l'hypothese aide, elle ne decide pas.
     const POIDS_DEMANDE = 3
-    const index = this.voisinage()
     const limite = Math.max(1, Math.min(50, Math.floor(options?.limite ?? 10) || 10))
     const parConversation = Math.max(
       1,
@@ -1671,7 +2154,7 @@ export class ConversationStore {
     const masquesReposesParId = new Map<string, number[]>()
     // La pre-selection porte sur les mots DEMANDES et AJOUTES : une conversation absente de l'index
     // pour tous ces mots ne peut pas correspondre, il est inutile de la relire.
-    const candidates = this.indexInverse().candidates([...demandes, ...elargis])
+    const candidates = inverse.candidates([...demandes, ...elargis])
     const budget = options?.budgetMs
     // Un budget de zero ou negatif veut dire « ne cherche pas » : l'echeance est deja passee. Sans
     // ce cas explicite, `now + 0` valait `now` et le premier controle ne declenchait pas -- un
@@ -1689,6 +2172,7 @@ export class ConversationStore {
      * Le message est l'unite de COUT reelle : c'est lui qu'on tokenise et qu'on lit.
      */
     let messagesParcourus = 0
+    const cadence = new Cadence()
     const budgetEpuise = (): boolean => {
       // L'horloge n'est consultee qu'un message sur 256 : l'appeler a chaque message couterait plus
       // cher que ce qu'on economise, et 256 messages se parcourent en bien moins d'une milliseconde.
@@ -1696,7 +2180,7 @@ export class ConversationStore {
       if ((messagesParcourus & 255) !== 0) return false
       return Date.now() > echeance
     }
-    for (const conversation of this.list()) {
+    for (const conversation of this.listAvecTexte()) {
       if (candidates && !candidates.has(conversation.id)) continue
       if (budgetEpuise()) break
       const extraits: ConversationExtrait[] = []
@@ -1720,6 +2204,7 @@ export class ConversationStore {
         // Coupe AUSSI a l'interieur d'une conversation tres longue : sans cela, une seule
         // conversation de dix mille messages ignorait le budget a elle seule.
         if (budgetEpuise()) break
+        if (cadence.arret()) yield
         const replie = replier(message.content)
         const motsDuMessage = this.motsMemoises(message.content)
         let premierePosition = -1
@@ -1836,6 +2321,7 @@ export class ConversationStore {
       if (extraits.length > 0 && dernierRang !== undefined) {
         for (const suivant of conversation.messages.slice(dernierRang + 1)) {
           if (typeof suivant.content !== 'string') continue
+          if (cadence.arret()) yield
           if (!REVIREMENTS.test(replier(suivant.content))) continue
           extraits.push({
             role: suivant.role,
@@ -2067,14 +2553,19 @@ export class ConversationStore {
     const OCCURRENCES_UTILES = 3
     // Construite une seule fois : la recompiler par message coutait plus que le test lui-meme.
     const motEntier = new RegExp(`(^|[^a-z0-9_.:-])${porteur}([^a-z0-9_.:-]|$)`, 'u')
-    const porte = (id: string): number => {
-      const conversation = this.conversations.get(id)
+    // fix-ok: cause mesurée — `porte` relisait chaque fil candidat par `this.get` : une recherche faisait
+    // des lectures disque des fils archivés (le test « sans relire le disque » comptait ces lectures avant
+    // correction). Les fils sont déjà en mémoire, ou en version texte pour les archivés.
+    const parId = new Map(this.filsSansTri().map((fil) => [fil.id, fil] as const))
+    const porte = function* (id: string): Generator<void, number, void> {
+      const conversation = parId.get(id)
       if (!conversation) return 0
       let n = 0
       /** Le mot ENTIER a-t-il ete vu ? Le bonus s'ajoute UNE fois, apres le comptage. */
       let exact = false
       for (const message of conversation.messages) {
         if (typeof message.content !== 'string') continue
+        if (cadence.arret()) yield
         const texte = replier(message.content)
         /*
          * LA FORME EXACTE VAUT LE PLAFOND D'OCCURRENCES.
@@ -2109,7 +2600,8 @@ export class ConversationStore {
       }
       return n + (exact ? OCCURRENCES_UTILES : 0)
     }
-    const marques = candidats.map((c) => ({ c, porte: porte(c.id) }))
+    const marques: Array<{ c: ConversationRecherche & { score: number }; porte: number }> = []
+    for (const c of candidats) marques.push({ c, porte: yield* porte(c.id) })
     marques.sort((a, b) => b.porte - a.porte)
     /*
      * UNE DEMANDE DEJA POSEE PASSE DEVANT LE MOT PORTEUR (2026-09-30).
@@ -2147,41 +2639,12 @@ export class ConversationStore {
     return ordre.slice(0, limite).map(({ c }) => c)
   }
 
-  /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */
+  /**
+   * Projection légère destinée aux listes IPC : c'est le résumé de `listResumes`. La liste n'a besoin
+   * ni du texte des messages ni de l'historique entier, et ses champs dérivés sont déjà dans le résumé.
+   */
   listSummaries(): ConversationSummary[] {
-    return this.list().map(({ messages, ...summary }) => {
-      // Le dernier TOUR, pas la dernière carte de l'app posée après lui. Sans tour du
-      // tout, on retombe sur le dernier message assistant, comme avant.
-      const assistantsRecents = [...messages].reverse().filter((m) => m.role === 'assistant')
-      const dernierAssistant =
-        assistantsRecents.find((message) => !estAvisDeLApp(message)) ?? assistantsRecents[0]
-      return {
-        ...summary,
-        messageCount: messages.length,
-        // UNE CONSIGNE ÉCRITE PENDANT UN TOUR N'EST PAS UN TOUR EN ATTENTE (2026-09-09).
-        // Défaut vécu : « il m'indique un statut sans réponse alors qu'il a bien pris en compte mon
-        // message ». Le texte injecté pendant qu'un tour tourne est ajouté en FIN de fil avec
-        // `orientation: true` — le dernier message devenait donc `user`, et la pastille annonçait
-        // « Sans réponse » alors que la réponse était là, juste au-dessus. On ignore ces messages
-        // pour décider du rôle qui porte l'attente.
-        lastMessageRole: [...messages].reverse().find((m) => m.orientation !== true)?.role,
-        lastAssistantStatus: dernierAssistant?.status,
-        // Le MOTIF de l'échec, pas seulement le fait qu'il y en ait un : la liste ne peut pas
-        // distinguer un fil coupé par le quota (qui se relance tel quel) d'un fil tombé sur une
-        // vraie erreur sans lire ce texte. Servi uniquement quand le tour a échoué — sinon chaque
-        // résumé IPC porterait une erreur périmée.
-        ...(dernierAssistant?.status === 'failed' && dernierAssistant.error
-          ? { lastAssistantError: dernierAssistant.error }
-          : {}),
-        ...(lastUserMessageAt(messages) !== undefined
-          ? { lastUserMessageAt: lastUserMessageAt(messages) }
-          : {}),
-        ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {}),
-        ...(messages.some((m) => m.role === 'assistant' && m.status === 'streaming')
-          ? { hasStreamingTurn: true as const }
-          : {})
-      }
-    })
+    return this.listResumes()
   }
 
   /**
@@ -2193,7 +2656,7 @@ export class ConversationStore {
    * VRAI « non fait » distinguable d'un succes.
    */
   rename(id: string, title: string): { id: string; title: string } | undefined {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) return undefined
     conversation.title = title
     // Seuls la barre latérale et l'outil `rename_conversation` passent ici : c'est un nom donné
@@ -2201,7 +2664,7 @@ export class ConversationStore {
     // automatique, lui, est posé par `beginTurn` sans passer par ce chemin.
     conversation.origineTitre = 'utilisateur'
     this.changed(id)
-    const relue = this.conversations.get(id)
+    const relue = this.get(id)
     return relue ? { id, title: relue.title } : undefined
   }
 
@@ -2233,7 +2696,7 @@ export class ConversationStore {
    * triée par `updatedAt` — un rangement la ferait remonter en tête comme si elle venait de servir.
    */
   rangerDansDossier(id: string, projectPath: string | null): Conversation | undefined {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) return undefined
     const brut = projectPath?.trim() ?? ''
     if (!brut) {
@@ -2265,7 +2728,7 @@ export class ConversationStore {
     id: string,
     copie: { chemin: string; depot: string }
   ): Conversation | undefined {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     const chemin = canonicalProjectPath(copie.chemin)
     const depot = canonicalProjectPath(copie.depot)
     if (!conversation || !chemin || !depot) return undefined
@@ -2284,7 +2747,7 @@ export class ConversationStore {
    * de fil (`menage-des-copies-de-fil.ts`) la retire, une fois le fil fini et rien n'y restant à publier.
    */
   revenirDeLaCopie(id: string): Conversation | undefined {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     const copie = conversation?.copieDuFil
     if (!conversation || !copie) return undefined
     if (copie.dossierAvant) conversation.projectPath = copie.dossierAvant
@@ -2302,7 +2765,7 @@ export class ConversationStore {
    * `updatedAt` — un simple repère la ferait remonter en tête comme si elle venait de servir.
    */
   surligner(id: string, surlignee: boolean): Conversation | undefined {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) return undefined
     if (surlignee) conversation.surlignee = true
     else delete conversation.surlignee
@@ -2312,7 +2775,7 @@ export class ConversationStore {
 
   /** Marque la conversation active/inactive (statut manuel). Ne touche pas `updatedAt`. */
   marquerInactive(id: string, inactive: boolean): Conversation | undefined {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) return undefined
     if (inactive) conversation.inactive = true
     else delete conversation.inactive
@@ -2325,7 +2788,7 @@ export class ConversationStore {
    * un titre n'est pas travailler, le fil ne doit pas remonter en tête de liste.
    */
   marquerPrive(id: string, prive: boolean): Conversation | undefined {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) return undefined
     if (prive) conversation.prive = true
     else delete conversation.prive
@@ -2341,7 +2804,7 @@ export class ConversationStore {
    * `updatedAt`.
    */
   choisirCompteClaude(id: string, accountId: string | null): Conversation | undefined {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) return undefined
     const propre = accountId?.trim()
     if (propre) conversation.claudeAccountId = propre
@@ -2359,7 +2822,7 @@ export class ConversationStore {
    * `os:conversations:setModel` qui refuse un modèle inconnu avant d'appeler ceci.
    */
   choisirModele(id: string, modele: ModeleDeConversation | null): Conversation | undefined {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) return undefined
     const provider = modele?.provider?.trim()
     if (modele && provider) {
@@ -2377,7 +2840,7 @@ export class ConversationStore {
 
   /** Attache un RUN.md externe à une conversation (idempotent). Jette si l'id est inconnu. */
   attachRun(id: string, runPath: string): Conversation {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) {
       throw new Error(`Conversation inconnue: ${id}`)
     }
@@ -2392,7 +2855,7 @@ export class ConversationStore {
 
   /** Détache un RUN.md externe sans supprimer le fichier qui appartient à son outil d'origine. */
   detachRun(id: string, runPath: string): Conversation {
-    const conversation = this.conversations.get(id)
+    const conversation = this.get(id)
     if (!conversation) {
       throw new Error(`Conversation inconnue: ${id}`)
     }
@@ -2407,7 +2870,7 @@ export class ConversationStore {
 
   /** Messages d'une conversation, dans l'ordre. Jette si l'id est inconnu. */
   messagesOf(id: string): Msg[] {
-    const c = this.conversations.get(id)
+    const c = this.get(id)
     if (!c) throw new Error(`Conversation inconnue: ${id}`)
     return c.messages
   }
@@ -2436,7 +2899,7 @@ export class ConversationStore {
    * (conversations.copie-du-fil.test.ts, « une branche d'un fil en copie… », rouge sur le code d'avant).
    */
   fork(id: string, fromMessageId: string, options: { dossier?: string } = {}): Conversation {
-    const source = this.conversations.get(id)
+    const source = this.get(id)
     if (!source) throw new Error(`Conversation inconnue: ${id}`)
     if (!fromMessageId) throw new Error('fromMessageId requis') // sinon matche un message legacy sans id
     const cut = source.messages.findIndex((m) => m.messageId === fromMessageId)
@@ -2526,7 +2989,7 @@ export class ConversationStore {
   /** Tous les messageId du corpus, en UN balayage. Jetable : ne jamais le conserver entre appels. */
   private allMessageIds(): Set<string> {
     const ids = new Set<string>()
-    for (const conversation of this.conversations.values()) {
+    for (const conversation of this.filsSansTri()) {
       for (const { messageId } of conversation.messages) if (messageId) ids.add(messageId)
     }
     return ids
@@ -2563,18 +3026,19 @@ export class ConversationStore {
 
   /** Supprime une conversation. Retourne true si elle existait. */
   remove(id: string): boolean {
-    this.voisinageCache = undefined
-    // Le corpus entier change de forme : la pre-selection ne peut pas etre rattrapee
-    // par une mise a jour, elle est jetee.
-    // Une conversation part : l'index inverse sait la DESINSCRIRE en temps proportionnel a ses
-    // mots, il n'y a pas besoin de jeter le corpus entier. `retirer` existait, teste, et n'etait
-    // appele nulle part en production -- une capacite branchee pour rien, relevee par l'audit.
-    this.indexInverseCache?.retirer(id)
+    // Une conversation part : le corpus change de forme, les index sont remis à zéro et se reconstruisent par
+    // tranches à la prochaine recherche classée. Désinscrire le fil de l'index inverse ne suffit pas : le
+    // voisinage garde la présence de ses mots.
+    this.invaliderIndex()
     // Le cache de tokenisation garde une entree par CONTENU vu, et les etats intermediaires du
     // streaming en laissent beaucoup. Il n'etait purge nulle part : une conversation qui part est
     // le bon moment pour le remettre a plat.
     this.motsParMessage.clear()
-    const existed = this.conversations.delete(id)
+    // Un fil archivé non relu n'est qu'une entrée d'archive : sa suppression le retire d'ici aussi.
+    const etaitRelu = this.conversations.delete(id)
+    const etaitArchive = this.archives.delete(id)
+    this.archivesRelues.delete(id)
+    const existed = etaitRelu || etaitArchive
     if (existed) this.changed(id)
     return existed
   }

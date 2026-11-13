@@ -67,26 +67,23 @@ const flush = (): Promise<void> =>
     await Promise.resolve()
   })
 
-/** Ouvre le menu de modèle d'un rôle (même menu que « Modèle des petites tâches »). */
-async function ouvrirMenu(idBase: string): Promise<HTMLDetailsElement> {
-  const menu = container.querySelector<HTMLDetailsElement>(`details[data-testid="${idBase}"]`)
-  expect(menu).not.toBeNull()
-  await act(async () => {
-    menu!.open = true
-    menu!.dispatchEvent(new Event('toggle'))
-  })
-  return menu!
+/** Ouvre le menu déroulant de modèle d'un rôle (le même que « Modèle des petites tâches »). */
+async function ouvrirMenu(idBase: string): Promise<HTMLButtonElement> {
+  const barre = container.querySelector<HTMLButtonElement>(`button[data-testid="${idBase}"]`)
+  expect(barre).not.toBeNull()
+  if (barre!.getAttribute('aria-expanded') !== 'true') await act(async () => barre!.click())
+  return barre!
 }
 
-/** Le geste réel : un point de la grille modèle × effort, puis le menu se referme. */
+/** Le geste réel : une pastille d'effort sur la ligne d'un modèle, puis le menu se referme. */
 async function choisirDansLeMenu(idBase: string, ligne: string, effort: string): Promise<void> {
-  const menu = await ouvrirMenu(idBase)
-  const cran = document.body.querySelector<HTMLButtonElement>(
-    `[data-testid="effort-matrix"] [data-row="${ligne}"] [data-effort="${effort}"]`
+  await ouvrirMenu(idBase)
+  const cran = container.querySelector<HTMLButtonElement>(
+    `[data-testid="${idBase}-liste"] [data-row="${ligne}"] [data-effort="${effort}"]`
   )
   expect(cran).not.toBeNull()
   await act(async () => cran!.click())
-  await act(async () => menu.dispatchEvent(new Event('toggle')))
+  expect(container.querySelector(`[data-testid="${idBase}-liste"]`)).toBeNull()
 }
 
 beforeEach(() => {
@@ -130,7 +127,7 @@ describe('AgentsTopologyView orchestrator persistence', () => {
     await ouvrirMenu('topology-modele-orchestrator')
     expect(
       document.body
-        .querySelector('[data-testid="effort-matrix"] [aria-checked="true"]')
+        .querySelector('[data-testid="topology-modele-orchestrator-liste"] [aria-checked="true"]')
         ?.getAttribute('data-effort')
     ).toBe('low')
   })
@@ -206,7 +203,7 @@ describe('AgentsTopologyView concurrent persistence', () => {
 
     await ouvrirMenu('topology-modele-orchestrator')
     const lignes = [
-      ...document.body.querySelectorAll('[data-testid="effort-matrix"] .effort-matrix-row')
+      ...container.querySelectorAll('[data-testid="topology-modele-orchestrator-liste"] [data-row]')
     ].map((ligne) => ligne.getAttribute('data-row'))
     expect(lignes).toEqual(['openai:dynamic-gpt'])
   })

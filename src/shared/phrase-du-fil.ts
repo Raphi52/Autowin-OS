@@ -18,7 +18,8 @@ const LIGNE_TECHNIQUE = /^(?:AUTOWIN_[A-Z_]+\d*:|```|<|\||[-=*_]{3,}$)/u
  * Lignes écrites par l'app ou par la forme de clôture, pas par le lot : les rubriques de fin de tour
  * et le bandeau d'un fil repris (mesuré : ce bandeau passait pour le résultat du lot).
  */
-const LIGNE_DE_CADRE = /^(?:✅ Fait|📍 Maintenant|⏳ Reste à faire|👉 Recommandé|Reprise du fil\b)/u
+const LIGNE_DE_CADRE =
+  /^(?:✅ Fait|📍 Maintenant|⏳ Reste à faire|❓ À éclaircir|👉 Recommandé|Reprise du fil\b)/u
 
 const lisible = (ligne: string): string =>
   ligne

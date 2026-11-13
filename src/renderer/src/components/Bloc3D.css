@@ -1,14 +1,19 @@
 /* Bloc ```threejs du fil (Bloc3D.tsx). Couleurs par jetons du theme : aucun hex en dur, pour
    que le bloc suive le theme sombre comme le clair. */
+/* Le bord est l'anneau chrome partage des blocs du fil (anneau-activite.css, `::before`) : le
+   bord d'1 px garde la place, transparent. */
 .bloc-3d {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   width: 100%;
   min-width: 0;
   margin: var(--s1, 8px) 0;
   overflow: hidden;
-  border: 1px solid rgba(var(--voile-rgb), 0.13);
-  border-radius: 10px;
+  border: 1px solid transparent;
+  --cadre-rayon: 10px;
+  border-radius: var(--cadre-rayon);
 }
 
 .bloc-3d__barre {

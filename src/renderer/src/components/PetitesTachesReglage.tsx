@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './RouterView.css'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
+import { ModeleDeroulant } from './ModeleDeroulant'
 import { CeQueCaCouvre } from './CeQueCaCouvre'
 import type { OrchestratorProviderStatus } from './OrchestratorModelSelector'
 import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
@@ -37,11 +38,18 @@ export function PetitesTachesReglage({
   idBase,
   testId,
   couvertureRepliee = false,
-  modeleSeul = false
+  modeleSeul = false,
+  surtitre,
+  menuDeroulant = false
 }: {
   /** Agent Studio ne garde que le choix du modèle : la case du routage et le retour au défaut
    *  se règlent dans Réglages → Routage. */
   modeleSeul?: boolean
+  /** Agent Studio pose une carte : un petit surtitre au-dessus du nom. Absent = rien (Routage). */
+  surtitre?: string
+  /** Agent Studio choisit le modèle dans son menu déroulant (ModeleDeroulant), sous la barre et
+   *  de sa largeur ; Routage garde le menu du chat. */
+  menuDeroulant?: boolean
   /** Agent Studio pose le bloc en ligne : l'explication y part repliée, au bout de la ligne. */
   couvertureRepliee?: boolean
   active: boolean
@@ -138,9 +146,11 @@ export function PetitesTachesReglage({
   }
 
   if (!petitesTaches && !error) return null
+  const MenuDeModele = menuDeroulant ? ModeleDeroulant : OrchestratorModelSelector
   return (
     <section className="router-default" data-testid={testId}>
       <header>
+        {surtitre && <span className="carte-surtitre">{surtitre}</span>}
         <h3>{t('routeur.petites.titre')}</h3>
         <small>{t('routeur.petites.aide')}</small>
       </header>
@@ -170,7 +180,7 @@ export function PetitesTachesReglage({
           }
         ]}
       />
-      <OrchestratorModelSelector
+      <MenuDeModele
         busy={false}
         catalogLoaded={catalogueFourni ? Boolean(catalogLoaded) : catalogue !== null}
         models={models ?? catalogue?.models ?? []}
@@ -180,7 +190,7 @@ export function PetitesTachesReglage({
         error={error}
         onSelect={(option) => void changer(option)}
         idBase={idBase}
-        // Libellé et aide sont réservés aux lecteurs d'écran (`.model-select-label` est masqué) :
+        // Libellé et aide sont réservés aux lecteurs d'écran (masqués dans les deux menus) :
         // l'état « non réglé » a donc AUSSI sa phrase visible juste en dessous.
         // Non réglé = Haiku en effort low (`roles.ts`), plus le modèle du chat.
         libelle={

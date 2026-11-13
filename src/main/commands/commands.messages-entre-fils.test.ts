@@ -45,7 +45,7 @@ function bus(opts: OptionsBus = {}): {
   ]
   const os = {
     executionWorkspace: depot,
-    conversations: { get: (id: string) => fils.find((f) => f.id === id), list: () => fils },
+    conversations: { get: (id: string) => fils.find((f) => f.id === id), listResumes: () => fils },
     registry: { ids: () => ['claude'] },
     roles: { all: () => ({}), getBinding: () => ({ provider: 'claude' }) },
     runsWithGate: () => [],

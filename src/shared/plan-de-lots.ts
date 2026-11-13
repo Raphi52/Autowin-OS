@@ -108,6 +108,18 @@ export interface LotDuPlan {
    * prouve rien sur ce travail-ci.
    */
   runsAPublier?: string[]
+  /**
+   * Après un redémarrage, la reprise du travail de ce lot attend dans la file des reprises, qui les
+   * fait repartir une par une et chacune jusqu'à sa fin : RIEN ne tourne encore. Le lot est montré en
+   * cours (« Reprendre » n'y lance pas un second agent), mais il se relance (`relancerLot`).
+   * `tour` : celui de la reprise attendue. Le premier geste de cette reprise efface la marque.
+   */
+  repriseEnFile?: { depuis: number; tour?: string }
+  /**
+   * Tours dont la reprise en file a été remplacée par une relance : quand leur tour de file arrive,
+   * ils ne repartent pas (`repriseAbandonnee`), sinon deux agents travailleraient dans le même fil.
+   */
+  reprisesAbandonnees?: string[]
 }
 
 export interface PlanDeLots {
@@ -1137,13 +1149,22 @@ export function interrompreAuDemarrage(plan: PlanDeLots): PlanDeLots {
       plan.statut === 'en-cours'
         ? 'l’app a redémarré pendant le plan : reprends-le avec le bouton « Reprendre ».'
         : plan.raison,
+    // La file des reprises meurt avec l'app : une reprise qui y attendait est à refaire.
     lots: plan.lots.map((l) =>
       l.etat === 'en-cours'
-        ? { ...l, etat: 'interrompu', raison: 'l’app a redémarré pendant ce lot.' }
+        ? {
+            ...l,
+            etat: 'interrompu',
+            raison: 'l’app a redémarré pendant ce lot.',
+            repriseEnFile: undefined
+          }
         : l
     )
   }
 }
+
+const RAISON_REPRISE_EN_FILE =
+  'sa reprise attend son tour dans la file des reprises, après le redémarrage : rien ne tourne encore. « Relancer » le fait repartir tout de suite.'
 
 /**
  * LE PLAN SUIT L'AGENT QUI A SURVÉCU (2026-10-30, demande de l'utilisateur). Vécu sur
@@ -1153,14 +1174,69 @@ export function interrompreAuDemarrage(plan: PlanDeLots): PlanDeLots {
  * s'il reste un lot interrompu : celui-là a perdu son agent, et seul « Reprendre » le relance.
  *
  * `tour` : le travail d'un AUTRE tour du même fil (ancien point de reprise) n'adopte pas le lot.
+ *
+ * Le premier geste d'une reprise qui attendait dans la file (`noterRepriseEnFile`) retire sa marque :
+ * un agent tourne désormais, le lot n'est plus relançable.
  */
 export function adopterLotRepris(plan: PlanDeLots, fil: string, tour?: string): PlanDeLots {
+  const enFile = plan.lots.find((l) => l.fil === fil && l.etat === 'en-cours' && l.repriseEnFile)
+  if (enFile) {
+    const attendu = enFile.repriseEnFile?.tour
+    return tour && attendu && tour !== attendu
+      ? plan
+      : avecLot(plan, enFile.rang, { repriseEnFile: undefined, raison: undefined })
+  }
   const lot = plan.lots.find((l) => l.fil === fil && l.etat === 'interrompu')
   if (!lot || (tour && lot.tour && tour !== lot.tour)) return plan
   const adopte = avecLot(plan, lot.rang, { etat: 'en-cours', raison: undefined })
   return adopte.statut === 'interrompu' && !adopte.lots.some((l) => l.etat === 'interrompu')
     ? { ...adopte, statut: 'en-cours', raison: undefined }
     : adopte
+}
+
+/**
+ * LA REPRISE MISE EN FILE N'EST PAS UN AGENT AU TRAVAIL (plan-db54feb7, 12/11/2026). Au redémarrage, le
+ * travail d'un lot repart par la file des reprises, qui les fait passer une par une et chacune
+ * jusqu'à sa fin : celle du lot 1 y a attendu 5 h 14, fil muet, pendant que le tableau le disait en
+ * cours et que « relancer » répondait « rien à relancer ». Le lot est adopté comme avant — « Reprendre »
+ * n'y lance pas un second agent —, mais marqué : il se relance (`relancerLot`), et la reprise
+ * remplacée ne part plus (`repriseAbandonnee`). Un second appel pour le même lot ne change rien.
+ */
+export function noterRepriseEnFile(
+  plan: PlanDeLots,
+  fil: string,
+  tour: string | undefined,
+  maintenant: number
+): PlanDeLots {
+  if (plan.lots.some((l) => l.fil === fil && l.repriseEnFile)) return plan
+  const adopte = adopterLotRepris(plan, fil, tour)
+  if (adopte === plan) return plan
+  const lot = adopte.lots.find((l) => l.fil === fil && l.etat === 'en-cours')
+  if (!lot) return adopte
+  return avecLot(adopte, lot.rang, {
+    raison: RAISON_REPRISE_EN_FILE,
+    repriseEnFile: { depuis: maintenant, ...(tour ? { tour } : {}) }
+  })
+}
+
+/** Vrai quand la reprise de ce tour, encore en file, a été remplacée par une relance du lot. */
+export function repriseAbandonnee(plan: PlanDeLots, fil: string, tour?: string): boolean {
+  return plan.lots.some((l) => l.fil === fil && (l.reprisesAbandonnees ?? []).includes(tour ?? ''))
+}
+
+/**
+ * Les états d'où un lot se relance. `attend-publication` en est : c'est la sortie de l'utilisateur
+ * si personne ne commite les fichiers qui bloquent (le chef, lui, en est empêché par son outil,
+ * `plans-de-lots-app.ts`). Un lot en cours seulement quand sa reprise attend dans la file : rien ne tourne.
+ */
+export function lotRelancable(lot: LotDuPlan): boolean {
+  return (
+    lot.etat === 'echec' ||
+    lot.etat === 'interrompu' ||
+    lot.etat === 'attend-chef' ||
+    lot.etat === 'attend-publication' ||
+    (lot.etat === 'en-cours' && lot.repriseEnFile !== undefined)
+  )
 }
 
 /**
@@ -1197,6 +1273,7 @@ export function reprendrePlan(
  * Relance d'un lot en échec ou interrompu, demandée par le chef. Elle consomme un tour du plafond.
  * Refusée sur un plan suspendu par le quota : seul l'utilisateur reprend après la limite. Permise
  * sur un plan BLOQUÉ : relancer le lot fautif est la seule sortie, ses dépendants suivront.
+ * Un lot dont la reprise attendait dans la file la voit abandonnée (`repriseAbandonnee`).
  */
 export function relancerLot(
   plan: PlanDeLots,
@@ -1213,21 +1290,25 @@ export function relancerLot(
     }
   if (!['en-cours', 'termine', 'bloque'].includes(plan.statut))
     return { ok: false, erreur: `plan ${LIBELLE_STATUT[plan.statut]} : relance impossible.` }
-  // `attend-publication` reste relançable : c'est la sortie de l'utilisateur si personne ne commite
-  // les fichiers qui bloquent. Le chef, lui, en est empêché par son outil (`plans-de-lots-app.ts`).
-  if (
-    lot.etat !== 'echec' &&
-    lot.etat !== 'interrompu' &&
-    lot.etat !== 'attend-chef' &&
-    lot.etat !== 'attend-publication'
-  )
+  if (!lotRelancable(lot))
     return { ok: false, erreur: `le lot ${rang} est ${LIBELLE_ETAT[lot.etat]} : rien à relancer.` }
   if (plan.toursLances >= plan.plafondTours)
     return {
       ok: false,
       erreur: `plafond de ${plan.plafondTours} tours atteint : relance impossible.`
     }
-  const p = avecLot(plan, rang, { etat: 'a-faire', raison: undefined, tour: undefined })
+  const enFile = lot.repriseEnFile
+  const p = avecLot(plan, rang, {
+    etat: 'a-faire',
+    raison: undefined,
+    tour: undefined,
+    ...(enFile
+      ? {
+          repriseEnFile: undefined,
+          reprisesAbandonnees: [...(lot.reprisesAbandonnees ?? []), enFile.tour ?? '']
+        }
+      : {})
+  })
   return { ok: true, plan: { ...p, statut: 'en-cours', raison: undefined } }
 }
 

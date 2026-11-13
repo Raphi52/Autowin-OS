@@ -105,12 +105,19 @@ export function composerTacheDOrchestration(
     ? bus.os.conversations.get(nommees.retenues[0])
     : undefined
   // Ni conversation nommee ni analyse Auto-Kaizen : une COMMANDE citee (« /draft ne me render
-  // pas… ») designe la derniere conversation ou elle a ete tapee. Conv-314, tour
-  // f5733ff5-07ff-4c61-8dc3-c4d75fad8f32 : dossier construit sur la conversation du /kaizen
-  // elle-meme, vide, alors que les traces etaient dans conv-310/311/312.
+  // pas… ») designe la derniere conversation ou elle a ete tapee. Sans cela, le dossier se construit
+  // sur la conversation du /kaizen elle-meme, vide, alors que les traces sont dans les conversations
+  // precedentes.
+  // fix-ok: cause mesurée — `listAvecMessages` ne rend plus les fils archivés non relus (conversations.ts ;
+  // test conversations.archives-au-resume) : kaizen cherche une phrase citée dans TOUS les fils, donc il
+  // lit la version texte, qui les couvre sans relire le disque.
   const kaizenParCommande =
     !kaizenNamed && conversation?.autoKaizen?.role !== 'analysis'
-      ? kaizenConversationParCommande(authoritativeTask, convId, bus.os.conversations.list())
+      ? kaizenConversationParCommande(
+          authoritativeTask,
+          convId,
+          bus.os.conversations.listAvecTexte()
+        )
       : undefined
   const kaizenEvidenceConversation = kaizenNamed
     ? kaizenNamed
@@ -124,7 +131,7 @@ export function composerTacheDOrchestration(
     ? localiserMessageCite(
         authoritativeTask,
         kaizenEvidenceConversation.id,
-        bus.os.conversations.list()
+        bus.os.conversations.listAvecTexte()
       )
     : undefined
   const kaizenDossier =
@@ -137,7 +144,7 @@ export function composerTacheDOrchestration(
       ? buildAutowinKaizenTaskPlusieurs({
           requestedTask,
           tache: authoritativeTask,
-          conversations: bus.os.conversations.list(),
+          conversations: bus.os.conversations.listAvecTexte(),
           obtenir: (id) => bus.os.conversations.get(id)
         })
       : undefined

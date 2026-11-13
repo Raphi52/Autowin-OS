@@ -27,6 +27,18 @@ describe('concise structured response policy', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).not.toMatch(/rubrique vide.*masqu/iu)
   })
 
+  // 2026-11-12 : l'utilisateur veut une place, dans le bloc, où le modèle lui pose ses questions.
+  // ENTRÉE QUI DOIT FAIRE ÉCHOUER : la rubrique rendue obligatoire, sans plafond de questions, ou
+  // posée après « 👉 Recommandé » (dont les lecteurs prendraient les questions pour la suite).
+  it('ouvre une rubrique FACULTATIVE « ❓ À éclaircir » de 1 à 3 questions, avant la recommandation', () => {
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /entre « ⏳ Reste à faire » et « 👉 Recommandé », une rubrique FACULTATIVE « ❓ À éclaircir » pose à l'utilisateur de UNE à TROIS questions/u
+    )
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /omets-la entièrement quand rien n'est à éclaircir/u
+    )
+  })
+
   it('does not impose a closing block on trivial conversational answers', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
       /réponse conversationnelle triviale.*aucun bloc/iu

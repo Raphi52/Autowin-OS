@@ -146,11 +146,11 @@ export function registerConversationsIpc({
   })
   // Recherche par CONTENU pour la barre laterale : la liste envoyee au renderer n'a pas les
   // messages, seul le processus principal peut dire quelles conversations portent le terme.
-  ipcMain.handle('os:conversations:searchContent', (event, rawTerme: unknown) => {
+  ipcMain.handle('os:conversations:searchContent', async (event, rawTerme: unknown) => {
     assertTrustedRendererSender(event, 'Conversations content search')
     const terme = typeof rawTerme === 'string' ? rawTerme : ''
     if (terme.trim().length === 0) return []
-    return os.conversations.rechercherParContenu(terme)
+    return os.conversations.rechercherParContenuAsync(terme)
   })
   ipcMain.handle('os:conversation', (event, rawId: unknown) => {
     assertTrustedRendererSender(event, 'Conversation detail')

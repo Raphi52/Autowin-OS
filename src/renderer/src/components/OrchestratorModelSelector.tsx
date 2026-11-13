@@ -7,8 +7,9 @@ import {
 } from './chat-view-model'
 import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
 import { effortLabel } from './model-effort-labels'
-import { useTextesChatPanneaux, type traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
+import { useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import { shortModelLabel } from './model-display-label'
+import { CLE_DU_STATUT, STATUTS_BLOQUANTS } from './statuts-fournisseur'
 import './ChatView.css'
 // Les puces de compte (.router-account-chip, .is-active = compte retenu encadré) sont stylées ici.
 import './RouterView.css'
@@ -59,18 +60,6 @@ export interface OrchestratorModelDefaut {
   actif: boolean
   onChoisir: () => void
 }
-
-const STATUT_LABEL: Record<string, Parameters<typeof traduireChatPanneaux>[0]> = {
-  authenticated: 'selecteur.statut.authentifie',
-  expired: 'selecteur.statut.expire',
-  'installed-untested': 'selecteur.statut.installeNonTeste',
-  absent: 'selecteur.statut.nonConnecte',
-  unknown: 'selecteur.statut.indetermine',
-  standby: 'selecteur.statut.standby'
-}
-
-/** Les états sous lesquels un prompt ne partirait pas : le choix est refusé, pas juste décoré. */
-const STATUTS_BLOQUANTS = new Set(['expired', 'absent', 'standby'])
 
 /**
  * Services directs (`api-xai`, `api-mistral`…) : sans niveau de réflexion, ils prennent un onglet de la
@@ -184,7 +173,7 @@ export function OrchestratorModelSelector({
   // `mesurerAncre` (react-hooks/preserve-manual-memoization, mesuré le 2026-10-27).
   const MODELE_VERROUILLE = t('selecteur.verrouille')
   const libelleStatut = (statut: string): string => {
-    const cle = STATUT_LABEL[statut]
+    const cle = CLE_DU_STATUT[statut]
     return cle ? t(cle) : statut
   }
   const grouped = useMemo(

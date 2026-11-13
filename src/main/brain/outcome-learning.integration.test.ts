@@ -387,7 +387,9 @@ describe('outcome learning — contrat visible par les modèles', () => {
       executionWorkspace: 'C:/Travail/Autowin OS',
       conversations: {
         get: (id: string) => (id === 'conv-1' ? conversation : undefined),
-        list: () => [conversation]
+        listAvecMessages: () => [conversation],
+        listAvecTexte: () => [conversation],
+        listResumes: () => [conversation].map(({ messages: _messages, ...resume }) => resume)
       },
       registry: { ids: () => ['codex'] },
       roles: {
@@ -511,7 +513,12 @@ describe('outcome learning — contrat visible par les modèles', () => {
     }
     const os = {
       executionWorkspace: 'C:/repo',
-      conversations: { get: () => conversation, list: () => [conversation] },
+      conversations: {
+        get: () => conversation,
+        listAvecMessages: () => [conversation],
+        listAvecTexte: () => [conversation],
+        listResumes: () => [conversation].map(({ messages: _messages, ...resume }) => resume)
+      },
       registry: { ids: () => ['codex'] },
       roles: { all: () => ({}), getBinding: () => ({ provider: 'codex', model: 'gpt-test' }) },
       runsWithGate: () => [],

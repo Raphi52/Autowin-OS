@@ -10,6 +10,9 @@
 :root[data-theme^='malvoyant-'] .topology-assign-button,
 :root[data-theme^='malvoyant-'] .topology-runtime-limit,
 :root[data-theme^='malvoyant-'] .studio-modeles .agents-topology .topology-toolbar .topology-state,
+:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .slot-unresolved,
+:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .topology-ligne-role,
+:root[data-theme^='malvoyant-'] .studio-modeles .topology-workspace .router-default > .ce-que-ca-couvre dt,
 :root[data-theme^='malvoyant-'] .studio-modeles.studio-modeles .agents-topology .topology-workspace .topology-runtime-limit {
   font-size: 13px;
 }
@@ -752,6 +755,12 @@
   color: var(--text);
 }
 
+/* components/ModeleDeroulant.css — tailles */
+:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-barre > em,
+:root[data-theme^='malvoyant-'] .modele-deroulant .modele-deroulant-etat {
+  font-size: 13px;
+}
+
 /* components/NavigateurIntegre.css — tailles */
 :root[data-theme^='malvoyant-'] .navigateur-mode,
 :root[data-theme^='malvoyant-'] .navigateur-cadre-tete,
@@ -1229,7 +1238,9 @@
 :root[data-theme^='malvoyant-'] .wf-badge,
 :root[data-theme^='malvoyant-'] .wf-tn-head,
 :root[data-theme^='malvoyant-'] .workflow-profiles-note,
-:root[data-theme^='malvoyant-'] .workflow-graph-hint {
+:root[data-theme^='malvoyant-'] .workflow-graph-hint,
+:root[data-theme^='malvoyant-'] .workflow-profiles .workflow-profile-mesures,
+:root[data-theme^='malvoyant-'] .workflow-profiles .wf-badge {
   font-size: 13px;
 }
 

@@ -276,6 +276,7 @@ import { copieALaDemandePossible } from '../copies/copie-a-la-demande-possible'
 import type { ReponseDeCopie } from '../../shared/copie-a-la-demande'
 import { messageLiaison } from '../store/dependances-copie-agent'
 import { materializeChatArtifact } from '../store/chat-artifact-store'
+import { branchesARattacher } from '../store/conversations'
 import { filterNativePreflight, readNativePreflight } from '../activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from '../activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from '../activity/brain-trace-spool'
@@ -1860,7 +1861,9 @@ Le fil reprend ensuite normalement.`
   void os.conversations.archivesChargees
     .then(async () => {
       let rattachees = 0
-      for (const branche of os.conversations.list()) {
+      // fix-ok: la boucle tourne sur la liste prise avant la première attente : relire chaque fil
+      // pendant l'attente ferait sauter une branche supprimée entre-temps.
+      for (const branche of branchesARattacher(os.conversations)) {
         const source = branche.forkedFrom && os.conversations.get(branche.forkedFrom.conversationId)
         if (source) rattachees += await rattacherLaBranche(branche, source)
       }
@@ -2274,7 +2277,7 @@ Le fil reprend ensuite normalement.`
       dossiersConnus: [
         ...new Set(
           os.conversations
-            .list()
+            .listResumes()
             .map((c) => {
               const copie = copieOuTravailleLeFil(c)
               return (copie ? copie.dossierAvant : c.projectPath)?.trim()
@@ -2288,7 +2291,7 @@ Le fil reprend ensuite normalement.`
       categoriesConnues: [
         ...new Set(
           os.conversations
-            .list()
+            .listResumes()
             .map((c) => c.categorie?.trim())
             .filter((libelle): libelle is string => Boolean(libelle))
         )
@@ -2698,9 +2701,8 @@ Le fil reprend ensuite normalement.`
              */
             const source = os.conversations.get(conversationId)
             if (source)
-              for (const branche of os.conversations.list())
-                if (branche.forkedFrom?.conversationId === conversationId)
-                  await rattacherLaBranche(branche, source)
+              for (const branche of branchesARattacher(os.conversations, conversationId))
+                await rattacherLaBranche(branche, source)
             mesureDesEcarts.planifier()
             // Le panneau RUN.md du fil relit ses fiches : la nouvelle s'y montre sans rouvrir le fil.
             broadcast({ type: 'refresh', scope: 'workflows' })
@@ -2847,6 +2849,9 @@ Le fil reprend ensuite normalement.`
   /** Rendu au démarrage : les runs repris y préviennent les plans de lots. */
   const suiviDuPlan: SuiviDuPlan = {
     agentRepris: (fil, tour) => suiviDesPlans.coordinateur?.agentRepris(fil, tour),
+    repriseEnFile: (fil, tour) => suiviDesPlans.coordinateur?.repriseEnFile(fil, tour),
+    repriseAbandonnee: (fil, tour) =>
+      suiviDesPlans.coordinateur?.repriseAbandonnee(fil, tour) ?? false,
     finDuRun: (fil, issue) => annoncerLaFinDuTour(observateurDesPlans, fil, issue)
   }
   /**
@@ -3115,14 +3120,14 @@ Le fil reprend ensuite normalement.`
    */
   const passeDuMenageDesCopies = (): void => {
     const depotDeLApp = os.executionWorkspace
-    const depots = depotsDesCopiesDeFil(os.conversations.list(), depotDeLApp)
+    const depots = depotsDesCopiesDeFil(os.conversations.listResumes(), depotDeLApp)
     if (!depots.length) return
     void pendantOperation('timer:balayage:copiesDeFil', async () => {
       const menage: Pick<
         Parameters<typeof menageDesCopiesDeTaches>[0],
         'lireFils' | 'tourEnCours' | 'decrocher'
       > = {
-        lireFils: () => os.conversations.list(),
+        lireFils: () => os.conversations.listResumes(),
         tourEnCours: (id) => activeChatTurns.isInFlight(id),
         decrocher: (id) => {
           os.conversations.revenirDeLaCopie(id)
@@ -3559,7 +3564,7 @@ Le fil reprend ensuite normalement.`
    */
   const fileDesFilsCoupes = new StartupResumeQueue()
   suiviDesFilsCoupes.reprise = creerRepriseDesFils({
-    lireFils: () => os.conversations.list(),
+    lireFils: () => os.conversations.listAvecMessages(),
     filOccupe: (id) => activeChatTurns.isInFlight(id),
     filDansUnPlan: (id) => Boolean(suiviDesPlans.coordinateur?.planDuFil(id)),
     filsAvecRunAReprendre: () =>

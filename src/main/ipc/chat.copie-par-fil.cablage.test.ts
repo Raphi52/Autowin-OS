@@ -108,7 +108,7 @@ describe('le ménage des copies de fil', () => {
     const passe = source.slice(source.indexOf('const passeDuMenageDesCopies = (): void => {'))
     const bloc = passe.slice(0, passe.indexOf('setInterval(passeDuMenageDesCopies'))
     expect(bloc).toContain(
-      'const depots = depotsDesCopiesDeFil(os.conversations.list(), depotDeLApp)'
+      'const depots = depotsDesCopiesDeFil(os.conversations.listResumes(), depotDeLApp)'
     )
     expect(bloc).toContain('for (const depot of depots)')
     // Les copies d'avant restent celles d'Autowin : leur passe ne tourne que sur son dépôt.

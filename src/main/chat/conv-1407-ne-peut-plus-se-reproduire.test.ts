@@ -85,11 +85,13 @@ describe('conv-1407 : une demande de quatre mots retrouve son sens', () => {
     expect(textes.some((texte) => texte.includes('ambre'))).toBe(true)
   })
 
-  it('LE TOUR PORTE DEJA le sens, sans qu aucun outil soit appele', () => {
+  it('LE TOUR PORTE DEJA le sens, sans qu aucun outil soit appele', async () => {
     const { conversations, bus } = corpusDeConv1407()
     const courante = conversations.list()[0]
 
-    // Exactement ce que fait `agent-pilot` avant d'envoyer le tour au modele.
+    // Exactement ce que fait `agent-pilot` avant d'envoyer le tour au modele : l'index du rappel est prêt
+    // (le tour l'attend), puis le message d'ouverture est composé.
+    await bus.prechaufferRappel()
     const rappel = bus.rappelPourDemande('remake les pastilles de couleurs', courante.id)
     const message = buildTurnMessages({
       snapshot: {},

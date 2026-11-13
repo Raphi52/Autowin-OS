@@ -163,7 +163,7 @@ const EN_TETE =
  * consommerait la place au profit de ce qu'il sait deja.
  */
 export function rappelDesEchangesPasses(
-  conversations: Pick<ConversationStore, 'search'>,
+  conversations: Pick<ConversationStore, 'search' | 'indexPret' | 'prechaufferIndex'>,
   demande: string | undefined,
   conversationCouranteId: string | undefined,
   /**
@@ -213,6 +213,16 @@ export function rappelDesEchangesPasses(
    * bien que le rappel actuel. Or un extrait faux ne se contente pas d'occuper la place -- il egare
    * (Un rappel hors sujet a ete pris pour l'intention de l'utilisateur). Non retenu.
    */
+  /*
+   * PAS DE CONSTRUCTION SUR LE FIL PRINCIPAL. La premiere recherche classee d'une session construit les index :
+   * 3,5 s mesurees sur le corpus reel, d'un trait, pendant le tour. Tant qu'ils ne sont pas prets, le tour part
+   * SANS rappel -- un rappel est un confort, jamais une autorite -- et les index se construisent par tranches en
+   * arriere-plan. Le budget ci-dessous ne couvre que le parcours, pas cette construction.
+   */
+  if (!conversations.indexPret()) {
+    void conversations.prechaufferIndex()
+    return ''
+  }
   const trouvees = conversations
     .search(terme, { limite: 3, extraitsParConversation: 2, budgetMs: BUDGET_MS })
     .filter((conversation) => conversation.id !== conversationCouranteId)

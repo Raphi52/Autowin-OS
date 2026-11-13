@@ -39,38 +39,60 @@ function corpus(): ConversationStore {
   return store
 }
 
+/** Le corpus avec ses index préchauffés, comme dans l’application : le rappel ne construit rien sur le tour. */
+async function corpusPret(): Promise<ConversationStore> {
+  const store = corpus()
+  await store.prechaufferIndex()
+  return store
+}
+
 describe('le tour porte deja ce que la demande suppose', () => {
-  it('rappelle l echange ou le sens a ete donne', () => {
-    const rappel = rappelDesEchangesPasses(corpus(), 'remake les pastilles de couleurs', 'conv-2', 'claude')
+  it('rappelle l echange ou le sens a ete donne', async () => {
+    const rappel = rappelDesEchangesPasses(
+      await corpusPret(),
+      'remake les pastilles de couleurs',
+      'conv-2',
+      'claude'
+    )
     expect(rappel).toContain('ambre')
     expect(rappel).toContain('conv-1')
   })
 
-  it('exclut la conversation COURANTE, que le modele a deja', () => {
-    const rappel = rappelDesEchangesPasses(corpus(), 'remake les pastilles de couleurs', 'conv-2', 'claude')
+  it('exclut la conversation COURANTE, que le modele a deja', async () => {
+    const rappel = rappelDesEchangesPasses(
+      await corpusPret(),
+      'remake les pastilles de couleurs',
+      'conv-2',
+      'claude'
+    )
     expect(rappel).not.toContain('conv-2')
   })
 
-  it('ne rappelle rien quand la demande ne renvoie a rien de connu', () => {
-    expect(rappelDesEchangesPasses(corpus(), 'installe kubernetes', 'conv-2', 'claude')).toBe('')
+  it('ne rappelle rien quand la demande ne renvoie a rien de connu', async () => {
+    expect(
+      rappelDesEchangesPasses(await corpusPret(), 'installe kubernetes', 'conv-2', 'claude')
+    ).toBe('')
   })
 
-  it('se tait sur une demande LONGUE, qui se suffit a elle-meme', () => {
+  it('se tait sur une demande LONGUE, qui se suffit a elle-meme', async () => {
     const longue =
       'Dans src/renderer/src/components/ChatView.parts.tsx, le composant SubAgentText rend son ' +
       'bouton de depliage inconditionnellement, y compris pour un texte de deux lignes qui tient ' +
       'dans les 160px de la classe subagent-text ; il faut le rendre conditionnel et couvrir la ' +
       'decision par un test unitaire dedie qui exerce le cas court et le cas long des pastilles.'
-    expect(rappelDesEchangesPasses(corpus(), longue, 'conv-2', 'claude')).toBe('')
+    expect(rappelDesEchangesPasses(await corpusPret(), longue, 'conv-2', 'claude')).toBe('')
   })
 
-  it('reste borne en volume, meme sur un corpus bavard', () => {
+  it('reste borne en volume, meme sur un corpus bavard', async () => {
     let horloge = 1000
     const store = new ConversationStore(() => horloge++)
     for (let i = 0; i < 40; i++) {
       const c = store.create({ title: 'sujet ' + i, provider: 'claude' })
       store.append(c.id, { role: 'user', content: 'pastille '.repeat(400) })
     }
-    expect(rappelDesEchangesPasses(store, 'pastille', 'conv-999', 'claude').length).toBeLessThan(4_000)
+    await store.prechaufferIndex()
+    expect(rappelDesEchangesPasses(store, 'pastille', 'conv-999', 'claude').length).toBeLessThan(
+      4_000
+    )
   })
 })

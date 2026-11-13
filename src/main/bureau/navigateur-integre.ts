@@ -31,7 +31,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { dirname, extname, basename, join } from 'node:path'
-import { app, session, shell, WebContentsView, type BrowserWindow, type Session } from 'electron'
+import {
+  app,
+  session,
+  shell,
+  WebContentsView,
+  type BrowserWindow,
+  type Session,
+  type WebContents
+} from 'electron'
 import { autowinAppDataRoot } from '../app/app-data'
 import {
   appelPage,
@@ -75,6 +83,12 @@ export const FICHIER_SITES_NAVIGATEUR = 'navigateur-sites.json'
 export const FICHIER_REGLAGES_NAVIGATEUR = 'navigateur-reglages.json'
 
 export const MAX_ONGLETS_PAR_FIL = 20
+/*
+ * Fenêtres de connexion ouvertes en même temps depuis un onglet. Elles s'affichent sur l'écran de
+ * l'utilisateur : une connexion en ouvre une, parfois une seconde depuis la première ; au-delà,
+ * c'est une page qui en ouvrirait en boucle.
+ */
+export const MAX_FENETRES_DE_CONNEXION = 2
 export const TAILLE_ANNEAU = 200
 export const MAX_CARACTERES_LECTURE = 30_000
 export const MAX_ELEMENTS_INSTANTANE = 400
@@ -141,7 +155,10 @@ export type EvenementSaisie =
 export interface EcouteursVue {
   /** URL, titre, chargement ou historique ont changé. */
   surChangement(): void
-  /** La page veut ouvrir une fenêtre : elle devient un onglet du même fil. */
+  /**
+   * La page veut ouvrir un onglet (lien `target=_blank`, clic molette) : il devient un onglet du
+   * même fil. Une fenêtre de connexion, elle, s'ouvre en vraie fenêtre (`gererOuvertures`).
+   */
   surNouvelleFenetre(url: string, disposition: string): void
   surConsole(ligne: { niveau: NiveauConsole; message: string; source: string; ligne: number }): void
   surRequeteEchouee(requete: Omit<RequeteEchouee, 'ongletId' | 'horodatage'>): void
@@ -552,16 +569,21 @@ export class GestionnaireNavigateur {
   fermerOnglet(ongletId: string): void {
     const onglet = this.onglets.get(ongletId)
     if (!onglet) return
-    const fil = this.fil(onglet.conversationId)
-    const rang = fil.onglets.indexOf(ongletId)
-    fil.onglets = fil.onglets.filter((id) => id !== ongletId)
-    if (fil.actif === ongletId) {
-      fil.actif = fil.onglets[Math.min(rang, fil.onglets.length - 1)] ?? null
-    }
-    this.onglets.delete(ongletId)
+    this.retirerOnglet(onglet)
     onglet.vue.fermer()
     this.appliquerVisibilite()
     this.emettre(onglet.conversationId)
+  }
+
+  /** Sort l'onglet de son fil ; son voisin de droite (sinon de gauche) devient l'onglet actif. */
+  private retirerOnglet(onglet: OngletInterne): void {
+    const fil = this.fil(onglet.conversationId)
+    const rang = fil.onglets.indexOf(onglet.id)
+    fil.onglets = fil.onglets.filter((id) => id !== onglet.id)
+    if (fil.actif === onglet.id) {
+      fil.actif = fil.onglets[Math.min(rang, fil.onglets.length - 1)] ?? null
+    }
+    this.onglets.delete(onglet.id)
   }
 
   /** Le fil supprimé : ses onglets se ferment, ses demandes d'accord et ses gestes en pause tombent. */
@@ -1245,30 +1267,36 @@ export class GestionnaireNavigateur {
   private creerOnglet(conversationId: string): OngletInterne {
     const id = `onglet-${++this.compteur}`
     const partition = this.lireReglages().garderCookies ? PARTITION_PERSISTANTE : PARTITION_EPHEMERE
-    const vue = this.fabrique.creerVue({
-      partition,
-      ecouteurs: {
-        surChangement: () => this.surChangement(id),
-        surNouvelleFenetre: (url, disposition) => this.surNouvelleFenetre(id, url, disposition),
-        surConsole: (ligne) => this.surConsole(id, ligne),
-        surRequeteEchouee: (requete) => {
-          const onglet = this.onglets.get(id)
-          if (onglet)
-            pousserDansAnneau(onglet.requetes, { ...requete, ongletId: id, horodatage: Date.now() })
-        },
-        surTelechargement: ({ chemin, etat }) => {
-          const onglet = this.onglets.get(id)
-          if (!onglet) return
-          if (etat === 'completed') this.noterConsole(onglet, 'info', `Téléchargé dans ${chemin}`)
-          else
-            this.noterConsole(
-              onglet,
-              'warning',
-              `Téléchargement ${etat === 'cancelled' ? 'annulé' : 'interrompu'} : ${chemin}`
-            )
-        }
+    const vue = this.fabrique.creerVue({ partition, ecouteurs: this.ecouteursDeLOnglet(id) })
+    return this.enregistrerOnglet(id, conversationId, vue)
+  }
+
+  /** Les écoutes d'une page, aiguillées vers l'onglet `id` (qui peut ne pas encore exister). */
+  private ecouteursDeLOnglet(id: string): EcouteursVue {
+    return {
+      surChangement: () => this.surChangement(id),
+      surNouvelleFenetre: (url, disposition) => this.surNouvelleFenetre(id, url, disposition),
+      surConsole: (ligne) => this.surConsole(id, ligne),
+      surRequeteEchouee: (requete) => {
+        const onglet = this.onglets.get(id)
+        if (onglet)
+          pousserDansAnneau(onglet.requetes, { ...requete, ongletId: id, horodatage: Date.now() })
+      },
+      surTelechargement: ({ chemin, etat }) => {
+        const onglet = this.onglets.get(id)
+        if (!onglet) return
+        if (etat === 'completed') this.noterConsole(onglet, 'info', `Téléchargé dans ${chemin}`)
+        else
+          this.noterConsole(
+            onglet,
+            'warning',
+            `Téléchargement ${etat === 'cancelled' ? 'annulé' : 'interrompu'} : ${chemin}`
+          )
       }
-    })
+    }
+  }
+
+  private enregistrerOnglet(id: string, conversationId: string, vue: VueNavigateur): OngletInterne {
     const onglet: OngletInterne = {
       id,
       conversationId,
@@ -2017,211 +2045,294 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
     })
   }
 
-  return {
-    creerVue({ partition, ecouteurs }) {
-      const vue = new WebContentsView({
-        webPreferences: {
-          partition,
-          sandbox: true,
-          contextIsolation: true,
-          nodeIntegration: false,
-          nodeIntegrationInSubFrames: false,
-          nodeIntegrationInWorker: false,
-          webviewTag: false,
-          safeDialogs: true
-        }
-      })
-      // La page passe au-dessus du DOM : le CSS de `.navigateur-zone` ne peut pas l'arrondir.
-      vue.setBorderRadius(RAYON_PAGE_PX)
-      const contenu = vue.webContents
-      const idContenu = contenu.id
-      preparerSession(contenu.session)
-      // L'agent de la page passe devant celui de la session : sans ceci, « Electron/x » restait.
-      contenu.setUserAgent(agentChrome(contenu.getUserAgent()))
-      ecouteursParContenu.set(idContenu, ecouteurs)
-      vue.setVisible(false)
-      // Une taille dès la création : panneau jamais ouvert, la vue restait en 0 × 0, sa
-      // page sans mise en page et ses éléments sans position à cliquer.
-      const { width, height } = fenetre.getContentBounds()
-      let cadreVoulu = { x: 0, y: 0, width, height }
-      let visibleVoulue = false
-      let enPeinture = false
-      vue.setBounds(cadreVoulu)
-      fenetre.contentView.addChildView(vue)
-
-      contenu.setWindowOpenHandler((details) => {
+  /*
+   * FENÊTRES OUVERTES PAR UNE PAGE — un onglet, ou une fenêtre de connexion elle-même.
+   * `new-window` = `window.open` avec des dimensions, la forme des fenêtres de connexion (Google,
+   * Microsoft…). Elle s'ouvre en VRAIE fenêtre, que Chromium relie à la page qui l'ouvre
+   * (`window.opener`) : le résultat de la connexion revient par ce lien. Rouverte dans un onglet
+   * neuf, elle le perdait et la connexion ne revenait jamais. Fille de la fenêtre de l'app, elle reste
+   * au-dessus d'elle et se ferme avec elle. Electron lui donne la session de la page et lui impose ses
+   * réglages les plus sûrs (bac à sable, isolation, pas de Node : doc de `webpreferences` dans
+   * electron.d.ts). Le reste (lien `target=_blank`, clic molette) devient un onglet du fil.
+   * `filles` : les fenêtres de connexion encore ouvertes depuis l'onglet, toutes générations.
+   */
+  function gererOuvertures(
+    contenu: WebContents,
+    ecouteurs: EcouteursVue,
+    filles: Set<BrowserWindow>
+  ): void {
+    const ignorer = (message: string): { action: 'deny' } => {
+      ecouteurs.surConsole({ niveau: 'warning', message, source: 'autowin', ligne: 0 })
+      return { action: 'deny' }
+    }
+    contenu.setWindowOpenHandler((details) => {
+      if (details.disposition !== 'new-window') {
         ecouteurs.surNouvelleFenetre(details.url, details.disposition)
         return { action: 'deny' }
-      })
-      /*
-       * RACCOURCIS DU PANNEAU TAPÉS DANS LA PAGE (lot 5/5) — mesuré dans
-       * l'instance cachée : Ctrl+Shift+B, le focus dans la page, laissait le panneau ouvert. Ses
-       * écoutes (ChatView, NavigateurIntegre) vivent dans le rendu de la fenêtre, qui ne reçoit pas
-       * les touches de cette vue. On les y rejoue ; la page ne les voit pas. La frappe de l'AGENT
-       * (`envoyer`, même chemin `sendInputEvent`) reste à la page : son Control+T n'ouvre pas
-       * d'onglet dans le panneau de l'utilisateur.
-       */
-      let frappeDeLAgent = false
-      contenu.on('before-input-event', (evenement, entree) => {
-        if (frappeDeLAgent || entree.type !== 'keyDown') return
-        if (!(entree.control || entree.meta) || entree.alt) return
-        const touche = entree.key.toLowerCase()
-        const avecMaj = touche === 'b' || touche === 's'
-        if (!(entree.shift ? avecMaj : touche === 't')) return
-        if (fenetre.isDestroyed()) return
-        evenement.preventDefault()
-        const keyCode = touche.toUpperCase()
-        const modifiers: Array<'control' | 'shift'> = entree.shift
-          ? ['control', 'shift']
-          : ['control']
-        fenetre.webContents.focus()
-        fenetre.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
-        fenetre.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
-      })
-
-      const changer = (): void => ecouteurs.surChangement()
-      contenu.on('did-start-loading', changer)
-      contenu.on('did-stop-loading', changer)
-      contenu.on('did-navigate', changer)
-      contenu.on('did-navigate-in-page', changer)
-      contenu.on('page-title-updated', changer)
-      contenu.on('console-message', (details) => {
-        ecouteurs.surConsole({
-          niveau: details.level,
-          message: details.message,
-          source: details.sourceId,
-          ligne: details.lineNumber
-        })
-      })
-      contenu.on('render-process-gone', (_e, details) => {
-        ecouteurs.surConsole({
-          niveau: 'error',
-          message: `La page s'est arrêtée (${details.reason}).`,
-          source: 'autowin',
-          ligne: 0
-        })
-      })
-
-      const zoom = (): number => {
-        const z = contenu.getZoomFactor()
-        return Number.isFinite(z) && z > 0 ? z : 1
       }
+      if (!normaliserUrlNavigateur(details.url))
+        return ignorer(`Fenêtre de connexion ignorée : « ${texteBorne(details.url, 200)} ».`)
+      if (filles.size >= MAX_FENETRES_DE_CONNEXION)
+        return ignorer(
+          `Fenêtre de connexion ignorée : ${MAX_FENETRES_DE_CONNEXION} ouvertes au plus par onglet.`
+        )
       return {
-        async charger(url) {
-          try {
-            await contenu.loadURL(url)
-            return { ok: true }
-          } catch (erreur) {
-            const message = messageErreur(erreur)
-            // Navigation remplacée par une autre (redirection, nouveau clic) : la page vit.
-            if (message.includes('ERR_ABORTED')) return { ok: true }
-            return { ok: false, erreur: message }
-          }
-        },
-        url: () => contenu.getURL(),
-        titre: () => contenu.getTitle(),
-        chargement: () => contenu.isLoading(),
-        peutReculer: () => contenu.navigationHistory.canGoBack(),
-        peutAvancer: () => contenu.navigationHistory.canGoForward(),
-        reculer: () => contenu.navigationHistory.goBack(),
-        avancer: () => contenu.navigationHistory.goForward(),
-        recharger: () => contenu.reload(),
-        arreter: () => contenu.stop(),
-        // Pendant un dessin forcé, la demande du panneau est RETENUE : `peindre` la pose en sortant.
-        // L'appliquer tout de suite, c'était la voir défaite ~100 ms plus tard.
-        poserCadre: (cadre) => {
-          cadreVoulu = cadre
-          if (!enPeinture) vue.setBounds(cadre)
-        },
-        rendreVisible: (visible) => {
-          visibleVoulue = visible
-          if (!enPeinture) vue.setVisible(visible)
-        },
-        taille: () => {
-          const b = vue.getBounds()
-          return { largeur: b.width / zoom(), hauteur: b.height / zoom() }
-        },
-        executer: (source) =>
-          contenu.executeJavaScriptInIsolatedWorld(MONDE_ISOLE_NAVIGATEUR, [
-            { code: source }
-          ]) as Promise<unknown>,
-        async capturer(rect) {
-          const z = zoom()
-          const zone = rect
-            ? {
-                x: Math.round(rect.x * z),
-                y: Math.round(rect.y * z),
-                width: Math.max(1, Math.round(rect.largeur * z)),
-                height: Math.max(1, Math.round(rect.hauteur * z))
-              }
-            : undefined
-          const image = await contenu.capturePage(zone, { stayHidden: true })
-          return image.isEmpty() ? null : image.toDataURL()
-        },
-        /*
-         * Image forcée par le débogueur intégré (réparation 1) : `Page.captureScreenshot`
-         * ATTEND l'image avant de la copier. `capturePage` ne convient pas : il copie tout de suite,
-         * et sur une page jamais dessinée il échoue (« UnknownVizError », run-r1-vert.txt) sans rien
-         * faire dessiner. Débogueur détaché après coup s'il ne l'était pas.
-         *
-         * VUE CACHÉE DANS UNE FENÊTRE MONTRÉE (mesuré avec le vrai Electron, cause
-         * suspendu 20 min) : l'image ne revient JAMAIS, `fromSurface:false` et l'émulation
-         * du focus n'y changent rien, et une vue placée toute entière hors de la fenêtre non plus. La
-         * vue passe donc visible avec UN pixel dans la fenêtre : 115 ms, le clic arrive à la page, la
-         * capture suivante marche. Elle n'est ni redimensionnée (la page ne se remet pas en page) ni
-         * montrée à l'utilisateur. Dans une vue 1 × 1, l'image vient mais le clic est perdu.
-         */
-        async peindre() {
-          const debogueur = contenu.debugger
-          const attacheIci = !debogueur.isAttached()
-          if (attacheIci) debogueur.attach('1.3')
-          const cachee = !vue.getVisible()
-          enPeinture = cachee
-          try {
-            if (cachee) {
-              vue.setBounds({ ...cadreVoulu, y: fenetre.getContentBounds().height - 1 })
-              vue.setVisible(true)
-            }
-            await sousDelai(
-              debogueur.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: 1 }),
-              DELAI_PEINTURE_MS,
-              `dessin de la page impossible en ${DELAI_PEINTURE_MS / 1000} s : la fenêtre d'Autowin est peut-être réduite`
-            )
-          } finally {
-            if (cachee) {
-              enPeinture = false
-              vue.setVisible(visibleVoulue)
-              vue.setBounds(cadreVoulu)
-            }
-            if (attacheIci && debogueur.isAttached()) debogueur.detach()
-          }
-        },
-        envoyer(evenement) {
-          const z = zoom()
-          if ('x' in evenement) {
-            contenu.sendInputEvent({
-              ...evenement,
-              x: Math.round(evenement.x * z),
-              y: Math.round(evenement.y * z)
-            } as Parameters<typeof contenu.sendInputEvent>[0])
-          } else {
-            // `before-input-event` est émis PENDANT `sendInputEvent` : le drapeau couvre l'appel.
-            frappeDeLAgent = true
-            try {
-              contenu.sendInputEvent(evenement as Parameters<typeof contenu.sendInputEvent>[0])
-            } finally {
-              frappeDeLAgent = false
-            }
-          }
-        },
-        insererTexte: (texte) => contenu.insertText(texte),
-        fermer() {
-          ecouteursParContenu.delete(idContenu)
-          if (!fenetre.isDestroyed()) fenetre.contentView.removeChildView(vue)
-          if (!contenu.isDestroyed()) contenu.close()
+        action: 'allow',
+        // `useContentSize` : comme Chrome, la page donne la taille de son CONTENU ; sans lui, Electron
+        // y comptait le cadre et la fenêtre de connexion sortait plus petite que demandé.
+        overrideBrowserWindowOptions: {
+          parent: fenetre,
+          autoHideMenuBar: true,
+          useContentSize: true
         }
       }
-    },
+    })
+    contenu.on('did-create-window', (fille, details) => {
+      filles.add(fille)
+      fille.once('closed', () => filles.delete(fille))
+      gererOuvertures(fille.webContents, ecouteurs, filles)
+      /*
+       * Même agent que l'onglet : la page de connexion doit voir Chrome, pas « Electron/x » (Google
+       * refuse certains navigateurs intégrés). `setUserAgent` ne suffit pas : Chromium ne passe pas
+       * l'agent de l'ouvreur à la fenêtre qu'il ouvre, et une navigation lancée par une page (ici
+       * `window.open`) ne prend l'agent posé que si la page d'avant l'avait déjà. Mesuré par
+       * scripts/sonde-fenetre-connexion.mjs : relancée trop tôt, la page était remplacée par la
+       * navigation d'origine, partie avec l'agent Electron. On RETIENT donc cette première
+       * navigation et on la relance nous-mêmes avec l'agent Chrome ; les suivantes en héritent. Le
+       * lien avec l'ouvreur tient à la fenêtre, pas à sa page : il survit (même sonde). Une page
+       * demandée en POST ne se rejoue pas : elle garde l'agent Electron.
+       */
+      const page = fille.webContents
+      const agent = agentChrome(page.getUserAgent())
+      page.setUserAgent(agent)
+      if (details.postBody) return
+      page.once('will-navigate', (evenement, url) => {
+        evenement.preventDefault()
+        page
+          .loadURL(url, { userAgent: agent, httpReferrer: details.referrer })
+          .catch((erreur: unknown) => {
+            // ERR_ABORTED = la page de connexion s'est redirigée tout de suite : elle vit.
+            const message = messageErreur(erreur)
+            if (message.includes('ERR_ABORTED')) return
+            ecouteurs.surConsole({
+              niveau: 'warning',
+              message: `Fenêtre de connexion : ${message}`,
+              source: 'autowin',
+              ligne: 0
+            })
+          })
+      })
+    })
+  }
+
+  function construireVue(partition: string, ecouteurs: EcouteursVue): VueNavigateur {
+    const vue = new WebContentsView({
+      webPreferences: {
+        partition,
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        nodeIntegrationInSubFrames: false,
+        nodeIntegrationInWorker: false,
+        webviewTag: false,
+        safeDialogs: true
+      }
+    })
+    // La page passe au-dessus du DOM : le CSS de `.navigateur-zone` ne peut pas l'arrondir.
+    vue.setBorderRadius(RAYON_PAGE_PX)
+    const contenu = vue.webContents
+    const idContenu = contenu.id
+    preparerSession(contenu.session)
+    // L'agent de la page passe devant celui de la session : sans ceci, « Electron/x » restait.
+    contenu.setUserAgent(agentChrome(contenu.getUserAgent()))
+    ecouteursParContenu.set(idContenu, ecouteurs)
+    vue.setVisible(false)
+    // Une taille dès la création : panneau jamais ouvert, la vue restait en 0 × 0, sa
+    // page sans mise en page et ses éléments sans position à cliquer.
+    const { width, height } = fenetre.getContentBounds()
+    let cadreVoulu = { x: 0, y: 0, width, height }
+    let visibleVoulue = false
+    let enPeinture = false
+    vue.setBounds(cadreVoulu)
+    fenetre.contentView.addChildView(vue)
+
+    const fenetresDeConnexion = new Set<BrowserWindow>()
+    gererOuvertures(contenu, ecouteurs, fenetresDeConnexion)
+    /*
+     * RACCOURCIS DU PANNEAU TAPÉS DANS LA PAGE (lot 5/5) — mesuré dans
+     * l'instance cachée : Ctrl+Shift+B, le focus dans la page, laissait le panneau ouvert. Ses
+     * écoutes (ChatView, NavigateurIntegre) vivent dans le rendu de la fenêtre, qui ne reçoit pas
+     * les touches de cette vue. On les y rejoue ; la page ne les voit pas. La frappe de l'AGENT
+     * (`envoyer`, même chemin `sendInputEvent`) reste à la page : son Control+T n'ouvre pas
+     * d'onglet dans le panneau de l'utilisateur.
+     */
+    let frappeDeLAgent = false
+    contenu.on('before-input-event', (evenement, entree) => {
+      if (frappeDeLAgent || entree.type !== 'keyDown') return
+      if (!(entree.control || entree.meta) || entree.alt) return
+      const touche = entree.key.toLowerCase()
+      const avecMaj = touche === 'b' || touche === 's'
+      if (!(entree.shift ? avecMaj : touche === 't')) return
+      if (fenetre.isDestroyed()) return
+      evenement.preventDefault()
+      const keyCode = touche.toUpperCase()
+      const modifiers: Array<'control' | 'shift'> = entree.shift
+        ? ['control', 'shift']
+        : ['control']
+      fenetre.webContents.focus()
+      fenetre.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
+      fenetre.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+    })
+
+    const changer = (): void => ecouteurs.surChangement()
+    contenu.on('did-start-loading', changer)
+    contenu.on('did-stop-loading', changer)
+    contenu.on('did-navigate', changer)
+    contenu.on('did-navigate-in-page', changer)
+    contenu.on('page-title-updated', changer)
+    contenu.on('console-message', (details) => {
+      ecouteurs.surConsole({
+        niveau: details.level,
+        message: details.message,
+        source: details.sourceId,
+        ligne: details.lineNumber
+      })
+    })
+    contenu.on('render-process-gone', (_e, details) => {
+      ecouteurs.surConsole({
+        niveau: 'error',
+        message: `La page s'est arrêtée (${details.reason}).`,
+        source: 'autowin',
+        ligne: 0
+      })
+    })
+
+    const zoom = (): number => {
+      const z = contenu.getZoomFactor()
+      return Number.isFinite(z) && z > 0 ? z : 1
+    }
+    const vueNavigateur: VueNavigateur = {
+      async charger(url) {
+        try {
+          await contenu.loadURL(url)
+          return { ok: true }
+        } catch (erreur) {
+          const message = messageErreur(erreur)
+          // Navigation remplacée par une autre (redirection, nouveau clic) : la page vit.
+          if (message.includes('ERR_ABORTED')) return { ok: true }
+          return { ok: false, erreur: message }
+        }
+      },
+      url: () => contenu.getURL(),
+      titre: () => contenu.getTitle(),
+      chargement: () => contenu.isLoading(),
+      peutReculer: () => contenu.navigationHistory.canGoBack(),
+      peutAvancer: () => contenu.navigationHistory.canGoForward(),
+      reculer: () => contenu.navigationHistory.goBack(),
+      avancer: () => contenu.navigationHistory.goForward(),
+      recharger: () => contenu.reload(),
+      arreter: () => contenu.stop(),
+      // Pendant un dessin forcé, la demande du panneau est RETENUE : `peindre` la pose en sortant.
+      // L'appliquer tout de suite, c'était la voir défaite ~100 ms plus tard.
+      poserCadre: (cadre) => {
+        cadreVoulu = cadre
+        if (!enPeinture) vue.setBounds(cadre)
+      },
+      rendreVisible: (visible) => {
+        visibleVoulue = visible
+        if (!enPeinture) vue.setVisible(visible)
+      },
+      taille: () => {
+        const b = vue.getBounds()
+        return { largeur: b.width / zoom(), hauteur: b.height / zoom() }
+      },
+      executer: (source) =>
+        contenu.executeJavaScriptInIsolatedWorld(MONDE_ISOLE_NAVIGATEUR, [
+          { code: source }
+        ]) as Promise<unknown>,
+      async capturer(rect) {
+        const z = zoom()
+        const zone = rect
+          ? {
+              x: Math.round(rect.x * z),
+              y: Math.round(rect.y * z),
+              width: Math.max(1, Math.round(rect.largeur * z)),
+              height: Math.max(1, Math.round(rect.hauteur * z))
+            }
+          : undefined
+        const image = await contenu.capturePage(zone, { stayHidden: true })
+        return image.isEmpty() ? null : image.toDataURL()
+      },
+      /*
+       * Image forcée par le débogueur intégré (réparation 1) : `Page.captureScreenshot`
+       * ATTEND l'image avant de la copier. `capturePage` ne convient pas : il copie tout de suite,
+       * et sur une page jamais dessinée il échoue (« UnknownVizError », run-r1-vert.txt) sans rien
+       * faire dessiner. Débogueur détaché après coup s'il ne l'était pas.
+       *
+       * VUE CACHÉE DANS UNE FENÊTRE MONTRÉE (mesuré avec le vrai Electron, cause
+       * suspendu 20 min) : l'image ne revient JAMAIS, `fromSurface:false` et l'émulation
+       * du focus n'y changent rien, et une vue placée toute entière hors de la fenêtre non plus. La
+       * vue passe donc visible avec UN pixel dans la fenêtre : 115 ms, le clic arrive à la page, la
+       * capture suivante marche. Elle n'est ni redimensionnée (la page ne se remet pas en page) ni
+       * montrée à l'utilisateur. Dans une vue 1 × 1, l'image vient mais le clic est perdu.
+       */
+      async peindre() {
+        const debogueur = contenu.debugger
+        const attacheIci = !debogueur.isAttached()
+        if (attacheIci) debogueur.attach('1.3')
+        const cachee = !vue.getVisible()
+        enPeinture = cachee
+        try {
+          if (cachee) {
+            vue.setBounds({ ...cadreVoulu, y: fenetre.getContentBounds().height - 1 })
+            vue.setVisible(true)
+          }
+          await sousDelai(
+            debogueur.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: 1 }),
+            DELAI_PEINTURE_MS,
+            `dessin de la page impossible en ${DELAI_PEINTURE_MS / 1000} s : la fenêtre d'Autowin est peut-être réduite`
+          )
+        } finally {
+          if (cachee) {
+            enPeinture = false
+            vue.setVisible(visibleVoulue)
+            vue.setBounds(cadreVoulu)
+          }
+          if (attacheIci && debogueur.isAttached()) debogueur.detach()
+        }
+      },
+      envoyer(evenement) {
+        const z = zoom()
+        if ('x' in evenement) {
+          contenu.sendInputEvent({
+            ...evenement,
+            x: Math.round(evenement.x * z),
+            y: Math.round(evenement.y * z)
+          } as Parameters<typeof contenu.sendInputEvent>[0])
+        } else {
+          // `before-input-event` est émis PENDANT `sendInputEvent` : le drapeau couvre l'appel.
+          frappeDeLAgent = true
+          try {
+            contenu.sendInputEvent(evenement as Parameters<typeof contenu.sendInputEvent>[0])
+          } finally {
+            frappeDeLAgent = false
+          }
+        }
+      },
+      insererTexte: (texte) => contenu.insertText(texte),
+      fermer() {
+        // L'onglet parti, ses fenêtres de connexion n'ont plus de page à qui rendre la connexion.
+        for (const fille of fenetresDeConnexion) if (!fille.isDestroyed()) fille.close()
+        ecouteursParContenu.delete(idContenu)
+        if (!fenetre.isDestroyed()) fenetre.contentView.removeChildView(vue)
+        if (!contenu.isDestroyed()) contenu.close()
+      }
+    }
+    return vueNavigateur
+  }
+
+  return {
+    creerVue: ({ partition, ecouteurs }) => construireVue(partition, ecouteurs),
     async effacerDonnees() {
       for (const partition of [PARTITION_PERSISTANTE, PARTITION_EPHEMERE]) {
         const ses = session.fromPartition(partition)

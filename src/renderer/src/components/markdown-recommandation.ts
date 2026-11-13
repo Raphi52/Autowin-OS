@@ -8,7 +8,7 @@
  */
 
 /** Les autres en-tetes du bloc de cloture : ils BORNENT la rubrique « Recommandé ». */
-const AUTRE_EN_TETE = /^\s*(?:✅|⚠️?|📍|⏳|👉)/u
+const AUTRE_EN_TETE = /^\s*(?:✅|⚠️?|📍|⏳|❓|👉)/u
 
 /**
  * Lignes techniques (prompt pre-garni, carte des besoins) : ce n'est pas le texte de la

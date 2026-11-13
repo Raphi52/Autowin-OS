@@ -39,7 +39,7 @@ type Fenetre = Run[] & { horsFenetre?: number; horsFenetreARegarder?: number }
 const os = (runs: Fenetre): OsDouble =>
   ({
     executionWorkspace: process.cwd(),
-    conversations: { list: () => [] },
+    conversations: { listResumes: () => [] },
     registry: { ids: () => ['claude'] },
     roles: { all: () => ({}), getBinding: () => undefined },
     runsWithGate: async () => runs,
