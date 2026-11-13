@@ -44,17 +44,23 @@
 /* ANNEAU HOLOGRAPHIQUE — le bord de 3 px de TOUS les blocs encadres du fil : ce cadre (Raisonnement,
    Actions, Etapes, Chantier, Orchestration, barre d'activite, capsule d'image), le decodage d'une
    image (LookDecodeBlock.css) et la scene 3D (Bloc3D.css). Le modele de l'utilisateur est l'anneau
-   d'un bouton de verre (une epingle Pinterest) : un metal SOMBRE, presque noir, ou la lumiere fait un
-   point BLANC qui deborde en halo, et ou le spectre se range serre de part et d'autre de ce blanc,
-   comme dans un hologramme. Les blocs le partagent ici pour qu'une retouche les suive tous.
+   d'un bouton de verre (une epingle Pinterest) : un anneau NOIR cerne d'un liseré clair tres fin, ou
+   la lumiere fait un point BLANC qui deborde en aura, et ou le spectre se range serre de part et
+   d'autre de ce blanc, comme dans un hologramme. Les blocs le partagent ici pour qu'une retouche les
+   suive tous.
    CE QUI A ETE ESSAYE ET REFUSE (2026-11-12) : le spectre tout autour du bord (« ca fait arc en
    ciel ») ; puis un chrome gris clair avec une frange de couleur de 2 px (« un peu mieux mais on est
    loin du compte »). Ce qui manquait au second, mesure sur l'epingle : un anneau plus epais (5 % du
    diametre, soit 3 px sur un bloc de 60), un blanc qui irradie au-dela du bord (le halo), un spectre
-   franc et large autour du blanc, et un metal qui reste sombre pour que la lumiere ressorte.
-   AU REPOS, LE METAL SEUL : le point blanc, son spectre et son halo sont portes par la VAGUE (plus
-   bas), jamais poses ici. Un eclat fixe en haut et son miroir en bas, laisses sous la vague, faisaient
-   « un reflet qui balaye un reflet » (2026-11-12).
+   franc et large autour du blanc, et un metal qui reste sombre pour que la lumiere ressorte. Puis un
+   metal a bandes grises, teinte de bleu et de rouge : « j'ai un border gris bleu et rouge il devrait
+   juste etre noir de base » (2026-11-13).
+   AU REPOS, LE NOIR SEUL ET SON LISERE : le point blanc, son spectre et son aura sont portes par la
+   VAGUE (plus bas), jamais poses ici. Un eclat fixe en haut et son miroir en bas, laisses sous la
+   vague, faisaient « un reflet qui balaye un reflet » (2026-11-12). Le LISERE (1 px clair sur le bord
+   exterieur, `--chrome-lisere`) est le contour du bouton du pin : « on dirait un vrai bouton car le
+   border est noir avec un liseré très fin ». Ombre INTERIEURE du calque : elle tombe dans l'anneau
+   (le masque la garde) et suit l'arrondi.
    Calque EVIDE par masque : `border-image` ignore l'arrondi, et un fond `border-box` masquerait le
    fil sous le cadre.
    LE METAL ET LE SPECTRE ONT LEURS PROPRES JETONS (`--chrome-*`, `--prisme-*`, theme.css et
@@ -66,20 +72,8 @@
   z-index: -1;
   padding: 3px;
   border-radius: inherit;
-  /* Quelques bandes grises, et le noir teinte de bleu et de rouge profonds que le modele garde loin
-     de la lumiere. */
-  background: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--prisme-bleu) 30%, var(--chrome-noir)),
-    var(--chrome-sombre) 20%,
-    var(--chrome-moyen) 34%,
-    var(--chrome-noir) 46%,
-    color-mix(in srgb, var(--prisme-rouge) 25%, var(--chrome-noir)) 58%,
-    var(--chrome-sombre) 70%,
-    var(--chrome-moyen) 82%,
-    var(--chrome-noir)
-  );
-  background-origin: border-box;
+  background: var(--chrome-noir);
+  box-shadow: inset 0 0 0 1px var(--chrome-lisere);
   pointer-events: none;
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
@@ -95,16 +89,17 @@
    - `.cadre-vague__onde` : la bande sur l'anneau, avec le dessin de l'eclat que l'utilisateur a
      trouve « super reussi » : un point BLANC et le spectre serre de part et d'autre (jaune, or,
      rouge, magenta, bleu, cyan, vert). Masque : anneau plein, verre du bloc a 10 % ;
-   - `.cadre-vague__lueur` : le halo de ce blanc, qui deborde de 10 px dehors et s'efface a 24 px
-     dedans. Dessous l'onde : par-dessus, il delavait le spectre.
+   - `.cadre-vague__lueur` : l'AURA de ce blanc, violette (`--chrome-halo`), qui deborde de 10 px
+     dehors et s'efface a 24 px dedans : « l'aura lumineuse autour du bouton suit la vague reflet »
+     (2026-11-13). Dessous l'onde : par-dessus, elle delavait le spectre.
    DEPLACEE PAR `transform` SEUL, jamais par une position de degrade : la carte graphique fait glisser
    la bande deja peinte, le processeur ne repeint rien. Animer un degrade (l'ancienne lave, puis
    l'eclat au survol) repeignait le calque a chaque image. La pente est un `skewX` : le profil reste
    le meme le long du bord haut et du bord bas, et rien ne coupe la bande sur un bloc deplie, haut
    de plusieurs centaines de pixels (un degrade penche dans une tuile de 220 px y serait tronque).
    LA COURSE, A LA MEME VITESSE SUR TOUS LES BLOCS : la bande (220 px) part de
-   `100cqw + --vague-avance` (juste a droite du bloc) et recule de `--vague-course` en 35 % d'un
-   cycle de 6 s, soit 2,1 s. La course vaut 1 100 px plus la hauteur du bloc, que la pente ajoute a
+   `100cqw + --vague-avance` (juste a droite du bloc) et recule de `--vague-course` en 52,5 % d'un
+   cycle de 4 s, soit 2,1 s (« un passage toutes les 4 s au lieu de 6 », 2026-11-13). La course vaut 1 100 px plus la hauteur du bloc, que la pente ajoute a
    ce qui doit sortir a gauche : environ 545 px/s, et 1,8 s de lumiere sur un bloc de 720 px. Elle ne
    depend pas de la largeur du bloc : une course proportionnelle donnait a chaque largeur sa vitesse,
    et la diagonale cassait d'un bloc a l'autre. Seul un bloc plus large que 870 px (la scene 3D sur
@@ -226,7 +221,7 @@
   width: 220px;
   transform-origin: 0 0;
   transform: translateX(calc(100cqw + var(--vague-avance))) skewX(45deg);
-  animation: cadre-vague 6s linear infinite;
+  animation: cadre-vague 4s linear infinite;
 }
 /* Le halo depasse de 10 px en haut : sa pente part du bord du bloc, pas du haut du calque. */
 .cadre-vague__lueur::before {
@@ -244,7 +239,7 @@
   0% {
     transform: translateX(calc(100cqw + var(--vague-avance))) skewX(45deg);
   }
-  35%,
+  52.5%,
   100% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course))) skewX(45deg);
   }
@@ -313,8 +308,9 @@
 .bloc-3d::before {
   z-index: 2;
 }
-/* EN COURS : reflet ALLUME et la seule lueur du cadre, dans la couleur chaude (« rose = en cours,
-   seule lueur qui bat » dans Holographique). */
+/* EN COURS : le verre s'ALLUME, et le rond garde sa lueur chaude (plus bas). Plus d'aura fixe autour
+   du cadre : l'aura passe avec la vague (« de base ya une aura violette […] l'aura lumineuse autour
+   du bouton suit la vague reflet », 2026-11-13). */
 .cadre-anneau.is-live {
   background: radial-gradient(
     55% 85% at 50% 0%,
@@ -322,7 +318,6 @@
     var(--chat-capsule-reflet-milieu) 55%,
     var(--chat-capsule-reflet-fin) 100%
   );
-  box-shadow: 0 0 14px color-mix(in srgb, var(--capsule-chaud) 35%, transparent);
 }
 .thinking-block.cadre-anneau {
   margin: 2px 0 6px;

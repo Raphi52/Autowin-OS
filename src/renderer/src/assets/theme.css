@@ -64,16 +64,18 @@
   --info: var(--cyan);
   --violet: #8f7cff;
 
-  /* Anneau holographique des blocs du fil (anneau-activite.css) : un metal sombre, un point blanc et
-     le spectre serre autour. Ses jetons a part : un metal est NEUTRE, et le texte du theme est
-     teinte (lavande en Nebuleuse) ; pris aux statuts, le spectre tombait dans la palette du theme
-     (en Nebuleuse, l'or et le cyan sont roses). */
+  /* Anneau holographique des blocs du fil (anneau-activite.css) : un anneau noir et son liseré, un
+     point blanc, le spectre serre autour et une aura violette, portes par la vague. Ses jetons a
+     part : un metal est NEUTRE, et le texte du theme est teinte (lavande en Nebuleuse) ; pris aux
+     statuts, le spectre tombait dans la palette du theme (en Nebuleuse, l'or et le cyan sont
+     roses). */
   --chrome-eclat: #ffffff;
   --chrome-clair: #e9ecf0;
   --chrome-moyen: #8a9099;
   --chrome-sombre: #16181c;
   --chrome-noir: #050507;
-  --chrome-halo: rgba(255, 246, 228, 0.34);
+  --chrome-lisere: rgba(255, 255, 255, 0.2);
+  --chrome-halo: rgba(156, 108, 255, 0.55);
   --prisme-jaune: #fff27a;
   --prisme-or: #ffc93c;
   --prisme-rouge: #ff5a3c;

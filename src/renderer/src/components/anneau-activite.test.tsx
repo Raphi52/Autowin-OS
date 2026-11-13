@@ -11,7 +11,7 @@
  *  - la LEGENDE ne colore que l'exception et ne fond jamais un echec dans des reussites voisines ;
  *  - le cadre n'ecrit AUCUNE couleur en dur et aucune feuille de theme ne le repeint : c'est ce qui
  *    le rend juste dans tous les themes (le defaut de l'ancienne carte, repeinte par sept feuilles) ;
- *  - au repos, l'anneau n'a que son metal : la VAGUE, une diagonale qui traverse chaque bloc encadre
+ *  - au repos, l'anneau n'est que noir, cerne d'un liseré : la VAGUE, une diagonale qui traverse chaque bloc encadre
  *    par la carte graphique seule, porte seule le reflet, en un seul passage pour tout le groupe
  *    (Actions d'abord, puis Raisonnement, puis Etapes).
  */
@@ -240,12 +240,18 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     expect(sansMasques).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
   })
 
-  it('allume le reflet et la lueur chaude quand ca tourne', () => {
+  /**
+   * EN COURS, le verre s'allume ; plus d'aura fixe autour du cadre : l'aura passe avec la vague
+   * (« de base ya une aura violette […] l'aura lumineuse autour du bouton suit la vague reflet »).
+   * ENTREE QUI DOIT FAIRE ECHOUER : une lueur fixe remise sur le cadre en cours, ou un verre en cours
+   * qui ne s'allume plus.
+   */
+  it('allume le verre quand ca tourne, sans aura fixe autour du cadre', () => {
     const i = css.indexOf('.cadre-anneau.is-live {')
     expect(i).toBeGreaterThan(-1)
     const regle = css.slice(i, css.indexOf('}', i))
     expect(regle).toMatch(/--chat-capsule-reflet-haut/)
-    expect(regle).toMatch(/box-shadow:[^;]*--capsule-chaud/)
+    expect(regle).not.toMatch(/box-shadow/)
   })
 
   /** Le corps d'une regle de anneau-activite.css, sans ses commentaires. */
@@ -272,29 +278,27 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     couches.push(courante.trim())
     return { valeur, couches }
   }
+  const THEME = readFileSync(join(ICI, '..', 'assets', 'theme.css'), 'utf8')
+  const MODES = readFileSync(join(ICI, '..', 'assets', 'theme-modes.css'), 'utf8')
+
   /**
    * ANNEAU HOLOGRAPHIQUE : un seul dessin pour le bord de tous les blocs encadres du fil, copie de
-   * l'anneau d'un bouton de verre choisi par l'utilisateur. AU REPOS, LE METAL SEUL : le point blanc
-   * et son spectre ne passent qu'avec la vague. ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer un
-   * bloc de la liste, ecrire une couleur en dur, etaler le spectre le long du metal (l'arc-en-ciel
-   * tout autour, refuse), reposer un eclat ou un halo fixe sous la vague (« ca fait reflet qui
-   * balaye un reflet »), ou animer le calque (il serait repeint a chaque image).
+   * l'anneau d'un bouton de verre choisi par l'utilisateur. AU REPOS, LE NOIR SEUL ET SON LISERE :
+   * le point blanc, son spectre et son aura ne passent qu'avec la vague. ENTREE QUI DOIT FAIRE
+   * ECHOUER CE TEST : retirer un bloc de la liste, ecrire une couleur en dur, remettre des bandes
+   * grises ou teintees (« j'ai un border gris bleu et rouge il devrait juste etre noir de base »),
+   * retirer le liseré, reposer un eclat ou un halo fixe sous la vague (« ca fait reflet qui balaye un
+   * reflet »), ou animer le calque (il serait repeint a chaque image).
    */
-  it('pose au repos un anneau de metal seul, sans reflet fixe', () => {
+  it('pose au repos un anneau noir et son liseré, sans reflet fixe', () => {
     const regle = regleDe(':is(.cadre-anneau, .look-decode-block, .bloc-3d)::before')
     const { valeur, couches } = couchesDuFond(regle)
     expect(regle).toMatch(/\bpadding: 3px;/)
-    expect(valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
-    // Une seule couche, le metal : ni eclat, ni blanc.
-    expect(couches).toHaveLength(1)
-    expect(couches[0]).toMatch(/^linear-gradient\(/)
-    expect(valeur).not.toContain('--chrome-eclat')
-    for (const jeton of ['noir', 'sombre', 'moyen'])
-      expect(valeur).toContain(`var(--chrome-${jeton})`)
-    // Le metal reste SOMBRE : le spectre n'y entre qu'en teinte du noir.
-    const TEINTE = /color-mix\(in srgb, var\(--prisme-\w+\) (\d+)%, var\(--chrome-noir\)\)/g
-    for (const t of valeur.matchAll(TEINTE)) expect(Number(t[1])).toBeLessThanOrEqual(30)
-    expect(valeur.replace(TEINTE, '')).not.toContain('--prisme-')
+    expect(couches).toEqual(['var(--chrome-noir)'])
+    // Le liseré : 1 px sur le bord exterieur, une ombre interieure que le masque garde dans l'anneau.
+    expect(regle).toMatch(/\bbox-shadow: inset 0 0 0 1px var\(--chrome-lisere\);/)
+    for (const feuille of [THEME, MODES]) expect(feuille).toMatch(/--chrome-lisere:\s*rgba\(/)
+    expect(valeur).not.toMatch(/--chrome-eclat|--prisme-/)
     expect(regle).not.toMatch(/animation/)
     // Plus de halo pose sur le cadre lui-meme : il passe avec la vague.
     expect(css).not.toMatch(/(cadre-anneau|look-decode-block)\)?::after\s*\{/)
@@ -302,21 +306,29 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
   })
 
   /**
-   * LE HALO SUIT LA VAGUE : la lumiere du point blanc deborde du bord, dehors sur le fil et dedans sur
-   * le verre, la ou la bande passe. Il ne deborde qu'en hauteur : un calque qui depasse sur les cotes
-   * elargit la zone defilable du fil (barre horizontale possible). Eteint en clair : sur fond blanc il
-   * ne restait qu'une tache beige. ENTREE QUI DOIT FAIRE ECHOUER : un `inset` qui deborde a gauche ou
-   * a droite, une lueur non clippee sur les cotes, une couleur en dur, ou un halo rallume en clair.
+   * L'AURA SUIT LA VAGUE : la lumiere du point blanc deborde du bord, dehors sur le fil et dedans sur
+   * le verre, la ou la bande passe, en violet (« de base ya une aura violette »), en sombre comme en
+   * clair. Elle ne deborde qu'en hauteur : un calque qui depasse sur les cotes elargit la zone
+   * defilable du fil (barre horizontale possible). ENTREE QUI DOIT FAIRE ECHOUER : un `inset` qui
+   * deborde a gauche ou a droite, une lueur non clippee sur les cotes, une couleur en dur, ou une
+   * aura eteinte dans un des deux modes.
    */
-  it('fait deborder la lumiere de la vague en halo, sans elargir le fil', () => {
+  it('fait deborder une aura violette avec la vague, sans elargir le fil', () => {
     const lueur = regleDe('.cadre-vague__lueur')
     expect(lueur).toMatch(/\binset: -\d+px 0;/)
     expect(lueur).toMatch(/\boverflow-x: clip;/)
     const { valeur } = couchesDuFond(regleDe('.cadre-vague__lueur::before'))
     expect(valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
     expect(valeur).toContain('var(--chrome-halo)')
-    const modes = readFileSync(join(ICI, '..', 'assets', 'theme-modes.css'), 'utf8')
-    expect(modes).toMatch(/--chrome-halo:\s*transparent;/)
+    // Violet : le bleu domine, puis le rouge, le vert en retrait ; jamais transparent.
+    for (const feuille of [THEME, MODES]) {
+      const m = /--chrome-halo:\s*rgba\((\d+), (\d+), (\d+), ([\d.]+)\);/.exec(feuille)
+      expect(m, 'aura violette').not.toBeNull()
+      const [r, v, b, alpha] = m!.slice(1).map(Number)
+      expect(b!).toBeGreaterThan(r!)
+      expect(r!).toBeGreaterThan(v!)
+      expect(alpha!).toBeGreaterThan(0)
+    }
   })
 
   it('donne aux tranches de la pile d images le meme metal que le bord', () => {
@@ -367,7 +379,7 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     for (const n of noms) expect([...vagues, ...ANIMATIONS_D_ATTERRISSAGE], n).toContain(n)
     expect(css).not.toMatch(/@property/)
     const bandes = regleDe('.cadre-vague__lueur::before,\n.cadre-vague__onde::before')
-    expect(bandes).toMatch(/animation: cadre-vague 6s linear infinite;/)
+    expect(bandes).toMatch(/animation: cadre-vague 4s linear infinite;/)
     expect(bandes).toMatch(/\bwidth: 220px;/)
     expect(bandes).toContain(`transform: ${DEPART};`)
     const vague = regleDe('.cadre-vague')
@@ -420,7 +432,7 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
   it('traverse Actions puis Raisonnement, puis Etapes, en une seule diagonale', () => {
     expect([...ANIMATIONS_DE_VAGUE]).toEqual(['cadre-vague'])
     const etapes = [...etapesDe('cadre-vague')].sort((a, b) => a[0] - b[0])
-    expect(etapes.map(([p]) => p)).toEqual([0, 35, 100])
+    expect(etapes.map(([p]) => p)).toEqual([0, 52.5, 100])
     expect(etapes[0]![1]).toBe(`transform: ${DEPART};`)
     expect(etapes[1]![1]).toBe(`transform: ${ARRIVEE};`)
     const vague = regleDe('.cadre-vague')

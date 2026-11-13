@@ -80,7 +80,10 @@
   --chrome-moyen: #6b717b;
   --chrome-sombre: #23262c;
   --chrome-noir: #3a3e46;
-  --chrome-halo: transparent;
+  /* Le liseré clair reste lisible sur l'anneau gris fonce ; l'aura violette, plus legere sur le
+     blanc. */
+  --chrome-lisere: rgba(255, 255, 255, 0.7);
+  --chrome-halo: rgba(124, 77, 255, 0.3);
   --prisme-jaune: #c9a200;
   --prisme-or: #b98600;
   --prisme-rouge: #d43a1a;
