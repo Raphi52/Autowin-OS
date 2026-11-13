@@ -7,8 +7,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   compterArchives,
   copierDonnees,
+  empreinteResultats,
   enMo,
   formater,
+  resumerRecherche,
   resumerReleves,
   trouverSource
 } from './banc-memoire-conversations.mjs'
@@ -45,6 +47,51 @@ describe('banc mémoire des conversations', () => {
     })
     expect(enMo(1.55 * 1024 * 1024)).toBe(1.6)
     expect(formater(r)).toContain('Fils actifs : 3 · fils archivés (fichiers) : 7')
+    expect(formater(r)).not.toContain('Recherche')
+  })
+
+  /**
+   * L'empreinte prouve « mêmes résultats » entre deux versions du code : elle doit ignorer l'ordre
+   * d'un filtre (recherche de la liste) mais pas celui d'un classement (recherche classée).
+   */
+  it("l'empreinte ignore l'ordre d'un filtre, pas celui d'un classement", () => {
+    const a = [['conv-2', 'conv-1'], []]
+    const b = [['conv-1', 'conv-2'], []]
+    expect(empreinteResultats(a, { trier: true })).toBe(empreinteResultats(b, { trier: true }))
+    expect(empreinteResultats(a, { trier: false })).not.toBe(
+      empreinteResultats(b, { trier: false })
+    )
+    expect(empreinteResultats([['conv-1'], []], { trier: true })).not.toBe(
+      empreinteResultats(b, { trier: true })
+    )
+  })
+
+  it('résume une recherche par ses pires valeurs et l’affiche', () => {
+    const lignes = [
+      { terme: 'a', totalMs: 40.4, pauseMs: 9.6, ids: ['conv-1'] },
+      { terme: 'b', totalMs: 120.6, pauseMs: 14.2, ids: [] }
+    ]
+    const litterale = resumerRecherche(lignes, { trier: true })
+    expect(litterale).toMatchObject({ pauseMaxMs: 14, totalMaxMs: 121, trouves: [1, 0] })
+    const r = resumerReleves(
+      { heapUsed: 0, rss: 0 },
+      { heapUsed: 0, rss: 0 },
+      { actifs: 1, archives: 0 }
+    )
+    r.recherche = {
+      litterale,
+      classee: resumerRecherche(lignes, { trier: false }),
+      premiereClassee: { totalMs: 812.3, pauseMs: 31.7 },
+      coutIndexHeapMo: 42.5,
+      coutIndexRssMo: -3
+    }
+    const texte = formater(r)
+    expect(texte).toContain('Recherche de la liste : pause max 14 ms · durée max 121 ms')
+    expect(texte).toContain(
+      'Première classée (construit les index) : pause max 32 ms · durée 812 ms'
+    )
+    expect(texte).toContain('Coût des index de recherche : heapUsed +42.5 Mo · rss -3 Mo')
+    expect(texte).toContain(`empreinte ${litterale.empreinte}`)
   })
 
   it('copie snapshot, journal et archives sans toucher à la source', () => {
