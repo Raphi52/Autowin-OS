@@ -9,6 +9,7 @@ import {
 import { formaterNombre } from '../langue'
 import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { useBrancheCourante } from './branche-courante'
+import { LigneLimiteDeModele } from './LigneLimiteDeModele'
 import { copieAfficheeDuFil, dossierDeLaBranche } from './copie-du-fil-entete'
 import { presenceDepuisRunsVivants } from './run-presence'
 import { useClampDansFenetre } from './useClampDansFenetre'
@@ -3913,7 +3914,7 @@ export function ChatView({
     toursAutoRef,
     vueMonteeRef
   })
-  const { convsCoupeesParQuota, situationsDeLaReprise, repriseQuotaNotice, repriseQuotaMasqueePour, setRepriseQuotaMasqueePour, cleRepriseQuota, reprendreConversationsCoupeesParQuota, resumePilotTurn, viewRun, relireRunOuvert } = useRepriseDesTours({
+  const { convsCoupeesParQuota, situationsDeLaReprise, repriseQuotaNotice, repriseQuotaMasqueePour, setRepriseQuotaMasqueePour, cleRepriseQuota, reprendreConversationsCoupeesParQuota, coupuresParModele, reprendreSurUnAutreModele, resumePilotTurn, viewRun, relireRunOuvert } = useRepriseDesTours({
     activeRef,
     busyConversations,
     busyConversationsRef,
@@ -4141,7 +4142,9 @@ export function ChatView({
             La notice garde le bloc ouvert quelques secondes apres le clic : tous les fils repris
             passent occupes d'un coup et sortent de la liste des coupes, le clic resterait sinon
             sans accuse de reception. */}
-          {(convsCoupeesParQuota.length > 0 || repriseQuotaNotice) &&
+          {(convsCoupeesParQuota.length > 0 ||
+            coupuresParModele.length > 0 ||
+            repriseQuotaNotice) &&
             repriseQuotaMasqueePour !== cleRepriseQuota && (
               <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
                 <button
@@ -4176,6 +4179,16 @@ export function ChatView({
                   >
                     {texteDeLaSituation(situation)}
                   </span>
+                ))}
+                {/* La limite d'UN modèle : le bouton du dessus la reprendrait sur le même modèle, qui
+                refuserait encore. Sa ligne propose un autre modèle, au clic seulement. */}
+                {coupuresParModele.map((coupure) => (
+                  <LigneLimiteDeModele
+                    key={coupure.modele}
+                    coupure={coupure}
+                    models={modelCatalog}
+                    onReprendre={(ids, option) => void reprendreSurUnAutreModele(ids, option)}
+                  />
                 ))}
                 {repriseQuotaNotice ? (
                   <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">

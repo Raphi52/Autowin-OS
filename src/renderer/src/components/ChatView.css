@@ -5421,6 +5421,30 @@ button.chat-project-dot:disabled {
   border-color: color-mix(in srgb, var(--chat-etat-echec) 45%, transparent);
   color: var(--chat-etat-echec);
 }
+.conv-reprise-quota .conv-date-sort:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* LIMITE D'UN SEUL MODELE : sa phrase, la liste des autres modeles, puis le bouton. */
+.conv-reprise-modele {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* Seule dans le bloc, la phrase passerait sous la croix de fermeture du coin haut-droit. */
+.conv-reprise-modele .conv-auto-notice {
+  padding-right: 20px;
+}
+.conv-reprise-modele-choix {
+  width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-1);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
 /* MESSAGE ORIENTE EN COURS DE TOUR (2026-09-04).
    Un message tape pendant qu'un tour tourne n'ouvre PAS un nouveau tour : il rejoint la reponse en
    cours. Rien ne le distinguait dans le fil, donc l'utilisateur le croyait perdu. Marque DISCRETE :

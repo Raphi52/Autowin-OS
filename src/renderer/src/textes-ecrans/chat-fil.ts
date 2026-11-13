@@ -448,6 +448,17 @@ export const TEXTES_FR = {
   'quota.reprendre.titre':
     'Relance les conversations dont le dernier tour a ete coupe par un quota epuise',
   'quota.reprendre': 'Reprendre les conversations coupées par le quota ({n})',
+  'quota.limiteModele.une':
+    '{n} conversation arrêtée par la limite de {modele} : elle ne repart pas seule, choisis un autre modèle.',
+  'quota.limiteModele.plusieurs':
+    '{n} conversations arrêtées par la limite de {modele} : elles ne repartent pas seules, choisis un autre modèle.',
+  'quota.limiteModele.choisir': 'Autre modèle…',
+  'quota.limiteModele.choisir.libelle':
+    'Modèle sur lequel reprendre les conversations bloquées par {modele}',
+  'quota.limiteModele.reprendre': 'Reprendre sur ce modèle ({n})',
+  'quota.limiteModele.refuse': '{modele} n’a pas été retenu : aucune conversation reprise.',
+  'quota.limiteModele.reprendre.titre':
+    'Passe ces conversations sur le modèle choisi, puis les reprend. Aucune ne change de modèle sans ce clic.',
   'liste.vide': 'Aucune conversation — écris un message pour en démarrer une.',
   'liste.aucunResultat': 'Aucun message ou titre trouvé.',
   'liste.filtre.titre': 'Statut affiché : {statut} — cliquer pour changer',
@@ -1010,6 +1021,16 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'quota.reprendre.titre':
     'Relaunches the conversations whose last turn was cut off by an exhausted quota',
   'quota.reprendre': 'Resume the conversations cut off by the quota ({n})',
+  'quota.limiteModele.une':
+    '{n} conversation stopped by the {modele} limit: it will not resume on its own, pick another model.',
+  'quota.limiteModele.plusieurs':
+    '{n} conversations stopped by the {modele} limit: they will not resume on their own, pick another model.',
+  'quota.limiteModele.choisir': 'Another model…',
+  'quota.limiteModele.choisir.libelle': 'Model to resume the conversations blocked by {modele} on',
+  'quota.limiteModele.reprendre': 'Resume on this model ({n})',
+  'quota.limiteModele.refuse': '{modele} was not accepted: no conversation resumed.',
+  'quota.limiteModele.reprendre.titre':
+    'Switches these conversations to the chosen model, then resumes them. None changes model without this click.',
   'liste.vide': 'No conversation — write a message to start one.',
   'liste.aucunResultat': 'No message or title found.',
   'liste.filtre.titre': 'Status shown: {statut} — click to change',
