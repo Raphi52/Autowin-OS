@@ -272,7 +272,8 @@ describe.skipIf(process.platform !== 'win32')(
 describe('processus de capture — lancement lent et fil sans bureau (conv-1077)', () => {
   const fauxLanceur = (
     bureaux: string[],
-    bloqueMs = 0
+    bloqueMs = 0,
+    demarrageMs = 5
   ): { lancer: LanceurCapture; lancements: number[]; tues: number[] } => {
     const lancements: number[] = []
     const tues: number[] = []
@@ -282,6 +283,8 @@ describe('processus de capture — lancement lent et fil sans bureau (conv-1077)
       while (Date.now() - debut < bloqueMs) {
         // attente active voulue
       }
+      // Comme hdesk-tv.ps1 : la demande attend dans le tube que le script soit prêt (`pret`).
+      const pretA = Date.now() + demarrageMs
       const n = lancements.push(Date.now())
       const stdout = new PassThrough()
       const stdin = new PassThrough()
@@ -299,9 +302,12 @@ describe('processus de capture — lancement lent et fil sans bureau (conv-1077)
       stdin.setEncoding('utf8')
       stdin.on('data', (ligne: string) => {
         if (ligne.trim() === 'list')
-          setTimeout(() => stdout.write(`${JSON.stringify({ bureaux })}\n`), 10)
+          setTimeout(
+            () => stdout.write(`${JSON.stringify({ bureaux })}\n`),
+            Math.max(0, pretA - Date.now()) + 10
+          )
       })
-      setTimeout(() => stdout.write('{"pret":true}\n'), 5)
+      setTimeout(() => stdout.write('{"pret":true}\n'), demarrageMs)
       return proc as unknown as ChildProcessWithoutNullStreams
     }
     return { lancer, lancements, tues }
@@ -318,6 +324,36 @@ describe('processus de capture — lancement lent et fil sans bureau (conv-1077)
       expect(f.lancements).toHaveLength(1)
       // Jumeau : l'inactivité arrête toujours le processus, une fois la demande servie.
       expect(f.tues).toHaveLength(0)
+      await new Promise((r) => setTimeout(r, 250))
+      expect(f.tues).toHaveLength(1)
+    } finally {
+      c.detruire()
+      rmSync(reg, { recursive: true, force: true })
+    }
+  })
+
+  /*
+   * 2026-11-13 : le même cercle, une marche plus loin. `spawn powershell.exe` a encore figé l'app
+   * jusqu'à 20 s, 17 fois dans la journée (gels.jsonl : 11 entre 10:23 et 10:29 UTC, 6 entre 16:20 et
+   * 16:23). Chaque lancement repartait 8,5 à 8,8 s après la fin du précédent : les 8 s du minuteur
+   * d'inactivité, plus le délai de la nouvelle demande (0,5 s après un autre gel qui le retenait).
+   * Une fois lancé, le script mettait plus de 8 s à se dire prêt (0,5 s en temps normal). Le minuteur
+   * le tuait alors que sa première demande attendait encore sa réponse.
+   * fix-ok: entrée qui fait échouer si le correctif est faux — script prêt 300 ms après son lancement pour 100 ms d'inactivité (rouge mesuré avant correction : « expected { ok: false, …(1) } »).
+   */
+  it('démarrage plus lent que le délai d’inactivité : la demande en attente n’est pas tuée', async () => {
+    // ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST si le minuteur court pendant une demande : un script qui
+    // se dit prêt 300 ms après son lancement, pour 100 ms d'inactivité.
+    const f = fauxLanceur(['a'], 0, 300)
+    const reg = mkdtempSync(join(tmpdir(), 'tv-demarrage-reg-'))
+    const c = new CapteurHdesk(tmpdir(), reg, { lancer: f.lancer, inactiviteMs: 100 })
+    try {
+      expect(await c.listeVivants()).toEqual({ ok: true, vivants: ['a'] })
+      expect(f.tues).toHaveLength(0)
+      // La demande suivante reprend le MÊME processus : pas de nouveau lancement qui figerait l'app.
+      expect(await c.listeVivants()).toEqual({ ok: true, vivants: ['a'] })
+      expect(f.lancements).toHaveLength(1)
+      // Jumeau : sans demande en attente, l'inactivité arrête toujours le processus.
       await new Promise((r) => setTimeout(r, 250))
       expect(f.tues).toHaveLength(1)
     } finally {
@@ -1031,7 +1067,9 @@ describe.skipIf(process.platform !== 'win32' || !process.env.AUTOWIN_HDESK_REEL)
         // 2026-10-31 : le refus dit OU sont les fenetres (titre + rectangle ecran),
         // sans quoi l'agent retente a l'aveugle (6 echecs sur 16 en 10 jours).
         expect(brut).toMatchObject({
-          message: expect.stringMatching(/Fenetres visibles .*"[^"]*" \(-?\d+,-?\d+\)-\(-?\d+,-?\d+\)/)
+          message: expect.stringMatching(
+            /Fenetres visibles .*"[^"]*" \(-?\d+,-?\d+\)-\(-?\d+,-?\d+\)/
+          )
         })
       } finally {
         c.detruire()
