@@ -352,36 +352,84 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     }
     return etapes
   }
-  // La bande attend juste a droite du bloc (plus loin s'il a de l'avance dans son groupe), et
-  // recule de la course : assez pour que son pied, decale de la hauteur du bloc par la pente a 45
-  // degres, ait passe le bord gauche.
-  const DEPART = 'translateX(calc(100cqw + var(--vague-avance))) skewX(45deg)'
-  const ARRIVEE =
-    'translateX(calc(100cqw + var(--vague-avance) - var(--vague-course))) skewX(45deg)'
+  // Une etape de la vague, telle que scripts/vague-du-cadre.mjs l'ecrit : la position passe TOUJOURS
+  // par `100cqw + --vague-avance - --vague-course * p` (c'est ce qui garde une seule diagonale pour
+  // le groupe), puis la pente, la largeur et l'intensite ; seule la derniere etape d'un passage
+  // saute au depart du suivant.
+  const ETAT =
+    /^transform: translateX\(calc\(100cqw \+ var\(--vague-avance\) - var\(--vague-course\) \* (-?[\d.]+)\)\) skewX\((-?[\d.]+)deg\) scaleX\(([\d.]+)\); opacity: ([\d.]+);( animation-timing-function: step-end;)?$/
+  type Etat = {
+    pourcent: number
+    p: number
+    pente: number
+    largeur: number
+    opacite: number
+    saut: boolean
+  }
+  /** Les etats d'un reflet, dans l'ordre du cycle. */
+  function etatsDe(nom: string): Etat[] {
+    return [...etapesDe(nom)]
+      .sort((a, b) => a[0] - b[0])
+      .map(([pourcent, declarations]) => {
+        const m = ETAT.exec(declarations.replace(/\s+/g, ' '))
+        expect(m, `${nom} ${pourcent}% : ${declarations}`).not.toBeNull()
+        return {
+          pourcent,
+          p: Number(m![1]),
+          pente: Number(m![2]),
+          largeur: Number(m![3]),
+          opacite: Number(m![4]),
+          saut: Boolean(m![5])
+        }
+      })
+  }
+  /** Les passages d'un reflet : chacun finit sur l'etape qui saute au suivant. */
+  function passagesDe(nom: string): Etat[][] {
+    const passages: Etat[][] = [[]]
+    for (const etat of etatsDe(nom)) {
+      passages[passages.length - 1]!.push(etat)
+      if (etat.saut) passages.push([])
+    }
+    return passages.filter((p) => p.length > 0)
+  }
+  const CYCLE_S = 12
+  const COURSE_PX = 1144
 
   /**
-   * LA VAGUE (« une vague qui traverse l'input », puis « la vague doit etre diagonale ») : une bande
-   * penchee glisse sur l'anneau, de droite a gauche, et porte seule le reflet, avec le dessin de
-   * l'eclat que l'utilisateur a trouve « super reussi ». ENTREE QUI DOIT FAIRE ECHOUER : une bande
-   * droite (sans pente), animee autrement que par `transform` (un degrade ou une propriete
-   * enregistree serait repeint a chaque image, le cout de l'ancienne lave), une autre animation
-   * revenue sur l'anneau, une couleur en dur dans la bande, ou une bande qui perd le blanc ou la
-   * symetrie de son spectre.
+   * LA VAGUE (« une vague qui traverse l'input », puis « la vague doit etre diagonale ») : des bandes
+   * penchees glissent sur l'anneau, de droite a gauche, et portent seules le reflet, avec le dessin
+   * de l'eclat que l'utilisateur a trouve « super reussi ». ENTREE QUI DOIT FAIRE ECHOUER : une bande
+   * droite (sans pente), animee autrement que par `transform` et `opacity` (un degrade ou une
+   * propriete enregistree serait repeint a chaque image, le cout de l'ancienne lave), une autre
+   * animation revenue sur l'anneau, une couleur en dur dans la bande, une bande qui perd le blanc ou
+   * la symetrie de son spectre, ou un second reflet dont le raccourci `animation` ecrase le nom.
    */
-  it('fait glisser une vague diagonale par transform seul, et n anime rien d autre', () => {
+  it('fait glisser une vague diagonale par transform et opacite seuls, et n anime rien d autre', () => {
     const noms = [...css.matchAll(/@keyframes ([\w-]+)/g)].map((m) => m[1]!)
     const vagues = noms.filter((n) => n.startsWith('cadre-vague'))
     expect(vagues.sort()).toEqual([...ANIMATIONS_DE_VAGUE].sort())
     for (const nom of vagues)
-      for (const declarations of etapesDe(nom).values())
-        expect(declarations, nom).toMatch(/^transform: translateX\(.*\) skewX\(45deg\);$/)
+      for (const etat of etatsDe(nom)) {
+        expect(etat.pente, nom).toBeGreaterThanOrEqual(35)
+        expect(etat.pente, nom).toBeLessThanOrEqual(55)
+      }
     // Seuls la vague et l'atterrissage du verdict animent quelque chose dans ce fichier.
     for (const n of noms) expect([...vagues, ...ANIMATIONS_D_ATTERRISSAGE], n).toContain(n)
     expect(css).not.toMatch(/@property/)
-    const bandes = regleDe('.cadre-vague__lueur::before,\n.cadre-vague__onde::before')
-    expect(bandes).toMatch(/animation: cadre-vague 4s linear infinite;/)
+    const selecteurCommun =
+      '.cadre-vague__lueur::before,\n.cadre-vague__onde::before,\n.cadre-vague__onde::after'
+    const bandes = regleDe(selecteurCommun)
+    expect(bandes).toMatch(/animation: cadre-vague 12s linear infinite;/)
     expect(bandes).toMatch(/\bwidth: 220px;/)
-    expect(bandes).toContain(`transform: ${DEPART};`)
+    expect(bandes).toMatch(/\btransform-origin: 110px 0;/)
+    expect(bandes).toContain(
+      'transform: translateX(calc(100cqw + var(--vague-avance))) skewX(45deg) scaleX(1);'
+    )
+    // Le second reflet prend son nom APRES la regle commune.
+    const nomDuSecond = css.indexOf(
+      '.cadre-vague__onde::after {\n  animation-name: cadre-vague-second;'
+    )
+    expect(nomDuSecond).toBeGreaterThan(css.indexOf(`${selecteurCommun} {`))
     const vague = regleDe('.cadre-vague')
     // `cqw`/`cqh` lisent la taille de ce calque.
     expect(vague).toMatch(/\bcontainer-type: size;/)
@@ -400,6 +448,10 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     expect(avant.map((a) => a.teinte).reverse()).toEqual(apres.map((a) => a.teinte))
     expect(avant.map((a) => 220 - a.px).reverse()).toEqual(apres.map((a) => a.px))
     expect(apres.map((a) => a.teinte)).toEqual(['jaune', 'or', 'rouge', 'magenta', 'bleu', 'cyan'])
+    // Le second reflet : un blanc mince, sans couleur en dur.
+    const second = couchesDuFond(regleDe('.cadre-vague__onde::after')).valeur
+    expect(second).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
+    expect(second).toContain('var(--chrome-eclat) 108px 112px')
 
     // Clippee : la bande en attente a droite elargirait la zone defilable du fil.
     expect(regleDe('.cadre-vague__onde')).toMatch(/\boverflow: clip;/)
@@ -419,22 +471,81 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
   })
 
   /**
+   * « j'aimerais que l'effet soit moins lineaire, presque chaotique, vraiment comme la video de
+   * pinterest » (2026-11-13). Mesure sur la video : plusieurs trainees qui oscillent autour de leur
+   * place (jusqu'a revenir en arriere), un blanc qui enfle en eclat puis retombe, une intensite qui
+   * varie. ENTREE QUI DOIT FAIRE ECHOUER : une vitesse constante (meme vitesse d'une etape a
+   * l'autre), aucun retour en arriere, une largeur ou une intensite fixes, trois passages identiques,
+   * un second reflet qui ne croise jamais le premier, ou une lumiere qui reste sur le bloc entre deux
+   * passages (le bord est « noir de base »).
+   */
+  it('n est pas lineaire : la lumiere hesite, revient, enfle et vacille, comme la video', () => {
+    const passages = passagesDe('cadre-vague')
+    expect(passages).toHaveLength(3)
+    let retours = 0
+    for (const passage of passages) {
+      // Un passage toutes les 4 s : 0, 4 et 8 s dans le cycle de 12 s.
+      const depart = (passage[0]!.pourcent / 100) * CYCLE_S
+      expect(Math.abs(depart - 4 * Math.round(depart / 4))).toBeLessThan(0.01)
+      // Hors du bloc au depart et a la fin : entre deux passages, le bord reste noir.
+      expect(passage[0]!.p).toBeLessThanOrEqual(0)
+      expect(passage.at(-1)!.p).toBeGreaterThanOrEqual(1)
+      expect(passage.at(-1)!.saut).toBe(true)
+      const vitesses = passage.slice(1).map((e, k) => {
+        const dt = ((e.pourcent - passage[k]!.pourcent) / 100) * CYCLE_S
+        return ((e.p - passage[k]!.p) * COURSE_PX) / dt
+      })
+      const lente = Math.min(...vitesses)
+      const rapide = Math.max(...vitesses)
+      if (lente < 0) retours++
+      // Hesite puis s'elance : au moins trois fois plus vite au plus rapide qu'au plus lent.
+      expect(rapide).toBeGreaterThan(3 * Math.max(lente, 1))
+      // L'eclat enfle puis retombe.
+      const largeurs = passage.map((e) => e.largeur)
+      expect(Math.max(...largeurs)).toBeGreaterThanOrEqual(1.4)
+      expect(passage[0]!.largeur).toBeLessThanOrEqual(1.05)
+      expect(passage.at(-1)!.largeur).toBeLessThanOrEqual(1.05)
+      // L'intensite vacille.
+      const opacites = passage.map((e) => e.opacite)
+      expect(Math.max(...opacites) - Math.min(...opacites)).toBeGreaterThanOrEqual(0.3)
+    }
+    // La lumiere repart en arriere au moins une fois par cycle.
+    expect(retours).toBeGreaterThanOrEqual(1)
+    // Deux passages ne se ressemblent pas.
+    for (let i = 0; i < passages.length; i++)
+      for (let j = i + 1; j < passages.length; j++) {
+        const ecart = Math.max(...passages[i]!.map((e, k) => Math.abs(e.p - passages[j]![k]!.p)))
+        expect(ecart, `passages ${i + 1} et ${j + 1}`).toBeGreaterThanOrEqual(0.03)
+      }
+    // Le second reflet, plus fin, croise le premier au moins une fois.
+    const seconds = passagesDe('cadre-vague-second')
+    expect(seconds).toHaveLength(3)
+    const croisements = seconds.filter((second, i) =>
+      second.some((e, k) => {
+        if (k === 0) return false
+        const avantK = Math.sign(second[k - 1]!.p - passages[i]![k - 1]!.p)
+        return avantK !== 0 && Math.sign(e.p - passages[i]![k]!.p) === -avantK
+      })
+    )
+    expect(croisements.length).toBeGreaterThanOrEqual(1)
+    const plusLarge = (liste: Etat[][]): number => Math.max(...liste.flat().map((e) => e.largeur))
+    expect(plusLarge(seconds)).toBeLessThan(plusLarge(passages))
+  })
+
+  /**
    * « quand ya un groupement de 3 comme ca ca doit faire une vague qui traverse d'abord action puis
-   * raisonnement », puis « la vague doit etre diagonale » : une SEULE diagonale pour le groupe, a la
-   * meme vitesse partout. Chaque bloc part d'aussi loin a droite que la diagonale a de chemin a faire
-   * avant son bord droit (`--vague-avance`) : Actions d'abord, puis Raisonnement, et Etapes, dessous,
-   * un peu apres. On simule la rangee cote a cote (fil de 720 px) et sur deux lignes (fil de 400 px),
-   * et la ligne doit etre continue. ENTREE QUI DOIT FAIRE ECHOUER : Raisonnement traverse avant
-   * Actions, une course qui depend de la largeur (chaque bloc aurait sa vitesse, la bande sauterait),
-   * Etapes traverse en meme temps que la rangee (dents de scie), une rangee sur deux lignes traitee
-   * comme cote a cote, ou un passage hors de l'horloge commune.
+   * raisonnement », puis « la vague doit etre diagonale » : une SEULE diagonale pour le groupe. Tous
+   * les blocs suivent les memes etapes (le meme `p` au meme instant) ; chacun part d'aussi loin a
+   * droite que la diagonale a de chemin a faire avant son bord droit (`--vague-avance`) : Actions
+   * d'abord, puis Raisonnement, et Etapes, dessous, un peu apres. On simule la rangee cote a cote
+   * (fil de 720 px) et sur deux lignes (fil de 400 px), et la ligne doit etre continue. ENTREE QUI
+   * DOIT FAIRE ECHOUER : Raisonnement traverse avant Actions, une course qui depend de la largeur
+   * (chaque bloc aurait sa vitesse, la bande sauterait), Etapes traverse en meme temps que la rangee
+   * (dents de scie), une rangee sur deux lignes traitee comme cote a cote, ou un passage hors de
+   * l'horloge commune.
    */
   it('traverse Actions puis Raisonnement, puis Etapes, en une seule diagonale', () => {
-    expect([...ANIMATIONS_DE_VAGUE]).toEqual(['cadre-vague'])
-    const etapes = [...etapesDe('cadre-vague')].sort((a, b) => a[0] - b[0])
-    expect(etapes.map(([p]) => p)).toEqual([0, 52.5, 100])
-    expect(etapes[0]![1]).toBe(`transform: ${DEPART};`)
-    expect(etapes[1]![1]).toBe(`transform: ${ARRIVEE};`)
+    expect([...ANIMATIONS_DE_VAGUE]).toEqual(['cadre-vague', 'cadre-vague-second'])
     const vague = regleDe('.cadre-vague')
     expect(vague).toMatch(/--vague-avance: 0px;/)
     // La course ne lit la largeur du bloc qu'au-dela de 870 px (scene 3D sur un fil large).
@@ -513,7 +624,7 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
    * « les animations sur les blocs dans le chat doivent etre en fonction de la ou je regarde, pas
    * juste les dernieres » : la vague passe sur TOUS les tours, et animations-hors-champ.ts met en
    * pause ce qui sort de l'ecran. Ce module observe l'element qui porte l'animation : ce sont donc
-   * les `::before` de calques FIXES poses sur le cadre qui bougent, jamais les calques eux-memes.
+   * les pseudo-elements de calques FIXES poses sur le cadre qui bougent, jamais les calques.
    * ENTREE QUI DOIT FAIRE ECHOUER : figer la vague des tours anciens, ou animer un calque (rogne et
    * pousse hors du cadre entre deux passages, il serait juge hors champ et ne repartirait plus).
    */
@@ -531,7 +642,7 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     expect(animees.length).toBeGreaterThan(0)
     for (const m of animees)
       for (const selecteur of m[1]!.replace(/\/\*[\s\S]*?\*\//g, '').split(','))
-        expect(selecteur.trim()).toMatch(/^\.cadre-vague__(onde|lueur)::before$/)
+        expect(selecteur.trim()).toMatch(/^\.cadre-vague__(onde|lueur)::(before|after)$/)
   })
 
   /**
