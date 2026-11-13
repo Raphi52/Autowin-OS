@@ -240,6 +240,25 @@ export function classerCommitLocal(
 }
 
 /**
+ * LE FIL OÙ RELANCER LA PASSE DES COMMITS RESTÉS SUR LA BRANCHE LOCALE, après un redémarrage. La file
+ * vit en mémoire : un redémarrage la vide avant le calme de la passe, et seul le passage de porte d'un
+ * AUTRE fil poussait ensuite ces commits. Le plus récent d'abord (`git log` les rend ainsi) : la passe
+ * s'annonce dans le fil qui vient d'écrire. Un fil que l'app ne connaît plus ne peut ni attendre son
+ * calme ni recevoir le bandeau : il est sauté. Aucun fil connu → `undefined`, la passe ne part pas.
+ */
+export function filDesCommitsLocaux(
+  commits: readonly CommitLocal[],
+  deps: { filDuRun: (run: string) => string | undefined; connu: (fil: string) => boolean }
+): string | undefined {
+  for (const commit of commits) {
+    if (commit.parents > 1 && FUSION_AUTOMATIQUE.test(commit.sujet)) continue
+    const fil = filsDuCommit(commit, deps.filDuRun).find(deps.connu)
+    if (fil) return fil
+  }
+  return undefined
+}
+
+/**
  * La condition de déclenchement, entière, sans effet de bord.
  *
  * LES FILS DE PLAN NE SONT PLUS ÉCARTÉS : leur travail est rendu au fil CHEF par

@@ -81,6 +81,19 @@ describe('enchaînement auto du chat — câblage de fin de tour', () => {
     expect(balayage).toMatch(/suiviGitApresFil\.file\?\.ajouterTravaux\(/)
   })
 
+  it('remet en file, après le démarrage, les commits restés sur main local', () => {
+    const debut = source.indexOf('const rattraperLesCommitsLocaux')
+    expect(debut).toBeGreaterThan(-1)
+    const bloc = source.slice(debut, source.indexOf('setTimeout(', debut))
+    expect(bloc).toContain('if (!os.autoCloseEnabled() || !os.gitApresFilActif()) return')
+    expect(bloc).toContain('plageDesCommitsLocaux(os.executionWorkspace, await defaultGitRunner())')
+    expect(bloc).toMatch(/filDesCommitsLocaux\(plage\.commits, \{/)
+    expect(bloc).toMatch(
+      /suiviGitApresFil\.file\?\.ajouter\(\s*filDeLaPasse\(fil, suiviDesPlans\.coordinateur\?\.planDuFil\(fil\)\),\s*\[\],\s*fil,\s*\{ commitsLocaux: true \}\s*\)/
+    )
+    expect(source).toMatch(/setTimeout\(rattraperSansBruit, 60_000\)/)
+  })
+
   it('range la passe /git dans la file, qui en lance une seule à la fois', () => {
     expect(source).toContain('suiviGitApresFil.file = new FileGitApresFil({')
     expect(source.match(/new FileGitApresFil\(/g)).toHaveLength(1)

@@ -232,6 +232,7 @@ import {
   estUnDepotGit,
   FileGitApresFil,
   filDeLaPasse,
+  filDesCommitsLocaux,
   lireAmont,
   planEnCoursDuFil,
   planTourneEncore,
@@ -3613,6 +3614,39 @@ Le fil reprend ensuite normalement.`
   os.onFinDeRun(balayerSansBruit)
   // Une minute après le démarrage : le recensement git ne s'ajoute pas au coût du lancement.
   setTimeout(balayerSansBruit, 60_000).unref?.()
+  /*
+   * LES COMMITS RESTÉS SUR MAIN LOCAL APRÈS UN REDÉMARRAGE. Le passage de porte d'un fil y entre sans
+   * partir, et sa passe attend le calme du fil dans une file en mémoire : un redémarrage
+   * (`restart_app`, relance du moteur au repos) la vide, et rien ne la remplissait au démarrage.
+   * Mesuré le 13/11 : deux commits de lots restés une heure sur main local, partis seulement avec le
+   * passage de porte d'un autre fil. Git dit ce qui attend : la passe repart dans le fil du plus
+   * récent, et juge chaque commit de la branche comme d'habitude (`classerCommitLocal`).
+   */
+  const rattraperLesCommitsLocaux = async (): Promise<void> => {
+    if (!os.autoCloseEnabled() || !os.gitApresFilActif()) return
+    if (!estDepotAutowin(os.executionWorkspace)) return
+    const plage = await plageDesCommitsLocaux(os.executionWorkspace, await defaultGitRunner())
+    if (!plage) return
+    const filDuRun = new Map(
+      os.getWorktreeActivity().map((agent) => [agent.agentId, agent.conversationId])
+    )
+    const fil = filDesCommitsLocaux(plage.commits, {
+      filDuRun: (run) => filDuRun.get(run),
+      connu: (autre) => Boolean(os.conversations.get(autre))
+    })
+    if (!fil) return
+    suiviGitApresFil.file?.ajouter(
+      filDeLaPasse(fil, suiviDesPlans.coordinateur?.planDuFil(fil)),
+      [],
+      fil,
+      { commitsLocaux: true }
+    )
+  }
+  const rattraperSansBruit = (): void =>
+    void rattraperLesCommitsLocaux().catch((erreur) =>
+      console.warn('[git apres fil] commits locaux illisibles :', erreur)
+    )
+  setTimeout(rattraperSansBruit, 60_000).unref?.()
   void relanceurTachesDeFond
     .reprendreAuDemarrage()
     .catch((erreur) => console.warn('[taches de fond] reprise au demarrage impossible :', erreur))

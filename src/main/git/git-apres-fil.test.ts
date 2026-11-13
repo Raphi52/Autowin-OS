@@ -19,6 +19,7 @@ import {
   lireAmont,
   classerCommitLocal,
   filsDuCommit,
+  filDesCommitsLocaux,
   planEnCoursDuFil,
   planTourneEncore,
   travauxParFil,
@@ -596,6 +597,25 @@ describe('les commits restés sur la branche locale : à qui ils sont, et s’il
     expect(classerCommitLocal(commit({ parents: 2, sujet: 'merge: reprise (conv-1)' }), deps)).toBe(
       'oui'
     )
+  })
+
+  // Un redémarrage vide la file en mémoire : au démarrage, git dit ce qui attend, et la passe doit
+  // repartir dans un fil que l'app connaît, sinon personne ne la lance.
+  it('après un redémarrage, rend le fil du commit le plus récent qu’un fil connu réclame', () => {
+    const connu = (fil: string): boolean => ['conv-1900', 'conv-7'].includes(fil)
+    const commits = [
+      commit({ parents: 2, sujet: "Merge commit 'b4940aa39f861bfd' into HEAD" }),
+      commit({ sujet: 'feat(a): b (conv-404)' }),
+      commit({ sujet: 'fix(c): d (conv-1900)' }),
+      commit({ porte: 'conv-7' })
+    ]
+    expect(filDesCommitsLocaux(commits, { filDuRun, connu })).toBe('conv-1900')
+    expect(
+      filDesCommitsLocaux([commit({ sujet: 'agent run-4aec23b50831-1' })], { filDuRun, connu })
+    ).toBe('conv-7')
+    // Aucun fil connu : la passe n'aurait nulle part où se dire, elle ne part pas.
+    expect(filDesCommitsLocaux([commit({ sujet: 'wip' })], { filDuRun, connu })).toBeUndefined()
+    expect(filDesCommitsLocaux([], { filDuRun, connu })).toBeUndefined()
   })
 })
 
