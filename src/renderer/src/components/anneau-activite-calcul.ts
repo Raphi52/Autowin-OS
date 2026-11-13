@@ -50,42 +50,6 @@ export function atterrissageDuPassage(avant: string, apres: string): Atterrissag
 export const ANIMATIONS_D_ATTERRISSAGE: readonly string[] = ['anneau-reflet', 'anneau-secousse']
 
 /**
- * Les animations de la vague (anneau-activite.css, etapes calculees par scripts/vague-du-cadre.mjs),
- * calees sur l'HORLOGE COMMUNE du fil : le coeur blanc de l'eclat (et son halo), ses deux franges,
- * l'intensite de l'eclat, puis le second reflet, plus fin. Les memes noms pour tous les blocs : la
- * place de chacun dans son groupe est une distance (`--vague-avance`), pas un horaire propre.
- */
-export const ANIMATIONS_DE_VAGUE: readonly string[] = [
-  'cadre-vague',
-  'cadre-vague-gauche',
-  'cadre-vague-droite',
-  'cadre-vague-intensite',
-  'cadre-vague-second'
-]
-
-/**
- * Cale les passages de vague d'un element sur l'horloge commune : un debut a l'origine du document.
- * Une animation CSS part quand son element apparait ; Raisonnement apparait au debut du tour,
- * Actions a la premiere action, et chaque retour sur l'onglet Chat les relance. Sans ce calage, la
- * vague traversait les blocs d'un meme groupe dans un ordre au hasard, au lieu d'un seul passage
- * (Actions d'abord, puis Raisonnement). Rend le nombre d'animations calees.
- */
-export function caleSurLHorlogeCommune(element: Element): number {
-  // `getAnimations` manque hors d'un vrai navigateur (jsdom) : rien a caler.
-  if (typeof element.getAnimations !== 'function') return 0
-  let calees = 0
-  // `subtree` : chaque bande est le `::before` d'un calque, et seule cette option rend son animation.
-  for (const animation of element.getAnimations({ subtree: true })) {
-    const nom = (animation as Partial<CSSAnimation>).animationName
-    if (nom === undefined || !ANIMATIONS_DE_VAGUE.includes(nom) || animation.startTime === 0)
-      continue
-    animation.startTime = 0
-    calees++
-  }
-  return calees
-}
-
-/**
  * L'effet a poser sur le rond quand l'etat du bloc PASSE de « en cours » a la fin. Le
  * premier etat vu est la reference : un fil ouvert sur un run deja fini ne joue rien. L'animation
  * CSS ne part qu'a l'APPARITION de l'attribut ; `effacer` le retire a la fin de l'effet. Sans cela,

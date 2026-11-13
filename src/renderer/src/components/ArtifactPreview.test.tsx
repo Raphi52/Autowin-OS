@@ -656,7 +656,7 @@ describe('ArtifactPreview — aperçus visuels repliés par défaut', () => {
     expect(tete.querySelector(':scope > .anneau-chevron')).not.toBe(null)
     // Plus rien hors du cadre : le nom n'est plus un voisin de la capsule. La vague de l'anneau,
     // calque decoratif sans texte, est mise a part.
-    expect(toggle.querySelectorAll(':scope > :not(.cadre-vague)').length).toBe(1)
+    expect(toggle.querySelectorAll(':scope > :not(.cadre-reflet)').length).toBe(1)
     // Replié : aucune image dans le DOM, ni corps ni pied — seule la capsule reste.
     expect(container.querySelector('.artifact-preview__body')).toBe(null)
     expect(container.querySelector('img')).toBe(null)

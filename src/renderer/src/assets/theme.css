@@ -64,33 +64,19 @@
   --info: var(--cyan);
   --violet: #8f7cff;
 
-  /* Anneau holographique des blocs du fil (anneau-activite.css) : un anneau noir et son liseré, un
-     point blanc, ses deux franges et son halo, portes par la vague. Ses jetons a part : un metal
-     est NEUTRE, et le texte du theme est teinte (lavande en Nebuleuse) ; pris aux statuts, le
-     spectre tombait dans la palette du theme (en Nebuleuse, l'or et le cyan sont roses).
-     Le spectre est RELEVE AU PIXEL sur les 150 images de la video du bouton de verre (couleur
-     mediane des pixels satures, a distance croissante du blanc) : deux familles seulement, froide
-     d'un cote du blanc (cyan a 2-8 degres, bleu a 13, indigo a 20), chaude de l'autre (jaune a
-     2-8, or a 10, corail a 16, rouille a 24) ; ni vert ni magenta (1 % des pixels). Le halo y
-     est une lumiere BLANCHE, a peine froide, pas violette. Le cyan, le bleu, l'indigo, le corail
-     et la rouille sont recales sur la palette que scripts/anneau_lumiere.py rend pour la video
-     (medianes par eclat : froid vif #4cb1fc, moyen #326ed2, sombre #263f90 ; chaud moyen
-     #c95527, sombre #9a4323) : le film de la vague, mesure par le meme script, doit s'en
-     approcher. */
+  /* Anneau holographique des blocs du fil (anneau-activite.css) : un anneau noir et son liseré,
+     sous la lumiere du bouton de verre, rejouee depuis la video elle-meme (reflet-du-pin.ts : ses
+     couleurs viennent de la texture, aucun jeton ne les choisit). Le metal a ses jetons a part : il
+     est NEUTRE, et le texte du theme est teinte (lavande en Nebuleuse). Les nuances de metal
+     servent aussi aux tranches de la pile d'images (ArtifactPreview.css). */
   --chrome-eclat: #ffffff;
   --chrome-clair: #e9ecf0;
   --chrome-moyen: #8a9099;
   --chrome-sombre: #16181c;
   --chrome-noir: #050507;
   --chrome-lisere: rgba(255, 255, 255, 0.2);
-  --chrome-halo: rgba(236, 244, 255, 0.42);
-  --prisme-jaune: #fff67c;
-  --prisme-or: #ffd372;
-  --prisme-rouge: #d9602f;
-  --prisme-rouille: #9a4323;
-  --prisme-cyan: #66c4fc;
-  --prisme-bleu: #3f7ce6;
-  --prisme-indigo: #263f90;
+  /* La lueur du reflet (0 a 1), une lumiere AJOUTEE au fond, comme sur la video. */
+  --reflet-lueur: 1;
 
   /* Espacement (échelle 4px) */
   --s1: 4px;

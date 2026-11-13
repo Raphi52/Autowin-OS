@@ -72,26 +72,18 @@
   --err: #b23a34;
   --info: #0f6f9c;
   --violet: #5a48c8;
-  /* Le metal plus clair et le spectre plus soutenu : sur fond pale, un noir pur ferait un trait
-     dur et les teintes de nuit se delavent (le jaune vif disparait sur le blanc). L'eclat reste
-     blanc, un reflet de metal. */
+  /* Le metal plus clair : sur fond pale, un noir pur ferait un trait dur. L'eclat reste blanc, un
+     reflet de metal. */
   --chrome-eclat: #ffffff;
   --chrome-clair: #b9bec6;
   --chrome-moyen: #6b717b;
   --chrome-sombre: #23262c;
   --chrome-noir: #3a3e46;
-  /* Le liseré clair reste lisible sur l'anneau gris fonce. Le halo, une lumiere blanche en sombre,
-     ne se verrait pas sur le blanc : ici un voile gris-bleu leger. Le spectre garde les teintes
-     relevees sur la video (theme.css), en plus soutenu (les niveaux moyens et sombres mesures). */
+  /* Le liseré clair reste lisible sur l'anneau gris fonce. */
   --chrome-lisere: rgba(255, 255, 255, 0.7);
-  --chrome-halo: rgba(170, 182, 205, 0.36);
-  --prisme-jaune: #c9a200;
-  --prisme-or: #c28a12;
-  --prisme-rouge: #c4503f;
-  --prisme-rouille: #8f4127;
-  --prisme-cyan: #1597c9;
-  --prisme-bleu: #316ed2;
-  --prisme-indigo: #263f90;
+  /* Une lumiere ajoutee a un fond blanc ne se voit pas : peinte quand meme, la lueur du reflet n'y
+     laissait que des taches bleues et orangees autour des blocs (film du 2026-11-13). */
+  --reflet-lueur: 0;
 
   /* --------------------------------------------------------------------------
      LE CHAT SUIT ENFIN LE THEME. Les 116 jetons `--chat-*` valent, dans theme.css, la couleur

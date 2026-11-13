@@ -9,7 +9,7 @@ import {
   nomRepeteLeLibelle,
   partiesDistinctes
 } from './artifact-outils'
-import { RondDIcone, VagueDuCadre } from './anneau-activite'
+import { RondDIcone, RefletDuCadre } from './anneau-activite'
 import { Spinner } from './Spinner'
 
 /* PILE D'IMAGES (2026-10-18).
@@ -179,7 +179,7 @@ export function ArtifactPile({
             setOuverte((courant) => !courant)
           }}
         >
-          <VagueDuCadre />
+          <RefletDuCadre />
           <span className="anneau-tete">
             <RondDIcone>{ICONE_IMAGE}</RondDIcone>
             <span className="anneau-col">

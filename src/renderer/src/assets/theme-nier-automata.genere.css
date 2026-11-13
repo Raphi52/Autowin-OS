@@ -1,6 +1,6 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nier-automata -- ne pas modifier a la main.
    Theme « NieR:Automata » : les regles de la base claire qui ecrivent une couleur en dur, transposees
-   vers le papier beige et l'encre brune du jeu. 55 regles, 124 declarations. */
+   vers le papier beige et l'encre brune du jeu. 55 regles, 116 declarations. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nier-automata'][data-base='clair'] .topology-runtime-limit {
@@ -68,14 +68,6 @@
     --chrome-moyen: rgb(123, 119, 107);
     --chrome-sombre: rgb(43, 41, 36);
     --chrome-noir: rgb(70, 67, 58);
-    --chrome-halo: rgba(201, 194, 174, 0.36);
-    --prisme-jaune: rgb(110, 105, 91);
-    --prisme-or: rgb(116, 111, 96);
-    --prisme-rouge: rgb(173, 97, 86);
-    --prisme-rouille: rgb(123, 75, 59);
-    --prisme-cyan: rgb(121, 116, 101);
-    --prisme-bleu: rgb(141, 135, 118);
-    --prisme-indigo: rgb(99, 95, 83);
     --chat-rail-trait: rgb(152, 147, 131);
     --chat-rail-reponse: rgb(157, 152, 138);
     --chat-rail-juge: rgb(40, 82, 54);

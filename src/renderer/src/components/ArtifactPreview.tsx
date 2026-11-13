@@ -13,7 +13,7 @@ import { ArtifactFontPreview } from './ArtifactFontPreview'
 import { ArtifactModel3dPreview } from './ArtifactModel3dPreview'
 import { SandboxedHtmlPreview } from './SandboxedHtmlPreview'
 import { ArtifactVideoPlayer } from './ArtifactVideoPlayer'
-import { RondDIcone, VagueDuCadre } from './anneau-activite'
+import { RondDIcone, RefletDuCadre } from './anneau-activite'
 import './ArtifactPreview.css'
 import { Spinner } from './Spinner'
 
@@ -448,7 +448,7 @@ export function ArtifactPreview({
             setIsExpanded((current) => !current)
           }}
         >
-          <VagueDuCadre />
+          <RefletDuCadre />
           <span className="anneau-tete">
             <RondDIcone>{ICONE_IMAGE}</RondDIcone>
             <span className="anneau-col">

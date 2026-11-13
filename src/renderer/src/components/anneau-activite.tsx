@@ -19,12 +19,11 @@
  * Les couleurs sont des JETONS (anneau-activite.css, a partir des jetons du theme) : le meme dessin
  * vaut pour tous les themes, comme les capsules du fil.
  */
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import './anneau-activite.css'
+import { brancherLeReflet } from './reflet-du-pin'
 import {
   ANIMATIONS_D_ATTERRISSAGE,
-  ANIMATIONS_DE_VAGUE,
-  caleSurLHorlogeCommune,
   casesDuVerdict,
   groupesDeLegende,
   verdictDuRond,
@@ -123,31 +122,15 @@ export function LegendeDesOutils({
 }
 
 /**
- * LA VAGUE DU CADRE : la lumiere qui traverse l'anneau en diagonale, d'un bord a l'autre (dessin dans
- * anneau-activite.css) — le seul reflet de l'anneau. Trois calques : le halo dessous, l'eclat sur
- * l'anneau (ses deux franges, et son coeur blanc dans un calque a lui, le seul qui enfle), puis le
- * trait, un second reflet plus fin. A poser DANS chaque bloc encadre, en premier enfant de son
- * `<summary>` quand le bloc est un `<details>` : hors du `summary`, un `<details>` replie ne
- * l'afficherait pas. Chaque depart d'un passage est cale sur l'horloge commune, pour que tous les
- * blocs du fil soient traverses par le MEME passage.
+ * LE REFLET DU CADRE : la lumiere de l'anneau du bouton de verre, rejouee image par image sur le bord
+ * du bloc (reflet-du-pin.ts, place dans anneau-activite.css) — le seul reflet de l'anneau. A poser
+ * DANS chaque bloc encadre, en premier enfant de son `<summary>` quand le bloc est un `<details>` :
+ * hors du `summary`, un `<details>` replie ne l'afficherait pas.
  */
-export function VagueDuCadre(): React.JSX.Element {
-  return (
-    <span
-      className="cadre-vague"
-      aria-hidden="true"
-      onAnimationStart={(event) => {
-        if (ANIMATIONS_DE_VAGUE.includes(event.animationName))
-          caleSurLHorlogeCommune(event.target as Element)
-      }}
-    >
-      <span className="cadre-vague__lueur" />
-      <span className="cadre-vague__onde">
-        <span className="cadre-vague__coeur" />
-      </span>
-      <span className="cadre-vague__trait" />
-    </span>
-  )
+export function RefletDuCadre(): React.JSX.Element {
+  const toile = useRef<HTMLCanvasElement>(null)
+  useEffect(() => (toile.current ? brancherLeReflet(toile.current) : undefined), [])
+  return <canvas ref={toile} className="cadre-reflet" aria-hidden="true" />
 }
 
 /**

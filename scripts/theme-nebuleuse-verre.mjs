@@ -360,14 +360,12 @@ const CLAIR_JETONS_BLANCS = new Set([
 ])
 
 /**
- * L'anneau des blocs du fil (anneau-activite.css) : un metal et un spectre releves sur la video du
- * bouton de verre, dont theme-modes.css donne deja la valeur claire, choisie a l'oeil. Ni Nebuleuse
- * ni sa version claire ne les transposent. En clair, le noir du metal (`--chrome-noir`) passait pour
- * un fond d'encre et devenait la nacre : l'anneau disparaissait sur le blanc. En sombre, le cyan de
- * la frange froide (teinte 193) tombait dans le cyan HUD et virait au violet : l'eclat perdait son
- * ordre froid / chaud.
+ * L'anneau des blocs du fil (anneau-activite.css) : un metal NEUTRE, dont theme-modes.css donne deja
+ * la valeur claire, choisie a l'oeil. Ni Nebuleuse ni sa version claire ne le transposent. En clair,
+ * le noir du metal (`--chrome-noir`) passait pour un fond d'encre et devenait la nacre : l'anneau
+ * disparaissait sur le blanc.
  */
-const JETONS_ANNEAU = /^--(chrome|prisme)-/
+const JETONS_ANNEAU = /^--chrome-/
 
 /** Role d'une declaration : ce que la couleur y peint. */
 function roleClair(propriete) {

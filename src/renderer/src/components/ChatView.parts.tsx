@@ -25,7 +25,7 @@ import {
   LegendeDesOutils,
   RondDIcone,
   RondDuCompte,
-  VagueDuCadre,
+  RefletDuCadre,
   VerdictDeVerre
 } from './anneau-activite'
 import { useAtterrissage, type EtatArc } from './anneau-activite-calcul'
@@ -906,7 +906,7 @@ export function AssistantActivityGroup({
             setPliManuel(!capsuleOuverte)
           }}
         >
-          <VagueDuCadre />
+          <RefletDuCadre />
           <span className="anneau-tete">
             <RondDIcone
               etats={etatsDesPhases}
@@ -1055,7 +1055,7 @@ export function AssistantActivityGroup({
         data-state={etat}
         data-testid="activity-anneau"
       >
-        <VagueDuCadre />
+        <RefletDuCadre />
         {/* TOUTE LA LIGNE deplie, fleche comprise, comme le <summary> des autres blocs du fil :
             la fleche vivait A COTE du bouton et ne reagissait pas, alors que c'est la qu'on vise
             pour deplier. Le geste est donc pose sur la ligne ; le bouton reste la cible du clavier
