@@ -54,9 +54,13 @@ describe('enchaînement auto du chat — câblage de fin de tour', () => {
   it('la passe pousse les commits restés sur main local, jugés au niveau du distant', () => {
     const debut = source.indexOf('suiviGitApresFil.file = new FileGitApresFil({')
     const bloc = source.slice(debut, source.indexOf('noterTravauxTentes', debut))
-    // Le dossier d'un fil en copie est sa copie, à tête détachée : la branche vit dans son dépôt.
+    // Le dossier d'un fil en copie est sa copie, à tête détachée : la branche, son amont et ses
+    // commits publiés (le bandeau) vivent dans le dépôt de la copie.
+    expect(source).toContain('os.conversations.get(fil)?.copieDuFil?.depot ?? dossierDuTour(fil)')
+    expect(bloc).toContain('const depotDuFil = depotDeLaPasse(fil)')
+    expect(bloc).toContain('lireAmont(await defaultGitRunner(), depotDeLaPasse(fil))')
     expect(bloc).toContain(
-      'const depotDuFil = os.conversations.get(fil)?.copieDuFil?.depot ?? repo'
+      'commitsPublies(await defaultGitRunner(), depotDeLaPasse(fil), depuis, fils)'
     )
     expect(bloc).toContain('lire: () => plageDesCommitsLocaux(depotDuFil, runGit)')
     // Pousser la branche emporte tous ses commits : chacun est rattaché à un fil qui peut publier.

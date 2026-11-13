@@ -692,6 +692,8 @@ export interface CommitLocal {
 /** Les commits de la branche courante que le distant n'a pas, et les fichiers qu'ils changent. */
 export interface PlageDesCommitsLocaux {
   branche: string
+  /** La pointe de `origin/<branche>` lue ici. Différente de `base` : le distant a des commits que la branche n'a pas. */
+  amont: string
   /** Le dernier commit commun avec `origin/<branche>`. */
   base: string
   /** La pointe lue ici : c'est elle qui est contrôlée puis poussée, pas un HEAD relu plus tard. */
@@ -755,7 +757,7 @@ export async function plageDesCommitsLocaux(
         ...(porte.trim() ? { porte: porte.trim() } : {})
       }
     })
-  return { branche, base, tete, fichiers, commits }
+  return { branche, amont, base, tete, fichiers, commits }
 }
 
 /**

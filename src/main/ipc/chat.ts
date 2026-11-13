@@ -3468,12 +3468,14 @@ Le fil reprend ensuite normalement.`
   const travauxTentes = travauxTentesSurDisque(
     join(autowinAppDataRoot(), 'git-apres-fil-travaux-tentes.json')
   )
+  // Le dossier d'un fil en copie EST sa copie, à tête détachée : la branche où la porte a fait entrer
+  // son travail, son amont et ses commits publiés vivent dans le dépôt de la copie.
+  const depotDeLaPasse = (fil: string): string =>
+    os.conversations.get(fil)?.copieDuFil?.depot ?? dossierDuTour(fil)
   suiviGitApresFil.file = new FileGitApresFil({
     publier: async (fil, passe) => {
       const repo = dossierDuTour(fil)
-      // Le dossier d'un fil en copie EST sa copie, à tête détachée : la branche où la porte a fait
-      // entrer son travail vit dans le dépôt de la copie.
-      const depotDuFil = os.conversations.get(fil)?.copieDuFil?.depot ?? repo
+      const depotDuFil = depotDeLaPasse(fil)
       const runGit = await defaultGitRunner()
       const filDuRun = new Map(
         os.getWorktreeActivity().map((agent) => [agent.agentId, agent.conversationId])
@@ -3511,17 +3513,14 @@ Le fil reprend ensuite normalement.`
             classer: (commit) =>
               classerCommitLocal(commit, {
                 filDuRun: (run) => filDuRun.get(run),
-                publiable: (autre) => {
-                  const conversation = os.conversations.get(autre)
-                  return (
-                    conversation !== undefined &&
-                    !publicationInterditeDans(
-                      conversation.messages
-                        .filter((message) => message.role === 'user')
-                        .map((message) => String(message.content))
-                    )
-                  )
-                },
+                // Un fil archivé (inactif depuis 14 jours) ou supprimé n'est plus en mémoire : plus
+                // aucune demande ne peut y interdire de publier, et le refuser figerait la branche.
+                publiable: (autre) =>
+                  !publicationInterditeDans(
+                    (os.conversations.get(autre)?.messages ?? [])
+                      .filter((message) => message.role === 'user')
+                      .map((message) => String(message.content))
+                  ),
                 planEnCours: (autre) =>
                   planEnCoursDuFil(suiviDesPlans.coordinateur?.planDuFil(autre))
               }),
@@ -3561,9 +3560,9 @@ Le fil reprend ensuite normalement.`
       activeChatTurns.isInFlight(fil) ||
       publicationsEnVol.conversations().includes(fil) ||
       planTourneEncore(suiviDesPlans.coordinateur?.planDuFil(fil)),
-    lireAmont: async (fil) => lireAmont(await defaultGitRunner(), dossierDuTour(fil)),
+    lireAmont: async (fil) => lireAmont(await defaultGitRunner(), depotDeLaPasse(fil)),
     commitsDepuis: async (fil, depuis, fils) =>
-      commitsPublies(await defaultGitRunner(), dossierDuTour(fil), depuis, fils),
+      commitsPublies(await defaultGitRunner(), depotDeLaPasse(fil), depuis, fils),
     annoncer: (fil, contenu) => {
       os.conversations.append(fil, { role: 'assistant', content: contenu })
       broadcast({ type: 'refresh', scope: 'chat', convId: fil })

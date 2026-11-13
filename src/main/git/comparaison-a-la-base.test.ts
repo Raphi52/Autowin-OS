@@ -191,4 +191,29 @@ describe('ouvrirCopieDesCommitsLocaux — juger des commits déjà sur la branch
       await copie.fermer()
     }
   })
+
+  it('un fichier devenu un dossier : l’ancien fichier part avant que le nouveau soit posé', async () => {
+    const { depot, racine } = banc()
+    writeFileSync(join(depot, 'src', 'x'), 'un fichier\n')
+    git(depot, 'add', '-A')
+    git(depot, 'commit', '-q', '-m', 'x est un fichier')
+    const base = git(depot, 'rev-parse', 'HEAD').trim()
+    git(depot, 'rm', '-q', 'src/x')
+    mkdirSync(join(depot, 'src', 'x'))
+    writeFileSync(join(depot, 'src', 'x', 'y.ts'), 'export const y = 1\n')
+    git(depot, 'add', '-A')
+    git(depot, 'commit', '-q', '-m', 'x devient un dossier')
+    const tete = git(depot, 'rev-parse', 'HEAD').trim()
+
+    const copie = await ouvrirCopieDesCommitsLocaux(
+      depot,
+      { base, tete, fichiers: ['src/x', 'src/x/y.ts'] },
+      racine
+    )
+    try {
+      expect(existsSync(join(copie.chemin, 'src', 'x', 'y.ts'))).toBe(true)
+    } finally {
+      await copie.fermer()
+    }
+  })
 })

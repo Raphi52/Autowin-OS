@@ -176,6 +176,12 @@ export function publicationInterditeDans(textes: readonly string[]): boolean {
   return textes.some((texte) => PUBLICATION_INTERDITE.test(texte))
 }
 
+/**
+ * Les fusions écrites sans main humaine : fin d'un run (`Merge commit '<sha>' into HEAD`), avance
+ * de la branche (`Merge branch '…'`) et rattachement après un rejeu (`Merge origin/…`, `run-autoclose.ts`).
+ */
+const FUSION_AUTOMATIQUE = /^Merge (?:commit '[0-9a-f]+' into |branch '[^']+'|origin\/)/u
+
 /** Le fil appartient-il à un plan qui tourne encore, comme chef ou comme lot ? */
 export function planEnCoursDuFil(vu: FilDansUnPlan | undefined): boolean {
   return vu !== undefined && PLAN_QUI_TOURNE.has(vu.plan.statut)
@@ -215,8 +221,9 @@ export function filsDuCommit(
  *  - `plus-tard` : son fil est dans un plan qui tourne encore — le plan part en une passe à sa fin
  *    (`filOccupe`), la branche attend cette passe-là ;
  *  - `oui` : il peut partir.
- * Une fusion (plusieurs parents) n'est pas classée : les commits qu'elle apporte sont dans la plage
- * et le sont, chacun.
+ * Une fusion de la forme que git ou l'app écrivent seuls (`FUSION_AUTOMATIQUE`) n'est pas classée :
+ * les commits qu'elle apporte sont dans la plage, et le sont chacun. Toute autre fusion se classe
+ * comme un commit : elle a pu être écrite à la main, résolution de conflit comprise.
  */
 export function classerCommitLocal(
   commit: CommitLocal,
@@ -226,7 +233,7 @@ export function classerCommitLocal(
     planEnCours: (fil: string) => boolean
   }
 ): 'oui' | 'plus-tard' | 'non' {
-  if (commit.parents > 1) return 'oui'
+  if (commit.parents > 1 && FUSION_AUTOMATIQUE.test(commit.sujet)) return 'oui'
   const fils = filsDuCommit(commit, deps.filDuRun)
   if (!fils.length || fils.some((fil) => !deps.publiable(fil))) return 'non'
   return fils.some((fil) => deps.planEnCours(fil)) ? 'plus-tard' : 'oui'

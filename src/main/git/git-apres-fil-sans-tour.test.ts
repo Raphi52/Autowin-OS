@@ -408,6 +408,7 @@ describe('publierSansTour', () => {
 describe('publierSansTour — les commits restés sur la branche locale', () => {
   const plage: PlageDesCommitsLocaux = {
     branche: 'main',
+    amont: 'b'.repeat(40),
     base: 'b'.repeat(40),
     tete: 't'.repeat(40),
     fichiers: ['src/porte.ts'],
@@ -448,6 +449,18 @@ describe('publierSansTour — les commits restés sur la branche locale', () => 
     expect(issue.publie).toBe(false)
     expect(issue.aTrier).toEqual([
       'commits restés sur main local : uuuuuuuuu « fix(y): à la main » n’est réclamé par aucun fil qui peut publier'
+    ])
+    expect(typer).not.toHaveBeenCalled()
+    expect(pousser).not.toHaveBeenCalled()
+  })
+
+  it('le distant a avancé : rien n’est contrôlé ni poussé, la branche est à réaligner', async () => {
+    const { commitsLocaux, pousser, typer } = locaux({
+      lire: async () => ({ ...plage, amont: 'c'.repeat(40) })
+    })
+    const issue = await publierSansTour(deps({ commitsLocaux }).d, passeDePorte)
+    expect(issue.aTrier).toEqual([
+      'commits restés sur main local : origin/main a avancé (ccccccccc), la branche locale est à réaligner avant tout envoi'
     ])
     expect(typer).not.toHaveBeenCalled()
     expect(pousser).not.toHaveBeenCalled()

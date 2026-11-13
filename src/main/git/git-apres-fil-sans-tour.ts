@@ -295,6 +295,14 @@ async function pousserLesCommitsLocaux(
   if (!plage) return
   const lue = plage
   const quoi = `commits restés sur ${lue.branche} local`
+  // Le distant a des commits que la branche n'a pas : le push direct serait refusé, et la copie de
+  // contrôle jugerait contre une base dépassée. La branche est à réaligner avant tout envoi.
+  if (lue.amont !== lue.base) {
+    issue.aTrier.push(
+      `${quoi} : origin/${lue.branche} a avancé (${lue.amont.slice(0, 9)}), la branche locale est à réaligner avant tout envoi`
+    )
+    return
+  }
   const classes = lue.commits.map((commit) => ({ commit, classe: deps.classer(commit) }))
   const orphelins = classes.filter(({ classe }) => classe === 'non')
   if (orphelins.length) {

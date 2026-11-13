@@ -1239,6 +1239,7 @@ describe('les commits restés sur la branche locale (passage de porte jamais pou
     const tete = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
     expect(await plageDesCommitsLocaux(repo, realGit)).toEqual({
       branche: 'travail',
+      amont: base,
       base,
       tete,
       fichiers: ['a.ts', 'b.ts'],

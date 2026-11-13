@@ -132,9 +132,11 @@ export async function ouvrirCopieDesCommitsLocaux(
 ): Promise<CopieDeBase> {
   const copie = await ouvrirCopieDeBase(repo, racine, plage.base)
   try {
+    const lots: string[][] = []
+    for (let i = 0; i < plage.fichiers.length; i += CHEMINS_PAR_CHECKOUT)
+      lots.push(plage.fichiers.slice(i, i + CHEMINS_PAR_CHECKOUT))
     const presents = new Set<string>()
-    for (let i = 0; i < plage.fichiers.length; i += CHEMINS_PAR_CHECKOUT) {
-      const lot = plage.fichiers.slice(i, i + CHEMINS_PAR_CHECKOUT)
+    for (const lot of lots) {
       // `-z` : sans lui, git cite entre guillemets un chemin accentué, qui ne se retrouverait plus.
       const lus = await git(copie.chemin, [
         'ls-tree',
@@ -146,12 +148,15 @@ export async function ouvrirCopieDesCommitsLocaux(
         ...lot
       ])
       for (const chemin of lus.split('\0').filter(Boolean)) presents.add(chemin)
-      const aPoser = lot.filter((chemin) => presents.has(chemin))
-      if (aPoser.length) await git(copie.chemin, ['checkout', plage.tete, '--', ...aPoser])
     }
+    // Les disparus d'abord : un fichier `a` devenu le dossier de `a/b.ts` empêcherait sinon de le poser.
     for (const chemin of plage.fichiers) {
       const cible = join(copie.chemin, chemin)
       if (!presents.has(chemin) && existsSync(cible)) unlinkSync(cible)
+    }
+    for (const lot of lots) {
+      const aPoser = lot.filter((chemin) => presents.has(chemin))
+      if (aPoser.length) await git(copie.chemin, ['checkout', plage.tete, '--', ...aPoser])
     }
   } catch (erreur) {
     await copie.fermer()

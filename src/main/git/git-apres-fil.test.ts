@@ -582,10 +582,20 @@ describe('les commits restés sur la branche locale : à qui ils sont, et s’il
     expect(classerCommitLocal(commit({ sujet: 'feat(a): b (conv-1) (conv-9)' }), deps)).toBe('non')
     // Un lot d'un plan qui tourne : la branche attend la passe de fin du plan.
     expect(classerCommitLocal(commit({ porte: 'conv-5' }), deps)).toBe('plus-tard')
-    // Une fusion n'est pas jugée : les commits qu'elle apporte le sont, chacun.
+    // Une fusion automatique n'est pas jugée : les commits qu'elle apporte le sont, chacun.
+    for (const sujet of [
+      "Merge commit 'b4940aa39f861bfd' into HEAD",
+      "Merge branch 'main' into HEAD",
+      'Merge origin/main : travail publié seul, au-dessus du distant'
+    ])
+      expect(classerCommitLocal(commit({ parents: 2, sujet }), deps)).toBe('oui')
+    // Une fusion écrite à la main se juge comme un commit : sans fil, elle ne part pas.
     expect(
-      classerCommitLocal(commit({ parents: 2, sujet: "Merge commit 'abc' into HEAD" }), deps)
-    ).toBe('oui')
+      classerCommitLocal(commit({ parents: 2, sujet: 'fusion à la main du correctif' }), deps)
+    ).toBe('non')
+    expect(classerCommitLocal(commit({ parents: 2, sujet: 'merge: reprise (conv-1)' }), deps)).toBe(
+      'oui'
+    )
   })
 })
 
