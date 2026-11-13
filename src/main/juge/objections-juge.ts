@@ -93,6 +93,32 @@ const ENTETE_QUESTIONS = /^\s*questions?\s+au\s+build\s*:/i
 const PREFIXE_QUESTION = /^\**\s*QUESTION\s*\**\s*:\s*\**\s*/i
 /** Une section suivante du contrat du juge (SCORE:, VERDICT:, …) ferme la liste. */
 const AUTRE_SECTION = /^\s*[A-ZÉÈÀ_ ]{3,}\s*:/
+/**
+ * UN TITRE LIBRE DANS LA SECTION : SES PUCES NUES NE SONT PAS DES REPROCHES.
+ *
+ * fix-ok: run build-traite-ensemble-3-candidats-issus-mwfcozv5 (2026-11-13) — le juge rend VALIDE 86,
+ * objections toutes OK, puis « **Résumé pour le fil chef :** » et trois puces nues (« **Fait :** … »,
+ * « **Reste :** … ») : la demande du lot lui dit de finir par un résumé. `AUTRE_SECTION` ne reconnaît
+ * qu'un titre en majuscules nu ; ces puces restaient dans la section, non étiquetées donc MAJEUR,
+ * et le VALIDE devenait « Promis mais pas fait ».
+ *
+ * Un titre libre (en début de ligne et hors puce : titre markdown `#`, ligne en gras, libellé en gras
+ * suivi de « : », ligne finie par « : ») SUSPEND la section au lieu de la fermer : sous lui, une puce
+ * étiquetée MAJEUR/MINEUR/OK (et ses sous-puces) compte encore, une puce nue non. Mesure sur les
+ * 1 265 verdicts distincts des runs du poste : 11 placent un titre libre DANS la section, suivi de
+ * puces MAJEUR ou MINEUR (« **Objection 1 (cause par fil) : non corrigée.** » puis trois MAJEUR) —
+ * fermer net les ferait passer en vert ; les 8 VALIDE à puces nues sous un tel titre ne portaient
+ * que des constats (sources, matrices cible → preuve, résumé pour le chef).
+ * Une ligne en retrait est la suite d'une puce, jamais un titre.
+ */
+const TITRE_LIBRE =
+  /^(?:#{1,6}\s+\S|\*\*[^*]+\*\*\s*:?\s*$|\*\*[^*]+?(?::\s*\*\*|\*\*\s*:)|\S.*:\s*\**\s*$)/
+/**
+ * Une puce qui OUVRE sur une gravité en majuscules reste un reproche sous un titre libre, même si
+ * son étiquette échappe à `ETIQUETTE` : 7 objections réelles, sous « Écarts à corriger dans ce run : »
+ * ou « Objections du juge précédent : », s'écrivaient « MINEUR — … » ou « MINEUR (objection 2) : … ».
+ */
+const GRAVITE_ANNONCEE = /^\**\s*(?:MAJEUR|MINEUR|OK)\b/
 const PUCE = /^\s*(?:[-*•]|\d+[.)])\s+/
 /** Gravité déclarée par le juge : seules MAJEUR (ou l'absence d'étiquette) bloquent. */
 /** Une puce explicitement etiquetee MAJEUR par le juge. */
@@ -218,6 +244,8 @@ function pucesDuJuge(text: string): PuceDuJuge[] {
    * Une sous-puce (plus indentee que la puce precedente) herite donc de l'etiquette de sa parente.
    */
   let parente: { retrait: number; etiquette: string | null } | null = null
+  // Sous un titre libre (`TITRE_LIBRE`) : seules les puces étiquetées restent des objections.
+  let sousUnTitreLibre = false
   for (const [index, ligne] of lignes.entries()) {
     // Les questions au build ne sont pas des objections : leur entête ferme la section.
     if (ENTETE_QUESTIONS.test(ligne)) {
@@ -226,6 +254,7 @@ function pucesDuJuge(text: string): PuceDuJuge[] {
     }
     if (ENTETE_OBJECTIONS.test(ligne)) {
       dansLaSection = true
+      sousUnTitreLibre = false
       parente = null
       // Forme en ligne : « OBJECTIONS: aucune » ou « OBJECTIONS: X ».
       const reste = ligne.replace(ENTETE_OBJECTIONS, '').trim()
@@ -247,6 +276,11 @@ function pucesDuJuge(text: string): PuceDuJuge[] {
       dansLaSection = false
       continue
     }
+    if (!PUCE.test(ligne) && TITRE_LIBRE.test(ligne)) {
+      sousUnTitreLibre = true
+      parente = null
+      continue
+    }
     if (!PUCE.test(ligne)) continue
     const contenu = ligne.replace(PUCE, '').trim()
     if (!contenu) continue
@@ -259,6 +293,7 @@ function pucesDuJuge(text: string): PuceDuJuge[] {
     const sousPuce = !etiquette && parente !== null && retrait > parente.retrait
     const gravite = etiquette ? etiquette[1] : sousPuce && parente ? parente.etiquette : null
     if (!sousPuce) parente = { retrait, etiquette: etiquette ? etiquette[1] : null }
+    if (sousUnTitreLibre && !gravite && !GRAVITE_ANNONCEE.test(contenu)) continue
     // Etiquette bornee au VALIDE : sur un refus, MINEUR/OK ne masquent pas les raisons (reparation 4).
     // fix-ok: (2026-09-24) — run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont
     // une puce MINEUR etait un vrai trou (drapeau `orientation` jamais transmis par run-pilot-chat.ts).
@@ -898,7 +933,12 @@ export function verdictPanelValide(membresDuPanel: MembreDuPanel[]): string {
   return `VALIDE\n\nOBJECTIONS:\n${puces.map((p) => `- ${p}`).join('\n')}`
 }
 
-/** Les puces de la section OBJECTIONS, étiquette de gravité CONSERVÉE. */
+/**
+ * Les puces de la section OBJECTIONS, étiquette de gravité CONSERVÉE.
+ * Un titre libre (`TITRE_LIBRE`) n'y écarte pas les puces nues : le vote du membre les étiquette
+ * (OK s'il approuve, MAJEUR s'il refuse) ; les écarter ferait perdre au verdict agrégé les MAJEUR
+ * d'un dissident qui a rangé ses reproches sous un titre.
+ */
 function objectionsBrutesDuJuge(text: string): string[] {
   const lignes = (text ?? '').split(/\r?\n/)
   const puces: string[] = []

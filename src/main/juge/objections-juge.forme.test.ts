@@ -248,3 +248,124 @@ describe('« passes » au sens de nom n’est pas un effet ; le verbe « passe �
     expect(objectionsDuJuge(`VALIDE\nOBJECTIONS:\n${remarque}`)).toEqual([])
   })
 })
+
+/*
+ * Verdict réel du juge, lot 2 du plan plan-717a0bcd (run build-traite-ensemble-3-candidats-issus-mwfcozv5,
+ * 2026-11-13), puces OK raccourcies. Toutes les objections sont OK ; la demande du lot (« termine-la
+ * par un résumé court ») a fait ajouter au juge un résumé sous un titre en gras. Ses puces nues
+ * étaient lues comme des objections MAJEUR : VALIDE 86 refusé en « Promis mais pas fait ».
+ * fix-ok: cause mesurée — `AUTRE_SECTION` (objections-juge.ts) ne reconnaît qu'un titre en
+ * majuscules nu ; ce bloc rendait 3 objections avant le correctif (7 cas rouges sur 7).
+ */
+const VALIDE_LOT_2 = `VALIDE
+SCORE: 86
+OBJECTIONS:
+- OK: Piste 1 vérifiée. J'ai relancé \`npx vitest run src/main/skills/skill-node-mcp.test.ts\` : 59/59, code 0.
+- OK: \`npm run typecheck\` : code 0. Lint : 0 erreur.
+- OK: hors run — Les commits ne sont pas encore poussés. L'app les fusionne après ce contrôle.
+
+**Résumé pour le fil chef :**
+- **Fait :** pistes 1 et 2, corrigées et commitées dans la copie de travail. Tests relancés : 59/59 et 948/948 (code 0). Typage : code 0.
+- **Reste :** la piste 3, à relancer une fois le lot 1 sur main.
+- **Publication :** fusion sur main par l'app après ce contrôle.`
+
+const PUCES_DU_RESUME =
+  '- **Fait :** pistes 1 et 2 corrigées, tests 59/59 (code 0).\n- Reste : la piste 3, à relancer.'
+
+describe('un titre libre après les objections ferme la section : ses puces ne sont pas des reproches', () => {
+  it('rejeu du lot 2 : un VALIDE aux objections toutes OK, suivi du résumé pour le chef, reste vert', () => {
+    expect(objectionsDuJuge(VALIDE_LOT_2)).toEqual([])
+    expect(verdictAvecObjectionsPortees(VALIDE_LOT_2)).toBe(VALIDE_LOT_2)
+    // Le lecteur de verdict réel, celui qui décide du vert.
+    expect(lireVerdictJuge(verdictAvecObjectionsPortees(VALIDE_LOT_2))).toBe(true)
+    // Rouge pour un autre motif, le contrôle ne recopie pas le résumé en promesses non tenues.
+    expect(dodDuVerdict(false, VALIDE_LOT_2).some((c) => /Fait|Reste/.test(c.label ?? ''))).toBe(
+      false
+    )
+  })
+
+  it.each([
+    ['titre en gras', '**Résumé pour le fil chef :**'],
+    ['titre en gras sans deux-points', '**Cibles demandées**'],
+    ['libellé en gras suivi de texte', '**Pour le chef :** ce lot est fait.'],
+    ['titre markdown', '## Résumé pour le fil chef'],
+    ['libellé suivi de « : »', 'Résumé pour le chef (lot 1) :'],
+    [
+      'libellé en majuscules avec parenthèses',
+      'MATRICE (cible demandée → fichier modifié → preuve) :'
+    ]
+  ])('%s : les puces nues qui suivent ne bloquent pas', (_forme, titre) => {
+    const verdict = `VALIDE\nSCORE: 86\nOBJECTIONS:\n- OK: tests 59/59, code 0.\n\n${titre}\n${PUCES_DU_RESUME}`
+    expect(objectionsDuJuge(verdict)).toEqual([])
+  })
+
+  it('une nouvelle entête OBJECTIONS: rouvre la section entière après un titre libre', () => {
+    expect(
+      objectionsDuJuge(
+        "VALIDE\nOBJECTIONS:\n- OK: tests.\n**Résumé :**\n- Fait : tout.\nOBJECTIONS:\n- le test de la reprise n'existe pas."
+      )
+    ).toEqual(["le test de la reprise n'existe pas."])
+  })
+})
+
+/*
+ * Jumeaux, mesurés sur les 1 265 verdicts distincts des runs du poste (2026-11-13) : 11 portent un
+ * titre libre DANS la section, suivi de puces MAJEUR ou MINEUR (« **Objection 1 (cause par fil) :
+ * non corrigée.** » puis trois MAJEUR). Fermer net la section les ferait passer en vert.
+ */
+describe('jumeaux : ce qui reste un reproche malgré un titre ou une ligne de texte', () => {
+  it('une puce étiquetée MAJEUR ou MINEUR sous un titre libre bloque toujours', () => {
+    expect(
+      objectionsDuJuge(
+        'VALIDE\nOBJECTIONS:\n**Objection 1 (cause par fil) : non corrigée.**\n- MAJEUR: le journal ne lit que le premier fil.\n- OK: tests 12/12, code 0.'
+      )
+    ).toEqual(['le journal ne lit que le premier fil.'])
+    expect(
+      objectionsDuJuge(
+        "VALIDE\nOBJECTIONS:\nObjections du juge précédent :\n- MINEUR: le test de la reprise n'existe pas encore."
+      )
+    ).toEqual(["le test de la reprise n'existe pas encore."])
+  })
+
+  it('une gravité mal étiquetée (« MINEUR — », « MINEUR (…) : ») sous un titre libre reste un reproche', () => {
+    // Refus réel (run build-etudie-cause-refus-echec-operation-mw8v9i0o), puces raccourcies.
+    const refus = `DEFAUT: deux écarts corrigeables.
+OBJECTIONS:
+Écarts à corriger dans ce run :
+- MINEUR — ÉTENDUE — aucun rejeu ne reproduit le refus, alors que le lot demande de « rejouer la situation d'un des refus contre le correctif ».
+Objections du juge précédent :
+- MINEUR (objection 7, périmètre) : non corrigé, voir le quatrième point.`
+    expect(objectionsDuJuge(refus)).toHaveLength(2)
+  })
+
+  it('une sous-puce d’un MAJEUR placé sous un titre libre hérite de sa gravité', () => {
+    expect(
+      objectionsDuJuge(
+        'VALIDE\nOBJECTIONS:\n## Piste 1\n- MAJEUR: deux défauts restent :\n  - le test rouge manque.'
+      )
+    ).toEqual(['deux défauts restent :', 'le test rouge manque.'])
+  })
+
+  it('une ligne de texte qui n’est pas un titre ne ferme pas la section', () => {
+    // Suite d'une puce, en retrait, même finie par « : ».
+    expect(
+      objectionsDuJuge(
+        "VALIDE\nOBJECTIONS:\n- OK: tests 12/12.\n  Détail de la vérification :\n- le test de la reprise n'existe pas."
+      )
+    ).toHaveLength(1)
+    // Phrase en début de ligne, sans « : » final.
+    expect(
+      objectionsDuJuge(
+        "VALIDE\nOBJECTIONS:\n- OK: tests 12/12.\nJ'ai relu le reste : voir la ligne 40.\n- le test de la reprise n'existe pas."
+      )
+    ).toHaveLength(1)
+  })
+
+  it('une puce nue à libellé gras, sans titre avant elle, reste une objection', () => {
+    expect(
+      objectionsDuJuge(
+        "VALIDE\nOBJECTIONS:\n- OK: tests 12/12.\n- **Reste :** le test de la reprise n'existe pas."
+      )
+    ).toHaveLength(1)
+  })
+})
