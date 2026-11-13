@@ -1,7 +1,13 @@
 import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import { auditerDepot, candidatsDepuisAudit, type FichierAudite } from './audit-interne'
+import {
+  auditerDepot,
+  candidatsDepuisAudit,
+  scoreValeurEffort,
+  type FichierAudite
+} from './audit-interne'
 import type { CandidatBrut } from './candidats'
+import { constatsDesMurs, type RegistreDesMurs } from './murs-recurrents'
 
 /**
  * LECTURE DU DÉPÔT pour l'audit interne — le seul endroit de ce mécanisme qui touche au disque.
@@ -130,13 +136,36 @@ export function lireSourcesDuDepot(
  * d'un coup reproduiraient le défaut qu'on corrige. Les constats sont déjà triés par score, donc le
  * plafond garde les plus rentables. Ce qui est écarté n'est pas perdu : la passe suivante le reverra,
  * et la déduplication empêchera les doublons.
+ *
+ * `murs` : le registre des murs du poste. Ses murs récurrents passent par le même score et le même
+ * plafond que les détecteurs du code (`murs-recurrents.ts`).
  */
 export function candidatsInternesDuDepot(
   racine: string,
-  options: { maintenant?: string; plafond?: number } = {}
+  options: { maintenant?: string; plafond?: number; murs?: RegistreDesMurs } = {}
 ): CandidatBrut[] {
   const maintenant = options.maintenant ?? new Date().toISOString()
   const plafond = options.plafond ?? 12
-  const constats = auditerDepot(lireSourcesDuDepot(racine))
+  const fichiers = lireSourcesDuDepot(racine)
+  const murs = constatsDesMurs(options.murs ?? {}, fichiers).map((c) => ({
+    ...c,
+    score: scoreValeurEffort(c)
+  }))
+  const constats = [...auditerDepot(fichiers), ...murs].sort(
+    (a, b) => b.score - a.score || a.ancrage.localeCompare(b.ancrage)
+  )
   return candidatsDepuisAudit(constats.slice(0, plafond), maintenant)
+}
+
+/**
+ * Le registre des murs tel qu'il est sur le disque. Absent ou illisible = aucun mur : comme le
+ * registre lui-même (`json-index-store.ts`), une lecture ratée ne bloque pas la passe.
+ */
+export function lireRegistreDesMurs(chemin: string): RegistreDesMurs {
+  try {
+    const brut = JSON.parse(readFileSync(chemin, 'utf8')) as unknown
+    return brut && typeof brut === 'object' && !Array.isArray(brut) ? (brut as RegistreDesMurs) : {}
+  } catch {
+    return {}
+  }
 }

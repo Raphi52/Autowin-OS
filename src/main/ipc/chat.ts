@@ -369,7 +369,8 @@ import { executerPasse } from '../veille/passe'
 import { genererCandidatsEnConversation } from '../veille/scout-visible'
 import { unePasseALaFois } from '../veille/une-passe-a-la-fois'
 import { lancerScoutVeille } from '../veille/scout-claude'
-import { candidatsInternesDuDepot } from '../veille/audit-depot'
+import { candidatsInternesDuDepot, lireRegistreDesMurs } from '../veille/audit-depot'
+import { mursStorePath } from '../runs/murs-store'
 import { dispatcherAvecVeille } from '../veille/dispatch-veille'
 import { deposerOrientationDuFil } from '../conversations/orientations-en-cours-app'
 import {
@@ -3659,7 +3660,10 @@ Le fil reprend ensuite normalement.`
       await genererCandidatsInternesVisibles()
       return executerPasse({
         lancerScout: lancerScoutVeille,
-        candidatsInternes: candidatsInternesDuDepot(os.executionWorkspace)
+        // Les murs qui reviennent d'un fil à l'autre, mesurés : voir `veille/murs-recurrents.ts`.
+        candidatsInternes: candidatsInternesDuDepot(os.executionWorkspace, {
+          murs: lireRegistreDesMurs(mursStorePath())
+        })
       })
     })
   })

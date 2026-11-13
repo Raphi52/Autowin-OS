@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { candidatsInternesDuDepot, lireSourcesDuDepot } from './audit-depot'
+import { candidatsInternesDuDepot, lireRegistreDesMurs, lireSourcesDuDepot } from './audit-depot'
 import { trierCandidats } from './candidats'
 import { PRODUIT_INTERNE } from './audit-interne'
 
@@ -112,6 +112,34 @@ describe('candidats internes du dépôt', () => {
       'src/renderer/src/App.tsx': '<VueMontee />\n'
     })
     expect(candidatsInternesDuDepot(racine)).toEqual([])
+  })
+
+  it('les murs récurrents du registre deviennent des candidats acceptés, ancrés à leur ligne', () => {
+    const racine = depotJouet({
+      'src/main/commands/conversations.ts':
+        "export function lire(c?: unknown, id = 'x'): unknown {\n  if (!c) throw new Error(`conversation introuvable: ${id}`)\n  return c\n}\n"
+    })
+    const signature = 'conversation_read::conversation introuvable: conv-<n>'
+    const murs = Object.fromEntries(
+      ['conv-1', 'conv-2', 'conv-3', 'conv-4'].map((id) => [id, [signature]])
+    )
+    const bruts = candidatsInternesDuDepot(racine, { maintenant: '2026-11-13T10:00:00.000Z', murs })
+    expect(bruts.map((b) => b.url)).toEqual(['src/main/commands/conversations.ts:2'])
+    const { retenus, refuses } = trierCandidats(bruts, new Set(), {
+      maintenant: '2026-11-13T10:00:00.000Z',
+      redigerPrompt: (c) => `corrige ${c.titre}`
+    })
+    expect(refuses).toEqual([])
+    expect(retenus[0]).toMatchObject({ concurrent: PRODUIT_INTERNE, type: 'correction' })
+    // Le jumeau : le même dépôt sans registre ne rend rien, le candidat vient bien des murs.
+    expect(candidatsInternesDuDepot(racine)).toEqual([])
+  })
+
+  it('un registre absent ou abîmé se lit vide, sans bloquer la passe', () => {
+    const racine = depotJouet({ 'murs.json': '{ pas du json', 'liste.json': '[1,2]' })
+    expect(lireRegistreDesMurs(join(racine, 'absent.json'))).toEqual({})
+    expect(lireRegistreDesMurs(join(racine, 'murs.json'))).toEqual({})
+    expect(lireRegistreDesMurs(join(racine, 'liste.json'))).toEqual({})
   })
 })
 
