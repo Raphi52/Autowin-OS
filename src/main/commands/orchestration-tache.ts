@@ -108,12 +108,15 @@ export function composerTacheDOrchestration(
   // pas… ») designe la derniere conversation ou elle a ete tapee. Sans cela, le dossier se construit
   // sur la conversation du /kaizen elle-meme, vide, alors que les traces sont dans les conversations
   // precedentes.
+  // fix-ok: cause mesurée — `listAvecMessages` ne rend plus les fils archivés non relus (conversations.ts ;
+  // test conversations.archives-au-resume) : kaizen cherche une phrase citée dans TOUS les fils, donc il
+  // lit la version texte, qui les couvre sans relire le disque.
   const kaizenParCommande =
     !kaizenNamed && conversation?.autoKaizen?.role !== 'analysis'
       ? kaizenConversationParCommande(
           authoritativeTask,
           convId,
-          bus.os.conversations.listAvecMessages()
+          bus.os.conversations.listAvecTexte()
         )
       : undefined
   const kaizenEvidenceConversation = kaizenNamed
@@ -128,7 +131,7 @@ export function composerTacheDOrchestration(
     ? localiserMessageCite(
         authoritativeTask,
         kaizenEvidenceConversation.id,
-        bus.os.conversations.listAvecMessages()
+        bus.os.conversations.listAvecTexte()
       )
     : undefined
   const kaizenDossier =
@@ -141,7 +144,7 @@ export function composerTacheDOrchestration(
       ? buildAutowinKaizenTaskPlusieurs({
           requestedTask,
           tache: authoritativeTask,
-          conversations: bus.os.conversations.listAvecMessages(),
+          conversations: bus.os.conversations.listAvecTexte(),
           obtenir: (id) => bus.os.conversations.get(id)
         })
       : undefined

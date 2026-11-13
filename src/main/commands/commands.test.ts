@@ -101,6 +101,8 @@ function fakeOs(): any {
       // fix-ok: cause mesurée — `listAvecMessages is not a function` : le kaizen (orchestration-tache.ts)
       // lit encore les messages ; la fixture doit garder les deux lectures, pas seulement le résumé.
       listAvecMessages: () => [...conversations.values()],
+      // Le kaizen et la carte lisent la version texte : la fixture la porte aussi, comme `listAvecMessages`.
+      listAvecTexte: () => [...conversations.values()],
       listResumes: () => [...conversations.values()].map(resumeDuFil),
       rangerDansDossier: (id: string, projectPath: string | null) => {
         const conversation = conversations.get(id)
@@ -1427,8 +1429,10 @@ describe('AppCommandBus command execution policy', () => {
       }))
       const sourceGet = os.conversations.get
       const sourceList = os.conversations.listAvecMessages
+      const sourceTexte = os.conversations.listAvecTexte
       os.conversations.get = (id: string) => autres.find((c) => c.id === id) ?? sourceGet(id)
       os.conversations.listAvecMessages = () => [...sourceList(), ...autres]
+      os.conversations.listAvecTexte = () => [...sourceTexte(), ...autres]
       const bus = new AppCommandBus(os, () => {})
 
       const result = await bus.exec(

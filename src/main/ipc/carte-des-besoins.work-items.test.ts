@@ -79,7 +79,7 @@ const fil = {
 beforeAll(() => {
   registerCarteDesBesoinsIpc({
     os: {
-      conversations: { listAvecMessages: () => [fil] },
+      conversations: { listAvecMessages: () => [fil], listAvecTexte: () => [fil] },
       runsWithGate: async () => [],
       executionWorkspace: undefined
     } as never,

@@ -26,7 +26,7 @@ function monter(prechauffageApres: Promise<unknown>): { lectures: () => number }
   const list = vi.fn(() => [fil])
   registerCarteDesBesoinsIpc({
     os: {
-      conversations: { listAvecMessages: list },
+      conversations: { listAvecMessages: list, listAvecTexte: list },
       runsWithGate: async () => [],
       executionWorkspace: undefined
     } as never,

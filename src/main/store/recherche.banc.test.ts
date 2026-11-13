@@ -3,6 +3,14 @@ import { ConversationStore } from './conversations'
 import { ajouterConversation, bancDEssai, remplissage } from './recherche.test-helpers'
 
 /**
+ * L'index de voisinage, lu sur le store : le banc mesure la rareté qu'il y calcule.
+ *
+ * fix-ok: cause mesurée — l'accesseur privé `voisinage()` a disparu du store (l'index vit dans `this.index`) :
+ * l'ancien appel rendait `TypeError: store.voisinage is not a function` (rouge prouvé, 2 échecs sur 6).
+ */
+type IndexLu = { index: { voisinage: { rarete: (m: string) => number } } }
+
+/**
  * LE BANC D'ESSAI TIENT-IL SA PROMESSE ?
  *
  * Un banc d'essai non teste est un instrument dont on ignore l'etalonnage. Celui-ci promet une seule
@@ -15,7 +23,7 @@ describe('banc d’essai de la recherche', () => {
     const store = bancDEssai({ conversations: 250 })
     ajouterConversation(store, 'Cible', [`${remplissage(600)}\nzarbitro et zarbitro\n${remplissage()}`])
     store.search('amorce', { limite: 1 })
-    const index = (store as unknown as { voisinage: () => { rarete: (m: string) => number } }).voisinage()
+    const index = (store as unknown as IndexLu).index.voisinage
 
     /*
      * L'assertion porte sur le RAPPORT, pas sur un seuil absolu.
@@ -43,7 +51,7 @@ describe('banc d’essai de la recherche', () => {
       mini.append(c.id, { role: 'user', content: 'on avait decide ensemble cette semaine' })
     }
     mini.search('amorce', { limite: 1 })
-    const index = (mini as unknown as { voisinage: () => { rarete: (m: string) => number } }).voisinage()
+    const index = (mini as unknown as IndexLu).index.voisinage
     expect(index.rarete('projet')).toBe(index.rarete('zarbitro'))
   })
 

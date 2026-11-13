@@ -23,7 +23,12 @@ function resultat(id: string, score: number): ConversationRecherche {
   }
 }
 const rappelSur = (resultats: ConversationRecherche[]): string =>
-  rappelDesEchangesPasses({ search: () => resultats }, 'pastilles', 'conv-courante', 'claude')
+  rappelDesEchangesPasses(
+    { search: () => resultats, indexPret: () => true, prechaufferIndex: () => Promise.resolve() },
+    'pastilles',
+    'conv-courante',
+    'claude'
+  )
 
 describe('rappel — proche du meilleur', () => {
   it('ecarte une 2e conversation loin du meilleur score', () => {

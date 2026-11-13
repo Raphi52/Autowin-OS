@@ -113,7 +113,7 @@ export async function executerConversations(
       const decalage = entierEnvoye(a.decalage, 'decalage', 0) ?? 0
       // Le store plafonne à 50 et classe tout avant de couper : lui demander ce plafond ne coûte
       // rien de plus, et c'est ce qui permet de dire ce qui n'est pas rendu.
-      const toutes = bus.os.conversations.search(terme, {
+      const toutes = await bus.os.conversations.searchAsync(terme, {
         limite: 50,
         extraitsParConversation: entierEnvoye(a.extraits, 'extraits', 1)
       })

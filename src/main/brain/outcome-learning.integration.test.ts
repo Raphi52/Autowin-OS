@@ -388,6 +388,7 @@ describe('outcome learning — contrat visible par les modèles', () => {
       conversations: {
         get: (id: string) => (id === 'conv-1' ? conversation : undefined),
         listAvecMessages: () => [conversation],
+        listAvecTexte: () => [conversation],
         listResumes: () => [conversation].map(({ messages: _messages, ...resume }) => resume)
       },
       registry: { ids: () => ['codex'] },
@@ -515,6 +516,7 @@ describe('outcome learning — contrat visible par les modèles', () => {
       conversations: {
         get: () => conversation,
         listAvecMessages: () => [conversation],
+        listAvecTexte: () => [conversation],
         listResumes: () => [conversation].map(({ messages: _messages, ...resume }) => resume)
       },
       registry: { ids: () => ['codex'] },

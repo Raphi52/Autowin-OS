@@ -49,6 +49,7 @@ function osQuiEmetUneNote(note: string): OsDouble {
     conversations: {
       get: (id: string) => conversations.get(id),
       listAvecMessages: () => [...conversations.values()],
+      listAvecTexte: () => [...conversations.values()],
       attachRun: () => ({ id: 'conv-1', runPaths: [] })
     },
     registry: { ids: () => ['claude'] },
