@@ -707,7 +707,7 @@
 
 /* VOILE DE BRUME — direction choisie par l'utilisateur le 2026-09-03, parmi
    trois propositions. Le décor n'est pas une image mais une scène 3D montée à la
-   racine (`home-decor-scene.ts`) : on ne la retouche donc PAS, on pose un voile
+   racine : on ne la retouche donc PAS, on pose un voile
    ivoire par-dessus. Le cosmos reste là, lavé comme un ciel de jour, et le fond
    se cale juste sous le blanc des fenêtres pour qu'elles se détachent encore.
    Réversible d'une ligne : c'est l'argument qui a fait préférer cette voie au
@@ -899,7 +899,7 @@
    lave le cosmos en mode clair (direction choisie le 2026-09-03) etait pose sur
    `.home-view::after` — un element `absolute` INTERIEUR a la vue Accueil. Il ne
    couvrait donc ni la bande de 28 px, ni les marges de la coque, ou le decor
-   continuait de s'effacer en noir opaque (home-decor-scene.ts, FOND_DECOR).
+   continuait de s'effacer en noir opaque.
 
    On pose le meme voile sur le DECOR lui-meme, qui est `fixed inset: 0` : toute
    la surface est lavee, bande du haut comprise, et le texte sombre du theme

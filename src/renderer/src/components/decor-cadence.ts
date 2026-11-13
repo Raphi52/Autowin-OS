@@ -48,37 +48,8 @@ export function estAuRepos(maintenant: number, dernierGeste: number, aLeFocus: b
 /** Part maximale du fil principal que le décor peut occuper en moyenne. */
 export const PART_MAX_DU_FIL = 0.5
 
-/**
- * LE DÉCOR DESSINÉ DANS SON PROPRE FIL (Worker, decor-avenue-hote.ts), 2026-10-19,
- * « l'accueil il fait pas assez lissé ». La règle du fil principal (moyenne ÷ 0,5) n'y voyait que le
- * prix d'un `postMessage`, ≈ 0 ms : la cadence restait à 30 images/s pendant que le Worker en mettait
- * 30 à 52 (reflet une image sur deux), et une image sur deux tombait pendant que la précédente était
- * encore en vol. Écarts mesurés au profil : 33 / 67 ms en alternance, de 40 à 131 ms au total.
- *
- * Pour un fil dédié, le rythme suit donc le coût RÉEL des images dans ce fil :
- *   1. le coût HAUT, pas la moyenne : le centile `CENTILE_FIL_DEDIE` des `FENETRE_FIL_DEDIE`
- *      dernières images. Une image sur deux porte le reflet : la moyenne laisserait la lourde
- *      déborder une fois sur deux. Un pic isolé (compilation, ramasse-miettes : 487 ms relevées chez
- *      l'utilisateur) reste hors du centile et ne fait pas chuter la cadence ;
- *   2. une marge : le Worker ne dessine pas plus de `PART_MAX_FIL_DEDIE` de son temps ;
- *   3. des intervalles en BATTEMENTS ENTIERS d'écran 60 Hz (33, 50, 67 ms…) : un intervalle de 41 ms
- *      tomberait tantôt sur 33, tantôt sur 50 — l'à-coup reviendrait par l'arrondi ;
- *   4. une hystérésis : le palier ne redescend que si le coût passe nettement sous le palier
- *      inférieur, sinon la cadence oscillerait entre deux paliers.
- */
-export const PART_MAX_FIL_DEDIE = 0.8
-/** Combien d'images récentes du fil dédié servent à estimer son coût haut. */
-const FENETRE_FIL_DEDIE = 20
-/** Le centile du coût retenu (0,85 sur 20 images : les trois plus lourdes sont écartées). */
-const CENTILE_FIL_DEDIE = 0.85
 /** Un battement d'écran 60 Hz (aussi un multiple exact des battements à 120 et 240 Hz). */
 const BATTEMENT_MS = 1000 / 60
-/** Le palier ne redescend que sous cette part du palier inférieur. */
-const HYSTERESE = 0.85
-
-/** Le plus petit nombre entier de battements qui couvre `ms`. */
-const enBattements = (ms: number): number => Math.ceil(ms / BATTEMENT_MS - 1e-6) * BATTEMENT_MS
-
 /** Combien d'écarts récents entre deux appels servent à apprendre la période de l'écran. */
 const FENETRE_PERIODE = 15
 /** Hors de ces bornes (ms), un écart n'est pas un battement : fenêtre cachée, veille, horloge figée. */
@@ -88,22 +59,11 @@ const PERIODE_MAX_MS = 70
 /** Lissage de la mesure du coût d'une image (moyenne glissante exponentielle). */
 const LISSAGE = 0.1
 
-/**
- * Où l'image a été dessinée : `interface` = sur le fil principal (son coût est pris sur l'interface),
- * `dedie` = dans le fil du décor (Worker), le coût revenant de ce fil.
- */
-export type FilDuDecor = 'interface' | 'dedie'
-
 export interface Cadence {
   /** Faut-il dessiner au battement `maintenant` (ms, horloge de requestAnimationFrame) ? */
   doitDessiner(maintenant: number): boolean
-  /**
-   * Un battement où la boucle ne consulte pas `doitDessiner` (fil du décor encore occupé) : il sert
-   * quand même à apprendre la période de l'écran, sinon elle paraîtrait double.
-   */
-  battement(maintenant: number): void
-  /** Ce qu'a coûté l'image qu'on vient de dessiner, en ms, et sur quel fil (défaut : l'interface). */
-  noterCout(ms: number, fil?: FilDuDecor): void
+  /** Ce qu'a coûté au fil de l'interface l'image qu'on vient de dessiner, en ms. */
+  noterCout(ms: number): void
   /** L'intervalle courant entre deux images, en ms. */
   intervalle(): number
   /** Au repos, la cadence descend à `IMAGES_PAR_SECONDE_REPOS` ; hors repos, elle revient. */
@@ -133,20 +93,7 @@ export function creerCadence(
 
   const baseRepos = 1000 / Math.min(imagesParSeconde, IMAGES_PAR_SECONDE_REPOS)
   let auRepos = false
-  /** Fil dédié : les derniers coûts relevés, et le palier (ms, battements entiers) qu'ils imposent. */
-  const coutsDedies: number[] = []
-  let palier = 0
-  const intervalle = (): number => Math.max(auRepos ? baseRepos : base, coutMoyen / partMax, palier)
-
-  const noterCoutDedie = (ms: number): void => {
-    coutsDedies.push(ms)
-    if (coutsDedies.length > FENETRE_FIL_DEDIE) coutsDedies.shift()
-    const tries = [...coutsDedies].sort((a, b) => a - b)
-    const haut = tries[Math.min(tries.length - 1, Math.floor(CENTILE_FIL_DEDIE * tries.length))]
-    const besoin = enBattements(haut / PART_MAX_FIL_DEDIE)
-    if (besoin > palier) palier = besoin
-    else if (haut / PART_MAX_FIL_DEDIE < (palier - BATTEMENT_MS) * HYSTERESE) palier = besoin
-  }
+  const intervalle = (): number => Math.max(auRepos ? baseRepos : base, coutMoyen / partMax)
 
   const battement = (maintenant: number): void => {
     if (dernierAppel !== null) {
@@ -160,7 +107,6 @@ export function creerCadence(
   }
 
   return {
-    battement,
     doitDessiner(maintenant) {
       battement(maintenant)
       if (dernierDessin === null) {
@@ -173,15 +119,14 @@ export function creerCadence(
       // aussitôt, sans rattrapage.
       const p = periode()
       const vise = Math.max(1, Math.round((auRepos ? baseRepos : base) / p - 1e-6))
-      const charge = Math.ceil(Math.max(coutMoyen / partMax, palier) / p - 1e-6)
+      const charge = Math.ceil(coutMoyen / partMax / p - 1e-6)
       const n = Math.max(vise, charge)
       if (maintenant - dernierDessin < (n - 0.5) * p) return false
       dernierDessin = maintenant
       return true
     },
-    noterCout(ms, fil = 'interface') {
+    noterCout(ms) {
       if (!(ms >= 0)) return
-      if (fil === 'dedie') return noterCoutDedie(ms)
       coutMoyen = coutMoyen === 0 ? ms : coutMoyen + (ms - coutMoyen) * LISSAGE
     },
     intervalle,

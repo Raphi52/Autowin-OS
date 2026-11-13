@@ -8,7 +8,6 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { autowinStorageKey } from '../storage-keys'
 import {
   brancherQuartier,
   debrancherQuartier,
@@ -104,13 +103,6 @@ describe('les widgets vivent dans leurs tours', () => {
       vue.querySelector<HTMLElement>('[data-testid="home-rentrer-agenda"]')?.click()
     })
     expect(vue.querySelectorAll('.home-tile')).toHaveLength(0)
-  })
-
-  it('laisse les tuiles de toujours sous un autre fond', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
-    const { vue } = await monter()
-    expect(vue.querySelectorAll('.home-tile').length).toBeGreaterThan(3)
-    expect(vue.querySelector('[data-testid="quartier-etiquette"]')).toBeNull()
   })
 })
 
@@ -329,11 +321,5 @@ describe('le bouton « Mes agents / Toute l’équipe » (D8)', () => {
       vue.querySelector<HTMLElement>('[data-testid="home-village-equipe"]')?.click()
     })
     expect(lireAgentsCollegues()).toHaveLength(1)
-  })
-
-  it('n’apparaît pas sous un autre fond', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
-    const { vue } = await monter()
-    expect(vue.querySelector('[data-testid="home-village"]')).toBeNull()
   })
 })

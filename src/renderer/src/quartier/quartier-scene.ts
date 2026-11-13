@@ -1,8 +1,8 @@
 /**
  * LE QUARTIER, FOND DE L'ACCUEIL : la Falaise peinte, où vivent les vrais agents.
  *
- * Une toile 2D, pas de 3D : la peinture est l'image, et tout ce qui bouge se pose dessus. Elle se monte
- * comme les autres fonds (`DecorScene`) : même cadence, même veille, même chemin dans `DecorDeFond`.
+ * Une toile 2D, pas de 3D : la peinture est l'image, et tout ce qui bouge se pose dessus. `DecorDeFond`
+ * la monte derrière toute l'app, lui donne sa cadence et la met en veille hors de l'Accueil.
  *
  * LE CADRAGE. La peinture fait 1344 × 768 et se cale sur la largeur de l'Accueil, pas sur celle de la
  * fenêtre : le menu de gauche fait 216 px, et il cacherait deux tours sur sept. Elle se pose en bas de
@@ -26,7 +26,6 @@ import urlAtlasRenard from '../assets/quartier/atlas-renard.avif'
 import urlAtlasPanda from '../assets/quartier/atlas-panda.avif'
 import urlAtlasPandaRoux from '../assets/quartier/atlas-panda-roux.avif'
 import urlBords from '../assets/quartier/bords.avif'
-import type { DecorScene } from '../components/home-decor-scene'
 import { HOME_WIDGET_IDS, type HomeWidgetId } from '../components/home-layout'
 import {
   abonnerAgentsQuartier,
@@ -356,7 +355,16 @@ export function etiquetteDuFil(titre: string): string {
   return t.length > 24 ? `${t.slice(0, 23).trimEnd()}…` : t
 }
 
-export function creerSceneQuartier(): DecorScene | null {
+/** Ce que `DecorDeFond` attend de la scène : sa toile, une image à la demande, sa taille, sa fin. */
+export interface SceneQuartier {
+  readonly canvas: HTMLCanvasElement
+  /** Avance la scène ; `elapsed` en secondes, sur l'horloge réelle. */
+  render(elapsed: number): void
+  resize(width: number, height: number): void
+  dispose(): void
+}
+
+export function creerSceneQuartier(): SceneQuartier | null {
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d', { alpha: false })
   if (!ctx) return null

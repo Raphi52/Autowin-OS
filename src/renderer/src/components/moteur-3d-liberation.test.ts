@@ -5,7 +5,7 @@ import { libererMoteur3d } from './moteur-3d-liberation'
 
 /**
  * LA MÉMOIRE GRAPHIQUE D'UN MOTEUR 3D FERMÉ. `dispose()` de three.js vide ses caches mais garde le
- * contexte WebGL : son tampon d'image (plein écran, anticrénelé pour le décor) reste dans le
+ * contexte WebGL : son tampon d'image reste dans le
  * processus GPU jusqu'au passage du ramasse-miettes. Ce qui doit faire échouer ce fichier : une
  * libération qui oublie la perte forcée du contexte, qui la fait AVANT `dispose()` (three.js
  * écoute encore l'événement et journalise « Context Lost »), ou un nouveau moteur 3D de
@@ -43,9 +43,9 @@ describe('chaque moteur 3D de l’interface', () => {
     const moteurs = sources.filter((chemin) =>
       /new\s+(THREE\.)?WebGLRenderer\s*\(/.test(readFileSync(chemin, 'utf8'))
     )
-    // Les deux moteurs connus doivent être trouvés : un filtre qui ne trouve plus rien passerait
-    // en vert sans rien contrôler.
-    expect(moteurs.length).toBeGreaterThanOrEqual(2)
+    // Le moteur connu (l'aperçu des modèles 3D) doit être trouvé : un filtre qui ne trouve plus rien
+    // passerait en vert sans rien contrôler.
+    expect(moteurs.length).toBeGreaterThanOrEqual(1)
     const oublis = moteurs.filter(
       (chemin) => !readFileSync(chemin, 'utf8').includes('libererMoteur3d(')
     )

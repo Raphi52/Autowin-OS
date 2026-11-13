@@ -3,19 +3,20 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomeView } from './HomeView'
-import { CLE_VISIBILITE_WIDGETS } from './home-widgets-visibility'
 import { CLE_NOM_JARVIS } from './jarvis-nom'
 import { oublierOuvertureReglages } from './home-reglages-ouverture'
 import { CLE_VOIX_JARVIS, lireReglageVoix } from './jarvis-voix-reglage'
-import { autowinStorageKey } from '../storage-keys'
 import { reinitialiserMonAnimal } from '../quartier/mon-animal'
+import { CLE_TUILES_SORTIES, oublierTuilesSorties } from '../quartier/quartier-tuiles'
+import { HOME_WIDGET_IDS } from './home-layout'
 
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
 beforeEach(() => {
   window.localStorage.clear()
-  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
+  // Toutes les tuiles sorties de leurs tours : ces tests portent sur leur contenu et leur place.
+  window.localStorage.setItem(CLE_TUILES_SORTIES, JSON.stringify(HOME_WIDGET_IDS))
+  oublierTuilesSorties()
   // Equivalent d'un DEMARRAGE de l'application : la memoire d'ouverture du panneau vit dans le
   // module, elle survivrait donc d'un test a l'autre.
   oublierOuvertureReglages()
@@ -155,7 +156,9 @@ describe('un interrupteur par widget', () => {
     await act(async () =>
       q<HTMLInputElement>(premier, '[data-testid="home-widget-switch-routines"]')!.click()
     )
-    expect(window.localStorage.getItem(CLE_VISIBILITE_WIDGETS)).toContain('"routines":false')
+    expect(JSON.parse(window.localStorage.getItem(CLE_TUILES_SORTIES) ?? '[]')).not.toContain(
+      'routines'
+    )
 
     const second = await mount()
     expect(q(second, '[data-testid="home-widget-routines"]')).toBeNull()

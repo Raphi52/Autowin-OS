@@ -1,32 +1,18 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef } from 'react'
 import { creerCadence, estAuRepos } from './decor-cadence'
 import { doitRedimensionner } from './decor-redimension'
-import {
-  abonnerFondAccueil,
-  FOND_DEFAUT,
-  FOND_FALAISE,
-  lireFondAccueil,
-  type FondAccueil
-} from './fond-accueil'
-import { createDecorScene, type DecorScene } from './home-decor-scene'
-import { creerSceneQuartier } from '../quartier/quartier-scene'
+import { creerSceneQuartier, type SceneQuartier } from '../quartier/quartier-scene'
 import { signalerSceneSousLaBarre } from '../theme-mode'
 
 /**
- * LE DECOR 3D, FOND DE TOUTE L'APPLICATION.
+ * LE FOND DE L'APPLICATION : LE QUARTIER.
  *
- * DEMANDE DE L'UTILISATEUR, formulee deux fois : « faut enlever le fond d'ecran 2d et tout remplacer
- * par du 3d », puis « ya encore le fond decran 2d ». Il avait raison les deux fois. Le `body` peignait
- * `autowin-galaxy-bg-hq.png` en `cover fixed` -- une image PLATE, sans profondeur ni reaction au
- * pointeur -- sur TOUTES les vues, tandis que le decor three.js ne vivait que dans `HomeView`.
+ * La scène monte à la racine de la coque, en `fixed`, derrière tout le contenu : il n'y a qu'un fond,
+ * et c'est lui. Le Quartier est le seul fond depuis le 2026-11-13 (« on doit avoir que le fond Le
+ * Quartier ») : les anciennes scènes 3D et leur menu ont été retirés.
  *
- * CE QUE CE COMPOSANT CHANGE : la scene monte a la racine de la coque, en `fixed`, derriere tout le
- * contenu. Elle devient le fond de chaque vue, et le PNG est retire. Il n'y a plus deux fonds qui se
- * disputent la place -- il n'y en a qu'un, et il est en trois dimensions.
- *
- * SUSPENSION : la boucle s'arrete quand le document est CACHE (fenetre minimisee, autre onglet), pas
- * quand une autre vue est affichee. C'est la difference avec la version d'avant, ou le decor
- * n'appartenait qu'a l'Accueil : un fond d'application doit vivre partout, sinon ce n'est pas un fond.
+ * SUSPENSION : la boucle s'arrete quand le document est CACHE (fenetre minimisee, autre onglet), et en
+ * veille hors de l'Accueil (`decor-veille.ts`).
  */
 export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -34,48 +20,6 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
   const decorRef = useRef<DecorMonte | null>(null)
   /** Lu par la boucle d'images à chaque battement : hors de l'Accueil, elle s'arrête. */
   const actifRef = useRef(actif)
-  /**
-   * LE FOND AFFICHÉ (le Quartier, sauf direction 3D enregistrée à la main), SUIVI en direct : le
-   * changer libère la scène et monte la nouvelle, sans redémarrer. La clé, son historique et
-   * l'événement vivent dans `fond-accueil.ts`, la même source que l'Accueil.
-   */
-  const variante = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => FOND_DEFAUT)
-
-  /**
-   * LE THEME APPLIQUE, mis en DEPENDANCE de la scene ci-dessous.
-   *
-   * La scene 3D lit les teintes du theme A SA CREATION (relireTeintesDuTheme dans
-   * home-decor-scene.ts) et ne les relit jamais ensuite. Sans ce qui suit, changer de theme
-   * laissait le decor sur les couleurs du precedent : constate a l ecran le 2026-09-07, la
-   * nebuleuse bleu-magenta du sombre d origine restait affichee sous Obsidian Nebula.
-   *
-   * On RECONSTRUIT plutot que de muter les couleurs en place : les teintes sont figees dans des
-   * geometries et des nuanceurs a la construction, les changer demanderait de parcourir toute la
-   * scene -- beaucoup de code pour un geste rare. Le nettoyage existant (scene.dispose) est deja
-   * correct, donc il n y a rien de plus a ecrire pour liberer l ancienne.
-   */
-  const [themeApplique, setThemeApplique] = useState<string>(() =>
-    typeof document === 'undefined'
-      ? ''
-      : (document.documentElement.getAttribute('data-theme') ?? '')
-  )
-
-  useEffect(() => {
-    if (typeof document === 'undefined' || typeof MutationObserver !== 'function') return
-    const racine = document.documentElement
-    const observateur = new MutationObserver(() => {
-      setThemeApplique(racine.getAttribute('data-theme') ?? '')
-    })
-    observateur.observe(racine, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => observateur.disconnect()
-  }, [])
-
-  /**
-   * Seules les directions « spatiales » relisent les teintes du thème à leur création : changer de
-   * thème les reconstruit. Le Quartier est une peinture : il ne suit pas le thème, et le reconstruire
-   * pour rien coûterait une scène entière.
-   */
-  const cleTheme = variante === FOND_FALAISE ? 'palette-propre' : themeApplique
 
   useEffect(() => {
     actifRef.current = actif
@@ -100,24 +44,23 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
      *
      * En developpement, `<StrictMode>` (main.tsx) monte cet effet, le demonte et le remonte
      * AUSSITOT, d'un seul tenant (`commitDoubleInvokeEffectsInDEV`, pile relevee par sonde CDP).
-     * Construire ici sur-le-champ batissait donc DEUX scenes a chaque ouverture de l'Accueil : un
-     * contexte WebGL, ~0,5 s de construction sur le fil principal et une compilation jetes a la
-     * poubelle 0,2 a 0,8 s plus tard -- sur la machine de l'utilisateur, qui fait tourner Autowin en
-     * developpement. La construction part donc en MICROTACHE, et le nettoyage l'annule : seule la
-     * derniere programmation survit au double montage. En production, rien ne change de visible --
-     * une microtache s'execute avant la prochaine image.
+     * Construire ici sur-le-champ batissait donc DEUX scenes a chaque ouverture de l'Accueil, la
+     * premiere jetee a la poubelle 0,2 a 0,8 s plus tard -- sur la machine de l'utilisateur, qui fait
+     * tourner Autowin en developpement. La construction part donc en MICROTACHE, et le nettoyage
+     * l'annule : seule la derniere programmation survit au double montage. En production, rien ne
+     * change de visible -- une microtache s'execute avant la prochaine image.
      */
     let annule = false
     queueMicrotask(() => {
       if (annule) return
-      decorRef.current = monterDecor(host, variante, () => actifRef.current)
+      decorRef.current = monterDecor(host, () => actifRef.current)
     })
     return () => {
       annule = true
       decorRef.current?.arreter()
       decorRef.current = null
     }
-  }, [cleTheme, variante])
+  }, [])
 
   // En veille, le décor est CACHÉ (style en ligne : il l'emporte sur les `display` des thèmes) et
   // sa boucle est arrêtée — rien n'est dessiné hors de l'Accueil.
@@ -140,17 +83,12 @@ interface DecorMonte {
 /**
  * Construit la scene dans `host`, lance sa boucle, et rend de quoi l'arreter, la liberer et la
  * reveiller. La boucle s'arrete d'elle-meme quand `estActif()` devient faux (veille hors de
- * l'Accueil). Rend `null` sans WebGL (happy-dom en test, pilote absent).
+ * l'Accueil). Rend `null` sans toile 2D (happy-dom en test).
  */
-function monterDecor(
-  host: HTMLDivElement,
-  choisie: FondAccueil,
-  estActif: () => boolean
-): DecorMonte | null {
-  const scene: DecorScene | null =
-    choisie === FOND_FALAISE ? creerSceneQuartier() : createDecorScene(choisie)
-  // Pas de WebGL (happy-dom en test, pilote absent) : l'app s'affiche sans decor, ce qui est le
-  // comportement voulu — un decor n'est pas une dependance de la fonction.
+function monterDecor(host: HTMLDivElement, estActif: () => boolean): DecorMonte | null {
+  const scene: SceneQuartier | null = creerSceneQuartier()
+  // Pas de toile (happy-dom en test) : l'app s'affiche sans decor, ce qui est le comportement
+  // voulu — un decor n'est pas une dependance de la fonction.
   if (!scene) return null
   host.appendChild(scene.canvas)
 
@@ -159,33 +97,24 @@ function monterDecor(
    *
    * Le redessin n'est pas une precaution : sans lui, le decor disparait. Cause localisee le
    * 2026-08-21 sur une machine ou « reduire les animations » est ACTIF — celle de l'utilisateur.
-   * `renderer.setSize` realloue le tampon de dessin : redimensionner repositionnait donc
-   * correctement tous les elements sur un tampon que plus personne ne remplissait.
+   * Redimensionner une toile vide son contenu : redimensionner repositionnait donc correctement
+   * tous les elements sur une toile que plus personne ne remplissait.
    */
   let derniereTaille: { w: number; h: number } | null = null
   const fit = (): void => {
     const w = host.clientWidth
     const h = host.clientHeight
-    // L'observateur notifie a la moindre secousse de mise en page, taille identique comprise. Or
-    // `resize` realloue toute la chaine de post-traitement : le payer pour rien figeait la
-    // fenetre (5,6 s et 6,3 s mesurees le 2026-09-08, sans tache longue JavaScript associee).
+    // L'observateur notifie a la moindre secousse de mise en page, taille identique comprise :
+    // redimensionner pour rien figeait la fenetre (5,6 s et 6,3 s mesurees le 2026-09-08).
     if (!doitRedimensionner(derniereTaille, w, h)) return
     derniereTaille = { w, h }
     scene.resize(w, h)
-    scene.render(performance.now() / 1000, { x: 0, y: 0 })
+    scene.render(performance.now() / 1000)
   }
   fit()
   const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null
   observer?.observe(host)
   window.addEventListener('resize', fit)
-
-  const aim = { x: 0, y: 0 }
-  const look = { x: 0, y: 0 }
-  const onPointerMove = (event: PointerEvent): void => {
-    aim.x = (event.clientX / window.innerWidth - 0.5) * 2
-    aim.y = (event.clientY / window.innerHeight - 0.5) * 2
-  }
-  window.addEventListener('pointermove', onPointerMove)
 
   /**
    * LE REPOS : fenetre sans le focus, ou aucun geste depuis `REPOS_APRES_MS` → la cadence
@@ -213,9 +142,8 @@ function monterDecor(
       return
     }
     frame = requestAnimationFrame(draw)
-    // Suspendu quand le document est CACHE : faire tourner un rendu 3D pour une fenetre que
-    // personne ne regarde coute un GPU entier pour rien. Mais une autre VUE affichee ne suspend
-    // plus rien — c'est desormais le fond de l'application, pas celui d'un ecran.
+    // Suspendu quand le document est CACHE : dessiner pour une fenetre que personne ne regarde
+    // coute pour rien.
     if (typeof document !== 'undefined' && document.hidden) return
     cadence.repos(
       estAuRepos(
@@ -224,19 +152,7 @@ function monterDecor(
         typeof document.hasFocus === 'function' ? document.hasFocus() : true
       )
     )
-    // Dessinee dans un Worker et l'image precedente pas encore finie : on attend le battement
-    // suivant SANS consommer le tour de la cadence. Avant, la demande etait perdue en
-    // silence par l'hote et la suivante attendait un intervalle entier : 33 / 67 ms en alternance.
-    // Ce battement compte quand meme pour apprendre la periode de l'ecran.
-    if (scene.pret && !scene.pret()) {
-      cadence.battement(time)
-      return
-    }
-    // La scene derive lentement : au-dela de 30 images/s la difference ne se voit pas, la facture
-    // d'une fenetre qui reste ouverte toute la journee, si.
     if (!cadence.doitDessiner(time)) return
-    look.x += (aim.x - look.x) * 0.05
-    look.y += (aim.y - look.y) * 0.05
     /*
      * LE TEMPS DU DECOR EST L'HORLOGE REELLE, « mouvement reduit » ou non (2026-10-19).
      * Sur un PC ou les « Effets d'animation » de Windows sont coupes, Chromium annonce
@@ -246,15 +162,10 @@ function monterDecor(
      * cette preference rendait le nuage immobile : ni fige, ni ralenti, donc.
      * Garde : DecorDeFond.vitesse.test.tsx.
      */
-    // Le cout qui regle le rythme : celui du fil ou l'image se dessine. Dans un Worker (l'avenue),
-    // l'interface ne paie qu'un message : c'est le cout de la derniere image FINIE dans le Worker qui
-    // compte (decor-cadence.ts, fil dedie). Dessinee dans la page, tout son rendu est pris sur
-    // l'interface — la cadence s'espace alors pour lui en laisser la moitie.
+    // Le cout de l'image est pris sur l'interface : la cadence s'espace pour lui en laisser la moitie.
     const debut = performance.now()
-    scene.render(time / 1000, look)
-    const coutDansSonFil = scene.coutDerniereImage?.() ?? null
-    if (coutDansSonFil !== null) cadence.noterCout(coutDansSonFil, 'dedie')
-    else cadence.noterCout(performance.now() - debut)
+    scene.render(time / 1000)
+    cadence.noterCout(performance.now() - debut)
     // Repère lisible par CDP : le coût réel de chaque image, mesuré sur le poste par
     // scripts/sonde-cout-image-accueil.mjs. Tampon borné à 300 entrées, vidé au-delà.
     performance.measure('decor:image', { start: debut })
@@ -275,7 +186,6 @@ function monterDecor(
     arreter() {
       cancelAnimationFrame(frame)
       enBoucle = false
-      window.removeEventListener('pointermove', onPointerMove)
       GESTES.forEach((nom) => window.removeEventListener(nom, geste))
       window.removeEventListener('focus', geste)
       window.removeEventListener('resize', fit)

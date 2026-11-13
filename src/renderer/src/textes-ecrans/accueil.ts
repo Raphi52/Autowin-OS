@@ -72,10 +72,6 @@ export const TEXTES_FR = {
   'reglages.annuler': 'Annuler',
   'reglages.disperser': 'Disperser',
   'reglages.retablir': 'Rétablir la disposition',
-  'reglages.rappelTitre': 'Rappeler comment manipuler les tuiles',
-  'reglages.rappel': "Rappeler l'aide",
-  'aide.tuiles':
-    'Prenez une tuile n’importe où et posez-la : elle reste exactement là où vous la lâchez. Les huit bords la redimensionnent, les flèches aussi (Maj pour la taille).',
   'quartier.ouvre': 'Ouvre {vue}',
   'quartier.sortir': 'Sortir le widget de sa tour',
   'quartier.rentrer': 'Rentrer le widget dans sa tour',
@@ -418,10 +414,6 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'reglages.annuler': 'Undo',
   'reglages.disperser': 'Scatter',
   'reglages.retablir': 'Reset the layout',
-  'reglages.rappelTitre': 'Show again how to handle the tiles',
-  'reglages.rappel': 'Show the help again',
-  'aide.tuiles':
-    'Pick up a tile anywhere and put it down: it stays exactly where you release it. The eight edges resize it, and so do the arrow keys (Shift for the size).',
   'quartier.ouvre': 'Opens {vue}',
   'quartier.sortir': 'Bring the widget out of its tower',
   'quartier.rentrer': 'Put the widget back in its tower',

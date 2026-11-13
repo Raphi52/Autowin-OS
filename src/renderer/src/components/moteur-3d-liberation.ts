@@ -8,7 +8,7 @@ export interface MoteurLiberable {
  * Rend au processus GPU toute la mémoire d'un moteur 3D qu'on ferme.
  *
  * `dispose()` de three.js vide ses caches (programmes, listes de rendu) mais garde le contexte
- * WebGL, donc son tampon d'image : celui du décor d'accueil est plein écran et anticrénelé.
+ * WebGL, donc son tampon d'image.
  * Chrome ne le rend qu'au passage du ramasse-miettes sur le canevas, quand il passe. La perte
  * forcée le rend tout de suite, et avec lui les géométries et textures que la scène n'aurait pas
  * libérées une à une.

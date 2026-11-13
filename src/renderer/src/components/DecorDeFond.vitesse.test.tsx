@@ -2,7 +2,6 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CLE_FOND_ACCUEIL } from './fond-accueil'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -30,11 +29,11 @@ interface FausseScene {
 }
 const creees: FausseScene[] = []
 
-// Le VRAI module, sauf la construction WebGL (absente sous happy-dom) : tout ce que `DecorDeFond`
-// en emploie pour fabriquer le temps reste le code livré.
-vi.mock('./home-decor-scene', async (original) => ({
-  ...(await original<typeof import('./home-decor-scene')>()),
-  createDecorScene: () => {
+// Le VRAI module, sauf la construction de la toile (absente sous happy-dom) : tout ce que
+// `DecorDeFond` emploie pour fabriquer le temps reste le code livré.
+vi.mock('../quartier/quartier-scene', async (original) => ({
+  ...(await original<typeof import('../quartier/quartier-scene')>()),
+  creerSceneQuartier: () => {
     const scene: FausseScene = {
       canvas: document.createElement('canvas'),
       images: [],
@@ -82,7 +81,6 @@ describe('le fond d accueil défile à vitesse normale, même quand Windows coup
     document.body.appendChild(hote)
     const root = createRoot(hote)
     monte = { root, hote }
-    window.localStorage.setItem(CLE_FOND_ACCUEIL, 'poussiere')
     await act(async () => root.render(createElement(DecorDeFond, { actif: true })))
     await act(async () => {
       await new Promise((r) => setTimeout(r, 500))

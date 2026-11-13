@@ -2,11 +2,11 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { autowinStorageKey } from '../storage-keys'
 import { HomeView } from './HomeView'
-import { HOME_WIDGET_TITLES } from './home-layout'
+import { HOME_WIDGET_TITLES, HOME_WIDGET_IDS } from './home-layout'
 import { appliquerLangue } from '../langue'
 import { TEXTES_FR } from '../textes-ecrans/accueil'
+import { CLE_TUILES_SORTIES, oublierTuilesSorties } from '../quartier/quartier-tuiles'
 
 /**
  * L'ACCUEIL SUIT LA LANGUE (traduction anglaise, lot « Accueil »). Entrée qui doit faire
@@ -28,8 +28,9 @@ let hote: HTMLDivElement | null = null
 beforeEach(() => {
   // Outlook ne se lit qu'apres « Connecter Outlook » : ces tests partent connectes.
   window.localStorage.setItem('autowin.outlook.connecte', '1')
-  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
+  // Toutes les tuiles sorties de leurs tours : ces tests portent sur leur contenu et leur place.
+  window.localStorage.setItem(CLE_TUILES_SORTIES, JSON.stringify(HOME_WIDGET_IDS))
+  oublierTuilesSorties()
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(HORLOGE)
   // Sans `outlookSnapshot` : les widgets Interlocuteurs et Agenda disent la panne (texte traduit).

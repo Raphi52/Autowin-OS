@@ -4,10 +4,8 @@
  * Sur la Falaise, chaque tuile de l'Accueil vit dans une tour de la ville. Un clic sur la tour fait
  * sortir le widget, et la tour reste allumée tant qu'il est dehors ; un second clic l'y fait rentrer.
  *
- * Ce choix a son propre enregistrement, à part de `home-widgets-visibility.ts` : les autres fonds
- * montrent toutes les tuiles par défaut, ce qui recouvrirait entièrement le Quartier. Changer de fond
- * retrouve donc ses tuiles telles qu'on les avait laissées, et une tuile rentrée ne lit plus rien
- * (Outlook, micro), exactement comme une tuile éteinte.
+ * Par défaut, toutes les tuiles sont rentrées : sorties d'office, elles recouvriraient entièrement le
+ * Quartier. Une tuile rentrée ne lit plus rien (Outlook, micro), exactement comme une tuile éteinte.
  */
 import { HOME_WIDGET_IDS, type HomeWidgetId } from '../components/home-layout'
 import type { HomeWidgetsVisibility } from '../components/home-widgets-visibility'
@@ -69,7 +67,7 @@ export function abonnerTuilesSorties(rappel: () => void): () => void {
   return () => abonnes.delete(rappel)
 }
 
-/** La même forme que le réglage des autres fonds : l'Accueil n'a qu'une façon de lire ses tuiles. */
+/** Les tuiles sorties, sous la forme que l'Accueil lit (`home-widgets-visibility.ts`). */
 export function visibiliteDesSorties(liste: ReadonlySet<HomeWidgetId>): HomeWidgetsVisibility {
   return Object.fromEntries(
     HOME_WIDGET_IDS.map((id) => [id, liste.has(id)])

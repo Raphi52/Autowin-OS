@@ -4,7 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomeView } from './HomeView'
 import { autowinStorageKey } from '../storage-keys'
-import { defaultHomeLayout, parseHomeLayout } from './home-layout'
+import { defaultHomeLayout, parseHomeLayout, HOME_WIDGET_IDS } from './home-layout'
+import { CLE_TUILES_SORTIES, oublierTuilesSorties } from '../quartier/quartier-tuiles'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -90,8 +91,9 @@ function outlookSnapshot() {
 beforeEach(() => {
   // Outlook ne se lit qu'apres « Connecter Outlook » : ces tests partent connectes.
   window.localStorage.setItem('autowin.outlook.connecte', '1')
-  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
+  // Toutes les tuiles sorties de leurs tours : ces tests portent sur leur contenu et leur place.
+  window.localStorage.setItem(CLE_TUILES_SORTIES, JSON.stringify(HOME_WIDGET_IDS))
+  oublierTuilesSorties()
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(CLOCK)
   ;(window as unknown as { api: unknown }).api = {

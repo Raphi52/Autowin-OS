@@ -21,16 +21,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * leurs propres symboles clairs.
  */
 
-vi.mock('./home-decor-scene', () => ({
-  DECOR_DEFAUT: 'poussiere',
-  createDecorScene: vi.fn(() => {
+vi.mock('../quartier/quartier-scene', () => ({
+  creerSceneQuartier: vi.fn(() => {
     const canvas = document.createElement('canvas')
     return { canvas, render: vi.fn(), resize: vi.fn(), dispose: vi.fn(() => canvas.remove()) }
   })
 }))
 
 const { DecorDeFond } = await import('./DecorDeFond')
-const { choisirFondAccueil, CLE_FOND_ACCUEIL } = await import('./fond-accueil')
 const { appliquerThemeMode, SYMBOLE_SUR_SCENE } = await import('../theme-mode')
 
 /** Couleurs envoyées au processus principal, dans l'ordre. */
@@ -70,17 +68,15 @@ afterEach(() => {
   }
   g.api = apiAvant
   envoyees.length = 0
-  window.localStorage.removeItem(CLE_FOND_ACCUEIL)
   document.documentElement.removeAttribute('data-theme')
   document.documentElement.removeAttribute('data-base')
   document.documentElement.style.removeProperty('--titlebar-symbol')
 })
 
 describe('couleur des boutons de fenêtre selon le fond de l Accueil', () => {
-  it('thème clair : clairs sur une scène 3D, foncés dès qu on quitte l Accueil', async () => {
+  it('thème clair : clairs sur le Quartier, foncés dès qu on quitte l Accueil', async () => {
     poserTheme('clair', '#14192a')
     expect(derniere()).toBe('#14192a')
-    choisirFondAccueil('limbe')
     await rendre(true)
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
     await rendre(false)
@@ -89,9 +85,8 @@ describe('couleur des boutons de fenêtre selon le fond de l Accueil', () => {
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
   })
 
-  it('thème clair : clairs aussi sur une autre scène, foncés hors de l Accueil', async () => {
+  it('même règle sous un autre thème clair (Vanilla Claude)', async () => {
     poserTheme('vanilla-claude', '#141413')
-    choisirFondAccueil('poussiere')
     await rendre(true)
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
     await rendre(false)
@@ -100,11 +95,10 @@ describe('couleur des boutons de fenêtre selon le fond de l Accueil', () => {
 
   it('changer de thème SUR l Accueil garde la règle', async () => {
     poserTheme('nebuleuse-verre', '#ece8f7')
-    choisirFondAccueil('limbe')
     await rendre(true)
     // Thème sombre : ses propres symboles clairs, rien n'est imposé.
     expect(derniere()).toBe('#ece8f7')
-    // Le fond observe `data-theme` : le changement passe par `act`, comme un vrai rendu.
+    // Le changement de thème passe par `act`, comme un vrai rendu.
     await act(async () => {
       poserTheme('nier-automata', '#4e4b42')
       await Promise.resolve()
@@ -114,7 +108,6 @@ describe('couleur des boutons de fenêtre selon le fond de l Accueil', () => {
 
   it('l Accueil démonté ne laisse pas les boutons clairs derrière lui', async () => {
     poserTheme('holographique-clair', '#1c172b')
-    choisirFondAccueil('limbe')
     await rendre(true)
     expect(derniere()).toBe(SYMBOLE_SUR_SCENE)
     const { root } = monte!

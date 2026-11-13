@@ -288,8 +288,8 @@ function accorderBoutonsDeFenetre(racine: Element, base: ThemeBase): void {
     /*
      * LE JETON LU EST `--titlebar-symbol`, PAS `--text` — et c'est toute la correction du
      * 2026-09-21. La barre est TRANSPARENTE : le symbole se pose sur le decor cosmique, qui reste
-     * SOMBRE sous tous les themes (le canevas 3D s'efface en noir opaque, home-decor-scene.ts
-     * FOND_DECOR). Un theme clair peignait donc un symbole sombre sur du sombre.
+     * SOMBRE sous tous les themes (le canevas 3D d'alors s'effacait en noir
+     * opaque). Un theme clair peignait donc un symbole sombre sur du sombre.
      *
      * La premiere tentative posait un fond BLANC OPAQUE derriere les symboles. Refuse par
      * l'utilisateur, et il avait raison sur les deux points : ca ne traitait que les trois boutons

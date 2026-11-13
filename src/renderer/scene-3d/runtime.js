@@ -7,8 +7,7 @@
  *   - `THREE` : tout l'espace de noms de three.js, plus `THREE.OrbitControls` ;
  *   - `OrbitControls` : la meme classe, pour le code ecrit a la mode des exemples recents.
  *
- * La version est celle du paquet `three` installe : l'app et le fil dessinent avec le meme moteur
- * que le decor de l'Accueil (`home-decor-scene.ts`).
+ * La version est celle du paquet `three` installe, celle de l'apercu des modeles 3D de l'app.
  */
 import * as THREE_MODULE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'

@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
  * livrait, les tests passaient… et l'écran restait muet. Il en concluait que ses demandes échouaient.
  *
  * POURQUOI UN TEST DE CONTRAT SUR LE SOURCE, et pas un test de comportement. La garantie vit dans un
- * effet React qui exige WebGL : sous happy-dom, `createDecorScene` rend `null` et l'effet sort avant
+ * effet React qui exige une toile : sous happy-dom, `creerSceneQuartier` rend `null` et l'effet sort avant
  * d'installer quoi que ce soit. Un test de comportement ne pourrait donc rien observer. Ce dépôt
  * emploie déjà cet idiome là où la garantie est structurelle (`security-critical-fixes.test.ts`,
  * `chat-ipc-contract.test.ts`) — on le reprend plutôt que d'inventer une troisième façon.
@@ -36,14 +36,8 @@ describe('« mouvement réduit » réduit le mouvement, il n’efface pas le dé
   })
 
   it('lance bien une boucle de rendu, inconditionnellement', () => {
-    // Bord inverse : supprimer la boucle « pour économiser » retirerait la parallaxe à tout le monde.
+    // Bord inverse : supprimer la boucle « pour économiser » figerait le Quartier pour tout le monde.
     expect(source).toMatch(/frame\s*=\s*requestAnimationFrame\(draw\)/)
-  })
-
-  it('transmet toujours le regard du curseur à la scène, sans le neutraliser', () => {
-    // C'est `{ x: 0, y: 0 }` en second argument qui annulait la parallaxe. Le regard doit passer.
-    expect(source).toMatch(/scene\.render\(.*,\s*look\s*\)/)
-    expect(source).not.toMatch(/scene\.render\([^)]*reduceMotion\s*\?\s*\{\s*x:\s*0,\s*y:\s*0\s*\}/)
   })
 
   it('ni FIGE (conv-1476) ni RALENTI (conv-1018) : le temps est l horloge réelle', () => {
@@ -51,7 +45,7 @@ describe('« mouvement réduit » réduit le mouvement, il n’efface pas le dé
     // défilait 4 fois moins vite (« le fond d'écran 3d de l'accueil défile super lentement »). Décision
     // de l'utilisateur le 2026-10-19 : vitesse normale, quel que soit le réglage Windows. La preuve
     // de comportement vit dans `DecorDeFond.vitesse.test.tsx` ; ici, la forme du source.
-    expect(source).toMatch(/scene\.render\(\s*time\s*\/\s*1000\s*,\s*look\s*\)/)
+    expect(source).toMatch(/scene\.render\(\s*time\s*\/\s*1000\s*\)/)
     // La préférence n'est plus LUE par le décor : rien ne peut donc plus en dériver un ralenti.
     expect(source).not.toMatch(/matchMedia\(/)
   })

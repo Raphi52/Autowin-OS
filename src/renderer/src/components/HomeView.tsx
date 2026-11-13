@@ -35,16 +35,9 @@ import {
   type ResizeEdge
 } from './home-layout'
 import { canUndo, emptyHistory, remember, undo, type ArrangementHistory } from './home-history'
-import {
-  basculerWidget,
-  ecrireVisibilite,
-  estVisible,
-  lireVisibilite,
-  type HomeWidgetsVisibility
-} from './home-widgets-visibility'
+import { estVisible } from './home-widgets-visibility'
 import { EVENEMENT_NOM_JARVIS, lireNomJarvis } from './jarvis-nom'
 import { memoriserOuvertureReglages, reglagesSontOuverts } from './home-reglages-ouverture'
-import { abonnerFondAccueil, FOND_DEFAUT, FOND_FALAISE, lireFondAccueil } from './fond-accueil'
 import { piloteQuartier } from '../quartier/quartier-pont'
 import { useQuartierAccueil } from '../quartier/useQuartierAccueil'
 import {
@@ -117,15 +110,6 @@ const CLE_TEXTE_TENUE: Readonly<Record<(typeof TENUES_AGENTS)[number], CleAccuei
 }
 
 const LAYOUT_STORAGE_KEY = autowinStorageKey('home.layout.v1')
-/**
- * Combien de fois la notice d'usage s'affiche avant de s'effacer.
- *
- * Un mode d'emploi PERMANENT est un aveu que l'interface ne se comprend pas seule, et il occupait
- * l'en-tête pour toujours en poussant tout le contenu vers le bas. Il reste rappelable : effacer une
- * aide sans laisser le moyen de la revoir échange une friction contre une autre.
- */
-const NOTICE_STORAGE_KEY = autowinStorageKey('home.notice-vue.v1')
-const NOTICE_OUVERTURES = 4
 /** Pas de déplacement au clavier, en pixels. Assez grand pour avancer, assez petit pour viser. */
 const PAS_CLAVIER = 16
 const REFRESH_MS = 30_000
@@ -303,21 +287,6 @@ export function HomeView({
    * relectures, et la faire re-rendre la page serait un rendu de plus a chaque relecture.
    */
   const derniereLecture = useRef(0)
-  /**
-   * Nombre d'ouvertures DEJA comptees, lu une fois et fige pour toute la vie du montage.
-   *
-   * C'etait un etat qu'un effet incrementait aussitot -- donc un `setState` synchrone dans un effet,
-   * signale par le React Compiler : le premier rendu affichait la notice sur l'ancienne valeur, un
-   * second rendu suivait immediatement. Rien ici n'a besoin de re-rendre : l'ouverture courante est
-   * connue des le montage, et la persistance est un effet de bord.
-   */
-  const [ouverturesDejaComptees] = useState(() => {
-    const lu = Number(window.localStorage.getItem(NOTICE_STORAGE_KEY) ?? '0')
-    return Number.isFinite(lu) ? lu : 0
-  })
-  /** Celle-ci comprise : c'est ce nombre que l'affichage compare, comme avant ce correctif. */
-  const noticeVue = ouverturesDejaComptees + 1
-  const [noticeForcee, setNoticeForcee] = useState(false)
 
   /* ---------------------------------------------------------------- *
    * LES REGLAGES : ce que l'accueil affiche, et comment on l'appelle.
@@ -341,16 +310,6 @@ export function HomeView({
       return !ouvert
     })
   }, [])
-  const [visibiliteTuiles, setVisibiliteTuiles] = useState<HomeWidgetsVisibility>(() =>
-    lireVisibilite(window.localStorage)
-  )
-  /**
-   * LE FOND DE L'ACCUEIL, lu à la même source que le décor (`fond-accueil.ts`). Le Quartier est le
-   * seul fond proposé, sans menu ; seule une direction 3D enregistrée à la main en sort.
-   */
-  const fond = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => FOND_DEFAUT)
-  /** Sur le Quartier, les tuiles vivent dans leurs tours : elles ne s'affichent que sorties. */
-  const quartier = fond === FOND_FALAISE
   /**
    * L'ANIMAL DE MES AGENTS : rangé dans le réglage du Board du poste et écrit dans
    * `presence.json`, il est aussi celui que les collègues voient. Un choix non enregistré le dit.
@@ -380,14 +339,6 @@ export function HomeView({
     }
   }, [])
 
-  const basculerVisibiliteTuile = useCallback((id: HomeWidgetId): void => {
-    setVisibiliteTuiles((courante) => {
-      const suivante = basculerWidget(courante, id)
-      ecrireVisibilite(window.localStorage, suivante)
-      return suivante
-    })
-  }, [])
-
   /**
    * Le titre affiche d'une tuile.
    *
@@ -415,14 +366,14 @@ export function HomeView({
   const etiquetteRef = useRef<HTMLDivElement | null>(null)
   const scene = useQuartierAccueil({
     etiquetteRef,
-    actif: quartier && active,
+    actif: active,
     surfaceRef,
     onNavigate,
     ouvrirConversation
   })
-  // Une seule façon de lire les tuiles : le Quartier répond à la même question que les autres fonds.
-  const visibilite = quartier ? scene.visibilite : visibiliteTuiles
-  const basculerVisibilite = quartier ? scene.basculerTuile : basculerVisibiliteTuile
+  // Les tuiles vivent dans leurs tours : seules celles qu'on a sorties s'affichent.
+  const visibilite = scene.visibilite
+  const basculerVisibilite = scene.basculerTuile
   const holdRef = useRef<HoldState | null>(null)
   /**
    * Compteur du dernier plan attribue. Reste une REF : il n'est ni lu ni affiche par le rendu, il
@@ -451,16 +402,6 @@ export function HomeView({
   useEffect(() => {
     activeRef.current = active
   }, [active])
-
-  // La notice se compte a l'OUVERTURE de la vue, une fois par montage. L'effet ne fait plus que
-  // PERSISTER : le compte affiché est déjà connu au montage, il n'a jamais eu besoin d'un rendu.
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(NOTICE_STORAGE_KEY, String(noticeVue))
-    } catch {
-      // Sans persistance la notice restera : c'est le comportement le moins surprenant.
-    }
-  }, [noticeVue])
 
   // Seul l'AGENCEMENT est enregistré. Écrire ce qui s'affiche graverait le mode compact d'une fenêtre
   // étroite et l'utilisateur ne retrouverait jamais son organisation.
@@ -568,8 +509,8 @@ export function HomeView({
   // menu quand on le replie.
   useEffect(() => {
     const rect = surfaceRef.current?.getBoundingClientRect()
-    if (quartier && active && rect && rect.width > 0) piloteQuartier()?.poserCadre(rect.left)
-  }, [quartier, active, surface])
+    if (active && rect && rect.width > 0) piloteQuartier()?.poserCadre(rect.left)
+  }, [active, surface])
 
   /* ---------------------------------------------------------------- *
    * Les données. Lues seulement quand la vue est affichée.
@@ -1072,8 +1013,6 @@ export function HomeView({
     [layout, viewport]
   )
 
-  const noticeVisible = noticeForcee || noticeVue <= NOTICE_OUVERTURES
-
   /**
    * Marque un panneau dont le contenu DEBORDE, et s'il reste quelque chose plus bas.
    *
@@ -1094,58 +1033,57 @@ export function HomeView({
       className="home-view"
       ref={surfaceRef}
       data-testid="home-view"
-      data-fond={quartier ? FOND_FALAISE : undefined}
+      // Les règles propres au Quartier (HomeView.css, couches de thème générées) visent cet attribut.
+      data-fond="falaise"
       data-sur-cible={scene.survol ? 'true' : undefined}
-      onPointerMove={quartier ? scene.auSurvol : undefined}
-      onPointerLeave={quartier ? scene.horsChamp : undefined}
-      onClick={quartier ? scene.auClic : undefined}
+      onPointerMove={scene.auSurvol}
+      onPointerLeave={scene.horsChamp}
+      onClick={scene.auClic}
     >
-      {quartier ? (
-        <div
-          className="quartier-etiquette"
-          ref={etiquetteRef}
-          data-testid="quartier-etiquette"
-          data-visible={scene.survol ? 'true' : undefined}
-          aria-hidden="true"
-        >
-          {scene.survol?.type === 'vue' ? (
-            <>
-              <b>{t(`quartier.objet.${scene.survol.cle}` as CleAccueil)}</b>
-              <span>{t('quartier.ouvre', { vue: VUE_DE_L_OBJET[scene.survol.cle] ?? '' })}</span>
-            </>
-          ) : null}
-          {scene.survol?.type === 'tour' ? (
-            <>
-              <b>{titreWidget(scene.survol.widget)}</b>
-              <span>
-                {t(scene.sorties.has(scene.survol.widget) ? 'quartier.rentrer' : 'quartier.sortir')}
-              </span>
-            </>
-          ) : null}
-          {scene.survol?.type === 'agent' && !scene.collegueSurvole ? (
-            <>
-              <b>{scene.survol.titre}</b>
-              <span>
-                {scene.agentSurvole
-                  ? t(cleDeLActivite(scene.agentSurvole.phase, scene.agentSurvole.metier))
-                  : null}
-              </span>
-            </>
-          ) : null}
-          {/* L'agent d'un collègue : son prénom, le titre de son fil s'il est publié, son activité (D9).
-              Tout ce texte vient d'un autre poste : React l'écrit comme du texte, jamais comme du HTML. */}
-          {scene.collegueSurvole ? (
-            <>
-              <b>{scene.collegueSurvole.collegue.prenom}</b>
-              {scene.collegueSurvole.titre ? (
-                <span className="quartier-etiquette__titre">{scene.collegueSurvole.titre}</span>
-              ) : null}
-              <span>{activiteDuCollegue(scene.collegueSurvole, t)}</span>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-      {quartier && scene.carte ? (
+      <div
+        className="quartier-etiquette"
+        ref={etiquetteRef}
+        data-testid="quartier-etiquette"
+        data-visible={scene.survol ? 'true' : undefined}
+        aria-hidden="true"
+      >
+        {scene.survol?.type === 'vue' ? (
+          <>
+            <b>{t(`quartier.objet.${scene.survol.cle}` as CleAccueil)}</b>
+            <span>{t('quartier.ouvre', { vue: VUE_DE_L_OBJET[scene.survol.cle] ?? '' })}</span>
+          </>
+        ) : null}
+        {scene.survol?.type === 'tour' ? (
+          <>
+            <b>{titreWidget(scene.survol.widget)}</b>
+            <span>
+              {t(scene.sorties.has(scene.survol.widget) ? 'quartier.rentrer' : 'quartier.sortir')}
+            </span>
+          </>
+        ) : null}
+        {scene.survol?.type === 'agent' && !scene.collegueSurvole ? (
+          <>
+            <b>{scene.survol.titre}</b>
+            <span>
+              {scene.agentSurvole
+                ? t(cleDeLActivite(scene.agentSurvole.phase, scene.agentSurvole.metier))
+                : null}
+            </span>
+          </>
+        ) : null}
+        {/* L'agent d'un collègue : son prénom, le titre de son fil s'il est publié, son activité (D9).
+            Tout ce texte vient d'un autre poste : React l'écrit comme du texte, jamais comme du HTML. */}
+        {scene.collegueSurvole ? (
+          <>
+            <b>{scene.collegueSurvole.collegue.prenom}</b>
+            {scene.collegueSurvole.titre ? (
+              <span className="quartier-etiquette__titre">{scene.collegueSurvole.titre}</span>
+            ) : null}
+            <span>{activiteDuCollegue(scene.collegueSurvole, t)}</span>
+          </>
+        ) : null}
+      </div>
+      {scene.carte ? (
         <div
           className="quartier-carte"
           role="dialog"
@@ -1214,28 +1152,24 @@ export function HomeView({
           </div>
           {/* D8 : masquer les agents des collègues quand il y a foule. Visible dès
               l'en-tête, pas caché dans les réglages : c'est un geste de tous les jours. */}
-          {quartier ? (
-            <div
-              className="home-view__village"
-              role="group"
-              aria-label={t('quartier.village.aria')}
-              data-testid="home-village"
-            >
-              {(['moi', 'equipe'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  aria-pressed={scene.modeVillage === mode}
-                  data-testid={`home-village-${mode}`}
-                  onClick={() => scene.choisirModeVillage(mode)}
-                >
-                  {t(mode === 'moi' ? 'quartier.village.moi' : 'quartier.village.equipe')}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {/* Sur le Quartier, il n'y a pas de tuile à poser : elles sont dans leurs tours. */}
-          {noticeVisible && !quartier ? <p>{t('aide.tuiles')}</p> : null}
+          <div
+            className="home-view__village"
+            role="group"
+            aria-label={t('quartier.village.aria')}
+            data-testid="home-village"
+          >
+            {(['moi', 'equipe'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={scene.modeVillage === mode}
+                data-testid={`home-village-${mode}`}
+                onClick={() => scene.choisirModeVillage(mode)}
+              >
+                {t(mode === 'moi' ? 'quartier.village.moi' : 'quartier.village.equipe')}
+              </button>
+            ))}
+          </div>
           {erreurOuverture !== null ? (
             <p className="home-view__alerte" role="status">
               {erreurOuverture}
@@ -1358,14 +1292,6 @@ export function HomeView({
                 <button type="button" onClick={resetLayout}>
                   {t('reglages.retablir')}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setNoticeForcee(true)}
-                  title={t('reglages.rappelTitre')}
-                  data-testid="home-rappel-notice"
-                >
-                  {t('reglages.rappel')}
-                </button>
               </div>
             </section>
           </div>
@@ -1461,24 +1387,22 @@ export function HomeView({
               ) : null}
               {/* Au bout de l'enseigne, après tout le reste : c'est là que la main va chercher une
                   croix. Un sceau rouge sur le bois, et une vraie cible de 26 px. */}
-              {quartier ? (
-                <button
-                  type="button"
-                  className="home-tile__rentrer"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    scene.basculerTuile(box.id)
-                  }}
-                  data-testid={`home-rentrer-${box.id}`}
-                  title={t('quartier.rentrer')}
-                  aria-label={t('quartier.rentrer')}
-                >
-                  <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false">
-                    <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
-                  </svg>
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="home-tile__rentrer"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  scene.basculerTuile(box.id)
+                }}
+                data-testid={`home-rentrer-${box.id}`}
+                title={t('quartier.rentrer')}
+                aria-label={t('quartier.rentrer')}
+              >
+                <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+                  <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+                </svg>
+              </button>
             </div>
             <div className="home-tile__panel">
               <div

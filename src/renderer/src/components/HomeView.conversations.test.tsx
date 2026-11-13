@@ -2,13 +2,14 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { autowinStorageKey } from '../storage-keys'
 import { HomeView } from './HomeView'
 import {
   marquerConversationEnAttente,
   retirerConversationEnAttente,
   viderConversationsEnAttente
 } from './conversations-attention'
+import { CLE_TUILES_SORTIES, oublierTuilesSorties } from '../quartier/quartier-tuiles'
+import { HOME_WIDGET_IDS } from './home-layout'
 
 /**
  * L'ACCUEIL montre les conversations en attente. Le hublot (une horloge posee sur le decor) ne
@@ -22,8 +23,9 @@ import {
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
 beforeEach(() => {
-  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
+  // Toutes les tuiles sorties de leurs tours : ces tests portent sur leur contenu et leur place.
+  window.localStorage.setItem(CLE_TUILES_SORTIES, JSON.stringify(HOME_WIDGET_IDS))
+  oublierTuilesSorties()
   ;(window as unknown as { innerWidth: number }).innerWidth = 1440
   ;(window as unknown as { innerHeight: number }).innerHeight = 900
   ;(window as unknown as { api: unknown }).api = {

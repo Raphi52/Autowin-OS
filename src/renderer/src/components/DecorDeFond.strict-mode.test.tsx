@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -9,7 +9,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * LE DÉFAUT, mesuré le 2026-10-17 (sonde de l'Accueil, pile d'appel relevée par CDP) :
- * à chaque ouverture de l'Accueil, le fond 3D était construit DEUX fois, à 0,2-0,8 s d'écart.
+ * à chaque ouverture de l'Accueil, le fond était construit DEUX fois, à 0,2-0,8 s d'écart.
  * La seconde construction venait de `commitDoubleInvokeEffectsInDEV` : en développement,
  * `<StrictMode>` (main.tsx) monte chaque effet, le démonte et le remonte aussitôt. L'utilisateur
  * fait tourner Autowin EN DÉVELOPPEMENT (`.autowin-data/electron-dev/electron.exe .`) : il payait
@@ -32,15 +32,14 @@ interface FausseScene {
 }
 const creees: FausseScene[] = []
 
-vi.mock('./home-decor-scene', () => ({
-  DECOR_DEFAUT: 'poussiere',
-  createDecorScene: vi.fn(() => {
+vi.mock('../quartier/quartier-scene', () => ({
+  creerSceneQuartier: vi.fn(() => {
     const canvas = document.createElement('canvas')
     const scene: FausseScene = {
       canvas,
       render: vi.fn(),
       resize: vi.fn(),
-      // Comme les vraies scènes (home-decor-scene.ts) : libérer retire l'image.
+      // Comme la vraie scène (quartier-scene.ts) : libérer retire l'image.
       dispose: vi.fn(() => canvas.remove())
     }
     creees.push(scene)
@@ -87,14 +86,10 @@ afterEach(() => {
   }
   creees.length = 0
   document.documentElement.removeAttribute('data-theme')
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
+  window.localStorage.clear()
 })
 
-beforeEach(() => {
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
-})
-
-describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => {
+describe('le Quartier n est construit qu une fois, même sous StrictMode', () => {
   it('UNE ouverture de l Accueil = UNE scène construite, vivante, dans la page', async () => {
     const hote = await monter()
     expect(creees).toHaveLength(1)
@@ -111,17 +106,14 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
     expect(creees[0].dispose).toHaveBeenCalledTimes(1)
   })
 
-  it('un VRAI changement de thème reconstruit une direction spatiale (teintes relues)', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
+  it('changer de thème ne reconstruit pas le Quartier : sa peinture ne suit pas le thème', async () => {
     await monter()
     await act(async () => {
       document.documentElement.setAttribute('data-theme', 'holographique-clair')
-      // l'observateur de mutations notifie en microtâche
       await Promise.resolve()
     })
-    expect(creees).toHaveLength(2)
-    expect(creees[0].dispose).toHaveBeenCalledTimes(1)
-    expect(creees[1].dispose).not.toHaveBeenCalled()
+    expect(creees).toHaveLength(1)
+    expect(creees[0].dispose).not.toHaveBeenCalled()
   })
 
   it('EN VEILLE (hors de l Accueil) : la scène reste, cachée, ne dessine plus ; au retour, redessine sans être reconstruite', async () => {
@@ -198,33 +190,17 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
   })
 })
 
-describe('le fond suit le choix fait dans les réglages de l Accueil (conv-346)', () => {
-  /** Ce que fait le menu « Fond » des réglages : enregistrer, puis prévenir la fenêtre. */
-  const choisir = async (fond: string): Promise<void> => {
-    await act(async () => {
-      window.localStorage.setItem(autowinStorageKey('home.decor.v4'), fond)
-      window.dispatchEvent(new Event('autowin:fond-accueil'))
-      await Promise.resolve()
-    })
-  }
-
-  it('changer de direction reconstruit le décor, sans redémarrer', async () => {
-    await monter()
-    expect(creees).toHaveLength(1)
-    const { createDecorScene } = await import('./home-decor-scene')
-    expect(vi.mocked(createDecorScene).mock.calls.at(-1)?.[0]).toBe('poussiere')
-    await choisir('limbe')
-    expect(creees).toHaveLength(2)
-    expect(creees[0].dispose).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(createDecorScene).mock.calls.at(-1)?.[0]).toBe('limbe')
-  })
-
-  it('« Aucun » enregistré avant le retrait du menu ne peint plus d aplat : le Quartier le remplace', async () => {
-    const hote = await monter()
-    await choisir('noir')
-    // La scène 3D est libérée et aucune autre direction n'est construite à sa place.
-    expect(creees[0].dispose).toHaveBeenCalledTimes(1)
-    expect(creees).toHaveLength(1)
-    expect((hote.querySelector('.decor-de-fond') as HTMLElement).dataset.fond).toBeUndefined()
+describe('un ancien choix de fond enregistré ne change plus rien', () => {
+  it('une ancienne direction 3D ou « Aucun » restés en mémoire montent quand même le Quartier', async () => {
+    for (const ancien of ['limbe', 'noir']) {
+      window.localStorage.setItem(autowinStorageKey('home.decor.v4'), ancien)
+      const hote = await monter()
+      expect(creees, ancien).toHaveLength(1)
+      expect(hote.querySelector('.decor-de-fond canvas'), ancien).toBe(creees[0].canvas)
+      act(() => monte!.root.unmount())
+      monte!.hote.remove()
+      monte = null
+      creees.length = 0
+    }
   })
 })

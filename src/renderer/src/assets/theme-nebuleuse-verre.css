@@ -7,8 +7,7 @@
 
    SON PARTI PRIS
    - Fond : NOIR PUR (#000) uni, sans halo, sans filet ni grain (
-     section 2). Le decor 3D de l'Accueil reste, teinte dans la meme famille
-     (jetons --decor-*).
+     section 2).
    - Verre : chaque panneau est une plaque translucide (blanc 4-6 %), flou de
      fond 18 px, bord blanc 11 %, reflet d'un pixel en haut, rayon 16 px.
    - Accent : UN degrade rose -> violet (#e63ca0 -> #3c6eeb), reserve a ce qui
@@ -86,13 +85,6 @@
 
   /* Boutons systeme de la fenetre (min / max / fermer) accordes au texte. */
   --titlebar-symbol: #ece8f7;
-
-  /* Decor 3D (home-decor-scene.ts) : nebuleuse violette, filaments magenta. */
-  --decor-nuage: #2a1d6b;
-  --decor-nuage-2: #3c6eeb;
-  --decor-accent: #e63ca0;
-  --decor-froid: #5b6dff;
-  --decor-chaud: #ff5fa8;
 
   /* Le degrade signature, reutilise partout. */
   /* C1 · D6 (choix du 2026-10-10, « go D6 ») : le degrade signature EST celui des

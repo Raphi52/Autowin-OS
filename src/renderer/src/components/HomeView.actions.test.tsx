@@ -3,7 +3,8 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomeView } from './HomeView'
-import { autowinStorageKey } from '../storage-keys'
+import { CLE_TUILES_SORTIES, oublierTuilesSorties } from '../quartier/quartier-tuiles'
+import { HOME_WIDGET_IDS } from './home-layout'
 
 /**
  * Ce que la vue Accueil FAIT, par opposition à ce qu'elle affiche.
@@ -85,8 +86,9 @@ function poserApi(over: Record<string, unknown> = {}): void {
 beforeEach(() => {
   // Outlook ne se lit qu'apres « Connecter Outlook » : ces tests partent connectes.
   window.localStorage.setItem('autowin.outlook.connecte', '1')
-  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
-  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'poussiere')
+  // Toutes les tuiles sorties de leurs tours : ces tests portent sur leur contenu et leur place.
+  window.localStorage.setItem(CLE_TUILES_SORTIES, JSON.stringify(HOME_WIDGET_IDS))
+  oublierTuilesSorties()
   ;(window as unknown as { innerWidth: number }).innerWidth = 1440
   ;(window as unknown as { innerHeight: number }).innerHeight = 900
   poserApi()
@@ -118,14 +120,6 @@ async function mount(): Promise<HTMLDivElement> {
 async function ouvrirReglages(c: HTMLDivElement): Promise<void> {
   const bouton = c.querySelector('[data-testid="home-settings"]') as HTMLButtonElement
   if (c.querySelector('[data-testid="home-settings-panel"]') === null) {
-    await act(async () => bouton.click())
-  }
-}
-
-/** L'inverse : le panneau etant OUVERT d'office, c'est le fermer qui demande un clic. */
-async function fermerReglages(c: HTMLDivElement): Promise<void> {
-  const bouton = c.querySelector('[data-testid="home-settings"]') as HTMLButtonElement
-  if (c.querySelector('[data-testid="home-settings-panel"]') !== null) {
     await act(async () => bouton.click())
   }
 }
@@ -278,16 +272,18 @@ describe('la vue agit : marquer lu', () => {
 })
 
 describe('la vue agit : arreter de lire Outlook', () => {
+  /** Seules ces tuiles sont sorties de leurs tours ; les autres sont rentrées, donc éteintes. */
+  const sortirSeulement = (ids: readonly string[]): void => {
+    window.localStorage.setItem(CLE_TUILES_SORTIES, JSON.stringify(ids))
+    oublierTuilesSorties()
+  }
   /**
    * Defaut releve par l'utilisateur le 2026-09-22 : « je remarque des lenteurs dans Outlook quand
    * Autowin est ouvert ». Eteindre les tuiles retirait l'AFFICHAGE mais pas la LECTURE : un dialogue
    * COM par minute continuait dans le process Outlook, invisible et pourtant payant.
    */
   it('ne lit plus Outlook du tout quand les deux tuiles qui s en servent sont eteintes', async () => {
-    window.localStorage.setItem(
-      autowinStorageKey('home.widgets-visibles.v1'),
-      JSON.stringify({ mails: false, agenda: false })
-    )
+    sortirSeulement(HOME_WIDGET_IDS.filter((id) => id !== 'mails' && id !== 'agenda'))
     const container = await mount()
     expect(tile(container, 'mails')).toBeNull()
     expect(api().outlookSnapshot).not.toHaveBeenCalled()
@@ -300,10 +296,7 @@ describe('la vue agit : arreter de lire Outlook', () => {
   })
 
   it('continue de lire si UNE seule des deux tuiles reste allumee', async () => {
-    window.localStorage.setItem(
-      autowinStorageKey('home.widgets-visibles.v1'),
-      JSON.stringify({ mails: false })
-    )
+    sortirSeulement(HOME_WIDGET_IDS.filter((id) => id !== 'mails'))
     await mount()
     expect(api().outlookSnapshot).toHaveBeenCalledTimes(1)
   })
@@ -487,34 +480,6 @@ describe('le compteur des mails compte les personnes', () => {
     })
     const container = await mount()
     expect(tile(container, 'mails').querySelector('.home-tile__count')?.textContent).toBe('1')
-  })
-})
-
-describe('la notice d usage s efface', () => {
-  it('disparait apres quelques ouvertures, et reste rappelable', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.notice-vue.v1'), '12')
-    const container = await mount()
-    expect(container.querySelector('.home-view__masthead p')).toBeNull()
-    await ouvrirReglages(container)
-    const rappel = container.querySelector(
-      '[data-testid="home-rappel-notice"]'
-    ) as HTMLButtonElement
-    expect(rappel).not.toBeNull()
-    // Effacer une aide SANS moyen de la revoir echangerait une friction contre une autre.
-    await act(async () => rappel.click())
-    expect(container.querySelector('.home-view__masthead p')?.textContent).toContain('posez-la')
-  })
-
-  it('reste visible les premieres fois', async () => {
-    const container = await mount()
-    expect(container.querySelector('.home-view__masthead p')?.textContent).toContain('posez-la')
-    // L'aide n'encombre pas l'en-tete : son rappel est range DANS les reglages -- panneau ouvert
-    // d'office depuis le 2026-09-01, donc il est la, mais dans le panneau et nulle part ailleurs.
-    const panneau = container.querySelector('[data-testid="home-settings-panel"]') as HTMLElement
-    const rappel = container.querySelector('[data-testid="home-rappel-notice"]')
-    expect(panneau.contains(rappel)).toBe(true)
-    await fermerReglages(container)
-    expect(container.querySelector('[data-testid="home-rappel-notice"]')).toBeNull()
   })
 })
 
