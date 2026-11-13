@@ -81,9 +81,10 @@
   --chrome-noir: #3a3e46;
   /* Le liseré clair reste lisible sur l'anneau gris fonce. */
   --chrome-lisere: rgba(255, 255, 255, 0.7);
-  /* Une lumiere ajoutee a un fond blanc ne se voit pas : peinte quand meme, la lueur du reflet n'y
-     laissait que des taches bleues et orangees autour des blocs (film du 2026-11-13). */
-  --reflet-lueur: 0;
+  /* La lumiere du reflet reste allumee : composee sur le fond clair (reflet-du-pin.ts), elle
+     l'eclaircit vers le blanc. Peinte comme sur fond noir, elle y laissait des taches bleues et
+     orangees (film du 2026-11-13). */
+  --reflet-lueur: 1;
 
   /* --------------------------------------------------------------------------
      LE CHAT SUIT ENFIN LE THEME. Les 116 jetons `--chat-*` valent, dans theme.css, la couleur

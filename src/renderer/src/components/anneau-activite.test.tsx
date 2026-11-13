@@ -359,14 +359,20 @@ describe('le reflet du cadre — la lumiere du pin, rejouee sur le bord', () => 
     return feuille.slice(debut, feuille.indexOf('\n}', debut)).replace(/\/\*[\s\S]*?\*\//g, '')
   }
 
-  it('pose un canvas cache aux lecteurs d ecran', () => {
+  // La lumiere douce DESSOUS, l'anneau net DESSUS : par-dessus, la lumiere voilerait le trait.
+  it('pose deux canvas, la lumiere puis l anneau, caches aux lecteurs d ecran', () => {
     const host = document.createElement('div')
     document.body.append(host)
     const root = createRoot(host)
     act(() => root.render(createElement(RefletDuCadre)))
-    const reflet = host.querySelector('canvas.cadre-reflet')
+    const reflet = host.querySelector('.cadre-reflet')
     expect(reflet?.getAttribute('aria-hidden')).toBe('true')
+    expect([...(reflet?.children ?? [])].map((e) => `${e.tagName}.${e.className}`)).toEqual([
+      'CANVAS.cadre-reflet__lumiere',
+      'CANVAS.cadre-reflet__anneau'
+    ])
     expect(reflet?.textContent).toBe('')
+    expect(regleDe('.cadre-reflet > canvas')).toMatch(/\bwidth: 100%;[\s\S]*\bheight: 100%;/)
     act(() => root.unmount())
     host.remove()
   })

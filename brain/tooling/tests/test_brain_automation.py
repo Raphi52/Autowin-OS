@@ -793,6 +793,26 @@ class ProposeNoteTests(unittest.TestCase):
                     model="test-model", source="session:test-session-123",
                 )
 
+    def test_separate_tags_never_form_a_false_iban(self):
+        # Les tags etaient colles par des espaces avant le scan : « gt1030 chrome mesure » prenait la
+        # forme d'un IBAN (2 lettres, 2 chiffres, 11 a 30 caracteres espaces compris) et le candidat
+        # etait refuse comme donnee personnelle. Chaque tag est scanne seul ; un IBAN dans UN tag
+        # reste refuse.
+        with tempfile.TemporaryDirectory() as td:
+            propose_note(
+                Path(td) / "inbox", title="Mesure", body="Contenu durable",
+                note_type="domain", scope="global", author_agent="hermes",
+                model="test-model", source="session:test-session-123",
+                tags=["autowin", "gpu", "gt1030", "chrome", "mesure"],
+            )
+        with tempfile.TemporaryDirectory() as td, self.assertRaises(ValueError):
+            propose_note(
+                Path(td) / "inbox", title="Mesure", body="Contenu durable",
+                note_type="domain", scope="global", author_agent="hermes",
+                model="test-model", source="session:test-session-123",
+                tags=["FR7630006000011234567890189"],
+            )
+
     def test_validates_source_locator_by_scheme(self):
         invalid_sources = (
             "session:x", "file:not-a-real-path", "url:not-a-url",

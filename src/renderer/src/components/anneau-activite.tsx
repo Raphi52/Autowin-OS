@@ -122,15 +122,21 @@ export function LegendeDesOutils({
 }
 
 /**
- * LE REFLET DU CADRE : la lumiere de l'anneau du bouton de verre, rejouee image par image sur le bord
- * du bloc (reflet-du-pin.ts, place dans anneau-activite.css) — le seul reflet de l'anneau. A poser
- * DANS chaque bloc encadre, en premier enfant de son `<summary>` quand le bloc est un `<details>` :
- * hors du `summary`, un `<details>` replie ne l'afficherait pas.
+ * LE REFLET DU CADRE : la lumiere de l'anneau du bouton de verre, rejouee sur le bord du bloc
+ * (reflet-du-pin.ts, place dans anneau-activite.css) — le seul reflet de l'anneau. Deux canvas : la
+ * lumiere douce (lueur et verre), puis l'anneau net par-dessus. A poser DANS chaque bloc encadre, en
+ * premier enfant de son `<summary>` quand le bloc est un `<details>` : hors du `summary`, un
+ * `<details>` replie ne l'afficherait pas.
  */
 export function RefletDuCadre(): React.JSX.Element {
-  const toile = useRef<HTMLCanvasElement>(null)
-  useEffect(() => (toile.current ? brancherLeReflet(toile.current) : undefined), [])
-  return <canvas ref={toile} className="cadre-reflet" aria-hidden="true" />
+  const conteneur = useRef<HTMLSpanElement>(null)
+  useEffect(() => (conteneur.current ? brancherLeReflet(conteneur.current) : undefined), [])
+  return (
+    <span ref={conteneur} className="cadre-reflet" aria-hidden="true">
+      <canvas className="cadre-reflet__lumiere" />
+      <canvas className="cadre-reflet__anneau" />
+    </span>
+  )
 }
 
 /**

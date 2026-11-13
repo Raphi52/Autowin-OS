@@ -73,12 +73,15 @@
 
 /* LE REFLET DU PIN (reflet-du-pin.ts) : la lumiere de l'anneau du bouton de verre, REJOUEE image par
    image sur le bord du bloc, depuis la video elle-meme (texture relevee par scripts/anneau-du-pin.py).
-   Un canvas, `RefletDuCadre` (anneau-activite.tsx), pose dans chaque bloc encadre. Il deborde de
-   10 px de chaque cote (`MARGE` dans reflet-du-pin.ts) : la lueur sort du bloc, comme sur la video ;
-   sur les cotes, le fil coupe ce qui depasse (`.chat-scroll`, overflow-x hidden), sans barre
-   horizontale. Dessous, l'anneau noir et son liseré (plus haut).
+   `RefletDuCadre` (anneau-activite.tsx), pose dans chaque bloc encadre : deux canvas superposes, la
+   LUMIERE (lueur dehors et verre du bloc, a demi-resolution, que le navigateur lisse en l'etirant),
+   puis l'ANNEAU net. Ils debordent de 10 px de chaque cote (`MARGE` dans reflet-du-pin.ts) : la
+   lueur sort du bloc, comme sur la video ; sur les cotes, le fil coupe ce qui depasse
+   (`.chat-scroll`, overflow-x hidden), sans barre horizontale. Dessous, l'anneau noir et son liseré
+   (plus haut).
    L'ARRONDI PAR `--cadre-rayon`, que le canvas lit pour suivre le bord : chaque bloc encadre la
-   declare avec son arrondi. `--reflet-lueur` (0 a 1) regle la lueur ; la scene 3D l'eteint.
+   declare avec son arrondi. `--reflet-lueur` (0 a 1) regle la lumiere ; la scene 3D l'eteint. La
+   lumiere est composee sur `--bg-0` : elle eclaircit le fond, en theme clair comme en sombre.
    SUR TOUS LES TOURS, MAIS SEULEMENT A L'ECRAN (« les animations sur les blocs dans le chat doivent
    etre en fonction de la ou je regarde, pas juste les dernieres ») : seul un canvas visible est
    repeint. Pas de neutralisation sous `prefers-reduced-motion` : ce poste a le mouvement reduit
@@ -91,6 +94,12 @@
   height: calc(100% + 20px);
   z-index: -1;
   pointer-events: none;
+}
+.cadre-reflet > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 /* Le decodage a un bord d'1 px transparent sous son anneau : le reflet le suit, sur l'anneau. La
    scene 3D est opaque et coupe ce qui depasse : le reflet passe au-dessus d'elle, sans lueur (elle

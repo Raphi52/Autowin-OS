@@ -62,7 +62,9 @@ def propose_note(
         raise ValueError(f"unsupported type: {note_type}")
     if not body.strip():
         raise ValueError("body is empty")
-    policy_finding = scan_candidate(title, body, source, "\n".join((scope, author_agent, model, " ".join(tags or []))))
+    # Un tag par ligne : colles par des espaces, des tags voisins (« gt1030 chrome mesure ») prenaient
+    # la forme d'un IBAN et le candidat etait refuse comme donnee personnelle.
+    policy_finding = scan_candidate(title, body, source, "\n".join((scope, author_agent, model, *(tags or []))))
     if policy_finding:
         raise ValueError(f"{policy_finding}; candidate rejected")
     supersedes = list(supersedes or [])

@@ -126,8 +126,76 @@ def main(argv: list[str]) -> int:
         return [round(v / un, 3) for v in valeurs]
     print(f'{n} images, centre ({cx:.1f}, {cy:.1f}), texture {img.shape[1]} x {img.shape[0]} -> {a.sortie}')
     print('DECROISSANCE_EXTERIEURE (d = 0..9 px) :', profil(+1, 9))
-    print('DECROISSANCE_INTERIEURE (d = 0..6 px) :', profil(-1, 6))
+    for nom, valeurs in lumiere_du_verre(images, cx, cy, np.clip(tex, 0, 1)).items():
+        print(f'{nom} (d = 0..{len(valeurs) - 1} px) :', valeurs)
     return 0
+
+
+#: Les voisinages de la lueur dedans qui eclairent aussi le verre, en degres de part et d'autre.
+VOISINAGES = (20, 40)
+
+
+def flou_circulaire(a: np.ndarray, demi: int) -> np.ndarray:
+    """Moyenne glissante sur 2 x demi + 1 colonnes, le tour bouclant sur lui-meme (derniere dimension)."""
+    n = a.shape[-1]
+    cumul = np.cumsum(np.concatenate([a[..., -demi:], a, a[..., : demi + 1]], axis=-1), axis=-1)
+    cumul = np.concatenate([np.zeros_like(cumul[..., :1]), cumul], axis=-1)
+    return (cumul[..., 2 * demi + 1 : 2 * demi + 1 + n] - cumul[..., :n]) / (2 * demi + 1)
+
+
+def lumiere_du_verre(
+    images: list[np.ndarray], cx: float, cy: float, tex: np.ndarray
+) -> dict[str, list[float]]:
+    """La lumiere du VERRE du bouton, du bord interieur de l'anneau jusqu'au centre, en px de bloc.
+
+    Pendant la gerbe, tout le bouton s'eclaire : 33 % d'exces au bord, encore 3 % au centre. Cette
+    lumiere vient du secteur allume de l'anneau, mais aussi de ses VOISINS (une gerbe large eclaire le
+    verre de biais), et une part COMMUNE a tout le bouton grandit avec la profondeur. A chaque
+    profondeur d, moindres carres sur le canal le plus lumineux :
+    exces(d) ≈ max(0, local[d] x lueur dedans du meme secteur (ligne 0 de la texture, telle que l'app
+                      la lit) + voisins_20[d] et voisins_40[d] x cette lueur moyennee a +-20 et +-40
+                      degres + commun[d] x force moyenne de l'anneau sur l'image (tiers du milieu,
+                      idem) + seuil[d]).
+    Mesure du 2026-11-13 a 10 px : le secteur seul explique R2 = 0,81 et sous-estime les pics de 14 % ;
+    avec ses voisins, R2 = 0,94 et les pics tombent juste. Le SEUIL (negatif) garde le verre noir au
+    repos : sans lui, une part de la lumiere restait allumee en permanence.
+    Le VERRE seul : les points deja clairs au repos (la maison blanche au centre du bouton) sont
+    ecartes ; une profondeur sans verre reprend la valeur de la precedente.
+    """
+    t = PX_DU_BLOC
+    profondeurs = int(BORD_INTERIEUR // t)
+    th = np.deg2rad(np.arange(0, DEGRES, 2) + 1)
+    rs = np.arange(1.0, BORD_INTERIEUR + 1, 1.0)
+    X = cx + rs[None, :] * np.sin(th)[:, None]
+    Y = cy - rs[None, :] * np.cos(th)[:, None]
+    xi, yi = np.round(X).astype(int), np.round(Y).astype(int)
+    V = np.stack([im.max(axis=2)[yi, xi] for im in images])  # (images, secteurs, rayons)
+    repos = np.percentile(V, 5, axis=0)
+    E = np.clip(V - repos[None], 0, None)
+    # Les regresseurs, tels que l'app les calcule depuis la texture (puis ramenes a 2 degres).
+    dedans = tex[:, 0]  # (images, 360, 3)
+    def par_secteur(a: np.ndarray) -> np.ndarray:
+        m = a.max(axis=-1)
+        return 0.5 * (m[:, 0::2] + m[:, 1::2])
+    regresseurs = {'VERRE_LOCAL': par_secteur(dedans)}
+    for v in VOISINAGES:
+        regresseurs[f'VERRE_VOISINS_{v}'] = par_secteur(np.moveaxis(flou_circulaire(np.moveaxis(dedans, 1, 2), v), 1, 2))
+    force = tex[:, 2].max(axis=2).mean(axis=1)
+    regresseurs['VERRE_COMMUN'] = np.repeat(force[:, None], E.shape[1], axis=1)
+    noms = [*regresseurs, 'VERRE_SEUIL']
+    sortie: dict[str, list[float]] = {nom: [] for nom in noms}
+    for d in range(profondeurs + 1):
+        k = int(np.argmin(abs(rs - (BORD_INTERIEUR - d * t))))
+        verre = repos[:, k] < 0.45
+        if verre.sum() < 10:
+            for nom in noms:
+                sortie[nom].append(sortie[nom][-1])
+            continue
+        A = np.c_[tuple(r[:, verre].ravel() for r in regresseurs.values()) + (np.ones(int(verre.sum()) * E.shape[0]),)]
+        coef, *_ = np.linalg.lstsq(A, E[:, verre, k].ravel(), rcond=None)
+        for nom, c in zip(noms, coef):
+            sortie[nom].append(round(float(c), 4))
+    return sortie
 
 
 if __name__ == '__main__':

@@ -75,7 +75,7 @@
   --chrome-sombre: #16181c;
   --chrome-noir: #050507;
   --chrome-lisere: rgba(255, 255, 255, 0.2);
-  /* La lueur du reflet (0 a 1), une lumiere AJOUTEE au fond, comme sur la video. */
+  /* La lumiere du reflet (0 a 1), AJOUTEE au fond `--bg-0`, comme sur la video. */
   --reflet-lueur: 1;
 
   /* Espacement (échelle 4px) */
