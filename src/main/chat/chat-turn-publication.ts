@@ -693,7 +693,9 @@ export async function verifierCeQuiPart(
   repo: string,
   fichiers: readonly string[],
   verifier: (racine: string, fichiers: readonly string[]) => Promise<VerificationAvantPublication>,
-  ouvrirCopie: (repo: string) => Promise<CopieDeBase> = ouvrirCopieDeBase
+  ouvrirCopie: (repo: string) => Promise<CopieDeBase> = ouvrirCopieDeBase,
+  /** Pose les fichiers sur la copie ; rien à poser quand `ouvrirCopie` les y a déjà mis. */
+  appliquer: (repo: string, copie: string, fichiers: readonly string[]) => void = appliquerLeTour
 ): Promise<VerificationAvantPublication> {
   const message = (erreur: unknown): string =>
     erreur instanceof Error ? erreur.message : String(erreur)
@@ -708,7 +710,7 @@ export async function verifierCeQuiPart(
   }
   try {
     try {
-      appliquerLeTour(repo, copie.chemin, fichiers)
+      appliquer(repo, copie.chemin, fichiers)
     } catch (erreur) {
       return {
         statut: 'non-verifie',

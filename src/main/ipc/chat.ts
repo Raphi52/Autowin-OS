@@ -224,6 +224,7 @@ import { lireProprietairesDeFichiers } from '../fichiers/proprietaire-fichier'
 import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 import {
   blocDuTour,
+  classerCommitLocal,
   commitsPublies,
   decisionGitApresFil,
   depotsDesCopiesDeFil,
@@ -232,6 +233,7 @@ import {
   FileGitApresFil,
   filDeLaPasse,
   lireAmont,
+  planEnCoursDuFil,
   planTourneEncore,
   publicationInterditeDans,
   travauxParFil,
@@ -241,8 +243,14 @@ import {
   autoCloseBranch,
   autoCloseRun,
   defaultGitRunner,
+  plageDesCommitsLocaux,
+  publierLesCommitsLocaux,
   type AutoCloseReport
 } from '../runs/run-autoclose'
+import { ouvrirCopieDesCommitsLocaux } from '../git/comparaison-a-la-base'
+
+/** La copie des commits locaux porte déjà leurs fichiers : rien à y poser depuis l'arbre partagé. */
+const rienAPoser = (): void => undefined
 import {
   creerNotifieurDeFinDeTour,
   libelleDeBouton,
@@ -2767,7 +2775,8 @@ Le fil reprend ensuite normalement.`
                     suiviDesPlans.coordinateur?.planDuFil(conversationId)
                   ),
                   decision.fichiers,
-                  conversationId
+                  conversationId,
+                  { commitsLocaux: decision.commitsLocaux === true }
                 )
             })
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
@@ -3461,7 +3470,13 @@ Le fil reprend ensuite normalement.`
   suiviGitApresFil.file = new FileGitApresFil({
     publier: async (fil, passe) => {
       const repo = dossierDuTour(fil)
+      // Le dossier d'un fil en copie EST sa copie, à tête détachée : la branche où la porte a fait
+      // entrer son travail vit dans le dépôt de la copie.
+      const depotDuFil = os.conversations.get(fil)?.copieDuFil?.depot ?? repo
       const runGit = await defaultGitRunner()
+      const filDuRun = new Map(
+        os.getWorktreeActivity().map((agent) => [agent.agentId, agent.conversationId])
+      )
       return publierSansTour(
         {
           repo,
@@ -3488,9 +3503,54 @@ Le fil reprend ensuite normalement.`
               paths: fichiers,
               runGit: runGitTrace,
               direct: true
-            })
+            }),
+          // Les passages de porte restés sur la branche locale, jugés au niveau du distant.
+          commitsLocaux: {
+            lire: () => plageDesCommitsLocaux(depotDuFil, runGit),
+            classer: (commit) =>
+              classerCommitLocal(commit, {
+                filDuRun: (run) => filDuRun.get(run),
+                publiable: (autre) => {
+                  const conversation = os.conversations.get(autre)
+                  return (
+                    conversation !== undefined &&
+                    !publicationInterditeDans(
+                      conversation.messages
+                        .filter((message) => message.role === 'user')
+                        .map((message) => String(message.content))
+                    )
+                  )
+                },
+                planEnCours: (autre) =>
+                  planEnCoursDuFil(suiviDesPlans.coordinateur?.planDuFil(autre))
+              }),
+            typer: (plage) =>
+              typerCeQuiPart({
+                repo: depotDuFil,
+                fichiers: plage.fichiers,
+                typer: typeurTsc(process.execPath),
+                ouvrirCopie: (depot) => ouvrirCopieDesCommitsLocaux(depot, plage),
+                appliquer: rienAPoser
+              }),
+            verifier: (plage) =>
+              verifierCeQuiPart(
+                depotDuFil,
+                plage.fichiers,
+                (racine, liste) => bus.verifierAvantPublication(racine, liste),
+                (depot) => ouvrirCopieDesCommitsLocaux(depot, plage),
+                rienAPoser
+              ),
+            pousser: (plage, runGitTrace) =>
+              publierLesCommitsLocaux({ repo: depotDuFil, plage, runGit: runGitTrace })
+          }
         },
-        { fil, fichiers: passe.fichiers, fils: passe.fils, travaux: passe.travaux.length }
+        {
+          fil,
+          fichiers: passe.fichiers,
+          fils: passe.fils,
+          travaux: passe.travaux.length,
+          commitsLocaux: passe.commitsLocaux === true
+        }
       )
     },
     // Le chef d'un plan qui tourne encore attend : ses lots écrivent toujours. La publication du

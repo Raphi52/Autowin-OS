@@ -13,7 +13,9 @@ import {
   defaultGitRunner,
   detectSecret,
   parsePorcelainPaths,
+  plageDesCommitsLocaux,
   projectPublicationNeedsRetry,
+  publierLesCommitsLocaux,
   type GitRunner
 } from './run-autoclose'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
@@ -1211,5 +1213,111 @@ describe('commit de fin de run : contrôle des noms avant commit-tree', () => {
     expect(avertissementDePublication(res)).not.toMatch(/n'a pas validé/u)
     expect(await realGit(['log', '--format=%s', 'travail'], repo)).not.toContain('Merge origin/')
     expect(await realGit(['log', '-p', '--all'], remote)).not.toContain(TERME)
+  })
+})
+
+describe('les commits restés sur la branche locale (passage de porte jamais poussé)', () => {
+  async function depotPublie(): Promise<Depot> {
+    const depot = await repoWithRemote()
+    await realGit(['push', '-u', 'origin', 'travail'], depot.repo)
+    return depot
+  }
+  async function commiter(repo: string, fichier: string, contenu = 'x\n'): Promise<string> {
+    writeFileSync(join(repo, fichier), contenu)
+    await realGit(['add', fichier], repo)
+    await realGit(['commit', '-m', `ajoute ${fichier} (conv-9)`], repo)
+    return (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+  }
+
+  it('lit la plage absente du distant et les fichiers qu’elle change', async () => {
+    const { repo } = await depotPublie()
+    const base = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+    const premier = await commiter(repo, 'a.ts')
+    writeFileSync(join(repo, 'b.ts'), 'x\n')
+    await realGit(['add', 'b.ts'], repo)
+    await realGit(['commit', '-m', 'feat(b): passage (conv-9)', '-m', 'Porte: conv-9'], repo)
+    const tete = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+    expect(await plageDesCommitsLocaux(repo, realGit)).toEqual({
+      branche: 'travail',
+      base,
+      tete,
+      fichiers: ['a.ts', 'b.ts'],
+      commits: [
+        { sha: tete, parents: 1, sujet: 'feat(b): passage (conv-9)', porte: 'conv-9' },
+        { sha: premier, parents: 1, sujet: 'ajoute a.ts (conv-9)' }
+      ]
+    })
+  })
+
+  it('rien d’avance, aucun suivi du distant ou tête détachée : rien à pousser', async () => {
+    const { repo } = await depotPublie()
+    expect(await plageDesCommitsLocaux(repo, realGit)).toBeUndefined()
+    await realGit(['checkout', '-b', 'sans-suivi'], repo)
+    await commiter(repo, 'c.ts')
+    expect(await plageDesCommitsLocaux(repo, realGit)).toBeUndefined()
+    await realGit(['checkout', '--detach'], repo)
+    expect(await plageDesCommitsLocaux(repo, realGit)).toBeUndefined()
+  })
+
+  it('pousse la pointe lue, directement sur la branche, et pas un commit arrivé après', async () => {
+    const { repo, remote } = await depotPublie()
+    const tete = await commiter(repo, 'a.ts')
+    const plage = (await plageDesCommitsLocaux(repo, realGit))!
+    await commiter(repo, 'arrive-apres.ts')
+    const res = await publierLesCommitsLocaux({ repo, plage, runGit: realGit })
+    expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
+    expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(tete)
+  })
+
+  it('le distant a avancé : refusé, sans rejeu ni branche dédiée, rien ne part', async () => {
+    const { repo, remote } = await depotPublie()
+    await commiter(repo, 'a.ts')
+    const plage = (await plageDesCommitsLocaux(repo, realGit))!
+    // Un autre poste pousse entre la lecture de la plage et l'envoi.
+    const ailleurs = join(repo, '..', 'ailleurs')
+    await run('git', ['clone', '-q', '-b', 'travail', remote, ailleurs])
+    await run(
+      'git',
+      [
+        '-c',
+        'user.email=t@t.t',
+        '-c',
+        'user.name=T',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'ailleurs'
+      ],
+      { cwd: ailleurs }
+    )
+    await run('git', ['push', '-q', 'origin', 'travail'], { cwd: ailleurs })
+    const distant = (await realGit(['rev-parse', 'travail'], remote)).trim()
+    const res = await publierLesCommitsLocaux({ repo, plage, runGit: realGit })
+    expect(res).toMatchObject({ status: 'failed' })
+    expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(distant)
+    expect(await realGit(['branch', '--list'], remote)).not.toContain('auto/')
+  })
+
+  it('la branche a changé pendant les contrôles : la pointe jugée ne part pas ailleurs', async () => {
+    const { repo, remote } = await depotPublie()
+    const distant = (await realGit(['rev-parse', 'travail'], remote)).trim()
+    await commiter(repo, 'a.ts')
+    const plage = (await plageDesCommitsLocaux(repo, realGit))!
+    await realGit(['checkout', '-q', '-b', 'autre'], repo)
+    const res = await publierLesCommitsLocaux({ repo, plage, runGit: realGit })
+    expect(res).toMatchObject({ status: 'skipped', reason: 'invalid-publication-range' })
+    expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(distant)
+  })
+
+  it('un dépôt tiers garde ses commits : la garde d’envoi vaut ici aussi', async () => {
+    const { repo, remote } = await repoWithRemote({ autowin: false })
+    await realGit(['push', '-u', 'origin', 'travail'], repo)
+    const distant = (await realGit(['rev-parse', 'travail'], remote)).trim()
+    await commiter(repo, 'a.ts')
+    const plage = (await plageDesCommitsLocaux(repo, realGit))!
+    const res = await publierLesCommitsLocaux({ repo, plage, runGit: realGit })
+    expect(res).toEqual({ status: 'skipped', reason: 'depot-tiers' })
+    expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(distant)
   })
 })

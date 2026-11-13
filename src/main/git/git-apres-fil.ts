@@ -4,7 +4,7 @@ import { formeDuChemin } from '../fichiers/meme-chemin'
 import { deposerFichier, relireFichier } from '../gel/ecriture-hors-fil'
 import type { StatutDuPlan } from '../../shared/plan-de-lots'
 import type { IssueDePasse } from './git-apres-fil-sans-tour'
-import type { AutoCloseReport, GitRunner } from '../runs/run-autoclose'
+import type { AutoCloseReport, CommitLocal, GitRunner } from '../runs/run-autoclose'
 import { destinationDuPush, titreDuBandeau } from './titre-bandeau-git'
 
 /**
@@ -32,6 +32,15 @@ import { destinationDuPush, titreDuBandeau } from './titre-bandeau-git'
  *   - validé = l'enchaînement n'a rien refusé pour une raison de QUALITÉ (tests, typage, secret).
  *     Il ne reste que le manque de preuve d'appartenance, le seul refus que `/git` sait lever. Ce
  *     n'est pas une preuve de vert : la consigne de `/git` exige donc de rejouer typage et tests.
+ *
+ * LE PASSAGE D'UN FIL EN COPIE PART AUSSI (2026-11-13). La porte fait entrer le travail d'un fil en
+ * copie dans main LOCAL et ne pousse rien (`garder-un-essai.ts`, `estUnPassageDePorte`) : l'envoi
+ * devait venir d'ici, mais seuls les fichiers `exclus` déclenchaient la passe. Mesuré sur 7 jours :
+ * 14 `/git` tapés seuls ; 6 des 12 qui ont publié quelque chose poussaient des commits déjà sur
+ * main local, le reste le plus fréquent. Le soir de la mesure, 7 commits y attendaient, dont 4
+ * passages de porte, le plus ancien depuis plus d'une heure. Un rapport `committed` lance
+ * donc la passe, qui pousse les commits de la branche absents du distant, après typage et tests
+ * (`git-apres-fil-sans-tour.ts`).
  */
 
 /** Fichiers laissés FAUTE DE PREUVE d'appartenance : le seul cas qu'un tri par contenu résout. */
@@ -69,7 +78,12 @@ export interface TourFini {
 }
 
 export type DecisionGitApresFil =
-  | { lancer: true; fichiers: string[] }
+  | {
+      lancer: true
+      fichiers: string[]
+      /** Le passage du fil est entré dans main local sans partir : la passe pousse la branche. */
+      commitsLocaux?: true
+    }
   | {
       lancer: false
       raison:
@@ -162,6 +176,62 @@ export function publicationInterditeDans(textes: readonly string[]): boolean {
   return textes.some((texte) => PUBLICATION_INTERDITE.test(texte))
 }
 
+/** Le fil appartient-il à un plan qui tourne encore, comme chef ou comme lot ? */
+export function planEnCoursDuFil(vu: FilDansUnPlan | undefined): boolean {
+  return vu !== undefined && PLAN_QUI_TOURNE.has(vu.plan.statut)
+}
+
+/**
+ * Les fils qu'un commit de la branche locale nomme : la ligne `Porte: conv-N` d'un passage de
+ * porte, sinon les `(conv-N)` de son sujet (convention des commits du dépôt), sinon le fil du run
+ * qui l'a fait (`agent <run>` ou `agent <run>: résumé`, `worktree-manager-outils.ts`). Vide : un
+ * commit que rien ne rattache à un fil — un commit de l'utilisateur, par exemple.
+ */
+export function filsDuCommit(
+  commit: Pick<CommitLocal, 'sujet' | 'porte'>,
+  filDuRun: (run: string) => string | undefined
+): string[] {
+  if (commit.porte)
+    return [
+      ...new Set(
+        commit.porte
+          .split(',')
+          .map((fil) => fil.trim())
+          .filter(Boolean)
+      )
+    ]
+  const nommes = [...commit.sujet.matchAll(/\((conv-\d+)\)/gu)].map((m) => m[1]!)
+  if (nommes.length) return [...new Set(nommes)]
+  const run = /^agent ([^\s:]+)/u.exec(commit.sujet.trim())?.[1]
+  const fil = run ? filDuRun(run) : undefined
+  return fil ? [fil] : []
+}
+
+/**
+ * CE QUE LA PASSE FAIT D'UN COMMIT RESTÉ SUR LA BRANCHE LOCALE. Pousser la branche emporte tous ses
+ * commits, pas seulement ceux du fil de la passe :
+ *  - `non` : aucun fil ne le réclame, ou son fil interdit de publier — seul un tri humain tranche,
+ *    et rien de la branche ne part ;
+ *  - `plus-tard` : son fil est dans un plan qui tourne encore — le plan part en une passe à sa fin
+ *    (`filOccupe`), la branche attend cette passe-là ;
+ *  - `oui` : il peut partir.
+ * Une fusion (plusieurs parents) n'est pas classée : les commits qu'elle apporte sont dans la plage
+ * et le sont, chacun.
+ */
+export function classerCommitLocal(
+  commit: CommitLocal,
+  deps: {
+    filDuRun: (run: string) => string | undefined
+    publiable: (fil: string) => boolean
+    planEnCours: (fil: string) => boolean
+  }
+): 'oui' | 'plus-tard' | 'non' {
+  if (commit.parents > 1) return 'oui'
+  const fils = filsDuCommit(commit, deps.filDuRun)
+  if (!fils.length || fils.some((fil) => !deps.publiable(fil))) return 'non'
+  return fils.some((fil) => deps.planEnCours(fil)) ? 'plus-tard' : 'oui'
+}
+
 /**
  * La condition de déclenchement, entière, sans effet de bord.
  *
@@ -178,9 +248,12 @@ export function decisionGitApresFil(tour: TourFini): DecisionGitApresFil {
   if (publicationInterditeDans([tour.demande, ...tour.demandesDuFil]))
     return { lancer: false, raison: 'publication-interdite' }
   const fichiers = tour.rapport?.exclus?.map((exclu) => exclu.path) ?? []
-  if (!tour.rapport || fichiers.length === 0) return { lancer: false, raison: 'rien-a-rattraper' }
+  // `committed` n'a qu'une source dans un tour de chat : la porte, qui ne pousse jamais.
+  const commitsLocaux = tour.rapport?.project.status === 'committed'
+  if (!tour.rapport || (fichiers.length === 0 && !commitsLocaux))
+    return { lancer: false, raison: 'rien-a-rattraper' }
   if (refusDeQualite(tour.rapport)) return { lancer: false, raison: 'pas-valide' }
-  return { lancer: true, fichiers }
+  return { lancer: true, fichiers, ...(commitsLocaux ? { commitsLocaux: true as const } : {}) }
 }
 
 /**
@@ -429,6 +502,8 @@ export interface PasseGit {
   /** Le fil de la passe, plus les lots du plan quand il en est le chef. */
   fils: string[]
   travaux: TravailDAgent[]
+  /** Un passage de porte est entré dans main local : pousser les commits absents du distant. */
+  commitsLocaux?: true
 }
 
 export interface DepsGitApresFil {
@@ -456,6 +531,7 @@ interface EnAttente {
   fichiers: Set<string>
   fils: Set<string>
   travaux: Map<string, TravailDAgent>
+  commitsLocaux: boolean
 }
 
 /**
@@ -490,10 +566,16 @@ export class FileGitApresFil {
    * `conversationId` est le fil où la passe tournera ; `origine` celui qui a écrit les fichiers — un
    * lot, quand la passe tourne dans le chef de son plan.
    */
-  ajouter(conversationId: string, fichiers: readonly string[], origine = conversationId): void {
+  ajouter(
+    conversationId: string,
+    fichiers: readonly string[],
+    origine = conversationId,
+    options: { commitsLocaux?: boolean } = {}
+  ): void {
     const entree = this.#entree(conversationId)
     for (const fichier of fichiers) entree.fichiers.add(fichier)
     entree.fils.add(origine)
+    if (options.commitsLocaux) entree.commitsLocaux = true
     this.#armer(conversationId)
   }
 
@@ -513,7 +595,12 @@ export class FileGitApresFil {
   #entree(fil: string): EnAttente {
     let entree = this.#attente.get(fil)
     if (!entree) {
-      entree = { fichiers: new Set(), fils: new Set([fil]), travaux: new Map() }
+      entree = {
+        fichiers: new Set(),
+        fils: new Set([fil]),
+        travaux: new Map(),
+        commitsLocaux: false
+      }
       this.#attente.set(fil, entree)
     }
     return entree
@@ -568,6 +655,7 @@ export class FileGitApresFil {
       for (const fichier of entree.fichiers) remise.fichiers.add(fichier)
       for (const origine of entree.fils) remise.fils.add(origine)
       for (const [id, travail] of entree.travaux) remise.travaux.set(id, travail)
+      if (entree.commitsLocaux) remise.commitsLocaux = true
       this.#armer(fil)
       return
     }
@@ -578,7 +666,8 @@ export class FileGitApresFil {
     const issue = await this.#deps.publier(fil, {
       fichiers: [...entree.fichiers],
       fils,
-      travaux
+      travaux,
+      ...(entree.commitsLocaux ? { commitsLocaux: true as const } : {})
     })
     // Le seul message de la passe dans le fil : le bloc git, ou la note de ce qui reste à trier.
     const commits = issue.publie && avant ? await this.#deps.commitsDepuis(fil, avant, fils) : []

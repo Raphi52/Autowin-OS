@@ -17,6 +17,9 @@ import {
   FileGitApresFil,
   filDeLaPasse,
   lireAmont,
+  classerCommitLocal,
+  filsDuCommit,
+  planEnCoursDuFil,
   planTourneEncore,
   travauxParFil,
   travauxTentesSurDisque,
@@ -27,7 +30,7 @@ import {
   LONGUEUR_MAX_PROMPT,
   promptsDesBoutons
 } from '../../renderer/src/components/bouton-prompt-html'
-import type { AutoCloseReport } from '../runs/run-autoclose'
+import type { AutoCloseReport, CommitLocal } from '../runs/run-autoclose'
 import { annonceCommitLocal } from '../chat/annonce-commit-local'
 import type { IssueDePasse } from './git-apres-fil-sans-tour'
 import { viderFichiersEnAttente } from '../gel/ecriture-hors-fil'
@@ -75,6 +78,25 @@ describe('decisionGitApresFil — quand /git part tout seul', () => {
       lancer: true,
       fichiers: ['src/a.ts', 'src/b.ts']
     })
+  })
+
+  it('part aussi quand le passage d’un fil en copie est entré dans main local sans partir', () => {
+    const rapport = rapportLaisse({ project: { status: 'committed', files: 3 }, exclus: undefined })
+    expect(decisionGitApresFil(tourPublie({ rapport }))).toEqual({
+      lancer: true,
+      fichiers: [],
+      commitsLocaux: true
+    })
+  })
+
+  it('un passage refusé ou en attente n’a rien mis dans main local : rien à pousser', () => {
+    for (const project of [
+      { status: 'skipped', reason: 'porte-refusee', detail: 'conflit' },
+      { status: 'skipped', reason: 'porte-en-attente', detail: 'copie occupée' }
+    ] as const) {
+      const rapport = rapportLaisse({ project, exclus: undefined })
+      expect(decisionGitApresFil(tourPublie({ rapport }))).toMatchObject({ lancer: false })
+    }
   })
 
   it('l’accord absent ne lance rien : c’est le défaut, et un lancement coûte un tour', () => {
@@ -509,6 +531,62 @@ describe('les fils de plan (conv-1544) : une passe dans le chef, à la fin du pl
     expect(planTourneEncore(lot)).toBe(false)
     expect(planTourneEncore(undefined)).toBe(false)
   })
+
+  it('un lot comme son chef sont « dans un plan en cours » tant que le plan tourne', () => {
+    expect(planEnCoursDuFil(lot)).toBe(true)
+    expect(planEnCoursDuFil(chef('en-cours'))).toBe(true)
+    expect(planEnCoursDuFil(chef('termine'))).toBe(false)
+    expect(planEnCoursDuFil(undefined)).toBe(false)
+  })
+})
+
+describe('les commits restés sur la branche locale : à qui ils sont, et s’ils peuvent partir', () => {
+  const runs: Record<string, string> = { 'run-4aec23b50831-1': 'conv-7' }
+  const filDuRun = (run: string): string | undefined => runs[run]
+  const commit = (partiel: Partial<CommitLocal>): CommitLocal => ({
+    sha: 'a'.repeat(40),
+    parents: 1,
+    sujet: 'fix(x): y',
+    ...partiel
+  })
+
+  it('lit le fil dans la porte, puis dans le sujet, puis dans le run de l’agent', () => {
+    expect(
+      filsDuCommit(commit({ porte: 'conv-1', sujet: 'feat(a): b (conv-2)' }), filDuRun)
+    ).toEqual(['conv-1'])
+    expect(filsDuCommit(commit({ sujet: 'fix(git): a (conv-2) (conv-3)' }), filDuRun)).toEqual([
+      'conv-2',
+      'conv-3'
+    ])
+    expect(filsDuCommit(commit({ sujet: 'agent run-4aec23b50831-1' }), filDuRun)).toEqual([
+      'conv-7'
+    ])
+    expect(
+      filsDuCommit(commit({ sujet: 'agent run-4aec23b50831-1: corrige le bouton' }), filDuRun)
+    ).toEqual(['conv-7'])
+    // Un commit de l'utilisateur, ou d'un run inconnu : aucun fil.
+    expect(filsDuCommit(commit({ sujet: 'wip' }), filDuRun)).toEqual([])
+    expect(filsDuCommit(commit({ sujet: 'agent run-inconnu-1' }), filDuRun)).toEqual([])
+  })
+
+  it('ne laisse partir que les commits de fils qui peuvent publier, plan fini', () => {
+    const deps = {
+      filDuRun,
+      publiable: (fil: string) => fil !== 'conv-9',
+      planEnCours: (fil: string) => fil === 'conv-5'
+    }
+    expect(classerCommitLocal(commit({ porte: 'conv-1' }), deps)).toBe('oui')
+    expect(classerCommitLocal(commit({ sujet: 'wip' }), deps)).toBe('non')
+    // « ne publie rien » dans ce fil : son commit ne part pas avec la branche d'un autre.
+    expect(classerCommitLocal(commit({ porte: 'conv-9' }), deps)).toBe('non')
+    expect(classerCommitLocal(commit({ sujet: 'feat(a): b (conv-1) (conv-9)' }), deps)).toBe('non')
+    // Un lot d'un plan qui tourne : la branche attend la passe de fin du plan.
+    expect(classerCommitLocal(commit({ porte: 'conv-5' }), deps)).toBe('plus-tard')
+    // Une fusion n'est pas jugée : les commits qu'elle apporte le sont, chacun.
+    expect(
+      classerCommitLocal(commit({ parents: 2, sujet: "Merge commit 'abc' into HEAD" }), deps)
+    ).toBe('oui')
+  })
 })
 
 describe('les travaux d’agents restés hors de la branche (conv-1544)', () => {
@@ -632,6 +710,49 @@ describe('FileGitApresFil — une passe à la fois', () => {
     await attendre()
     expect(passes).toHaveLength(2)
     expect(passes[1]!.fichiers).toEqual(['b.ts', 'c.ts'])
+    fins[1]!()
+    await attendre()
+  })
+
+  it('les commits restés sur main local partent avec la passe du fil', async () => {
+    const { file, fins, passes } = banc()
+    file.ajouter('conv-1', [], 'conv-1', { commitsLocaux: true })
+    await attendre()
+    expect(passes[0]).toMatchObject({ fichiers: [], commitsLocaux: true })
+    fins[0]!()
+    await attendre()
+  })
+
+  it('un fil qui reprend pendant la passe d’un autre garde ses commits locaux pour la sienne', async () => {
+    const occupes = new Set<string>()
+    const passes: Array<[string, PasseGit]> = []
+    const fins: Array<() => void> = []
+    const file = new FileGitApresFil(
+      {
+        publier: (fil, passe) => {
+          passes.push([fil, passe])
+          return new Promise((resolve) => fins.push(() => resolve(publiee)))
+        },
+        filOccupe: (fil) => occupes.has(fil),
+        lireAmont: async () => 'avant',
+        commitsDepuis: async () => [],
+        annoncer: () => undefined,
+        journal: () => undefined
+      },
+      { calmeMs: 0 }
+    )
+    file.ajouter('conv-1', ['a.ts'])
+    file.ajouter('conv-2', [], 'conv-2', { commitsLocaux: true })
+    await attendre()
+    // Le second fil reprend pendant la passe du premier : sa passe est remise, pas perdue.
+    occupes.add('conv-2')
+    fins[0]!()
+    await attendre()
+    expect(passes.map(([fil]) => fil)).toEqual(['conv-1'])
+    occupes.delete('conv-2')
+    await attendre()
+    expect(passes.map(([fil]) => fil)).toEqual(['conv-1', 'conv-2'])
+    expect(passes[1]![1]).toMatchObject({ commitsLocaux: true })
     fins[1]!()
     await attendre()
   })

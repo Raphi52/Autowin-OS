@@ -470,11 +470,16 @@ async function publishRunCommits(input: {
    * dédiée puis on ouvre une PR vers la branche courante.
    */
   direct?: boolean
+  /**
+   * Le push direct seul, sans rejeu ni branche dédiée (`publierLesCommitsLocaux`) : refusé, rien ne
+   * part. `branch` n'est alors jamais poussée, sa garde de nom ne s'applique pas.
+   */
+  seulementDirect?: boolean
   openPr?: PrOpener
   title?: string
 }): Promise<AutoCloseResult> {
   const { repo, publication, branch, runGit } = input
-  if (PROTECTED.test(branch.trim())) {
+  if (!input.seulementDirect && PROTECTED.test(branch.trim())) {
     return { status: 'skipped', reason: 'protected-branch', detail: branch }
   }
   const { baseSha, publishedSha } = publication
@@ -548,6 +553,8 @@ async function publishRunCommits(input: {
         } catch (error) {
           directRefused = (error instanceof Error ? error.message : String(error)).slice(0, 300)
         }
+        if (input.seulementDirect)
+          return { status: 'failed', error: `push direct refusé : ${directRefused}` }
         const rejeu = await rejouerSurLeDistant({
           repo,
           runGit,
@@ -574,6 +581,8 @@ async function publishRunCommits(input: {
         )
       }
     }
+    if (input.seulementDirect)
+      return { status: 'failed', error: 'tête détachée : aucune branche courante où pousser' }
     await runGit(['push', 'origin', `${publishedSha}:refs/heads/${branch}`], repo)
     if (!input.direct || !base) return { status: 'pushed', branch, files: files.length }
     try {
@@ -668,6 +677,115 @@ async function publishLegacyRunCommits(input: {
   } catch (error) {
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
   }
+}
+
+/** Un commit de la plage, avec ce qu'il dit de son fil. */
+export interface CommitLocal {
+  sha: string
+  /** Plus d'un parent : une fusion, dont les commits apportés sont aussi dans la plage. */
+  parents: number
+  sujet: string
+  /** Le fil d'un passage de porte (ligne finale `Porte: conv-N`, `garder-un-essai.ts`). */
+  porte?: string
+}
+
+/** Les commits de la branche courante que le distant n'a pas, et les fichiers qu'ils changent. */
+export interface PlageDesCommitsLocaux {
+  branche: string
+  /** Le dernier commit commun avec `origin/<branche>`. */
+  base: string
+  /** La pointe lue ici : c'est elle qui est contrôlée puis poussée, pas un HEAD relu plus tard. */
+  tete: string
+  fichiers: string[]
+  /** Tous les commits de `base..tete`, fusions et commits qu'elles apportent compris. */
+  commits: CommitLocal[]
+}
+
+/**
+ * LES COMMITS RESTÉS SUR LA BRANCHE LOCALE : le passage d'un fil en copie y entre sans partir
+ * (`garder-un-essai.ts`). `undefined` = rien à pousser : tête détachée, aucun suivi de
+ * `origin/<branche>`, ou aucune avance. Une lecture git qui échoue au-delà lève : l'appelant le dit.
+ */
+export async function plageDesCommitsLocaux(
+  repo: string,
+  runGit: GitRunner
+): Promise<PlageDesCommitsLocaux | undefined> {
+  const branche = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], repo)).trim()
+  if (!branche || branche === 'HEAD') return undefined
+  const suivi = `refs/remotes/origin/${branche}`
+  // Hors ligne, le suivi déjà connu sert : s'il est en retard, le push direct est refusé
+  // (`publierLesCommitsLocaux` ne tente rien d'autre), et rien n'est perdu.
+  await runGit(['fetch', '--quiet', 'origin', `+refs/heads/${branche}:${suivi}`], repo).catch(
+    () => ''
+  )
+  let amont: string
+  try {
+    amont = (await runGit(['rev-parse', '--verify', suivi], repo)).trim()
+  } catch {
+    return undefined
+  }
+  const tete = (await runGit(['rev-parse', 'HEAD'], repo)).trim()
+  const base = (await runGit(['merge-base', amont, tete], repo)).trim()
+  if (!base || base === tete) return undefined
+  // `-z` : sans lui, git cite entre guillemets un chemin accentué, que les contrôles ne trouveraient pas.
+  const fichiers = (await runGit(['diff', '--name-only', '-z', '--no-renames', base, tete], repo))
+    .split('\0')
+    .map((chemin) => chemin.trim())
+    .filter(Boolean)
+  // Champs séparés par une tabulation, commits par un octet nul : un sujet ne contient ni l'un ni l'autre.
+  const commits = (
+    await runGit(
+      [
+        'log',
+        '-z',
+        '--format=%H%x09%P%x09%(trailers:key=Porte,valueonly,separator=%x2C)%x09%s',
+        `${base}..${tete}`
+      ],
+      repo
+    )
+  )
+    .split('\0')
+    .filter((ligne) => ligne.trim())
+    .map((ligne): CommitLocal => {
+      const [sha = '', parents = '', porte = '', ...sujet] = ligne.trim().split('\t')
+      return {
+        sha,
+        parents: parents.split(' ').filter(Boolean).length,
+        sujet: sujet.join('\t'),
+        ...(porte.trim() ? { porte: porte.trim() } : {})
+      }
+    })
+  return { branche, base, tete, fichiers, commits }
+}
+
+/**
+ * Pousse `plage.tete`, et rien d'autre, par le PUSH DIRECT de toute publication (secret, garde de
+ * dépôt). Ni rejeu au-dessus d'un distant qui a avancé, ni branche dédiée : l'un comme l'autre
+ * enverrait un état que le typage et les tests de la passe n'ont pas jugé. Refusé, il reste sur la
+ * branche locale, et la passe le dit.
+ */
+export async function publierLesCommitsLocaux(input: {
+  repo: string
+  plage: PlageDesCommitsLocaux
+  runGit: GitRunner
+}): Promise<AutoCloseResult> {
+  const { repo, plage, runGit } = input
+  // Une autre branche pendant les contrôles (plusieurs minutes) : la pointe jugée n'est pas la sienne.
+  const courante = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], repo)).trim()
+  if (courante !== plage.branche)
+    return {
+      status: 'skipped',
+      reason: 'invalid-publication-range',
+      detail: `la branche courante est ${courante}, plus ${plage.branche}`
+    }
+  return publishRunCommits({
+    repo,
+    publication: { baseSha: plage.base, publishedSha: plage.tete },
+    branch: plage.branche,
+    runGit,
+    direct: true,
+    seulementDirect: true
+  })
 }
 
 /** Nom de branche de publication d'un run — stable, lisible, jamais protégé. */
