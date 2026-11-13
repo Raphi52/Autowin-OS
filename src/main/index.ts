@@ -709,9 +709,10 @@ const finishedRunOutcomeByTurnId = ((): ((turnId: string) => FinishedRunOutcome 
 const conversationsEcartees: string[] = []
 
 /**
- * Les fils ARCHIVÉS (inactifs depuis 14 jours) ne sont pas relus par le démarrage : ils arrivent
- * juste après, et la liste est alors rafraîchie. La bascule vers l'archive tourne 2 minutes après
- * le démarrage, puis une fois par jour — jamais sur le chemin critique. Voir `conversations-disk.ts`.
+ * Les fils ARCHIVÉS (inactifs depuis 3 jours, `SEUIL_ARCHIVE_MS`) ne sont pas relus par le démarrage :
+ * ils arrivent juste après, et la liste est alors rafraîchie. La bascule vers l'archive tourne 2 minutes
+ * après le démarrage, puis une fois par jour — jamais sur le chemin critique — et ne range jamais un
+ * fil occupé (tour, run, plan). Voir `conversations-disk.ts`.
  */
 const persistanceConversations = {
   resumableTurnIds,
@@ -721,6 +722,8 @@ const persistanceConversations = {
     if (ajoutees > 0) broadcast({ type: 'refresh', scope: 'conversations' })
   },
   archivage: { apresMs: 2 * 60_000, intervalleMs: 24 * 60 * 60_000 },
+  // Appelé par la passe, 2 minutes après le démarrage : `bus` est alors construit.
+  filOccupe: (conversationId: string) => bus.filOccupe(conversationId),
   // Réécriture de `conversations.json` (0,4 à 0,9 s mesurées) : après la fenêtre.
   compactionApres: interfaceVisible
 }

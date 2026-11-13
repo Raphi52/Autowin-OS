@@ -31,7 +31,7 @@ import {
   type ContexteFils
 } from '../conversations/messages-entre-fils-app'
 import type { CoordinateurDesPlans } from '../orchestration/plans-de-lots-app'
-import { SEUIL_ARCHIVE_MS } from '../store/conversations-disk'
+import { planTourneEncore } from '../git/git-apres-fil'
 import {
   type TaskCreateDeps
 } from '../task-manager/task-create-command'
@@ -107,6 +107,13 @@ import * as editionIsolee from './edition-isolee'
 import * as outilsBureauNavigateur from './outils-bureau-navigateur'
 import * as instantanes from './instantanes'
 import * as apprentissage from './apprentissage'
+
+/**
+ * Un fil touché depuis moins que ce délai est un destinataire d'`ecrire_a_un_fil`. Volontairement
+ * distinct du seuil de rangement dans l'archive (`SEUIL_ARCHIVE_MS`, quelques jours) : ranger un fil
+ * pour la mémoire ne doit retirer personne des messages entre fils.
+ */
+export const SEUIL_FIL_ACTIF_MS = 14 * 24 * 60 * 60 * 1000
 
 export class AppCommandBus {
   /**
@@ -184,6 +191,19 @@ export class AppCommandBus {
   /** Nombre d'orchestrations en vol : la relance automatique du moteur attend qu'il tombe à zéro. */
   orchestrationsEnVol(): number {
     return this.activeOrchestrations.size
+  }
+
+  /**
+   * Un travail tourne-t-il sur ce fil : tour de chat ou publication en vol, run (orchestration),
+   * ou plan de lots dont il est le chef ? Lu par la passe d'archivage, qui ne range jamais un fil
+   * occupé (`persistConversations`, option `filOccupe`).
+   */
+  filOccupe(convId: string): boolean {
+    return (
+      (this.conversationsEnVol?.() ?? []).includes(convId) ||
+      this.activeOrchestrations.has(convId) ||
+      planTourneEncore(this.plansDeLots?.planDuFil?.(convId))
+    )
   }
 
   /**
@@ -364,7 +384,8 @@ export class AppCommandBus {
    * Coordinateur des plans de lots, câblé tardivement depuis index.ts. Absent -> refus.
    * `lancerParOrdre` : l'ordre d'un chef vers un lot bloqué vaut relance du lot.
    */
-  plansDeLots?: Pick<CoordinateurDesPlans, 'outil' | 'lancerParOrdre'>
+  plansDeLots?: Pick<CoordinateurDesPlans, 'outil' | 'lancerParOrdre'> &
+    Partial<Pick<CoordinateurDesPlans, 'planDuFil'>>
 
   /**
    * Le Task Manager (stockage, minuteur, rafraîchissement de l'écran), câblé TARDIVEMENT depuis
@@ -641,14 +662,14 @@ export class AppCommandBus {
   }
 
   /**
-   * Les fils vus par `ecrire_a_un_fil`. Actif = connu ET touché depuis moins que le
-   * seuil d'archivage (`SEUIL_ARCHIVE_MS`) ; lu dans la liste en mémoire, sans charger d'archive.
+   * Les fils vus par `ecrire_a_un_fil`. Actif = connu ET touché depuis moins de
+   * `SEUIL_FIL_ACTIF_MS` ; lu dans les résumés (fils rangés dans l'archive compris), sans charger d'archive.
    * Le dossier d'un fil suit la même règle que son tour (`dossierRangeSur`).
    */
   /** @internal */ contexteDesFils(maintenant = Date.now()): ContexteFils {
     const actifs = new Map<string, true>()
     for (const c of this.os.conversations?.listResumes?.() ?? []) {
-      if (typeof c.updatedAt === 'number' && maintenant - c.updatedAt < SEUIL_ARCHIVE_MS)
+      if (typeof c.updatedAt === 'number' && maintenant - c.updatedAt < SEUIL_FIL_ACTIF_MS)
         actifs.set(c.id, true)
     }
     return {

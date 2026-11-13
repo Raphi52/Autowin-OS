@@ -17,7 +17,8 @@ import {
   conversationArchiveDir,
   conversationJournalPath,
   loadConversations,
-  persistConversations
+  persistConversations,
+  SEUIL_ARCHIVE_MS
 } from './conversations-disk'
 
 /**
@@ -437,5 +438,109 @@ describe('un fil archivé ne tient plus en mémoire : le store le lit à la dema
       'Réponse ancienne.',
       'Je reprends ce vieux fil'
     ])
+  })
+})
+
+/**
+ * RANGEMENT APRÈS QUELQUES JOURS. Mesuré le 2026-11-13 sur une copie figée des vraies données
+ * (521 fils actifs) : ranger après 3 jours sans activité fait passer le store de +240 à +133 Mo,
+ * à résultats de recherche identiques. Un fil rangé si tôt sera souvent rouvert : ces tests tiennent
+ * qu'il revient exactement tel qu'il était, et qu'un fil occupé ne part jamais.
+ */
+describe('fils rangés après 1 à 3 jours sans activité', () => {
+  /** Un fil avec un tour complet, touché pour la dernière fois il y a `ageJours` jours. */
+  function filAge(
+    p: string,
+    ageJours: number,
+    filOccupe?: (id: string) => boolean
+  ): {
+    store: ConversationStore
+    persistance: ReturnType<typeof persistConversations>
+    id: string
+    recent: string
+  } {
+    let horloge = MAINTENANT - ageJours * JOUR
+    const store = new ConversationStore(() => horloge)
+    const persistance = persistConversations(store, p, filOccupe ? { filOccupe } : undefined)
+    const id = store.create({ title: 'Fil de la semaine', provider: 'claude' }).id
+    store.beginTurn(id, { content: 'Où en est le rangement ?' }, { turnId: 'turn-1' })
+    store.applyTurnEvent(id, 'turn-1', {
+      kind: 'delta',
+      streamId: '0:0',
+      text: 'Le rangement avance.'
+    })
+    store.applyTurnEvent(id, 'turn-1', { kind: 'done' })
+    horloge = MAINTENANT
+    const recent = store.create({ title: 'Fil du jour', provider: 'claude' }).id
+    return { store, persistance, id, recent }
+  }
+
+  it('le seuil de rangement est de 3 jours : un fil de 2 jours reste, un fil de 4 jours part', async () => {
+    expect(SEUIL_ARCHIVE_MS).toBe(3 * JOUR)
+    const deuxJours = filAge(nouveauChemin(), 2)
+    expect(await deuxJours.persistance.archiver(MAINTENANT)).toBe(0)
+    const quatreJours = filAge(nouveauChemin(), 4)
+    expect(await quatreJours.persistance.archiver(MAINTENANT)).toBe(1)
+    await attendreEcrituresConversations()
+  })
+
+  for (const jours of [1, 2, 3]) {
+    it(`rangé après ${jours} jour(s), rouvert, modifié puis supprimé : contenu exact, liste et recherche à jour`, async () => {
+      const p = nouveauChemin()
+      const { store, persistance, id, recent } = filAge(p, jours + 0.5)
+      const avant = structuredClone(store.get(id))
+      expect(await persistance.archiver(MAINTENANT, jours * JOUR)).toBe(1)
+      await attendreEcrituresConversations()
+      expect(existsSync(join(conversationArchiveDir(p), `${id}.json`))).toBe(true)
+
+      // Rouvert après un redémarrage : identique, listé, trouvé par les deux recherches.
+      const session = redemarrer(p)
+      await session.persistance.archivesChargees
+      expect(session.store.listAvecMessages().map((c) => c.id)).toEqual([recent])
+      expect(session.store.listSummaries().map((r) => r.id)).toContain(id)
+      expect(session.store.get(id)).toEqual(avant)
+      expect(session.store.rechercherParContenu('rangement').map((r) => r.id)).toContain(id)
+      expect(session.store.search('rangement').map((r) => r.id)).toContain(id)
+
+      // Modifié : il redevient actif et entier, et le reste après un nouveau redémarrage.
+      session.store.append(id, { role: 'user', content: 'Et maintenant ?' })
+      await attendreEcrituresConversations()
+      const suivant = redemarrer(p)
+      await suivant.persistance.archivesChargees
+      const rouvert = suivant.store.get(id)
+      expect(rouvert?.messages.slice(0, -1)).toEqual(avant?.messages)
+      expect(rouvert?.messages.at(-1)?.content).toBe('Et maintenant ?')
+      expect(rouvert?.title).toBe(avant?.title)
+      expect(suivant.store.search('rangement').map((r) => r.id)).toContain(id)
+
+      // Supprimé : plus de fichier, plus dans la liste ni la recherche, et il ne revient pas.
+      expect(suivant.store.remove(id)).toBe(true)
+      await attendreEcrituresConversations()
+      expect(existsSync(join(conversationArchiveDir(p), `${id}.json`))).toBe(false)
+      expect(suivant.store.listSummaries().map((r) => r.id)).not.toContain(id)
+      expect(suivant.store.rechercherParContenu('rangement').map((r) => r.id)).not.toContain(id)
+      const dernier = redemarrer(p)
+      await dernier.persistance.archivesChargees
+      expect(dernier.store.get(id)).toBeUndefined()
+      expect(dernier.store.listSummaries().map((r) => r.id)).toEqual([recent])
+    })
+  }
+
+  it('ne range jamais un fil occupé (tour, run ou lot de plan en cours), même très ancien', async () => {
+    const p = nouveauChemin()
+    const occupes = new Set<string>()
+    const { persistance, id } = filAge(p, 30, (fil) => occupes.has(fil))
+    occupes.add(id)
+    expect(await persistance.archiver(MAINTENANT)).toBe(0)
+    await attendreEcrituresConversations()
+    // Resté dans la copie active (snapshot ou journal), sans fichier d'archive.
+    expect(loadConversations(p).map((c) => c.id)).toContain(id)
+    expect(existsSync(join(conversationArchiveDir(p), `${id}.json`))).toBe(false)
+
+    // Jumeau : le même fil, libéré, part à la passe suivante.
+    occupes.delete(id)
+    expect(await persistance.archiver(MAINTENANT)).toBe(1)
+    await attendreEcrituresConversations()
+    expect(idsDuSnapshot(p)).not.toContain(id)
   })
 })

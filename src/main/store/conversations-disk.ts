@@ -515,8 +515,15 @@ export function conversationArchiveDir(path = conversationsPath()): string {
   return `${path}.archive`
 }
 
-/** Au-delà de ce délai sans activité, un fil quitte le snapshot pour l'archive. */
-export const SEUIL_ARCHIVE_MS = 14 * 24 * 60 * 60 * 1000
+/**
+ * Au-delà de ce délai sans activité, un fil quitte le snapshot pour l'archive (et la mémoire, où il
+ * ne garde que son résumé et son texte). Mesuré le 2026-11-13 sur une copie figée des vraies données,
+ * 521 fils actifs : le store prend +240 Mo à 14 jours, +160 Mo à 7, +133 Mo à 3, +129 Mo à 2,
+ * +122 Mo à 1, résultats de recherche identiques. 3 jours prend 90 % du gain possible ; descendre à
+ * 1 jour ne gagne que 11 Mo de plus et range les fils de la veille, ceux qu'on rouvre le plus.
+ * Ce n'est PAS la notion de fil « actif » des messages entre fils : elle a son propre seuil.
+ */
+export const SEUIL_ARCHIVE_MS = 3 * 24 * 60 * 60 * 1000
 
 /** Un id de conversation est un NOM DE FICHIER d'archive : rien qui puisse sortir du dossier. */
 const ID_ARCHIVABLE = /^[A-Za-z0-9._-]{1,120}$/
@@ -993,6 +1000,11 @@ export function persistConversations(
      */
     archivage?: { apresMs: number; intervalleMs: number; seuilMs?: number }
     /**
+     * Un tour, un run ou un lot de plan tourne-t-il sur ce fil ? La passe d'archivage ne range jamais
+     * un fil occupé : il serait relu en entier à la première écriture du travail en cours.
+     */
+    filOccupe?: (conversationId: string) => boolean
+    /**
      * La compaction de démarrage (snapshot réécrit, journal effacé) n'est DÉPOSÉE qu'à la résolution
      * de cette promesse — en production, l'affichage de la fenêtre. Absente (tests) : déposée tout
      * de suite, et `attendreEcrituresConversations` l'attend.
@@ -1346,7 +1358,8 @@ export function persistConversations(
             !archivees.has(conversation.id) &&
             ID_ARCHIVABLE.test(conversation.id) &&
             maintenant - conversation.updatedAt > seuilMs &&
-            !conversation.messages.some((message) => message.status === 'streaming')
+            !conversation.messages.some((message) => message.status === 'streaming') &&
+            !options?.filOccupe?.(conversation.id)
         )
       if (candidats.length === 0) return 0
       await mkdir(conversationArchiveDir(path), { recursive: true })

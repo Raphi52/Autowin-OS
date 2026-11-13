@@ -2773,3 +2773,30 @@ describe('issue d’orchestration — les notes déposées par l’étape learn 
     )
   })
 })
+
+describe('filOccupe : ce que la passe d’archivage ne range jamais', () => {
+  const plan = (chef: string, statut: string) => ({
+    planDuFil: (fil: string) =>
+      fil === chef ? ({ plan: { chef, statut }, role: 'chef' } as never) : undefined
+  })
+
+  it('tour ou publication en vol, run en cours, plan qui tourne : occupé ; sinon libre', () => {
+    const bus = new AppCommandBus({} as never, () => undefined)
+    expect(bus.filOccupe('conv-1')).toBe(false)
+
+    bus.conversationsEnVol = () => ['conv-1']
+    expect(bus.filOccupe('conv-1')).toBe(true)
+    expect(bus.filOccupe('conv-2')).toBe(false)
+
+    bus.registerOrchestration('conv-2')
+    expect(bus.filOccupe('conv-2')).toBe(true)
+    bus.clearOrchestration('conv-2')
+    expect(bus.filOccupe('conv-2')).toBe(false)
+
+    bus.plansDeLots = { ...plan('conv-3', 'en-cours') } as never
+    expect(bus.filOccupe('conv-3')).toBe(true)
+    // Jumeau : le même chef, plan terminé, est libre.
+    bus.plansDeLots = { ...plan('conv-3', 'termine') } as never
+    expect(bus.filOccupe('conv-3')).toBe(false)
+  })
+})

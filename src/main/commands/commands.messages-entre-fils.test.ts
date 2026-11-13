@@ -115,6 +115,24 @@ describe('ecrire_a_un_fil / lire_mes_messages par le bus', () => {
     expect(archive.error).toMatch(/inconnu, archivé ou supprimé.*conv-B/)
   })
 
+  it('un fil rangé dans l’archive après quelques jours reste un destinataire jusqu’à 14 jours', () => {
+    // Le rangement en mémoire et les destinataires ont deux seuils : ranger plus tôt ne retire
+    // personne des messages entre fils.
+    const jour = 24 * 3_600_000
+    const fils = [
+      { id: 'conv-5j', updatedAt: maintenant - 5 * jour },
+      { id: 'conv-13j', updatedAt: maintenant - 13 * jour },
+      { id: 'conv-15j', updatedAt: maintenant - 15 * jour }
+    ]
+    const b = new AppCommandBus(
+      { conversations: { get: () => undefined, listResumes: () => fils } } as never,
+      () => undefined
+    )
+    const ctx = b.contexteDesFils(maintenant)
+    expect(ctx.filsActifs()).toEqual(['conv-5j', 'conv-13j'])
+    expect(ctx.estActif('conv-15j')).toBe(false)
+  })
+
   it('le destinataire reçoit le bloc en tête de son tour, une fois ; l’outil ne rend ensuite que du neuf', async () => {
     const { bus: b } = bus()
     await b.exec(
