@@ -1629,6 +1629,53 @@ describe('ajouterLots — un plan lancé grandit au lieu d’en exiger un second
     expect(r.plan.statut).toBe('en-cours')
   })
 
+  /*
+   * Dogfood du 13/11 : à la réception du lot 1, le chef ajoute un lot qui doit passer AVANT la note
+   * finale (lot 6, pas encore partie). Sans « avant », la note partait sans lui.
+   */
+  it('« avant » : un lot pas encore parti attend le lot ajouté, et ne part qu’à sa réception', () => {
+    // Lot 3 = la note, qui attend 1 et 2 ; le lot 1 tourne, le 2 aussi.
+    let plan = lancerCeQuiPart(
+      planAccepte({ parallele: 2, lots: [lot(1), lot(2), { ...lot(3), apres: [1, 2] }] })
+    )
+    const r = ajouterLots(plan, { lots: [{ ...lot(4), apres: [1], avant: [3] }] })
+    if (!r.ok) throw new Error(r.erreur)
+    expect(r.plan.lots.map((l) => [l.rang, l.apres])).toEqual([
+      [1, []],
+      [2, []],
+      [3, [1, 2, 4]],
+      [4, [1]]
+    ])
+    plan = r.plan
+    for (const fil of ['conv-110', 'conv-120'])
+      plan = noterFinDeTour(plan, fil, { ok: true }, 5).plan
+    plan = recevoir(plan, 1, 2)
+    // La note attend le lot ajouté ; lui part.
+    expect(lotsAPartir(plan)).toEqual([4])
+    plan = recevoir(noterFinDeTour(lancerCeQuiPart(plan), 'conv-140', { ok: true }, 6).plan, 4)
+    expect(lotsAPartir(plan)).toEqual([3])
+  })
+
+  it('« avant » refusé : lot déjà parti, lot inconnu, cycle, et au dépôt (où « apres » suffit)', () => {
+    const plan = lancerCeQuiPart(
+      planAccepte({ parallele: 1, lots: [lot(1), lot(2), { ...lot(3), apres: [2] }] })
+    )
+    const parti = ajouterLots(plan, [{ ...lot(4), avant: [1] }])
+    expect(parti.ok).toBe(false)
+    if (!parti.ok) expect(parti.erreur).toMatch(/le lot 1 est en cours : il est déjà parti/)
+    const inconnu = ajouterLots(plan, [{ ...lot(4), avant: [9] }])
+    expect(inconnu.ok).toBe(false)
+    if (!inconnu.ok) expect(inconnu.erreur).toMatch(/le lot 9 n’est pas déjà dans le plan/)
+    const cycle = ajouterLots(plan, [{ ...lot(4), apres: [3], avant: [2] }])
+    expect(cycle.ok).toBe(false)
+    if (!cycle.ok) expect(cycle.erreur).toMatch(/cycle/)
+    const mauvais = ajouterLots(plan, [{ ...lot(4), avant: '3' }])
+    expect(mauvais.ok).toBe(false)
+    const depot = lirePlanDeLots({ lots: [lot(1), { ...lot(2), avant: [1] }] })
+    expect(depot.ok).toBe(false)
+    if (!depot.ok) expect(depot.erreur).toMatch(/lot 2 : « avant » ne sert qu’à l’ajout/)
+  })
+
   it('un plan terminé repart avec les lots ajoutés ; accepte aussi une liste nue en JSON texte', () => {
     let plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
     plan = noterFinDeTour(plan, 'conv-110', { ok: true }, 5).plan

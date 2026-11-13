@@ -322,6 +322,14 @@ export function lirePlanDeLots(brut: unknown): LecturePlan {
   const lus = lireLots(plan.lots, 1, n)
   if (!lus.ok) return lus
   const lots = lus.lots
+  // « avant » ne vaut qu'à l'ajout (`lireAvant`) : ignoré ici, le lot visé partirait sans attendre.
+  const avecAvant = (plan.lots as unknown[]).findIndex(
+    (l) => !!l && typeof l === 'object' && 'avant' in l
+  )
+  if (avecAvant >= 0)
+    return refus(
+      `lot ${avecAvant + 1} : « avant » ne sert qu’à l’ajout de lots ; au dépôt, mets « apres » sur le lot qui doit attendre.`
+    )
   const cycle = refusDeCycle(lots.map((l) => l.apres))
   if (cycle) return refus(cycle)
 
@@ -637,7 +645,12 @@ export function ajouterLots(
     }
   const lus = lireLots(bruts, plan.lots.length + 1, total)
   if (!lus.ok) return lus
-  const cycle = refusDeCycle([...plan.lots.map(prerequisDe), ...lus.lots.map((l) => l.apres)])
+  const attentes = lireAvant(plan, bruts)
+  if (!attentes.ok) return attentes
+  const apresExistants = plan.lots.map((l): number[] =>
+    [...new Set([...prerequisDe(l), ...(attentes.parRang.get(l.rang) ?? [])])].sort((a, b) => a - b)
+  )
+  const cycle = refusDeCycle([...apresExistants, ...lus.lots.map((l) => l.apres)])
   if (cycle) return { ok: false, erreur: cycle }
   const avertissements: string[] = []
   const vivants = plan.lots.filter((l) => l.etat === 'a-faire' || l.etat === 'en-cours')
@@ -660,9 +673,53 @@ export function ajouterLots(
     statut: 'en-cours',
     raison: undefined,
     plafondTours: plan.plafondTours + nouveaux.length * TOURS_PAR_LOT_DEFAUT,
-    lots: [...plan.lots, ...nouveaux]
+    lots: [
+      ...plan.lots.map((l, i) =>
+        attentes.parRang.has(l.rang) ? { ...l, apres: apresExistants[i] } : l
+      ),
+      ...nouveaux
+    ]
   }
   return { ok: true, plan: statutApres(etendu), avertissements }
+}
+
+/**
+ * « AVANT » SUR UN LOT AJOUTÉ (2026-11-13, dogfood du plan-9817a640). À la réception du lot 1, le
+ * chef découvre un manque qui doit passer AVANT la note finale, déjà dans le plan et pas encore
+ * partie : « ajouter » ne savait que faire attendre le nouveau lot, jamais un lot existant. Le lot 6
+ * aurait noté le jeu sans le travail ajouté pour lui. `avant: [6]` sur le lot ajouté fait attendre
+ * le lot 6, s'il n'est pas encore parti. Rend, par rang existant, les rangs neufs qu'il attendra.
+ */
+function lireAvant(
+  plan: PlanDeLots,
+  bruts: readonly unknown[]
+): { ok: true; parRang: Map<number, number[]> } | { ok: false; erreur: string } {
+  const parRang = new Map<number, number[]>()
+  for (let i = 0; i < bruts.length; i++) {
+    const avant = (bruts[i] as Record<string, unknown>).avant
+    if (avant === undefined) continue
+    const rang = plan.lots.length + 1 + i
+    if (!Array.isArray(avant) || avant.some((r) => !Number.isInteger(r)))
+      return {
+        ok: false,
+        erreur: `lot ${rang} : avant — liste de numéros de lots déjà dans le plan attendue (ex. [6]).`
+      }
+    for (const r of avant as number[]) {
+      const vise = plan.lots.find((l) => l.rang === r)
+      if (!vise)
+        return {
+          ok: false,
+          erreur: `lot ${rang} : avant — le lot ${r} n’est pas déjà dans le plan ; entre lots ajoutés ensemble, écris « apres ».`
+        }
+      if (vise.etat !== 'a-faire')
+        return {
+          ok: false,
+          erreur: `lot ${rang} : avant — le lot ${r} est ${LIBELLE_ETAT[vise.etat]} : il est déjà parti, il ne peut plus attendre.`
+        }
+      parRang.set(r, [...(parRang.get(r) ?? []), rang])
+    }
+  }
+  return { ok: true, parRang }
 }
 
 const STATUTS_ACTIFS: ReadonlySet<StatutDuPlan> = new Set([
