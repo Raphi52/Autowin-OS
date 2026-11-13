@@ -212,8 +212,9 @@ describe('la couche de l anneau — la texture repeinte le long du trait', () =>
   })
 
   // « quand ya pas la lumiere qui passe ca doit etre noir » : au niveau des bords de l'anneau du pin
-  // au repos (13 %), le trait s'efface ; la couleur revient en entier a 35 %. ENTREE QUI DOIT FAIRE
-  // ECHOUER : un trait gris ou colore la ou le pin est au repos.
+  // au repos (13 %), le trait s'efface ; la couleur revient en entier a 50 % (« monte le seuil [...] de
+  // 35 % a 50 % pour avoir plus de noir au repos »). ENTREE QUI DOIT FAIRE ECHOUER : un trait gris ou
+  // colore la ou le pin est au repos, ou une lueur de 40 % deja peinte en entier (le seuil de 35 %).
   it('efface le trait au repos et le garde entier dans la lumiere', () => {
     const niveau = (force: number): number => {
       const tex = texture((ligne) => (ligne >= 1 && ligne <= 3 ? [force, force, force] : [0, 0, 0]))
@@ -225,6 +226,7 @@ describe('la couche de l anneau — la texture repeinte le long du trait', () =>
     expect(niveau(Math.round(NOIR_JUSQUA * 255))).toBe(0)
     expect(niveau(Math.round(0.24 * 255))).toBeGreaterThan(0)
     expect(niveau(Math.round(0.24 * 255))).toBeLessThan(255)
+    expect(niveau(Math.round(0.4 * 255))).toBeLessThan(255)
     expect(niveau(Math.round(COULEUR_DES * 255) + 1)).toBe(255)
     expect(niveau(255)).toBe(255)
   })

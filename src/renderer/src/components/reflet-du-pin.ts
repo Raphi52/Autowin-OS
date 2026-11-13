@@ -82,9 +82,11 @@ export const DECALAGE_MAX = 15
  * bords devenaient un liseré gris ou colore tout le long. Jusqu'a NOIR_JUSQUA (le niveau de ces bords
  * au repos, mesure sur la video), le trait est noir ; la couleur revient en entier a COULEUR_DES, la
  * ou la lumiere passe vraiment. Le liseré fin du bouton reste celui de la feuille (`--chrome-lisere`).
+ * COULEUR_DES vaut 50 % (« monte le seuil ou la couleur revient de 35 % a 50 % pour avoir plus de noir
+ * au repos », 2026-11-13) : seules les trainees vives gardent toute leur couleur.
  */
 export const NOIR_JUSQUA = 0.13
-export const COULEUR_DES = 0.35
+export const COULEUR_DES = 0.5
 
 /** La part de la couleur du trait gardee, selon sa force (0 a 1) : 0 au repos, 1 dans la lumiere. */
 export function lumiereQuiPasse(force: number): number {
