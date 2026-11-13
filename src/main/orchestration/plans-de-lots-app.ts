@@ -30,6 +30,7 @@ import {
   promptDuLot,
   refuserLot,
   relancerLot,
+  reprendreLotEnAttente,
   reprendrePlan,
   repriseAbandonnee as repriseAbandonneeDuPlan,
   statutApresLancements,
@@ -768,8 +769,15 @@ export class CoordinateurDesPlans {
       modele?: string
     ) => Promise<{ ok: boolean; turnId?: string; error?: string }>
   ): Promise<{ ok: boolean; turnId?: string; error?: string }> {
+    // Un lot « à faire » déjà parti une fois dans ce fil (`fin` posée) attend une place après une
+    // relance : l'ordre le prend. Sans ce cas, l'ordre partait hors du plan, et le lot repartait de
+    // zéro dans le même fil à la place suivante.
     const reprenable = (l: LotDuPlan): boolean =>
-      l.fil === fil && (l.etat === 'attend-chef' || l.etat === 'echec' || l.etat === 'a-recevoir')
+      l.fil === fil &&
+      (l.etat === 'attend-chef' ||
+        l.etat === 'echec' ||
+        l.etat === 'a-recevoir' ||
+        (l.etat === 'a-faire' && l.fin !== undefined))
     const plan = this.#plans.find((p) => p.chef === de && p.lots.some(reprenable))
     const lot = plan?.lots.find(reprenable)
     if (!plan || !lot) return lancer(fil, prompt)
@@ -778,14 +786,16 @@ export class CoordinateurDesPlans {
     const relance =
       lot.etat === 'a-recevoir'
         ? refuserLot(plan, lot.rang, prompt.slice(0, MOTIF_MAX))
-        : relancerLot(plan, lot.rang)
+        : lot.etat === 'a-faire'
+          ? reprendreLotEnAttente(plan, lot.rang)
+          : relancerLot(plan, lot.rang)
     if (!relance.ok)
       return { ok: false, error: `lot ${lot.rang} du plan ${plan.id} : ${relance.erreur}` }
     const lance = this.#poser(marquerLance(relance.plan, lot.rang, fil, this.#maintenant()))
     const lotLance = lance.lots.find((l) => l.rang === lot.rang) ?? lot
     let r: { ok: boolean; turnId?: string; error?: string }
     try {
-      const suite = prompt + suiteDeLOrdreAuLot(lance, lotLance)
+      const suite = prompt + suiteDeLOrdreAuLot(lance, lotLance, lot.etat)
       r = lotLance.modele ? await lancer(fil, suite, lotLance.modele) : await lancer(fil, suite)
     } catch (e) {
       r = { ok: false, error: (e as Error)?.message ?? String(e) }

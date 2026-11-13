@@ -1421,6 +1421,34 @@ export function reprendrePlan(
 }
 
 /**
+ * L'ORDRE DU CHEF PREND UN LOT DÉJÀ RELANCÉ QUI ATTEND UNE PLACE (2026-11-13). Le lot est « à
+ * faire » : rien à remettre en file, mais les mêmes bornes qu'une relance (quota, statut, plafond),
+ * puisque l'ordre le fait partir tout de suite (`lancerParOrdre`, puis `marquerLance`).
+ */
+export function reprendreLotEnAttente(
+  plan: PlanDeLots,
+  rang: number
+): { ok: true; plan: PlanDeLots } | { ok: false; erreur: string } {
+  const lot = plan.lots.find((l) => l.rang === rang)
+  if (!lot || lot.etat !== 'a-faire')
+    return { ok: false, erreur: `le lot ${rang} n’attend pas de place : rien à reprendre.` }
+  if (plan.statut === 'suspendu-quota')
+    return {
+      ok: false,
+      erreur:
+        'plan suspendu par la limite de quota : seul l’utilisateur le reprend (bouton « Reprendre » du tableau).'
+    }
+  if (!['en-cours', 'termine', 'bloque'].includes(plan.statut))
+    return { ok: false, erreur: `plan ${LIBELLE_STATUT[plan.statut]} : relance impossible.` }
+  if (plan.toursLances >= plan.plafondTours)
+    return {
+      ok: false,
+      erreur: `plafond de ${plan.plafondTours} tours atteint : relance impossible.`
+    }
+  return { ok: true, plan: { ...plan, statut: 'en-cours', raison: undefined } }
+}
+
+/**
  * Relance d'un lot en échec ou interrompu, demandée par le chef. Elle consomme un tour du plafond.
  * Refusée sur un plan suspendu par le quota : seul l'utilisateur reprend après la limite. Permise
  * sur un plan BLOQUÉ : relancer le lot fautif est la seule sortie, ses dépendants suivront.
@@ -1738,11 +1766,19 @@ export function messageDeDecision(
  * fil, sa réponse finale redevient le compte rendu remis au chef par l'app — sans cette ligne,
  * l'ordre lui demandait d'écrire au chef EN PLUS, et le chef recevait deux comptes rendus.
  */
-export function suiteDeLOrdreAuLot(plan: PlanDeLots, lot: LotDuPlan): string {
-  // Un ordre à un lot rendu est un refus (`lancerParOrdre`) : « répond à ta question » serait faux.
+export function suiteDeLOrdreAuLot(
+  plan: PlanDeLots,
+  lot: LotDuPlan,
+  /** L'état du lot avant l'ordre : seul « attend le chef » a posé une question. */
+  avant: EtatDuLot = 'attend-chef'
+): string {
+  // Un ordre à un lot rendu est un refus (`lancerParOrdre`) : « répond à ta question » serait faux,
+  // et tout autant pour un lot en échec, qui n'a rien demandé.
   const pourquoi = lot.refus
     ? 'l’ordre ci-dessus est le motif du refus de ton lot par le chef : corrige ce point, le lot reprend.'
-    : 'l’ordre ci-dessus répond à ta question, le lot reprend.'
+    : avant === 'attend-chef'
+      ? 'l’ordre ci-dessus répond à ta question, le lot reprend.'
+      : 'l’ordre ci-dessus relance ton lot après son échec : reprends-le en suivant cet ordre.'
   return [
     '',
     '---',

@@ -108,7 +108,7 @@ import { abortFailure } from './abort-diagnostic'
 import { advisorAccepte } from './claude-advisor'
 import { cheminRegistreReservations } from '../fichiers/reservation-fichiers-app'
 import { gardeEveil } from '../app/garder-eveille'
-import { creerCoupeBoucle } from '../chat/coupe-boucle'
+import { creerCoupeBoucle, sortieComparable } from '../chat/coupe-boucle'
 import { avancementDepuisCommande } from './arene-avancement'
 import {
   describeExitCode,
@@ -3141,7 +3141,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             call.name,
             entreesOutils.get(part.tool_use_id),
             part.is_error === true,
-            outputEntier
+            sortieComparable(part.content)
           )
           entreesOutils.delete(part.tool_use_id)
           if (motifBoucle) {

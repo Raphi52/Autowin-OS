@@ -771,6 +771,43 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
   })
 
   /*
+   * Course vue sur le lot 2 du plan-9817a640 (13/11) : le lot en échec est relancé (bouton
+   * « Relancer ») sans place libre, il attend « à faire » dans son fil ; 25 s plus tard, l'ordre du
+   * chef à ce fil partait HORS du plan — tour non suivi, et le lot serait reparti de zéro ensuite.
+   */
+  it('l’ordre du chef à un lot relancé qui attend une place le reprend : en cours, suivi, sans second départ', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: plan2() })
+    await b.coord.surFinDeTour('conv-100', { ok: false, erreur: 'build rouge' })
+    // Le lot 2 a pris l'unique place ; le lot 1, relancé, attend.
+    expect(b.coord.plans()[0].lots[1].etat).toBe('en-cours')
+    await b.coord.relancer('conv-1', 1)
+    const enAttente = b.coord.plans()[0]
+    expect(enAttente.lots[0]).toMatchObject({ etat: 'a-faire', fil: 'conv-100' })
+    const lances: Array<{ fil: string; prompt: string }> = []
+    const r = await b.coord.lancerParOrdre(
+      'conv-1',
+      'conv-100',
+      'reprends ton travail dans ta copie',
+      async (fil, prompt) => {
+        lances.push({ fil, prompt })
+        return { ok: true, turnId: 'tour-ordre' }
+      }
+    )
+    expect(r.ok).toBe(true)
+    expect(b.coord.plans()[0].lots[0]).toMatchObject({ etat: 'en-cours', tour: 'tour-ordre' })
+    expect(b.coord.plans()[0].toursLances).toBe(enAttente.toursLances + 1)
+    expect(lances[0].prompt).toMatch(/Ce fil fait le lot 1 sur 2/)
+    expect(lances[0].prompt).toMatch(/relance ton lot après son échec/)
+    expect(lances[0].prompt).not.toMatch(/répond à ta question/)
+    // La fin du lot 2 libère la place : le lot 1, déjà en cours, ne repart pas une seconde fois.
+    await b.coord.surFinDeTour('conv-101', { ok: true })
+    expect(b.lancements.filter((l) => l.fil === 'conv-100')).toHaveLength(1)
+    await b.coord.surFinDeTour('conv-100', { ok: true, tour: 'tour-ordre' })
+    expect(b.coord.plans()[0].lots[0].etat).toBe('a-recevoir')
+  })
+
+  /*
    * 2026-10-29, demande de l'utilisateur : « attend le chef » est un état à part — le
    * tableau, le compte rendu et le réveil du chef le disent, et le plan ne se clôt pas sans réponse.
    */
