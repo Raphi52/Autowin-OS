@@ -158,6 +158,54 @@ describe('bilan des pistes prises — compté par run fini', () => {
       '5 pistes dans 1 run fini : 0 livré, 0 en échec, 1 interrompu'
     )
   })
+
+  /*
+   * LE JOURNAL DES RÉSULTATS PLEIN (mesuré le 2026-11-13) : plus aucun résultat noté depuis le 02/11,
+   * et 10 runs lancés depuis restaient invisibles. Le scout ne lisait que les 7 runs d'octobre et en
+   * concluait « 6 sur 7 n'aboutissent pas ». Les runs sans résultat se disent, avec la date de la
+   * plus ancienne piste qu'ils portent : une piste proposée il y a dix jours n'est plus « en cours ».
+   */
+  it('dit les runs lancés sans résultat noté, et la plus ancienne date de leurs pistes', () => {
+    const chemin = memoireNeuve()
+    const titres = titresNumerotes(6)
+    noterPistesScout({
+      depot: DEPOT,
+      texte: tableau(titres.slice(0, 3)),
+      run: 's0',
+      maintenant: '2026-11-03T08:00:00.000Z',
+      chemin
+    })
+    noterPistesScout({
+      depot: DEPOT,
+      texte: tableau(titres.slice(3)),
+      run: 's1',
+      maintenant: '2026-11-05T08:00:00.000Z',
+      chemin
+    })
+    lots(chemin, titres, [
+      { taille: 1, run: 'fini' },
+      { taille: 2, run: 'perdu-a' },
+      { taille: 3, run: 'perdu-b' }
+    ])
+    const texte = bilan(chemin, { fini: 'delivered' })
+    expect(texte).toContain('1 piste dans 1 run fini : 1 livré, 0 en échec')
+    expect(texte).toContain(
+      '2 runs lancés sans résultat noté, sur des pistes proposées dès le 2026-11-03 (en cours, ou résultat jamais enregistré)'
+    )
+  })
+
+  it('aucun run fini mais des runs lancés : la ligne les dit au lieu de se taire', () => {
+    const chemin = memoireNeuve()
+    const titres = titresNumerotes(6)
+    scoutDe(chemin, titres)
+    lots(chemin, titres, [
+      { taille: 2, run: 'perdu' },
+      { taille: 4, run: null }
+    ])
+    expect(bilan(chemin, {})).toContain(
+      'prises traitées : 1 run lancé sans résultat noté, sur des pistes proposées dès le t1'
+    )
+  })
 })
 
 describe('sélection notée sans run — ce qui ne doit rien écrire', () => {
