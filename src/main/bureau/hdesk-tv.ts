@@ -407,7 +407,11 @@ export class CapteurHdesk {
     // 21/10 : il a figé l'app ~20 s, le minuteur de 8 s armé AVANT était expiré au retour, le processus
     // tué avant sa première réponse, relancé 500 ms plus tard — 6 lancements, 120,2 s figées.
     const p = this.demarrer()
-    this.rearmer()
+    // fix-ok: cause mesurée 2026-11-13 — gels.jsonl : 17 `spawn powershell.exe` jusqu'à 20 s, chacun relancé 8,5 à 8,8 s après le précédent ; le minuteur d'inactivité tuait le script encore en démarrage, sa demande en attente (test « démarrage plus lent » rouge)
+    // UNE DEMANDE EN ATTENTE N'EST PAS DE L'INACTIVITÉ : le minuteur ne court qu'entre deux
+    // demandes. Un script lent à se dire prêt reste borné par `delai` (15 s), pas par les 8 s
+    // d'inactivité ; sinon il meurt avant sa première réponse, et la demande suivante le relance.
+    this.suspendreInactivite()
     return new Promise<Reponse>((resolve, reject) => {
       const delai = setTimeout(() => {
         this.arreter()
@@ -415,6 +419,7 @@ export class CapteurHdesk {
       }, 15000)
       this.attente.push((r) => {
         clearTimeout(delai)
+        if (this.proc === p && this.attente.length === 0) this.rearmer()
         if (r.erreur === 'Processus de capture arrete.') reject(new Error(r.erreur))
         else resolve(r)
       })
@@ -470,8 +475,13 @@ export class CapteurHdesk {
   }
 
   private rearmer(): void {
-    if (this.minuterie) clearTimeout(this.minuterie)
+    this.suspendreInactivite()
     this.minuterie = setTimeout(() => this.arreter(), this.inactiviteMs)
+  }
+
+  private suspendreInactivite(): void {
+    if (this.minuterie) clearTimeout(this.minuterie)
+    this.minuterie = null
   }
 
   /** Repli : une capture = un hdesk-observe.ps1 (plus lent, meme resultat). */

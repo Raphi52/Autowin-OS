@@ -142,6 +142,51 @@ describe('instrumenterEntreesSortiesDuMain — cablage sur les vrais modules', (
     expect(prototype.spawn).toBe(avant)
   })
 
+  /*
+   * LA MESURE S'ARRETE AU RETOUR DE LA CREATION, PAS A LA FIN DE L'ENFANT.
+   *
+   * Soupcon a lever : des gels `io:processus:spawn` de 15 s et 20 s semblaient tomber sur le delai
+   * de l'appel. Si l'enrobage comptait la VIE de l'enfant (jusqu'a sa fin ou son delai), chaque
+   * processus lent deviendrait un gel imaginaire. Ici l'enfant vit 30 s et son delai le tue a
+   * `DELAI_MS` : un gel de cette duree, ou une boucle muette pendant sa vie, ferait rougir le test.
+   */
+  it('un enfant LENT tue par son delai ne compte que sa creation, et la boucle reste libre', async () => {
+    const { instrumenterEntreesSortiesDuMain } = await import('./gel-main')
+    const { createRequire } = await import('node:module')
+    const cp = createRequire(import.meta.url)(
+      'node:child_process'
+    ) as typeof import('node:child_process')
+    const DELAI_MS = 1500
+    const PERIODE_MS = 50
+    const gels: Gel[] = []
+    let battements = 0
+    const debut = Date.now()
+    const battement = setInterval(() => (battements += 1), PERIODE_MS)
+    const defaire = instrumenterEntreesSortiesDuMain(0, (g) => gels.push(g))
+    let erreur: (Error & { killed?: boolean }) | null
+    try {
+      erreur = await new Promise((resolve) => {
+        cp.execFile(
+          process.execPath,
+          ['-e', 'setTimeout(() => {}, 30000)'],
+          { windowsHide: true, timeout: DELAI_MS },
+          (e) => resolve(e)
+        )
+      })
+    } finally {
+      defaire()
+      clearInterval(battement)
+    }
+    // L'enfant a bien vecu jusqu'a son delai, qui l'a tue : le cas soupconne est rejoue.
+    expect(erreur?.killed).toBe(true)
+    expect(Date.now() - debut).toBeGreaterThanOrEqual(DELAI_MS)
+    const creations = gels.filter((g) => g.operation.startsWith('io:processus:spawn'))
+    expect(creations).toHaveLength(1)
+    expect(creations[0].blocageMs).toBeLessThan(DELAI_MS / 2)
+    // Une boucle tenue pendant la vie de l'enfant ne battrait qu'une fois ou deux.
+    expect(battements).toBeGreaterThanOrEqual(DELAI_MS / PERIODE_MS / 3)
+  })
+
   it('preserve les SOUS-FONCTIONS de l’API patchee (realpathSync.native)', async () => {
     const { instrumenterEntreesSortiesDuMain } = await import('./gel-main')
     const { createRequire } = await import('node:module')
