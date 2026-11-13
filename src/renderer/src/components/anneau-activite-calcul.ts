@@ -50,12 +50,18 @@ export function atterrissageDuPassage(avant: string, apres: string): Atterrissag
 export const ANIMATIONS_D_ATTERRISSAGE: readonly string[] = ['anneau-reflet', 'anneau-secousse']
 
 /**
- * Les reflets de la vague (anneau-activite.css, etapes calculees par scripts/vague-du-cadre.mjs),
- * cales sur l'HORLOGE COMMUNE du fil : le principal (et son aura), puis le second, plus fin. Les
- * memes noms pour tous les blocs : la place de chacun dans son groupe est une distance
- * (`--vague-avance`), pas un horaire propre.
+ * Les animations de la vague (anneau-activite.css, etapes calculees par scripts/vague-du-cadre.mjs),
+ * calees sur l'HORLOGE COMMUNE du fil : le coeur blanc de l'eclat (et son halo), ses deux franges,
+ * l'intensite de l'eclat, puis le second reflet, plus fin. Les memes noms pour tous les blocs : la
+ * place de chacun dans son groupe est une distance (`--vague-avance`), pas un horaire propre.
  */
-export const ANIMATIONS_DE_VAGUE: readonly string[] = ['cadre-vague', 'cadre-vague-second']
+export const ANIMATIONS_DE_VAGUE: readonly string[] = [
+  'cadre-vague',
+  'cadre-vague-gauche',
+  'cadre-vague-droite',
+  'cadre-vague-intensite',
+  'cadre-vague-second'
+]
 
 /**
  * Cale les passages de vague d'un element sur l'horloge commune : un debut a l'origine du document.

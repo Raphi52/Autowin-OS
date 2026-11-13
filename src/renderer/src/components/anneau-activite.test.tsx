@@ -306,28 +306,82 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
   })
 
   /**
-   * L'AURA SUIT LA VAGUE : la lumiere du point blanc deborde du bord, dehors sur le fil et dedans sur
-   * le verre, la ou la bande passe, en violet (« de base ya une aura violette »), en sombre comme en
-   * clair. Elle ne deborde qu'en hauteur : un calque qui depasse sur les cotes elargit la zone
-   * defilable du fil (barre horizontale possible). ENTREE QUI DOIT FAIRE ECHOUER : un `inset` qui
-   * deborde a gauche ou a droite, une lueur non clippee sur les cotes, une couleur en dur, ou une
-   * aura eteinte dans un des deux modes.
+   * LE HALO SUIT LA VAGUE : la lumiere du point blanc deborde du bord, dehors sur le fil et dedans
+   * sur le verre, la ou le coeur blanc passe (« l'aura lumineuse autour du bouton suit la vague
+   * reflet »), en sombre comme en clair. Mesure au pixel sur la video du bouton : derriere un blanc,
+   * le halo ajoute +48, +51 et +51 aux trois canaux — une lumiere BLANCHE, pas violette. Il ne
+   * deborde qu'en hauteur : un calque qui depasse sur les cotes elargit la zone defilable du fil
+   * (barre horizontale possible). ENTREE QUI DOIT FAIRE ECHOUER : un `inset` qui deborde a gauche ou
+   * a droite, une lueur non clippee sur les cotes, une couleur en dur, un halo eteint dans un des
+   * deux modes, ou un halo teinte (le violet d'avant : 156, 108, 255).
    */
-  it('fait deborder une aura violette avec la vague, sans elargir le fil', () => {
+  it('fait deborder un halo blanc avec la vague, sans elargir le fil', () => {
     const lueur = regleDe('.cadre-vague__lueur')
     expect(lueur).toMatch(/\binset: -\d+px 0;/)
     expect(lueur).toMatch(/\boverflow-x: clip;/)
     const { valeur } = couchesDuFond(regleDe('.cadre-vague__lueur::before'))
     expect(valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
     expect(valeur).toContain('var(--chrome-halo)')
-    // Violet : le bleu domine, puis le rouge, le vert en retrait ; jamais transparent.
+    // Neutre : les trois canaux a moins de 40 l'un de l'autre ; jamais transparent.
     for (const feuille of [THEME, MODES]) {
       const m = /--chrome-halo:\s*rgba\((\d+), (\d+), (\d+), ([\d.]+)\);/.exec(feuille)
-      expect(m, 'aura violette').not.toBeNull()
+      expect(m, 'halo').not.toBeNull()
       const [r, v, b, alpha] = m!.slice(1).map(Number)
-      expect(b!).toBeGreaterThan(r!)
-      expect(r!).toBeGreaterThan(v!)
+      expect(Math.max(r!, v!, b!) - Math.min(r!, v!, b!)).toBeLessThanOrEqual(40)
       expect(alpha!).toBeGreaterThan(0)
+    }
+  })
+
+  /**
+   * Teinte (degres) et luminance relative (0-1, celle que l'oeil percoit) d'un jeton `#rrggbb` d'une
+   * feuille de theme.
+   */
+  function teinteDe(feuille: string, jeton: string): { h: number; l: number } {
+    const m = new RegExp(`${jeton}:\\s*#([0-9a-f]{6});`, 'i').exec(feuille)
+    expect(m, jeton).not.toBeNull()
+    const [r, v, b] = [0, 2, 4].map((i) => Number.parseInt(m![1]!.slice(i, i + 2), 16) / 255) as [
+      number,
+      number,
+      number
+    ]
+    const max = Math.max(r, v, b)
+    const d = max - Math.min(r, v, b) || 1e-6
+    const h =
+      max === r
+        ? (((v - b) / d) % 6) * 60
+        : max === v
+          ? ((b - r) / d + 2) * 60
+          : ((r - v) / d + 4) * 60
+    const lineaire = (c: number): number =>
+      c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+    return {
+      h: (h + 360) % 360,
+      l: 0.2126 * lineaire(r) + 0.7152 * lineaire(v) + 0.0722 * lineaire(b)
+    }
+  }
+
+  /**
+   * LE SPECTRE DE LA VIDEO, releve au pixel sur ses 150 images (couleur mediane des pixels satures,
+   * a distance croissante du blanc) : deux familles et rien d'autre — froide (cyan a 2-8 degres
+   * d'anneau du blanc, bleu a 13, indigo a 20) et chaude (jaune a 2-8, or a 10, corail a 16, rouille
+   * a 24) —, chacune plus sombre a mesure qu'elle s'eloigne du blanc. Vert et magenta n'y font pas
+   * 1 % des pixels. ENTREE QUI DOIT FAIRE ECHOUER : un vert ou un magenta remis dans l'eclat, une
+   * frange qui s'eclaircit en s'eloignant du blanc, ou une teinte sortie de sa famille.
+   */
+  it('a le spectre de la video : deux familles, plus sombres loin du blanc', () => {
+    expect(css).not.toMatch(/--prisme-(vert|magenta)/)
+    for (const feuille of [THEME, MODES]) {
+      expect(feuille).not.toMatch(/--prisme-(vert|magenta)/)
+      const froid = ['cyan', 'bleu', 'indigo'].map((t) => teinteDe(feuille, `--prisme-${t}`))
+      const chaud = ['jaune', 'or', 'rouge', 'rouille'].map((t) =>
+        teinteDe(feuille, `--prisme-${t}`)
+      )
+      for (const { h } of froid) expect(h).toBeGreaterThanOrEqual(185)
+      for (const { h } of froid) expect(h).toBeLessThanOrEqual(240)
+      for (const { h } of chaud) expect(h < 65 || h > 350, `teinte chaude ${h}`).toBe(true)
+      for (const famille of [froid, chaud])
+        for (let i = 1; i < famille.length; i++)
+          expect(famille[i]!.l).toBeLessThanOrEqual(famille[i - 1]!.l)
     }
   })
 
@@ -354,32 +408,38 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
   }
   // Une etape de la vague, telle que scripts/vague-du-cadre.mjs l'ecrit : la position passe TOUJOURS
   // par `100cqw + --vague-avance - --vague-course * p` (c'est ce qui garde une seule diagonale pour
-  // le groupe), puis la pente, la largeur et l'intensite ; seule la derniere etape d'un passage
-  // saute au depart du suivant.
+  // le groupe), decalee de quelques pixels pour une frange, puis la pente et, pour le coeur et le
+  // second reflet, la largeur ; l'intensite est une opacite ; seule la derniere etape d'un passage
+  // saute au depart du suivant. Ce qu'une animation n'ecrit pas vaut `NaN`.
   const ETAT =
-    /^transform: translateX\(calc\(100cqw \+ var\(--vague-avance\) - var\(--vague-course\) \* (-?[\d.]+)\)\) skewX\((-?[\d.]+)deg\) scaleX\(([\d.]+)\); opacity: ([\d.]+);( animation-timing-function: step-end;)?$/
+    /^(?:transform: translateX\(calc\(100cqw \+ var\(--vague-avance\) - var\(--vague-course\) \* (-?[\d.]+)(?: ([+-]) ([\d.]+)px)?\)\) skewX\((-?[\d.]+)deg\)(?: scaleX\(([\d.]+)\))?; ?)?(?:opacity: ([\d.]+);)?( animation-timing-function: step-end;)?$/
   type Etat = {
     pourcent: number
     p: number
+    decalage: number
     pente: number
     largeur: number
     opacite: number
     saut: boolean
   }
-  /** Les etats d'un reflet, dans l'ordre du cycle. */
+  /** Les etats d'une animation de la vague, dans l'ordre du cycle. */
   function etatsDe(nom: string): Etat[] {
     return [...etapesDe(nom)]
       .sort((a, b) => a[0] - b[0])
       .map(([pourcent, declarations]) => {
-        const m = ETAT.exec(declarations.replace(/\s+/g, ' '))
+        // Prettier coupe les longues etapes : on recolle avant de lire.
+        const ligne = declarations.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')')
+        const m = ETAT.exec(ligne)
         expect(m, `${nom} ${pourcent}% : ${declarations}`).not.toBeNull()
+        const signe = m![2] === '-' ? -1 : 1
         return {
           pourcent,
-          p: Number(m![1]),
-          pente: Number(m![2]),
-          largeur: Number(m![3]),
-          opacite: Number(m![4]),
-          saut: Boolean(m![5])
+          p: Number(m![1] ?? Number.NaN),
+          decalage: m![1] === undefined ? Number.NaN : signe * Number(m![3] ?? 0),
+          pente: Number(m![4] ?? Number.NaN),
+          largeur: Number(m![5] ?? Number.NaN),
+          opacite: Number(m![6] ?? Number.NaN),
+          saut: Boolean(m![7])
         }
       })
   }
@@ -395,14 +455,38 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
   const CYCLE_S = 12
   const COURSE_PX = 1144
 
+  /** Les arrets `var(--prisme-x) Npx` (et le blanc) d'une couche, dans l'ordre, de gauche a droite. */
+  function arretsDe(couche: string): Array<{ teinte: string; px: number }> {
+    return [...couche.matchAll(/var\(--(?:prisme|chrome)-(\w+)\) (\d+)px/g)].map((m) => ({
+      teinte: m[1]!,
+      px: Number(m[2])
+    }))
+  }
+  const FROID = ['cyan', 'bleu', 'indigo']
+  const CHAUD = ['jaune', 'or', 'rouge', 'rouille']
+  /** La famille d'une couche, lue de part et d'autre de son blanc. */
+  const familles = (couche: string): { gauche: string[]; droite: string[] } => {
+    const arrets = arretsDe(couche)
+    const blanc = arrets.findIndex((a) => a.teinte === 'eclat')
+    const teintes = (liste: typeof arrets): string[] => [
+      ...new Set(liste.filter((a) => a.teinte !== 'eclat').map((a) => a.teinte))
+    ]
+    return { gauche: teintes(arrets.slice(0, blanc)), droite: teintes(arrets.slice(blanc + 1)) }
+  }
+
   /**
    * LA VAGUE (« une vague qui traverse l'input », puis « la vague doit etre diagonale ») : des bandes
-   * penchees glissent sur l'anneau, de droite a gauche, et portent seules le reflet, avec le dessin
-   * de l'eclat que l'utilisateur a trouve « super reussi ». ENTREE QUI DOIT FAIRE ECHOUER : une bande
-   * droite (sans pente), animee autrement que par `transform` et `opacity` (un degrade ou une
-   * propriete enregistree serait repeint a chaque image, le cout de l'ancienne lave), une autre
-   * animation revenue sur l'anneau, une couleur en dur dans la bande, une bande qui perd le blanc ou
-   * la symetrie de son spectre, ou un second reflet dont le raccourci `animation` ecrase le nom.
+   * penchees glissent sur l'anneau, de droite a gauche, et portent seules le reflet. Le dessin de
+   * l'eclat est celui de la video du bouton de verre, releve au pixel : un coeur blanc de 40 px,
+   * frange de FROID d'un cote (cyan, bleu, indigo) et de CHAUD de l'autre (jaune, or, corail,
+   * rouille), sur 66 px chacune. L'ordre suit le TOUR de l'anneau (sens horaire : froid, blanc,
+   * chaud, en haut comme en bas de la video) : sur le bord haut, froid a gauche ; sur le bord bas,
+   * froid a droite. ENTREE QUI DOIT FAIRE ECHOUER : une bande droite (sans pente), animee autrement
+   * que par `transform` et `opacity` (un degrade ou une propriete enregistree serait repeint a chaque
+   * image, le cout de l'ancienne lave), une autre animation revenue sur l'anneau, une couleur en dur
+   * dans la bande, un spectre symetrique (le meme de chaque cote du blanc), un bord bas range comme le
+   * bord haut, des franges de longueurs differentes, ou un nom d'animation ecrase par le raccourci
+   * `animation` de la regle commune.
    */
   it('fait glisser une vague diagonale par transform et opacite seuls, et n anime rien d autre', () => {
     const noms = [...css.matchAll(/@keyframes ([\w-]+)/g)].map((m) => m[1]!)
@@ -410,55 +494,86 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
     expect(vagues.sort()).toEqual([...ANIMATIONS_DE_VAGUE].sort())
     for (const nom of vagues)
       for (const etat of etatsDe(nom)) {
+        if (nom === 'cadre-vague-intensite') continue
         expect(etat.pente, nom).toBeGreaterThanOrEqual(35)
         expect(etat.pente, nom).toBeLessThanOrEqual(55)
       }
     // Seuls la vague et l'atterrissage du verdict animent quelque chose dans ce fichier.
     for (const n of noms) expect([...vagues, ...ANIMATIONS_D_ATTERRISSAGE], n).toContain(n)
     expect(css).not.toMatch(/@property/)
-    const selecteurCommun =
-      '.cadre-vague__lueur::before,\n.cadre-vague__onde::before,\n.cadre-vague__onde::after'
+    const selecteurCommun = [
+      '.cadre-vague__lueur::before',
+      '.cadre-vague__onde::before',
+      '.cadre-vague__onde::after',
+      '.cadre-vague__coeur::before',
+      '.cadre-vague__trait::before'
+    ].join(',\n')
     const bandes = regleDe(selecteurCommun)
     expect(bandes).toMatch(/animation: cadre-vague 12s linear infinite;/)
     expect(bandes).toMatch(/\bwidth: 220px;/)
     expect(bandes).toMatch(/\btransform-origin: 110px 0;/)
     expect(bandes).toContain(
-      'transform: translateX(calc(100cqw + var(--vague-avance))) skewX(45deg) scaleX(1);'
+      'transform: translateX(calc(100cqw + var(--vague-avance))) skewX(45deg);'
     )
-    // Le second reflet prend son nom APRES la regle commune.
-    const nomDuSecond = css.indexOf(
-      '.cadre-vague__onde::after {\n  animation-name: cadre-vague-second;'
+    // Chaque piece prend son nom APRES la regle commune.
+    for (const [piece, nom] of [
+      ['.cadre-vague__onde::before', 'cadre-vague-gauche'],
+      ['.cadre-vague__onde::after', 'cadre-vague-droite'],
+      ['.cadre-vague__trait::before', 'cadre-vague-second']
+    ])
+      expect(css.indexOf(`${piece} {\n  animation-name: ${nom};`), piece).toBeGreaterThan(
+        css.indexOf(`${selecteurCommun} {`)
+      )
+    // L'intensite estompe le calque de l'eclat et celui du halo, d'un bloc.
+    expect(regleDe('.cadre-vague__lueur,\n.cadre-vague__onde')).toMatch(
+      /animation: cadre-vague-intensite 12s linear infinite;/
     )
-    expect(nomDuSecond).toBeGreaterThan(css.indexOf(`${selecteurCommun} {`))
     const vague = regleDe('.cadre-vague')
     // `cqw`/`cqh` lisent la taille de ce calque.
     expect(vague).toMatch(/\bcontainer-type: size;/)
 
-    // Le dessin de l'eclat : un blanc plein au centre, puis le spectre en miroir de chaque cote.
-    const { valeur, couches } = couchesDuFond(regleDe('.cadre-vague__onde::before'))
-    expect(valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
-    expect(couches).toHaveLength(2)
-    expect(couches[0]).toContain('var(--chrome-eclat) 95px 125px')
-    const arrets = [...couches[1]!.matchAll(/var\(--prisme-(\w+)\) (\d+)px/g)].map((m) => ({
-      teinte: m[1]!,
-      px: Number(m[2])
-    }))
-    const avant = arrets.filter((a) => a.px < 110)
-    const apres = arrets.filter((a) => a.px > 110)
-    expect(avant.map((a) => a.teinte).reverse()).toEqual(apres.map((a) => a.teinte))
-    expect(avant.map((a) => 220 - a.px).reverse()).toEqual(apres.map((a) => a.px))
-    expect(apres.map((a) => a.teinte)).toEqual(['jaune', 'or', 'rouge', 'magenta', 'bleu', 'cyan'])
-    // Le second reflet : un blanc mince, sans couleur en dur.
-    const second = couchesDuFond(regleDe('.cadre-vague__onde::after')).valeur
-    expect(second).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
-    expect(second).toContain('var(--chrome-eclat) 108px 112px')
+    // Le coeur : 40 px de blanc plein, centre sur la bande.
+    const coeur = couchesDuFond(regleDe('.cadre-vague__coeur::before'))
+    expect(coeur.couches).toHaveLength(1)
+    expect(coeur.valeur).toContain('var(--chrome-eclat) 90px 130px')
+    // Les franges : deux couches chacune, la moitie haute puis la moitie basse.
+    const gauche = couchesDuFond(regleDe('.cadre-vague__onde::before'))
+    const droite = couchesDuFond(regleDe('.cadre-vague__onde::after'))
+    const trait = couchesDuFond(regleDe('.cadre-vague__trait::before'))
+    for (const piece of [gauche, droite, trait]) {
+      expect(piece.valeur).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
+      expect(piece.couches).toHaveLength(2)
+      expect(piece.couches[0]).toMatch(/\btop \/ 100% 50% no-repeat$/)
+      expect(piece.couches[1]).toMatch(/\bbottom \/ 100% 50% no-repeat$/)
+    }
+    // Bord haut : froid a gauche du blanc, chaud a droite ; bord bas : l'inverse.
+    expect(familles(gauche.couches[0]!).gauche).toEqual(['indigo', 'bleu', 'cyan'])
+    expect(familles(gauche.couches[1]!).gauche).toEqual(['rouille', 'rouge', 'or', 'jaune'])
+    expect(familles(droite.couches[0]!).droite).toEqual(CHAUD)
+    expect(familles(droite.couches[1]!).droite).toEqual(FROID)
+    expect(familles(trait.couches[0]!)).toEqual({ gauche: [...FROID].reverse(), droite: CHAUD })
+    expect(familles(trait.couches[1]!)).toEqual({ gauche: [...CHAUD].reverse(), droite: FROID })
+    // Une frange est le miroir de l'autre autour du centre (110 px) : memes longueurs.
+    const teintes = (couche: string): Array<{ teinte: string; px: number }> =>
+      arretsDe(couche).filter((a) => a.teinte !== 'eclat')
+    const miroir = (couche: string): Array<{ teinte: string; px: number }> =>
+      teintes(couche)
+        .map((a) => ({ teinte: a.teinte, px: 220 - a.px }))
+        .reverse()
+    expect(miroir(droite.couches[1]!)).toEqual(teintes(gauche.couches[0]!))
+    expect(miroir(droite.couches[0]!)).toEqual(teintes(gauche.couches[1]!))
+    expect(miroir(trait.couches[1]!)).toEqual(teintes(trait.couches[0]!))
+    // Les franges s'eteignent a 66 px du blanc (30 degres d'anneau sur la video).
+    expect(gauche.couches[0]).toMatch(/^linear-gradient\(\s*90deg,\s*transparent 24px,/)
+    expect(gauche.couches[0]).toContain('var(--chrome-eclat) 90px 94px')
 
-    // Clippee : la bande en attente a droite elargirait la zone defilable du fil.
-    expect(regleDe('.cadre-vague__onde')).toMatch(/\boverflow: clip;/)
+    // Clippes : la bande en attente a droite elargirait la zone defilable du fil.
+    const calques = regleDe('.cadre-vague__onde,\n.cadre-vague__trait')
+    expect(calques).toMatch(/\boverflow: clip;/)
     // L'arrondi par variable : `inherit` lit l'arrondi nul de l'emplacement cache d'un `<details>`,
     // et la vague debordait de l'anneau en equerre. Chaque bloc encadre declare le sien.
     expect(vague).toMatch(/\bborder-radius: var\(--cadre-rayon\);/)
-    expect(regleDe('.cadre-vague__onde')).toMatch(/\bborder-radius: var\(--cadre-rayon\);/)
+    expect(calques).toMatch(/\bborder-radius: var\(--cadre-rayon\);/)
     for (const [feuille, rayon] of [
       ['anneau-activite.css', '16px'],
       ['LookDecodeBlock.css', '10px'],
@@ -474,16 +589,42 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
    * « j'aimerais que l'effet soit moins lineaire, presque chaotique, vraiment comme la video de
    * pinterest » (2026-11-13). Mesure sur la video : plusieurs trainees qui oscillent autour de leur
    * place (jusqu'a revenir en arriere), un blanc qui enfle en eclat puis retombe, une intensite qui
-   * varie. ENTREE QUI DOIT FAIRE ECHOUER : une vitesse constante (meme vitesse d'une etape a
+   * varie. Releve au pixel : le blanc couvre 17 degres d'anneau en temps normal et 150 a 200 au plus
+   * fort, mais ses franges gardent 21 a 34 degres — seul le BLANC enfle, ses franges s'ecartent sans
+   * s'elargir. ENTREE QUI DOIT FAIRE ECHOUER : une vitesse constante (meme vitesse d'une etape a
    * l'autre), aucun retour en arriere, une largeur ou une intensite fixes, trois passages identiques,
-   * un second reflet qui ne croise jamais le premier, ou une lumiere qui reste sur le bloc entre deux
-   * passages (le bord est « noir de base »).
+   * un second reflet qui ne croise jamais le premier, une lumiere qui reste sur le bloc entre deux
+   * passages (le bord est « noir de base »), un eclat qui n'enfle jamais comme celui de la video, des
+   * franges etirees avec le blanc, ou des franges qui ne suivent pas le bord du coeur.
    */
   it('n est pas lineaire : la lumiere hesite, revient, enfle et vacille, comme la video', () => {
     const passages = passagesDe('cadre-vague')
     expect(passages).toHaveLength(3)
+    const intensites = passagesDe('cadre-vague-intensite')
+    const franges = [passagesDe('cadre-vague-gauche'), passagesDe('cadre-vague-droite')]
+    // Le coeur est au repos a 40 px : chaque frange s'ecarte de la moitie de ce qu'il gagne.
+    franges.forEach((frange, cote) => {
+      const sens = cote === 0 ? -1 : 1
+      expect(frange).toHaveLength(3)
+      frange.forEach((passage, i) =>
+        passage.forEach((e, k) => {
+          const c = passages[i]![k]!
+          expect(e.pourcent).toBe(c.pourcent)
+          expect(e.p).toBe(c.p)
+          expect(e.pente).toBe(c.pente)
+          expect(e.largeur, 'une frange ne s etire pas').toBeNaN()
+          expect(Math.abs(e.decalage - sens * 20 * (c.largeur - 1))).toBeLessThanOrEqual(0.25)
+        })
+      )
+    })
+    // Au plus fort, le coeur atteint la moitie de l'anneau d'un bloc de 350 x 52 (180 px en haut et
+    // en bas sur 777 px de tour) au moins une fois par cycle.
+    expect(Math.max(...passages.flat().map((e) => e.largeur))).toBeGreaterThanOrEqual(4)
     let retours = 0
-    for (const passage of passages) {
+    passages.forEach((passage, i) => {
+      // L'intensite suit les memes etapes ; elle seule porte une opacite.
+      expect(intensites[i]!.map((e) => e.pourcent)).toEqual(passage.map((e) => e.pourcent))
+      for (const e of passage) expect(e.opacite).toBeNaN()
       // Un passage toutes les 4 s : 0, 4 et 8 s dans le cycle de 12 s.
       const depart = (passage[0]!.pourcent / 100) * CYCLE_S
       expect(Math.abs(depart - 4 * Math.round(depart / 4))).toBeLessThan(0.01)
@@ -500,15 +641,17 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
       if (lente < 0) retours++
       // Hesite puis s'elance : au moins trois fois plus vite au plus rapide qu'au plus lent.
       expect(rapide).toBeGreaterThan(3 * Math.max(lente, 1))
-      // L'eclat enfle puis retombe.
+      // Le coeur enfle (au moins du double) puis retombe a sa taille de repos aux bords du bloc.
       const largeurs = passage.map((e) => e.largeur)
-      expect(Math.max(...largeurs)).toBeGreaterThanOrEqual(1.4)
+      expect(Math.max(...largeurs)).toBeGreaterThanOrEqual(2)
       expect(passage[0]!.largeur).toBeLessThanOrEqual(1.05)
       expect(passage.at(-1)!.largeur).toBeLessThanOrEqual(1.05)
-      // L'intensite vacille.
-      const opacites = passage.map((e) => e.opacite)
-      expect(Math.max(...opacites) - Math.min(...opacites)).toBeGreaterThanOrEqual(0.3)
-    }
+      // L'intensite vacille, sans eteindre l'eclat : sur la video, le blanc reste blanc (la lumiere
+      // varie par sa taille) ; une opacite a 0,35 ternissait l'or en olive.
+      const opacites = intensites[i]!.map((e) => e.opacite)
+      expect(Math.max(...opacites) - Math.min(...opacites)).toBeGreaterThanOrEqual(0.2)
+      expect(Math.min(...opacites)).toBeGreaterThanOrEqual(0.6)
+    })
     // La lumiere repart en arriere au moins une fois par cycle.
     expect(retours).toBeGreaterThanOrEqual(1)
     // Deux passages ne se ressemblent pas.
@@ -545,7 +688,13 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
    * l'horloge commune.
    */
   it('traverse Actions puis Raisonnement, puis Etapes, en une seule diagonale', () => {
-    expect([...ANIMATIONS_DE_VAGUE]).toEqual(['cadre-vague', 'cadre-vague-second'])
+    expect([...ANIMATIONS_DE_VAGUE]).toEqual([
+      'cadre-vague',
+      'cadre-vague-gauche',
+      'cadre-vague-droite',
+      'cadre-vague-intensite',
+      'cadre-vague-second'
+    ])
     const vague = regleDe('.cadre-vague')
     expect(vague).toMatch(/--vague-avance: 0px;/)
     // La course ne lit la largeur du bloc qu'au-dela de 870 px (scene 3D sur un fil large).
@@ -624,25 +773,39 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
    * « les animations sur les blocs dans le chat doivent etre en fonction de la ou je regarde, pas
    * juste les dernieres » : la vague passe sur TOUS les tours, et animations-hors-champ.ts met en
    * pause ce qui sort de l'ecran. Ce module observe l'element qui porte l'animation : ce sont donc
-   * les pseudo-elements de calques FIXES poses sur le cadre qui bougent, jamais les calques.
-   * ENTREE QUI DOIT FAIRE ECHOUER : figer la vague des tours anciens, ou animer un calque (rogne et
-   * pousse hors du cadre entre deux passages, il serait juge hors champ et ne repartirait plus).
+   * les pseudo-elements de calques FIXES poses sur le cadre qui bougent, jamais les calques ; un
+   * calque ne fait que s'estomper sur place (l'intensite, une opacite). ENTREE QUI DOIT FAIRE
+   * ECHOUER : figer la vague des tours anciens, ou deplacer un calque (rogne et pousse hors du cadre
+   * entre deux passages, il serait juge hors champ et ne repartirait plus).
    */
   it('anime la vague sur tous les tours, depuis des calques qui restent sur le cadre', () => {
     expect(css).not.toMatch(/:has\(~ \.msg\.assistant\.msg--rail\)[^{]*cadre-vague/)
     expect(css).not.toMatch(/cadre-vague[^{]*\{[^}]*animation: none/)
-    for (const calque of ['.cadre-vague__onde', '.cadre-vague__lueur']) {
+    for (const calque of [
+      '.cadre-vague__onde,\n.cadre-vague__trait',
+      '.cadre-vague__lueur',
+      '.cadre-vague__coeur'
+    ]) {
       const regle = regleDe(calque)
       expect(regle, calque).toMatch(/\binset: (0|-\d+px 0);/)
       expect(regle, calque).not.toMatch(/transform|animation/)
     }
+    // L'intensite n'anime que l'opacite des calques : elle ne les deplace pas.
+    for (const e of etatsDe('cadre-vague-intensite')) expect(e.p).toBeNaN()
     const animees = [
       ...css.matchAll(/([^{}]+)\{[^{}]*animation(?:-name)?:[^;]*cadre-vague[^{}]*\}/g)
     ]
     expect(animees.length).toBeGreaterThan(0)
-    for (const m of animees)
-      for (const selecteur of m[1]!.replace(/\/\*[\s\S]*?\*\//g, '').split(','))
-        expect(selecteur.trim()).toMatch(/^\.cadre-vague__(onde|lueur)::(before|after)$/)
+    for (const m of animees) {
+      const selecteurs = m[1]!.replace(/\/\*[\s\S]*?\*\//g, '').split(',')
+      const intensite = /animation: cadre-vague-intensite /.test(m[0])
+      for (const selecteur of selecteurs)
+        expect(selecteur.trim()).toMatch(
+          intensite
+            ? /^\.cadre-vague__(onde|lueur)$/
+            : /^\.cadre-vague__(onde|lueur|coeur|trait)::(before|after)$/
+        )
+    }
   })
 
   /**
@@ -669,14 +832,17 @@ describe('le cadre est dessine par les jetons du theme, et par lui seul', () => 
 
   // Le metal et le spectre ont leur valeur claire, choisie a l'oeil, dans theme-modes.css. La couche
   // generee du theme clair prenait le noir du metal pour un fond d'encre et le passait en nacre :
-  // l'anneau disparaissait sur le blanc. ENTREE QUI DOIT FAIRE ECHOUER : retirer l'exception
-  // `CLAIR_JETONS_ANNEAU` de scripts/theme-nebuleuse-verre.mjs puis regenerer.
-  it('la couche generee du theme clair ne transpose pas les couleurs de l anneau', () => {
-    const couche = readFileSync(
-      join(ICI, '..', 'assets', 'theme-holographique-clair.genere.css'),
-      'utf8'
-    )
-    expect(couche).not.toMatch(/--(chrome|prisme)-[\w-]+\s*:/)
+  // l'anneau disparaissait sur le blanc ; celle de Nebuleuse virait le cyan de la frange froide au
+  // violet. ENTREE QUI DOIT FAIRE ECHOUER : retirer l'exception `JETONS_ANNEAU` de
+  // scripts/theme-nebuleuse-verre.mjs puis regenerer.
+  it('les couches generees de Nebuleuse ne transposent pas les couleurs de l anneau', () => {
+    for (const fichier of [
+      'theme-holographique-clair.genere.css',
+      'theme-nebuleuse-verre.genere.css'
+    ]) {
+      const couche = readFileSync(join(ICI, '..', 'assets', fichier), 'utf8')
+      expect(couche, fichier).not.toMatch(/--(chrome|prisme)-[\w-]+\s*:/)
+    }
   })
 })
 
@@ -716,11 +882,14 @@ describe('la vague du cadre — un passage commun a tous les blocs', () => {
     act(() => root.render(createElement(VagueDuCadre)))
     const vague = host.querySelector('.cadre-vague')
     expect(vague?.getAttribute('aria-hidden')).toBe('true')
-    // Le halo dessous, la bande dessus : par-dessus, le halo delavait le spectre.
+    // Le halo dessous, l'eclat et le trait dessus : par-dessus, le halo delavait les franges. Le
+    // coeur blanc a son calque DANS l'eclat : il s'estompe avec ses franges, d'un bloc.
     expect([...(vague?.children ?? [])].map((e) => e.className)).toEqual([
       'cadre-vague__lueur',
-      'cadre-vague__onde'
+      'cadre-vague__onde',
+      'cadre-vague__trait'
     ])
+    expect(vague?.querySelector(':scope > .cadre-vague__onde > .cadre-vague__coeur')).not.toBeNull()
     expect(vague?.textContent).toBe('')
     act(() => root.unmount())
     host.remove()

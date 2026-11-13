@@ -65,10 +65,10 @@
     --chrome-moyen: rgb(123, 120, 107);
     --chrome-sombre: rgb(43, 41, 36);
     --chrome-noir: rgb(69, 67, 59);
-    --chrome-halo: rgba(173, 170, 159, 0.3);
-    --prisme-magenta: rgb(138, 134, 118);
-    --prisme-bleu: rgb(141, 137, 122);
-    --prisme-cyan: rgb(111, 108, 95);
+    --chrome-halo: rgba(193, 191, 182, 0.36);
+    --prisme-cyan: rgb(120, 116, 102);
+    --prisme-bleu: rgb(140, 136, 119);
+    --prisme-indigo: rgb(98, 95, 84);
     --chat-rail-trait: rgb(151, 147, 132);
     --chat-rail-reponse: rgb(156, 153, 139);
     --chat-rail-point-texte: rgb(173, 170, 159);

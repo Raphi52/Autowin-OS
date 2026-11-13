@@ -65,24 +65,32 @@
   --violet: #8f7cff;
 
   /* Anneau holographique des blocs du fil (anneau-activite.css) : un anneau noir et son liseré, un
-     point blanc, le spectre serre autour et une aura violette, portes par la vague. Ses jetons a
-     part : un metal est NEUTRE, et le texte du theme est teinte (lavande en Nebuleuse) ; pris aux
-     statuts, le spectre tombait dans la palette du theme (en Nebuleuse, l'or et le cyan sont
-     roses). */
+     point blanc, ses deux franges et son halo, portes par la vague. Ses jetons a part : un metal
+     est NEUTRE, et le texte du theme est teinte (lavande en Nebuleuse) ; pris aux statuts, le
+     spectre tombait dans la palette du theme (en Nebuleuse, l'or et le cyan sont roses).
+     Le spectre est RELEVE AU PIXEL sur les 150 images de la video du bouton de verre (couleur
+     mediane des pixels satures, a distance croissante du blanc) : deux familles seulement, froide
+     d'un cote du blanc (cyan a 2-8 degres, bleu a 13, indigo a 20), chaude de l'autre (jaune a
+     2-8, or a 10, corail a 16, rouille a 24) ; ni vert ni magenta (1 % des pixels). Le halo y
+     est une lumiere BLANCHE, a peine froide, pas violette. Le cyan, le bleu, l'indigo, le corail
+     et la rouille sont recales sur la palette que scripts/anneau_lumiere.py rend pour la video
+     (medianes par eclat : froid vif #4cb1fc, moyen #326ed2, sombre #263f90 ; chaud moyen
+     #c95527, sombre #9a4323) : le film de la vague, mesure par le meme script, doit s'en
+     approcher. */
   --chrome-eclat: #ffffff;
   --chrome-clair: #e9ecf0;
   --chrome-moyen: #8a9099;
   --chrome-sombre: #16181c;
   --chrome-noir: #050507;
   --chrome-lisere: rgba(255, 255, 255, 0.2);
-  --chrome-halo: rgba(156, 108, 255, 0.55);
-  --prisme-jaune: #fff27a;
-  --prisme-or: #ffc93c;
-  --prisme-rouge: #ff5a3c;
-  --prisme-magenta: #d44cff;
-  --prisme-bleu: #4a6cff;
-  --prisme-cyan: #3cd8ff;
-  --prisme-vert: #5dffa8;
+  --chrome-halo: rgba(236, 244, 255, 0.42);
+  --prisme-jaune: #fff67c;
+  --prisme-or: #ffd372;
+  --prisme-rouge: #d9602f;
+  --prisme-rouille: #9a4323;
+  --prisme-cyan: #66c4fc;
+  --prisme-bleu: #3f7ce6;
+  --prisme-indigo: #263f90;
 
   /* Espacement (échelle 4px) */
   --s1: 4px;

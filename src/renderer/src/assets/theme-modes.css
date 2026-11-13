@@ -80,17 +80,18 @@
   --chrome-moyen: #6b717b;
   --chrome-sombre: #23262c;
   --chrome-noir: #3a3e46;
-  /* Le liseré clair reste lisible sur l'anneau gris fonce ; l'aura violette, plus legere sur le
-     blanc. */
+  /* Le liseré clair reste lisible sur l'anneau gris fonce. Le halo, une lumiere blanche en sombre,
+     ne se verrait pas sur le blanc : ici un voile gris-bleu leger. Le spectre garde les teintes
+     relevees sur la video (theme.css), en plus soutenu (les niveaux moyens et sombres mesures). */
   --chrome-lisere: rgba(255, 255, 255, 0.7);
-  --chrome-halo: rgba(124, 77, 255, 0.3);
+  --chrome-halo: rgba(170, 182, 205, 0.36);
   --prisme-jaune: #c9a200;
-  --prisme-or: #b98600;
-  --prisme-rouge: #d43a1a;
-  --prisme-magenta: #a32fd1;
-  --prisme-bleu: #2f4bd8;
-  --prisme-cyan: #0a91c4;
-  --prisme-vert: #12a86a;
+  --prisme-or: #c28a12;
+  --prisme-rouge: #c4503f;
+  --prisme-rouille: #8f4127;
+  --prisme-cyan: #1597c9;
+  --prisme-bleu: #316ed2;
+  --prisme-indigo: #263f90;
 
   /* --------------------------------------------------------------------------
      LE CHAT SUIT ENFIN LE THEME. Les 116 jetons `--chat-*` valent, dans theme.css, la couleur

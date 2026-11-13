@@ -45,9 +45,8 @@
    Actions, Etapes, Chantier, Orchestration, barre d'activite, capsule d'image), le decodage d'une
    image (LookDecodeBlock.css) et la scene 3D (Bloc3D.css). Le modele de l'utilisateur est l'anneau
    d'un bouton de verre (une epingle Pinterest) : un anneau NOIR cerne d'un liseré clair tres fin, ou
-   la lumiere fait un point BLANC qui deborde en aura, et ou le spectre se range serre de part et
-   d'autre de ce blanc, comme dans un hologramme. Les blocs le partagent ici pour qu'une retouche les
-   suive tous.
+   la lumiere fait un point BLANC qui deborde en halo, frange de froid d'un cote et de chaud de
+   l'autre. Les blocs le partagent ici pour qu'une retouche les suive tous.
    CE QUI A ETE ESSAYE ET REFUSE (2026-11-12) : le spectre tout autour du bord (« ca fait arc en
    ciel ») ; puis un chrome gris clair avec une frange de couleur de 2 px (« un peu mieux mais on est
    loin du compte »). Ce qui manquait au second, mesure sur l'epingle : un anneau plus epais (5 % du
@@ -55,7 +54,7 @@
    franc et large autour du blanc, et un metal qui reste sombre pour que la lumiere ressorte. Puis un
    metal a bandes grises, teinte de bleu et de rouge : « j'ai un border gris bleu et rouge il devrait
    juste etre noir de base » (2026-11-13).
-   AU REPOS, LE NOIR SEUL ET SON LISERE : le point blanc, son spectre et son aura sont portes par la
+   AU REPOS, LE NOIR SEUL ET SON LISERE : le point blanc, ses franges et son halo sont portes par la
    VAGUE (plus bas), jamais poses ici. Un eclat fixe en haut et son miroir en bas, laisses sous la
    vague, faisaient « un reflet qui balaye un reflet » (2026-11-12). Le LISERE (1 px clair sur le bord
    exterieur, `--chrome-lisere`) est le contour du bouton du pin : « on dirait un vrai bouton car le
@@ -84,15 +83,33 @@
 
 /* LA VAGUE (« faut que ca fasse comme une vague qui traverse l'input », 2026-11-12) : la lumiere du
    bouton de verre traverse le bloc de DROITE A GAUCHE, en DIAGONALE (« la vague doit etre
-   diagonale ») : une bande penchee a 45 degres, le haut en avant. Elle est le SEUL reflet de l'anneau.
-   Element `VagueDuCadre` (anneau-activite.tsx), pose dans chaque bloc encadre, en deux calques :
-   - `.cadre-vague__onde` : la bande sur l'anneau (`::before`), avec le dessin de l'eclat que
-     l'utilisateur a trouve « super reussi » : un point BLANC et le spectre serre de part et d'autre
-     (jaune, or, rouge, magenta, bleu, cyan, vert) ; et un SECOND reflet plus fin (`::after`), qui
-     la suit a distance variable et la croise. Masque : anneau plein, verre du bloc a 10 % ;
-   - `.cadre-vague__lueur` : l'AURA de ce blanc, violette (`--chrome-halo`), qui deborde de 10 px
-     dehors et s'efface a 24 px dedans : « l'aura lumineuse autour du bouton suit la vague reflet »
-     (2026-11-13). Dessous l'onde : par-dessus, elle delavait le spectre.
+   diagonale ») : des bandes penchees a 45 degres, le haut en avant. Elle est le SEUL reflet de
+   l'anneau. Element `VagueDuCadre` (anneau-activite.tsx), pose dans chaque bloc encadre, en trois
+   calques :
+   - `.cadre-vague__onde` : l'ECLAT sur l'anneau, en trois pieces — sa frange gauche (`::before`),
+     sa frange droite (`::after`) et son coeur blanc (`.cadre-vague__coeur::before`) ;
+   - `.cadre-vague__trait` : un SECOND reflet plus fin (`::before`), qui suit l'eclat a distance
+     variable et le croise ;
+     ces deux calques ont le masque de l'anneau (anneau plein, verre du bloc a 10 %) ;
+   - `.cadre-vague__lueur` : le HALO du blanc (`--chrome-halo`), qui deborde de 10 px dehors et
+     s'efface a 12 px dedans : « l'aura lumineuse autour du bouton suit la vague reflet »
+     (2026-11-13). Sur la video, il tient a deux ou trois epaisseurs d'anneau de chaque cote ; a
+     24 px dedans (8 epaisseurs), il trainait en diagonale grise dans le bloc (film du 2026-11-13).
+     Dessous l'eclat : par-dessus, il delavait les franges.
+   LE DESSIN DE L'ECLAT EST RELEVE AU PIXEL sur les 150 images de la video du pin (2026-11-13),
+   anneau deroule en 360 secteurs :
+   - L'ORDRE SUIT LE TOUR DE L'ANNEAU : en tournant dans le sens horaire, le blanc est precede du
+     froid et suivi du chaud (764 bords froids contre 288 en sens inverse, 758 chauds contre 360),
+     en haut comme en bas de l'anneau. Sur le bord HAUT d'un bloc (horaire = vers la droite) : froid
+     a gauche du blanc, chaud a droite ; sur le bord BAS (horaire = vers la gauche), l'inverse. Chaque
+     piece a donc deux couches, la moitie haute et la moitie basse, en miroir. Sur les petits cotes,
+     l'ordre change a mi-hauteur : un trait de 3 px, ou le saut ne se voit pas.
+   - LES FRANGES : 66 px de chaque cote (30 degres a 2,2 px par degre, le pas d'un bloc de 350 x 52),
+     un passage par le pale a 4 px, puis cyan (13 px), bleu (29), indigo (44) d'un cote, jaune
+     (13 px), or (22), corail (35), rouille (53) de l'autre, eteints a 66 px. Ni vert ni magenta.
+   - LE COEUR : 40 px de blanc plein (17 degres, la mediane des blancs de la video). Lui seul enfle :
+     ses franges gardent leur largeur et s'ecartent (scripts/vague-du-cadre.mjs). Les franges
+     debordent de 4 px de blanc sur le coeur : la jointure ne laisse pas de fente.
    DEPLACEE PAR `transform` SEUL, jamais par une position de degrade : la carte graphique fait glisser
    la bande deja peinte, le processeur ne repeint rien. Animer un degrade (l'ancienne lave, puis
    l'eclat au survol) repeignait le calque a chaque image. La pente est un `skewX` : le profil reste
@@ -100,16 +117,18 @@
    de plusieurs centaines de pixels (un degrade penche dans une tuile de 220 px y serait tronque).
    PAS LINEAIRE (« moins lineaire, presque chaotique, vraiment comme la video de Pinterest »,
    2026-11-13) : un passage toutes les 4 s (« toutes les 4 s au lieu de 6 »), mais chacun hesite,
-   oscille, revient parfois en arriere, et sa bande enfle en eclat puis retombe en vacillant. Les
+   oscille, revient parfois en arriere, et son blanc enfle en eclat puis retombe en vacillant. Les
    trois passages d'un cycle de 12 s ont chacun leurs reglages. Ces etapes sont CALCULEES par
    scripts/vague-du-cadre.mjs, d'apres la video mesuree : on regle le script, pas les pourcentages.
+   L'INTENSITE de l'eclat et du halo anime l'opacite de leur calque (`cadre-vague-intensite`), pas
+   celle de chaque piece : les recouvrements de blanc s'y eclairciraient.
    LA COURSE, LA MEME POUR TOUS LES BLOCS : la bande (220 px) se place a
    `100cqw + --vague-avance - --vague-course * p`, de juste a droite du bloc (p = 0) a sortie a
    gauche (p = 1). La course vaut 1 100 px plus la hauteur du bloc, que la pente ajoute a ce qui doit
    sortir a gauche. Elle ne depend pas de la largeur du bloc : une course proportionnelle donnait a
-   chaque largeur sa vitesse, et la diagonale cassait d'un bloc a l'autre. Seul un bloc plus large que 870 px (la scene 3D sur
-   un fil large) l'allonge, pour que la bande en sorte entierement. `cqw`/`cqh` lisent la taille de
-   `.cadre-vague`, conteneur de requete.
+   chaque largeur sa vitesse, et la diagonale cassait d'un bloc a l'autre. Seul un bloc plus large
+   que 870 px (la scene 3D sur un fil large) l'allonge, pour que la bande en sorte entierement.
+   `cqw`/`cqh` lisent la taille de `.cadre-vague`, conteneur de requete.
    UNE SEULE DIAGONALE POUR TOUT LE GROUPE : chaque passage est cale sur l'horloge commune
    (`caleSurLHorlogeCommune`), et `--vague-avance` dit, en pixels, le chemin que la diagonale fait
    avant d'atteindre le bord droit du bloc. Dans la rangee Raisonnement | Actions, elle traverse
@@ -120,9 +139,10 @@
    passee sur deux lignes (fil de moins de 488 px, ou un bloc deplie qui prend la ligne) :
    Raisonnement en haut (0), Actions dessous (50), Etapes en bas (100). La hauteur d'un bloc deplie
    n'est pas connue ici : l'ordre reste juste, la ligne n'est qu'approchee.
-   L'onde est CLIPPEE (`overflow: clip`), la lueur sur les cotes seulement : la bande en attente a
-   droite du bloc elargirait sinon la zone defilable du fil (barre horizontale). Les bouts de la
-   lueur s'effacent sur 16 px : coupee net, elle dessinait une equerre au-dessus des coins arrondis.
+   L'eclat et le trait sont CLIPPES (`overflow: clip`), la lueur sur les cotes seulement : la bande
+   en attente a droite du bloc elargirait sinon la zone defilable du fil (barre horizontale). Les
+   bouts de la lueur s'effacent sur 16 px : coupee net, elle dessinait une equerre au-dessus des
+   coins arrondis.
    SUR TOUS LES TOURS, MAIS SEULEMENT A L'ECRAN (« les animations sur les blocs dans le chat doivent
    etre en fonction de la ou je regarde, pas juste les dernieres ») : animations-hors-champ.ts met en
    pause une animation continue sortie du champ et la reprend a sa phase sur l'horloge commune.
@@ -150,7 +170,11 @@
   position: absolute;
   inset: -10px 0;
   overflow-x: clip;
-  /* Dans un masque seule l'opacite compte : un jeton opaque plutot qu'un noir ecrit en dur. */
+  /* Dans un masque seule l'opacite compte : un jeton opaque plutot qu'un noir ecrit en dur.
+     Le halo s'arrete au trait de l'anneau (de 10 a 13 px, et autant en bas) et repart de l'autre
+     cote : sur la video, la lueur est AUTOUR de l'anneau, et l'anneau garde ses couleurs pures. Pose
+     sous les franges, son blanc les delavait des que l'eclat faiblissait (film mesure par
+     scripts/anneau_lumiere.py : orange moyen #ce7f61 au lieu du #c95527 de la video). */
   -webkit-mask:
     linear-gradient(
       90deg,
@@ -162,15 +186,20 @@
     linear-gradient(
       transparent,
       var(--bg-0) 10px,
-      transparent 34px,
-      transparent calc(100% - 34px),
+      transparent 10px 13px,
+      var(--bg-0) 13px,
+      transparent 25px,
+      transparent calc(100% - 25px),
+      var(--bg-0) calc(100% - 13px),
+      transparent calc(100% - 13px) calc(100% - 10px),
       var(--bg-0) calc(100% - 10px),
       transparent
     );
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
 }
-.cadre-vague__onde {
+.cadre-vague__onde,
+.cadre-vague__trait {
   position: absolute;
   inset: 0;
   padding: 3px;
@@ -183,59 +212,129 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
-/* Le profil de l'ancien eclat, en pixels sur une bande de 220 px : le blanc plein sur 30 px au
-   centre, puis le spectre jusqu'a 66 px de chaque cote. */
+.cadre-vague__lueur,
+.cadre-vague__onde {
+  animation: cadre-vague-intensite 12s linear infinite;
+}
+.cadre-vague__coeur {
+  position: absolute;
+  inset: 0;
+}
+/* Les pieces, en pixels sur une bande de 220 px dont le centre est a 110 : coeur blanc de 90 a
+   130, frange gauche de 24 a 94, frange droite de 126 a 196. Le pale des 4 premiers pixels : 40 %
+   de la teinte dans le blanc. */
 .cadre-vague__onde::before {
   background:
     linear-gradient(
-      90deg,
-      transparent 68px,
-      color-mix(in srgb, var(--chrome-eclat) 60%, transparent) 82px,
-      var(--chrome-eclat) 95px 125px,
-      color-mix(in srgb, var(--chrome-eclat) 60%, transparent) 138px,
-      transparent 152px
-    ),
+        90deg,
+        transparent 24px,
+        color-mix(in srgb, var(--prisme-indigo) 50%, transparent) 33px,
+        var(--prisme-indigo) 46px,
+        var(--prisme-bleu) 61px,
+        var(--prisme-cyan) 77px,
+        color-mix(in srgb, var(--prisme-cyan) 40%, var(--chrome-eclat)) 86px,
+        var(--chrome-eclat) 90px 94px,
+        transparent 94px
+      )
+      top / 100% 50% no-repeat,
     linear-gradient(
-      90deg,
-      transparent 44px,
-      color-mix(in srgb, var(--prisme-vert) 60%, transparent) 53px,
-      var(--prisme-cyan) 60px,
-      var(--prisme-bleu) 66px,
-      var(--prisme-magenta) 72px,
-      var(--prisme-rouge) 77px,
-      var(--prisme-or) 83px,
-      var(--prisme-jaune) 88px,
-      transparent 95px 125px,
-      var(--prisme-jaune) 132px,
-      var(--prisme-or) 137px,
-      var(--prisme-rouge) 143px,
-      var(--prisme-magenta) 148px,
-      var(--prisme-bleu) 154px,
-      var(--prisme-cyan) 160px,
-      color-mix(in srgb, var(--prisme-vert) 60%, transparent) 167px,
-      transparent 176px
-    );
+        90deg,
+        transparent 24px,
+        color-mix(in srgb, var(--prisme-rouille) 50%, transparent) 30px,
+        var(--prisme-rouille) 37px,
+        var(--prisme-rouge) 55px,
+        var(--prisme-or) 68px,
+        var(--prisme-jaune) 77px,
+        color-mix(in srgb, var(--prisme-jaune) 40%, var(--chrome-eclat)) 86px,
+        var(--chrome-eclat) 90px 94px,
+        transparent 94px
+      )
+      bottom / 100% 50% no-repeat;
 }
-/* Le second reflet : un blanc mince et son spectre, sans aura. */
 .cadre-vague__onde::after {
+  background:
+    linear-gradient(
+        90deg,
+        transparent 126px,
+        var(--chrome-eclat) 126px 130px,
+        color-mix(in srgb, var(--prisme-jaune) 40%, var(--chrome-eclat)) 134px,
+        var(--prisme-jaune) 143px,
+        var(--prisme-or) 152px,
+        var(--prisme-rouge) 165px,
+        var(--prisme-rouille) 183px,
+        color-mix(in srgb, var(--prisme-rouille) 50%, transparent) 190px,
+        transparent 196px
+      )
+      top / 100% 50% no-repeat,
+    linear-gradient(
+        90deg,
+        transparent 126px,
+        var(--chrome-eclat) 126px 130px,
+        color-mix(in srgb, var(--prisme-cyan) 40%, var(--chrome-eclat)) 134px,
+        var(--prisme-cyan) 143px,
+        var(--prisme-bleu) 159px,
+        var(--prisme-indigo) 174px,
+        color-mix(in srgb, var(--prisme-indigo) 50%, transparent) 187px,
+        transparent 196px
+      )
+      bottom / 100% 50% no-repeat;
+}
+.cadre-vague__coeur::before {
   background: linear-gradient(
     90deg,
-    transparent 78px,
-    color-mix(in srgb, var(--prisme-cyan) 70%, transparent) 88px,
-    var(--prisme-magenta) 96px,
-    var(--prisme-or) 103px,
-    var(--chrome-eclat) 108px 112px,
-    var(--prisme-or) 117px,
-    var(--prisme-magenta) 124px,
-    color-mix(in srgb, var(--prisme-cyan) 70%, transparent) 132px,
-    transparent 142px
+    transparent 90px,
+    var(--chrome-eclat) 90px 130px,
+    transparent 130px
   );
 }
-/* Origine au centre de la bande et au bord haut du bloc : l'eclat enfle autour de son centre, et la
+/* Le second reflet : un blanc de 8 px et des franges de 56 px, le meme ordre en miroir haut/bas.
+   Les petits blancs de la video (4 a 12 degres) gardent des franges de 21 a 32 degres. */
+.cadre-vague__trait::before {
+  background:
+    linear-gradient(
+        90deg,
+        transparent 50px,
+        color-mix(in srgb, var(--prisme-indigo) 50%, transparent) 58px,
+        var(--prisme-indigo) 69px,
+        var(--prisme-bleu) 81px,
+        var(--prisme-cyan) 95px,
+        color-mix(in srgb, var(--prisme-cyan) 40%, var(--chrome-eclat)) 103px,
+        var(--chrome-eclat) 106px 114px,
+        color-mix(in srgb, var(--prisme-jaune) 40%, var(--chrome-eclat)) 117px,
+        var(--prisme-jaune) 125px,
+        var(--prisme-or) 133px,
+        var(--prisme-rouge) 144px,
+        var(--prisme-rouille) 159px,
+        color-mix(in srgb, var(--prisme-rouille) 50%, transparent) 165px,
+        transparent 170px
+      )
+      top / 100% 50% no-repeat,
+    linear-gradient(
+        90deg,
+        transparent 50px,
+        color-mix(in srgb, var(--prisme-rouille) 50%, transparent) 55px,
+        var(--prisme-rouille) 61px,
+        var(--prisme-rouge) 76px,
+        var(--prisme-or) 87px,
+        var(--prisme-jaune) 95px,
+        color-mix(in srgb, var(--prisme-jaune) 40%, var(--chrome-eclat)) 103px,
+        var(--chrome-eclat) 106px 114px,
+        color-mix(in srgb, var(--prisme-cyan) 40%, var(--chrome-eclat)) 117px,
+        var(--prisme-cyan) 125px,
+        var(--prisme-bleu) 139px,
+        var(--prisme-indigo) 151px,
+        color-mix(in srgb, var(--prisme-indigo) 50%, transparent) 162px,
+        transparent 170px
+      )
+      bottom / 100% 50% no-repeat;
+}
+/* Origine au centre de la bande et au bord haut du bloc : le coeur enfle autour de son centre, et la
    pente part du bord. */
 .cadre-vague__lueur::before,
 .cadre-vague__onde::before,
-.cadre-vague__onde::after {
+.cadre-vague__onde::after,
+.cadre-vague__coeur::before,
+.cadre-vague__trait::before {
   content: '';
   position: absolute;
   top: 0;
@@ -243,24 +342,33 @@
   left: 0;
   width: 220px;
   transform-origin: 110px 0;
-  transform: translateX(calc(100cqw + var(--vague-avance))) skewX(45deg) scaleX(1);
+  transform: translateX(calc(100cqw + var(--vague-avance))) skewX(45deg);
   animation: cadre-vague 12s linear infinite;
 }
-/* Apres la regle commune : son raccourci `animation` remettrait le nom du reflet principal. */
+/* Apres la regle commune : son raccourci `animation` remettrait le nom du coeur. */
+.cadre-vague__onde::before {
+  animation-name: cadre-vague-gauche;
+}
 .cadre-vague__onde::after {
+  animation-name: cadre-vague-droite;
+}
+.cadre-vague__trait::before {
   animation-name: cadre-vague-second;
 }
-/* L'aura suit le reflet principal (meme animation). Elle depasse de 10 px en haut : sa pente part du
-   bord du bloc, pas du haut du calque. */
+/* Le halo suit le coeur (meme animation) : il enfle avec lui. Lumiere blanche mesuree sur la
+   video : derriere un blanc, +50 sur chaque canal autour de l'anneau, un peu plus dedans que dehors.
+   40 px de part et d'autre du centre au repos : enfle (x 4,5), il couvre encore ses franges sans
+   les deborder de plus de 30 px. Il depasse de 10 px en haut : sa pente part du bord du bloc, pas
+   du haut du calque. */
 .cadre-vague__lueur::before {
   transform-origin: 110px 10px;
   background: linear-gradient(
     90deg,
-    transparent 38px,
-    color-mix(in srgb, var(--chrome-halo) 30%, transparent) 65px,
-    var(--chrome-halo) 110px,
-    color-mix(in srgb, var(--chrome-halo) 30%, transparent) 155px,
-    transparent 182px
+    transparent 70px,
+    color-mix(in srgb, var(--chrome-halo) 35%, transparent) 82px,
+    var(--chrome-halo) 94px 126px,
+    color-mix(in srgb, var(--chrome-halo) 35%, transparent) 138px,
+    transparent 150px
   );
 }
 /* vague-du-cadre : debut du bloc calcule par scripts/vague-du-cadre.mjs */
@@ -268,459 +376,924 @@
   0% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
       skewX(45deg) scaleX(1);
-    opacity: 0.55;
   }
   1.548% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.058))
-      skewX(45.6deg) scaleX(1.03);
-    opacity: 0.68;
+      skewX(45.6deg) scaleX(1.04);
   }
   3.095% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.142))
-      skewX(47deg) scaleX(1.03);
-    opacity: 0.46;
+      skewX(47deg) scaleX(1.1);
   }
   4.643% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.189))
-      skewX(48.1deg) scaleX(1.01);
-    opacity: 0.64;
+      skewX(48.1deg) scaleX(1.33);
   }
   6.19% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.227))
-      skewX(47.8deg) scaleX(1.23);
-    opacity: 0.84;
+      skewX(47.8deg) scaleX(2.21);
   }
   7.738% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.315))
-      skewX(46deg) scaleX(1.74);
-    opacity: 0.72;
+      skewX(46deg) scaleX(3.8);
   }
   9.286% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.45))
-      skewX(43.3deg) scaleX(2.15);
-    opacity: 0.97;
+      skewX(43.3deg) scaleX(5.35);
   }
   10.833% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.56))
-      skewX(41deg) scaleX(2.2);
-    opacity: 1;
+      skewX(41deg) scaleX(5.9);
   }
   12.381% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.601))
-      skewX(40.1deg) scaleX(2.01);
-    opacity: 0.83;
+      skewX(40.1deg) scaleX(5.21);
   }
   13.929% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.618))
-      skewX(41.1deg) scaleX(1.72);
-    opacity: 0.86;
+      skewX(41.1deg) scaleX(3.78);
   }
   15.476% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.681))
-      skewX(43.3deg) scaleX(1.34);
-    opacity: 0.83;
+      skewX(43.3deg) scaleX(2.31);
   }
   17.024% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.795))
-      skewX(45.4deg) scaleX(1.04);
-    opacity: 0.5;
+      skewX(45.4deg) scaleX(1.36);
   }
   18.571% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.899))
-      skewX(46.4deg) scaleX(0.97);
-    opacity: 0.61;
+      skewX(46.4deg) scaleX(1.04);
   }
   20.119% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.966))
-      skewX(46.1deg) scaleX(1.01);
-    opacity: 0.67;
+      skewX(46.1deg) scaleX(1.02);
   }
   21.667% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
       skewX(45deg) scaleX(1);
-    opacity: 0.42;
     animation-timing-function: step-end;
   }
   33.333% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
-      skewX(45deg) scaleX(1.01);
-    opacity: 0.56;
+      skewX(45deg) scaleX(1);
   }
   34.881% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.053))
       skewX(45.8deg) scaleX(1.04);
-    opacity: 0.55;
   }
   36.429% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.112))
-      skewX(45.6deg) scaleX(1.08);
-    opacity: 0.89;
+      skewX(45.6deg) scaleX(1.13);
   }
   37.976% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.159))
-      skewX(44.1deg) scaleX(1.28);
-    opacity: 0.83;
+      skewX(44.1deg) scaleX(1.5);
   }
   39.524% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.23))
-      skewX(42deg) scaleX(1.54);
-    opacity: 0.88;
+      skewX(42deg) scaleX(2.04);
   }
   41.071% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.343))
-      skewX(40.5deg) scaleX(1.53);
-    opacity: 1;
+      skewX(40.5deg) scaleX(2.3);
   }
   42.619% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.47))
-      skewX(40.7deg) scaleX(1.27);
-    opacity: 0.88;
+      skewX(40.7deg) scaleX(2.11);
   }
   44.167% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.564))
-      skewX(42.6deg) scaleX(1.15);
-    opacity: 0.73;
+      skewX(42.6deg) scaleX(1.8);
   }
   45.714% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.609))
-      skewX(45.4deg) scaleX(1.18);
-    opacity: 0.84;
+      skewX(45.4deg) scaleX(1.54);
   }
   47.262% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.631))
-      skewX(47.8deg) scaleX(1.09);
-    opacity: 0.56;
+      skewX(47.8deg) scaleX(1.24);
   }
   48.81% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.679))
-      skewX(48.7deg) scaleX(0.94);
-    opacity: 0.49;
+      skewX(48.7deg) scaleX(0.98);
   }
   50.357% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.769))
-      skewX(48deg) scaleX(0.94);
-    opacity: 0.7;
+      skewX(48deg) scaleX(0.95);
   }
   51.905% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.876))
       skewX(46.4deg) scaleX(1.03);
-    opacity: 0.49;
   }
   53.452% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.965))
       skewX(45.2deg) scaleX(1.02);
-    opacity: 0.47;
   }
   55% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
       skewX(45deg) scaleX(1);
-    opacity: 0.69;
     animation-timing-function: step-end;
   }
   66.667% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
       skewX(45deg) scaleX(1);
-    opacity: 0.69;
   }
   68.214% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.029))
       skewX(43.9deg) scaleX(0.98);
-    opacity: 0.49;
   }
   69.762% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.133))
       skewX(43deg) scaleX(1.03);
-    opacity: 0.48;
   }
   71.31% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.25))
-      skewX(43.2deg) scaleX(1.07);
-    opacity: 0.7;
+      skewX(43.2deg) scaleX(1.1);
   }
   72.857% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.282))
-      skewX(44.8deg) scaleX(0.98);
-    opacity: 0.51;
+      skewX(44.8deg) scaleX(1.12);
   }
   74.405% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.277))
-      skewX(47.3deg) scaleX(0.95);
-    opacity: 0.57;
+      skewX(47.3deg) scaleX(1.41);
   }
   75.952% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.378))
-      skewX(49.4deg) scaleX(1.22);
-    opacity: 0.87;
+      skewX(49.4deg) scaleX(2.27);
   }
   77.5% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.558))
-      skewX(50deg) scaleX(1.58);
-    opacity: 0.77;
+      skewX(50deg) scaleX(3.35);
   }
   79.048% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.647))
-      skewX(48.7deg) scaleX(1.76);
-    opacity: 0.9;
+      skewX(48.7deg) scaleX(3.94);
   }
   80.595% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.628))
-      skewX(46.2deg) scaleX(1.79);
-    opacity: 1;
+      skewX(46.2deg) scaleX(3.74);
   }
   82.143% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.661))
-      skewX(43.8deg) scaleX(1.73);
-    opacity: 0.87;
+      skewX(43.8deg) scaleX(2.99);
   }
   83.69% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.796))
-      skewX(42.6deg) scaleX(1.5);
-    opacity: 0.78;
+      skewX(42.6deg) scaleX(2.08);
   }
   85.238% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.913))
-      skewX(42.8deg) scaleX(1.19);
-    opacity: 0.86;
+      skewX(42.8deg) scaleX(1.36);
   }
   86.786% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.965))
-      skewX(44deg) scaleX(1.03);
-    opacity: 0.54;
+      skewX(44deg) scaleX(1.04);
   }
   88.333% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
-      skewX(45deg) scaleX(1.01);
-    opacity: 0.53;
+      skewX(45deg) scaleX(1);
+    animation-timing-function: step-end;
+  }
+}
+@keyframes cadre-vague-gauche {
+  0% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
+      skewX(45deg);
+  }
+  1.548% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.058 - 0.8px))
+      skewX(45.6deg);
+  }
+  3.095% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.142 - 2px))
+      skewX(47deg);
+  }
+  4.643% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.189 - 6.7px))
+      skewX(48.1deg);
+  }
+  6.19% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.227 - 24.1px))
+      skewX(47.8deg);
+  }
+  7.738% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.315 - 56px))
+      skewX(46deg);
+  }
+  9.286% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.45 - 87px))
+      skewX(43.3deg);
+  }
+  10.833% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.56 - 98.1px))
+      skewX(41deg);
+  }
+  12.381% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.601 - 84.3px))
+      skewX(40.1deg);
+  }
+  13.929% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.618 - 55.6px))
+      skewX(41.1deg);
+  }
+  15.476% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.681 - 26.3px))
+      skewX(43.3deg);
+  }
+  17.024% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.795 - 7.3px))
+      skewX(45.4deg);
+  }
+  18.571% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.899 - 0.9px))
+      skewX(46.4deg);
+  }
+  20.119% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.966 - 0.4px))
+      skewX(46.1deg);
+  }
+  21.667% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
+      skewX(45deg);
+    animation-timing-function: step-end;
+  }
+  33.333% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
+      skewX(45deg);
+  }
+  34.881% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.053 - 0.8px))
+      skewX(45.8deg);
+  }
+  36.429% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.112 - 2.7px))
+      skewX(45.6deg);
+  }
+  37.976% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.159 - 10.1px))
+      skewX(44.1deg);
+  }
+  39.524% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.23 - 20.9px))
+      skewX(42deg);
+  }
+  41.071% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.343 - 25.9px))
+      skewX(40.5deg);
+  }
+  42.619% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.47 - 22.1px))
+      skewX(40.7deg);
+  }
+  44.167% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.564 - 16px))
+      skewX(42.6deg);
+  }
+  45.714% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.609 - 10.9px))
+      skewX(45.4deg);
+  }
+  47.262% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.631 - 4.8px))
+      skewX(47.8deg);
+  }
+  48.81% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.679 + 0.4px))
+      skewX(48.7deg);
+  }
+  50.357% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.769 + 0.9px))
+      skewX(48deg);
+  }
+  51.905% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.876 - 0.6px))
+      skewX(46.4deg);
+  }
+  53.452% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.965 - 0.5px))
+      skewX(45.2deg);
+  }
+  55% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
+      skewX(45deg);
+    animation-timing-function: step-end;
+  }
+  66.667% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
+      skewX(45deg);
+  }
+  68.214% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.029 + 0.4px))
+      skewX(43.9deg);
+  }
+  69.762% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.133 - 0.7px))
+      skewX(43deg);
+  }
+  71.31% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.25 - 2px))
+      skewX(43.2deg);
+  }
+  72.857% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.282 - 2.3px))
+      skewX(44.8deg);
+  }
+  74.405% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.277 - 8.2px))
+      skewX(47.3deg);
+  }
+  75.952% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.378 - 25.5px))
+      skewX(49.4deg);
+  }
+  77.5% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.558 - 47px))
+      skewX(50deg);
+  }
+  79.048% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.647 - 58.7px))
+      skewX(48.7deg);
+  }
+  80.595% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.628 - 54.8px))
+      skewX(46.2deg);
+  }
+  82.143% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.661 - 39.8px))
+      skewX(43.8deg);
+  }
+  83.69% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.796 - 21.5px))
+      skewX(42.6deg);
+  }
+  85.238% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.913 - 7.1px))
+      skewX(42.8deg);
+  }
+  86.786% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.965 - 0.8px))
+      skewX(44deg);
+  }
+  88.333% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
+      skewX(45deg);
+    animation-timing-function: step-end;
+  }
+}
+@keyframes cadre-vague-droite {
+  0% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
+      skewX(45deg);
+  }
+  1.548% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.058 + 0.8px))
+      skewX(45.6deg);
+  }
+  3.095% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.142 + 2px))
+      skewX(47deg);
+  }
+  4.643% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.189 + 6.7px))
+      skewX(48.1deg);
+  }
+  6.19% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.227 + 24.1px))
+      skewX(47.8deg);
+  }
+  7.738% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.315 + 56px))
+      skewX(46deg);
+  }
+  9.286% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.45 + 87px))
+      skewX(43.3deg);
+  }
+  10.833% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.56 + 98.1px))
+      skewX(41deg);
+  }
+  12.381% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.601 + 84.3px))
+      skewX(40.1deg);
+  }
+  13.929% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.618 + 55.6px))
+      skewX(41.1deg);
+  }
+  15.476% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.681 + 26.3px))
+      skewX(43.3deg);
+  }
+  17.024% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.795 + 7.3px))
+      skewX(45.4deg);
+  }
+  18.571% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.899 + 0.9px))
+      skewX(46.4deg);
+  }
+  20.119% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.966 + 0.4px))
+      skewX(46.1deg);
+  }
+  21.667% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
+      skewX(45deg);
+    animation-timing-function: step-end;
+  }
+  33.333% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
+      skewX(45deg);
+  }
+  34.881% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.053 + 0.8px))
+      skewX(45.8deg);
+  }
+  36.429% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.112 + 2.7px))
+      skewX(45.6deg);
+  }
+  37.976% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.159 + 10.1px))
+      skewX(44.1deg);
+  }
+  39.524% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.23 + 20.9px))
+      skewX(42deg);
+  }
+  41.071% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.343 + 25.9px))
+      skewX(40.5deg);
+  }
+  42.619% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.47 + 22.1px))
+      skewX(40.7deg);
+  }
+  44.167% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.564 + 16px))
+      skewX(42.6deg);
+  }
+  45.714% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.609 + 10.9px))
+      skewX(45.4deg);
+  }
+  47.262% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.631 + 4.8px))
+      skewX(47.8deg);
+  }
+  48.81% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.679 - 0.4px))
+      skewX(48.7deg);
+  }
+  50.357% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.769 - 0.9px))
+      skewX(48deg);
+  }
+  51.905% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.876 + 0.6px))
+      skewX(46.4deg);
+  }
+  53.452% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.965 + 0.5px))
+      skewX(45.2deg);
+  }
+  55% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
+      skewX(45deg);
+    animation-timing-function: step-end;
+  }
+  66.667% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
+      skewX(45deg);
+  }
+  68.214% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.029 - 0.4px))
+      skewX(43.9deg);
+  }
+  69.762% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.133 + 0.7px))
+      skewX(43deg);
+  }
+  71.31% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.25 + 2px))
+      skewX(43.2deg);
+  }
+  72.857% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.282 + 2.3px))
+      skewX(44.8deg);
+  }
+  74.405% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.277 + 8.2px))
+      skewX(47.3deg);
+  }
+  75.952% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.378 + 25.5px))
+      skewX(49.4deg);
+  }
+  77.5% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.558 + 47px))
+      skewX(50deg);
+  }
+  79.048% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.647 + 58.7px))
+      skewX(48.7deg);
+  }
+  80.595% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.628 + 54.8px))
+      skewX(46.2deg);
+  }
+  82.143% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.661 + 39.8px))
+      skewX(43.8deg);
+  }
+  83.69% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.796 + 21.5px))
+      skewX(42.6deg);
+  }
+  85.238% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.913 + 7.1px))
+      skewX(42.8deg);
+  }
+  86.786% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.965 + 0.8px))
+      skewX(44deg);
+  }
+  88.333% {
+    transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
+      skewX(45deg);
+    animation-timing-function: step-end;
+  }
+}
+@keyframes cadre-vague-intensite {
+  0% {
+    opacity: 0.78;
+  }
+  1.548% {
+    opacity: 0.89;
+  }
+  3.095% {
+    opacity: 0.69;
+  }
+  4.643% {
+    opacity: 0.83;
+  }
+  6.19% {
+    opacity: 0.97;
+  }
+  7.738% {
+    opacity: 0.82;
+  }
+  9.286% {
+    opacity: 0.99;
+  }
+  10.833% {
+    opacity: 1;
+  }
+  12.381% {
+    opacity: 0.87;
+  }
+  13.929% {
+    opacity: 0.94;
+  }
+  15.476% {
+    opacity: 0.96;
+  }
+  17.024% {
+    opacity: 0.71;
+  }
+  18.571% {
+    opacity: 0.82;
+  }
+  20.119% {
+    opacity: 0.88;
+  }
+  21.667% {
+    opacity: 0.67;
+    animation-timing-function: step-end;
+  }
+  33.333% {
+    opacity: 0.76;
+  }
+  34.881% {
+    opacity: 0.74;
+  }
+  36.429% {
+    opacity: 0.98;
+  }
+  37.976% {
+    opacity: 0.89;
+  }
+  39.524% {
+    opacity: 0.9;
+  }
+  41.071% {
+    opacity: 1;
+  }
+  42.619% {
+    opacity: 0.94;
+  }
+  44.167% {
+    opacity: 0.85;
+  }
+  45.714% {
+    opacity: 0.99;
+  }
+  47.262% {
+    opacity: 0.78;
+  }
+  48.81% {
+    opacity: 0.72;
+  }
+  50.357% {
+    opacity: 0.9;
+  }
+  51.905% {
+    opacity: 0.73;
+  }
+  53.452% {
+    opacity: 0.71;
+  }
+  55% {
+    opacity: 0.9;
+    animation-timing-function: step-end;
+  }
+  66.667% {
+    opacity: 0.9;
+  }
+  68.214% {
+    opacity: 0.72;
+  }
+  69.762% {
+    opacity: 0.72;
+  }
+  71.31% {
+    opacity: 0.91;
+  }
+  72.857% {
+    opacity: 0.74;
+  }
+  74.405% {
+    opacity: 0.77;
+  }
+  75.952% {
+    opacity: 1;
+  }
+  77.5% {
+    opacity: 0.88;
+  }
+  79.048% {
+    opacity: 0.94;
+  }
+  80.595% {
+    opacity: 1;
+  }
+  82.143% {
+    opacity: 0.89;
+  }
+  83.69% {
+    opacity: 0.86;
+  }
+  85.238% {
+    opacity: 0.97;
+  }
+  86.786% {
+    opacity: 0.74;
+  }
+  88.333% {
+    opacity: 0.75;
     animation-timing-function: step-end;
   }
 }
 @keyframes cadre-vague-second {
   0% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
-      skewX(45deg) scaleX(0.55);
-    opacity: 0.74;
+      skewX(45deg) scaleX(0.95);
+    opacity: 0.85;
   }
   1.548% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.075))
-      skewX(43.4deg) scaleX(0.71);
-    opacity: 0.85;
+      skewX(43.4deg) scaleX(1.15);
+    opacity: 0.92;
   }
   3.095% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.162))
-      skewX(42.2deg) scaleX(0.74);
-    opacity: 0.41;
+      skewX(42.2deg) scaleX(1.19);
+    opacity: 0.62;
   }
   4.643% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.196))
-      skewX(42.3deg) scaleX(0.61);
-    opacity: 0.38;
+      skewX(42.3deg) scaleX(1.03);
+    opacity: 0.61;
   }
   6.19% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.212))
-      skewX(44.1deg) scaleX(0.43);
-    opacity: 0.83;
+      skewX(44.1deg) scaleX(0.8);
+    opacity: 0.9;
   }
   7.738% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.275))
-      skewX(47deg) scaleX(0.35);
-    opacity: 0.77;
+      skewX(47deg) scaleX(0.7);
+    opacity: 0.87;
   }
   9.286% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.393))
-      skewX(50deg) scaleX(0.43);
-    opacity: 0.34;
+      skewX(50deg) scaleX(0.8);
+    opacity: 0.58;
   }
   10.833% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.501))
-      skewX(51.8deg) scaleX(0.61);
-    opacity: 0.47;
+      skewX(51.8deg) scaleX(1.03);
+    opacity: 0.66;
   }
   12.381% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.555))
-      skewX(51.6deg) scaleX(0.74);
-    opacity: 0.88;
+      skewX(51.6deg) scaleX(1.19);
+    opacity: 0.94;
   }
   13.929% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.596))
-      skewX(49.7deg) scaleX(0.71);
-    opacity: 0.68;
+      skewX(49.7deg) scaleX(1.15);
+    opacity: 0.8;
   }
   15.476% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.686))
-      skewX(46.9deg) scaleX(0.55);
-    opacity: 0.3;
+      skewX(46.9deg) scaleX(0.95);
+    opacity: 0.55;
   }
   17.024% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.82))
-      skewX(44.4deg) scaleX(0.39);
-    opacity: 0.57;
+      skewX(44.4deg) scaleX(0.75);
+    opacity: 0.73;
   }
   18.571% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.93))
-      skewX(43.2deg) scaleX(0.36);
-    opacity: 0.9;
+      skewX(43.2deg) scaleX(0.71);
+    opacity: 0.95;
   }
   20.119% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.988))
-      skewX(43.6deg) scaleX(0.49);
-    opacity: 0.57;
+      skewX(43.6deg) scaleX(0.87);
+    opacity: 0.73;
   }
   21.667% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
-      skewX(45deg) scaleX(0.67);
-    opacity: 0.31;
+      skewX(45deg) scaleX(1.1);
+    opacity: 0.55;
     animation-timing-function: step-end;
   }
   33.333% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
-      skewX(45deg) scaleX(0.75);
-    opacity: 0.84;
+      skewX(45deg) scaleX(1.2);
+    opacity: 0.91;
   }
   34.881% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.042))
-      skewX(45.1deg) scaleX(0.65);
-    opacity: 0.4;
+      skewX(45.1deg) scaleX(1.07);
+    opacity: 0.62;
   }
   36.429% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.086))
-      skewX(46.6deg) scaleX(0.46);
-    opacity: 0.39;
+      skewX(46.6deg) scaleX(0.84);
+    opacity: 0.61;
   }
   37.976% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.124))
-      skewX(48.8deg) scaleX(0.35);
-    opacity: 0.83;
+      skewX(48.8deg) scaleX(0.7);
+    opacity: 0.91;
   }
   39.524% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.201))
-      skewX(50.5deg) scaleX(0.4);
-    opacity: 0.77;
+      skewX(50.5deg) scaleX(0.77);
+    opacity: 0.86;
   }
   41.071% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.333))
-      skewX(50.7deg) scaleX(0.58);
-    opacity: 0.34;
+      skewX(50.7deg) scaleX(0.98);
+    opacity: 0.57;
   }
   42.619% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.491))
-      skewX(49deg) scaleX(0.73);
-    opacity: 0.48;
+      skewX(49deg) scaleX(1.17);
+    opacity: 0.67;
   }
   44.167% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.62))
-      skewX(45.9deg) scaleX(0.73);
-    opacity: 0.89;
+      skewX(45.9deg) scaleX(1.18);
+    opacity: 0.94;
   }
   45.714% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.692))
-      skewX(42.6deg) scaleX(0.59);
-    opacity: 0.67;
+      skewX(42.6deg) scaleX(1);
+    opacity: 0.79;
   }
   47.262% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.729))
-      skewX(40.2deg) scaleX(0.41);
-    opacity: 0.3;
+      skewX(40.2deg) scaleX(0.78);
+    opacity: 0.55;
   }
   48.81% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.772))
-      skewX(39.7deg) scaleX(0.35);
-    opacity: 0.59;
+      skewX(39.7deg) scaleX(0.7);
+    opacity: 0.74;
   }
   50.357% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.842))
-      skewX(40.8deg) scaleX(0.45);
-    opacity: 0.9;
+      skewX(40.8deg) scaleX(0.83);
+    opacity: 0.95;
   }
   51.905% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.921))
-      skewX(42.8deg) scaleX(0.64);
-    opacity: 0.56;
+      skewX(42.8deg) scaleX(1.06);
+    opacity: 0.72;
   }
   53.452% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.982))
-      skewX(44.5deg) scaleX(0.75);
-    opacity: 0.31;
+      skewX(44.5deg) scaleX(1.2);
+    opacity: 0.56;
   }
   55% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
-      skewX(45deg) scaleX(0.7);
-    opacity: 0.69;
+      skewX(45deg) scaleX(1.13);
+    opacity: 0.81;
     animation-timing-function: step-end;
   }
   66.667% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * -0.03))
-      skewX(45deg) scaleX(0.41);
-    opacity: 0.31;
+      skewX(45deg) scaleX(0.78);
+    opacity: 0.56;
   }
   68.214% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.04))
-      skewX(46.2deg) scaleX(0.35);
-    opacity: 0.53;
+      skewX(46.2deg) scaleX(0.7);
+    opacity: 0.71;
   }
   69.762% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.167))
-      skewX(46.2deg) scaleX(0.45);
-    opacity: 0.9;
+      skewX(46.2deg) scaleX(0.83);
+    opacity: 0.95;
   }
   71.31% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.315))
-      skewX(44.6deg) scaleX(0.64);
-    opacity: 0.61;
+      skewX(44.6deg) scaleX(1.06);
+    opacity: 0.76;
   }
   72.857% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.374))
-      skewX(41.9deg) scaleX(0.75);
-    opacity: 0.3;
+      skewX(41.9deg) scaleX(1.2);
+    opacity: 0.55;
   }
   74.405% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.384))
-      skewX(39.4deg) scaleX(0.7);
-    opacity: 0.64;
+      skewX(39.4deg) scaleX(1.13);
+    opacity: 0.78;
   }
   75.952% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.483))
-      skewX(38.2deg) scaleX(0.52);
-    opacity: 0.89;
+      skewX(38.2deg) scaleX(0.92);
+    opacity: 0.94;
   }
   77.5% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.643))
-      skewX(38.9deg) scaleX(0.37);
-    opacity: 0.51;
+      skewX(38.9deg) scaleX(0.73);
+    opacity: 0.69;
   }
   79.048% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.7))
-      skewX(41.3deg) scaleX(0.37);
-    opacity: 0.32;
+      skewX(41.3deg) scaleX(0.72);
+    opacity: 0.57;
   }
   80.595% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.646))
-      skewX(44.5deg) scaleX(0.51);
-    opacity: 0.74;
+      skewX(44.5deg) scaleX(0.9);
+    opacity: 0.85;
   }
   82.143% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.651))
-      skewX(47.2deg) scaleX(0.69);
-    opacity: 0.85;
+      skewX(47.2deg) scaleX(1.12);
+    opacity: 0.92;
   }
   83.69% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.771))
-      skewX(48.4deg) scaleX(0.75);
-    opacity: 0.41;
+      skewX(48.4deg) scaleX(1.2);
+    opacity: 0.63;
   }
   85.238% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.889))
-      skewX(48deg) scaleX(0.65);
-    opacity: 0.38;
+      skewX(48deg) scaleX(1.07);
+    opacity: 0.61;
   }
   86.786% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 0.951))
-      skewX(46.5deg) scaleX(0.46);
-    opacity: 0.83;
+      skewX(46.5deg) scaleX(0.84);
+    opacity: 0.9;
   }
   88.333% {
     transform: translateX(calc(100cqw + var(--vague-avance) - var(--vague-course) * 1.03))
-      skewX(45deg) scaleX(0.35);
-    opacity: 0.78;
+      skewX(45deg) scaleX(0.7);
+    opacity: 0.87;
     animation-timing-function: step-end;
   }
 }
@@ -775,7 +1348,7 @@
 .bloc-3d > .cadre-vague > .cadre-vague__lueur {
   display: none;
 }
-.bloc-3d > .cadre-vague > .cadre-vague__onde {
+.bloc-3d > .cadre-vague > :is(.cadre-vague__onde, .cadre-vague__trait) {
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);

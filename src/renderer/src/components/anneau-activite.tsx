@@ -124,11 +124,12 @@ export function LegendeDesOutils({
 
 /**
  * LA VAGUE DU CADRE : la lumiere qui traverse l'anneau en diagonale, d'un bord a l'autre (dessin dans
- * anneau-activite.css) — le seul reflet de l'anneau. Deux calques : le halo dessous, la bande sur
- * l'anneau dessus. A poser DANS chaque bloc encadre, en premier enfant de son `<summary>` quand le
- * bloc est un `<details>` : hors du `summary`, un `<details>` replie ne l'afficherait pas.
- * Chaque depart d'un passage est cale sur l'horloge commune, pour que tous les blocs du fil soient
- * traverses par le MEME passage.
+ * anneau-activite.css) — le seul reflet de l'anneau. Trois calques : le halo dessous, l'eclat sur
+ * l'anneau (ses deux franges, et son coeur blanc dans un calque a lui, le seul qui enfle), puis le
+ * trait, un second reflet plus fin. A poser DANS chaque bloc encadre, en premier enfant de son
+ * `<summary>` quand le bloc est un `<details>` : hors du `summary`, un `<details>` replie ne
+ * l'afficherait pas. Chaque depart d'un passage est cale sur l'horloge commune, pour que tous les
+ * blocs du fil soient traverses par le MEME passage.
  */
 export function VagueDuCadre(): React.JSX.Element {
   return (
@@ -141,7 +142,10 @@ export function VagueDuCadre(): React.JSX.Element {
       }}
     >
       <span className="cadre-vague__lueur" />
-      <span className="cadre-vague__onde" />
+      <span className="cadre-vague__onde">
+        <span className="cadre-vague__coeur" />
+      </span>
+      <span className="cadre-vague__trait" />
     </span>
   )
 }

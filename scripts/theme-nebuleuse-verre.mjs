@@ -41,7 +41,8 @@ const SORTIE = `src/renderer/src/assets/theme-${THEME}.genere.css`
 const PREFIXE = `:root[data-theme='${THEME}']`
 // AskDecision.css garde son OR (2026-10-10 : « les blocs comme ASK qui demandent des
 // actions utilisateur, mets-les en doré ») : le bloc qui attend l'utilisateur ressort du rose.
-const EXCLUS = /theme-nier-automata|theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude|AskDecision.css/
+const EXCLUS =
+  /theme-nier-automata|theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude|AskDecision.css/
 
 /** L'or d'Autowin, tel qu'il est ecrit dans les feuilles (rgb sans alpha). */
 const ORS = new Set([
@@ -267,7 +268,7 @@ export function generer() {
       regle.walkDecls((decl) => {
         if (decl.parent !== regle) return
         const prop = decl.prop.toLowerCase()
-        if (!PROPRIETES_COULEUR.test(prop)) return
+        if (!PROPRIETES_COULEUR.test(prop) || JETONS_ANNEAU.test(prop)) return
         const enFond = /^background/.test(prop)
         const valeur = transposerValeur(decl.value, enFond)
         if (valeur)
@@ -359,18 +360,21 @@ const CLAIR_JETONS_BLANCS = new Set([
 ])
 
 /**
- * L'anneau des blocs du fil (anneau-activite.css) : un metal et un spectre dont theme-modes.css
- * donne deja la valeur claire, choisie a l'oeil. Transposes, le noir du metal (`--chrome-noir`)
- * passait pour un fond d'encre et devenait la nacre : l'anneau disparaissait sur le blanc.
+ * L'anneau des blocs du fil (anneau-activite.css) : un metal et un spectre releves sur la video du
+ * bouton de verre, dont theme-modes.css donne deja la valeur claire, choisie a l'oeil. Ni Nebuleuse
+ * ni sa version claire ne les transposent. En clair, le noir du metal (`--chrome-noir`) passait pour
+ * un fond d'encre et devenait la nacre : l'anneau disparaissait sur le blanc. En sombre, le cyan de
+ * la frange froide (teinte 193) tombait dans le cyan HUD et virait au violet : l'eclat perdait son
+ * ordre froid / chaud.
  */
-const CLAIR_JETONS_ANNEAU = /^--(chrome|prisme)-/
+const JETONS_ANNEAU = /^--(chrome|prisme)-/
 
 /** Role d'une declaration : ce que la couleur y peint. */
 function roleClair(propriete) {
   const p = propriete.toLowerCase()
   if (/mask/.test(p)) return 'masque'
   if (p.startsWith('--')) {
-    if (CLAIR_JETONS_BLANCS.has(p) || CLAIR_JETONS_ANNEAU.test(p)) return 'garde'
+    if (CLAIR_JETONS_BLANCS.has(p) || JETONS_ANNEAU.test(p)) return 'garde'
     if (/survol|hover|cran-fond|selected/.test(p)) return 'survol'
     if (/ombre|shadow|lueur|reflet|filet-or/.test(p)) return 'ombre'
     if (/bord|-line|filet|separateur|ascenseur|cotes|border/.test(p)) return 'trait'
@@ -383,7 +387,14 @@ function roleClair(propriete) {
     return 'fond'
   }
   if (
-    ['color', 'fill', 'stroke', 'caret-color', '-webkit-text-fill-color', 'text-decoration-color'].includes(p)
+    [
+      'color',
+      'fill',
+      'stroke',
+      'caret-color',
+      '-webkit-text-fill-color',
+      'text-decoration-color'
+    ].includes(p)
   )
     return 'texte'
   if (/^(border|outline|column-rule)/.test(p)) return 'trait'
@@ -395,7 +406,14 @@ const arrondi = (a) => Math.round(a * 1000) / 1000
 /** Encre lilas : un clair (texte du noir) devient sombre, a teinte et saturation bornees. */
 function encreClair(h, s, l, a) {
   const neutre = s < 0.05
-  return { ...hslVersRgb({ h: neutre ? 252 : h, s: neutre ? 0.2 : Math.min(s, 0.3), l: 0.08 + (1 - l) * 0.8 }), a }
+  return {
+    ...hslVersRgb({
+      h: neutre ? 252 : h,
+      s: neutre ? 0.2 : Math.min(s, 0.3),
+      l: 0.08 + (1 - l) * 0.8
+    }),
+    a
+  }
 }
 /** Nacre : un fond sombre opaque du noir devient une nacre claire. */
 function nacreClair(l, a) {
@@ -421,7 +439,10 @@ function recolorerClair(rgb, role, garder) {
       // Un trait blanc a l'opacite a sur le noir -> un trait d'encre d'opacite comparable a l'oeil :
       // a x 1,6 donnait 88 % au « contour gris » de la recherche (55 %), un trait noir appuye
       // (capture du 2026-10-10) ; a x 0,7 + 5 % le garde gris, et un filet de 11 % reste visible (13 %).
-      if (role === 'trait') return a < 1 ? { r: 20, g: 15, b: 40, a: arrondi(Math.min(0.6, a * 0.7 + 0.05)) } : encreClair(h, s, l, a)
+      if (role === 'trait')
+        return a < 1
+          ? { r: 20, g: 15, b: 40, a: arrondi(Math.min(0.6, a * 0.7 + 0.05)) }
+          : encreClair(h, s, l, a)
       if (role === 'survol') return { r: 20, g: 15, b: 40, a: arrondi(a * 0.7) }
       return null // fond et ombre : un blanc reste un blanc (verre, reflets bombes)
     }
@@ -474,7 +495,9 @@ function recolorerValeurClair(valeur, role, garder) {
     if (!t) return brut
     // Opaque en #rrggbb : theme.css.test.ts exige un --bg-0 hexadecimal (liste native d'un select).
     const hex = (n) => n.toString(16).padStart(2, '0')
-    return (t.a ?? 1) === 1 ? `#${hex(t.r)}${hex(t.g)}${hex(t.b)}` : `rgba(${t.r}, ${t.g}, ${t.b}, ${t.a})`
+    return (t.a ?? 1) === 1
+      ? `#${hex(t.r)}${hex(t.g)}${hex(t.b)}`
+      : `rgba(${t.r}, ${t.g}, ${t.b}, ${t.a})`
   })
 }
 
@@ -491,10 +514,16 @@ const CLAIR_REMPLACEMENTS = [
     '--nv-satin-a: #f8f7fb;\n  --nv-satin-b: #ffffff;\n  --nv-satin-c: #f5f4f9;\n  --nv-satin-d: #fcfbfe;'
   ],
   // Lumiere de l'entree des cadres : la meme nacre que le halo de la souris, ci-dessous.
-  ['--nv-entree-lumiere: rgba(255, 255, 255, 0.17);', '--nv-entree-lumiere: rgba(255, 255, 255, 0.97);'],
+  [
+    '--nv-entree-lumiere: rgba(255, 255, 255, 0.17);',
+    '--nv-entree-lumiere: rgba(255, 255, 255, 0.97);'
+  ],
   // Lumiere de la souris : un blanc a 13 % ne se voit pas sur la nacre ; le halo du /draft
   // (« Halo nacre ») part de 97 %.
-  ['--nv-lumiere-couleur: rgba(255, 255, 255, 0.13);', '--nv-lumiere-couleur: rgba(255, 255, 255, 0.97);'],
+  [
+    '--nv-lumiere-couleur: rgba(255, 255, 255, 0.13);',
+    '--nv-lumiere-couleur: rgba(255, 255, 255, 0.97);'
+  ],
   // Cadre chanfreine : coins BLEU (haut gauche) et ROSE (bas droit) de la piste « Feuille holo ».
   ['--nv-chanfrein-haut: #ffffff;', '--nv-chanfrein-haut: __CLAIR_BLEU__;'],
   ['--nv-chanfrein-bas: #c9d4e6;', '--nv-chanfrein-bas: __CLAIR_ROSE_COIN__;'],
@@ -770,9 +799,13 @@ const COMPLEMENT_CLAIR = `
  * declaration par declaration (voir l'en-tete du bloc HOLOGRAPHIQUE BLANC).
  */
 export function genererMainClair() {
-  let source = readFileSync(join(RACINE, 'src/renderer/src/assets/theme-nebuleuse-verre.css'), 'utf8')
+  let source = readFileSync(
+    join(RACINE, 'src/renderer/src/assets/theme-nebuleuse-verre.css'),
+    'utf8'
+  )
   for (const [avant, apres] of CLAIR_REMPLACEMENTS) {
-    if (!source.includes(avant)) throw new Error(`genererMainClair : ligne introuvable dans la source : ${avant}`)
+    if (!source.includes(avant))
+      throw new Error(`genererMainClair : ligne introuvable dans la source : ${avant}`)
     source = source.replace(avant, apres)
   }
   if (!BLOC_FOND_PROPRE.test(source)) {
@@ -785,7 +818,11 @@ export function genererMainClair() {
     const regle = decl.parent
     const selecteur = regle && regle.type === 'rule' ? regle.selector : ''
     const garder = CLAIR_SUR_DEGRADE.test(selecteur)
-    decl.value = recolorerValeurClair(decl.value, roleDeclarationClair(decl.prop, selecteur), garder)
+    decl.value = recolorerValeurClair(
+      decl.value,
+      roleDeclarationClair(decl.prop, selecteur),
+      garder
+    )
     // Le lisere irise en premiere couche des panneaux qui portent le satin de la page (la saisie,
     // peinte autrement et coupee en `padding-box`, n'en recoit pas).
     if (decl.prop === 'background' && /var\(--nv-satin\) fixed\s*$/.test(decl.value)) {
@@ -794,10 +831,13 @@ export function genererMainClair() {
     }
   })
   if (lisereres < 4) {
-    throw new Error(`genererMainClair : lisere irise pose sur ${lisereres} panneau(x) seulement (4 attendus au moins)`)
+    throw new Error(
+      `genererMainClair : lisere irise pose sur ${lisereres} panneau(x) seulement (4 attendus au moins)`
+    )
   }
   let css = racine.toString().replace('/* __CLAIR_FOND__ */\n', FOND_CLAIR)
-  for (const [jeton, valeur] of Object.entries(CLAIR_JETONS_FINAUX)) css = css.replaceAll(jeton, valeur)
+  for (const [jeton, valeur] of Object.entries(CLAIR_JETONS_FINAUX))
+    css = css.replaceAll(jeton, valeur)
   css = css.replaceAll("data-theme='nebuleuse-verre'", `data-theme='${CLAIR_ID}'`)
   return `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ${CLAIR_ID}, depuis
    theme-nebuleuse-verre.css -- ne pas modifier a la main (modifier la source, puis regenerer). */\n\n${css}${COMPLEMENT_CLAIR}`
@@ -866,7 +906,9 @@ function transposerCoucheClaire(rgb, role, fondSombre) {
   if (role === 'texte') {
     if (famille) return { ...CLAIR_TEXTE_FAMILLE[famille], a }
     if (fondSombre && l > 0.55)
-      return s < 0.25 ? { ...CLAIR_ENCRE, a } : { ...hslVersRgb({ h, s: borne(s, 0.55, 0.85), l: 0.32 }), a }
+      return s < 0.25
+        ? { ...CLAIR_ENCRE, a }
+        : { ...hslVersRgb({ h, s: borne(s, 0.55, 0.85), l: 0.32 }), a }
     return null
   }
   if (role === 'trait') {
@@ -932,9 +974,14 @@ export function genererCoucheClaire() {
           const t = transposerCoucheClaire(rgb, role, fondSombre)
           if (!t) return brut
           change = true
-          return (t.a ?? 1) === 1 ? `#${hex(t.r)}${hex(t.g)}${hex(t.b)}` : `rgba(${t.r}, ${t.g}, ${t.b}, ${t.a})`
+          return (t.a ?? 1) === 1
+            ? `#${hex(t.r)}${hex(t.g)}${hex(t.b)}`
+            : `rgba(${t.r}, ${t.g}, ${t.b}, ${t.a})`
         })
-        if (change) nouvelles.push(postcss.decl({ prop: decl.prop, value: valeur, important: decl.important }))
+        if (change)
+          nouvelles.push(
+            postcss.decl({ prop: decl.prop, value: valeur, important: decl.important })
+          )
       }
       if (nouvelles.length === 0) return
       const copie = postcss.rule({ selectors: selecteurs })
@@ -950,7 +997,9 @@ export function genererCoucheClaire() {
       declarations += nouvelles.length
     })
     if (sortie.nodes.length > 0) {
-      blocs.push(`/* ---- ${relative(RACINE, fichier).replace(/\\/g, '/')} ---- */\n${sortie.toString()}`)
+      blocs.push(
+        `/* ---- ${relative(RACINE, fichier).replace(/\\/g, '/')} ---- */\n${sortie.toString()}`
+      )
     }
   }
   const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ${CLAIR_ID} -- ne pas modifier a la main.
@@ -980,7 +1029,8 @@ export function genererCoucheClaire() {
 const NINJA_ID = 'ninja-claude'
 const NINJA_PREFIXE = `:root[data-theme='${NINJA_ID}']`
 /** AskDecision.css N'EST PAS exclu ici : son or (choix fait pour Holographique) devient terracotta. */
-const NINJA_EXCLUS = /theme-nier-automata|theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude/
+const NINJA_EXCLUS =
+  /theme-nier-automata|theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude/
 /** Terracotta de Claude (#d97757) : teinte et saturation, la luminosite suit la couleur d'origine. */
 const NINJA_TERRACOTTA = rgbVersHsl({ r: 217, g: 119, b: 87 })
 /** Teinte des neutres chauds de Claude (#c2c0b6, #9c9a92, #30302e : 48-60 deg, saturation 3-9 %). */
@@ -1261,7 +1311,6 @@ export function genererVanillaClaude() {
   return { css: entete + blocs.join('\n\n') + '\n', regles, declarations }
 }
 
-
 /* =================================================================================================
  * NIER:AUTOMATA (id `nier-automata`, 2026-10-19). Demande : « Fait moi un theme Nier
  * Automata pour Autowin ». Base CLAIRE, meme mecanique que Vanilla Claude : les regles de la base
@@ -1320,19 +1369,30 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (process.argv[2] === NIER_ID) {
     const couche = genererNierAutomata()
     writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${NIER_ID}.genere.css`), couche.css)
-    console.log(`theme-${NIER_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`)
+    console.log(
+      `theme-${NIER_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`
+    )
   } else if (process.argv[2] === VANILLA_ID) {
     const couche = genererVanillaClaude()
-    writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${VANILLA_ID}.genere.css`), couche.css)
-    console.log(`theme-${VANILLA_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`)
+    writeFileSync(
+      join(RACINE, `src/renderer/src/assets/theme-${VANILLA_ID}.genere.css`),
+      couche.css
+    )
+    console.log(
+      `theme-${VANILLA_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`
+    )
   } else if (process.argv[2] === NINJA_ID) {
     const couche = genererNinjaClaude()
     writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${NINJA_ID}.genere.css`), couche.css)
-    console.log(`theme-${NINJA_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`)
+    console.log(
+      `theme-${NINJA_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`
+    )
   } else if (process.argv[2] === CLAIR_ID) {
     const couche = genererCoucheClaire()
     writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${CLAIR_ID}.genere.css`), couche.css)
-    console.log(`theme-${CLAIR_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`)
+    console.log(
+      `theme-${CLAIR_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`
+    )
     writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${CLAIR_ID}.css`), genererMainClair())
     console.log(`theme-${CLAIR_ID}.css : derive de theme-nebuleuse-verre.css`)
   } else {
