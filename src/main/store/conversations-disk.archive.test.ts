@@ -93,11 +93,14 @@ describe('archive des conversations inactives', () => {
     const apres = redemarrer(p)
     // Le démarrage ne lit QUE le snapshot (`list` ne déclenche aucune lecture d'archive)…
     expect(apres.store.list().map((c) => c.id)).toEqual([recent])
-    // …puis les archives arrivent en arrière-plan, identiques.
+    // fix-ok: cause mesurée — `list()` ne rend que les fils EN MÉMOIRE depuis la bascule (conversations.ts) ;
+    // l'ancienne assertion le lisait comme « tous les fils » : rouge, seuls les fils restés en mémoire sont listés.
+    // …puis les archives arrivent en arrière-plan : leur RÉSUMÉ est listé, mais le fil reste sur le disque.
     expect(await apres.persistance.archivesChargees).toBe(1)
+    expect(apres.store.list().map((c) => c.id)).toEqual([recent])
     expect(
       apres.store
-        .list()
+        .listResumes()
         .map((c) => c.id)
         .sort()
     ).toEqual([vieux, recent].sort())
@@ -111,9 +114,9 @@ describe('archive des conversations inactives', () => {
     await attendreEcrituresConversations()
 
     const apres = redemarrer(p)
-    // Ce que le Board préchauffe après cette promesse contient AUSSI le fil archivé.
+    // Ce que le Board préchauffe après cette promesse contient AUSSI le fil archivé, lu en version texte.
     expect(await apres.store.archivesChargees).toBe(1)
-    expect(apres.store.list().map((c) => c.id)).toContain(vieux)
+    expect(apres.store.listAvecTexte().map((c) => c.id)).toContain(vieux)
     // Sans archive : résolue tout de suite.
     expect(await new ConversationStore().archivesChargees).toBe(0)
   })
@@ -379,5 +382,60 @@ describe('archive des conversations inactives', () => {
     const suivant = redemarrer(p)
     await suivant.persistance.archivesChargees
     expect(suivant.store.get(recent)).toBeUndefined()
+  })
+})
+
+describe('un fil archivé ne tient plus en mémoire : le store le lit à la demande', () => {
+  it('après la relecture, aucun fil archivé n’est en mémoire ; chacun est listé et se relit à l’identique', async () => {
+    const p = nouveauChemin()
+    const { store, persistance, vieux, recent } = monterCorpus(p)
+    const avant = structuredClone(store.get(vieux))
+    expect(await persistance.archiver(MAINTENANT)).toBe(1)
+    await attendreEcrituresConversations()
+
+    const apres = redemarrer(p)
+    expect(await apres.persistance.archivesChargees).toBe(1)
+
+    expect(apres.store.listAvecMessages().map((c) => c.id)).toEqual([recent])
+    expect(
+      apres.store
+        .listResumes()
+        .map((resume) => resume.id)
+        .sort()
+    ).toEqual([vieux, recent].sort())
+    expect(apres.store.get(vieux)).toEqual(avant)
+  })
+
+  it('le chargement à la demande reste branché après la relecture des archives', async () => {
+    const p = nouveauChemin()
+    const { persistance } = monterCorpus(p)
+    await persistance.archiver(MAINTENANT)
+    await attendreEcrituresConversations()
+
+    const apres = redemarrer(p)
+    await apres.persistance.archivesChargees
+    expect(typeof apres.store.chargeurDArchive).toBe('function')
+  })
+
+  it('un fil archivé pendant la session sort de la mémoire, reste lisible, et garde son contenu après une reprise', async () => {
+    const p = nouveauChemin()
+    const { store, persistance, vieux, recent } = monterCorpus(p)
+    const avant = structuredClone(store.get(vieux))
+    expect(await persistance.archiver(MAINTENANT)).toBe(1)
+    await attendreEcrituresConversations()
+
+    expect(store.listAvecMessages().map((c) => c.id)).toEqual([recent])
+    expect(store.get(vieux)).toEqual(avant)
+
+    store.append(vieux, { role: 'user', content: 'Je reprends ce vieux fil' })
+    await attendreEcrituresConversations()
+
+    const suivant = redemarrer(p)
+    await suivant.persistance.archivesChargees
+    expect(suivant.store.get(vieux)?.messages.map((m) => m.content)).toEqual([
+      'Question ancienne',
+      'Réponse ancienne.',
+      'Je reprends ce vieux fil'
+    ])
   })
 })

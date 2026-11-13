@@ -449,6 +449,10 @@ export class AgentPilot {
       oublierSession: (id) => this.forgetPersistedChatSession(id),
       registry: this.registry
     })
+    // Le rappel des échanges passés est synchrone : son index doit être prêt avant le message d'ouverture. La
+    // construction (une fois par session) se fait par tranches, le tour attend ici sans geler l'interface.
+    // Dépendance optionnelle, comme le rappel lui-même : les bus factices des tests ne l'implémentent pas.
+    if (typeof this.bus.prechaufferRappel === 'function') await this.bus.prechaufferRappel()
     // Message d'ouverture du tour : agent-pilot/message-du-tour.ts (lot 2).
     const ouverture = messageDuTour({
       history,

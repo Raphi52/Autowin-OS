@@ -33,10 +33,17 @@ function corpus(): ConversationStore {
   return store
 }
 
+/** Le corpus avec ses index préchauffés, comme dans l’application : le rappel ne construit rien sur le tour. */
+async function corpusPret(): Promise<ConversationStore> {
+  const store = corpus()
+  await store.prechaufferIndex()
+  return store
+}
+
 describe('le rappel reste dans son projet', () => {
-  it('ne traverse pas la frontiere entre deux projets', () => {
+  it('ne traverse pas la frontiere entre deux projets', async () => {
     const rappel = rappelDesEchangesPasses(
-      corpus(),
+      await corpusPret(),
       'pastille',
       'conv-9',
       'claude',
@@ -45,9 +52,9 @@ describe('le rappel reste dans son projet', () => {
     expect(rappel).not.toContain('client A')
   })
 
-  it('rappelle bien a l interieur du MEME projet', () => {
+  it('rappelle bien a l interieur du MEME projet', async () => {
     const rappel = rappelDesEchangesPasses(
-      corpus(),
+      await corpusPret(),
       'pastille',
       'conv-9',
       'claude',
@@ -56,8 +63,14 @@ describe('le rappel reste dans son projet', () => {
     expect(rappel).toContain('client A')
   })
 
-  it('laisse se rappeler deux conversations SANS projet, le cas courant', () => {
-    const rappel = rappelDesEchangesPasses(corpus(), 'pastille', 'conv-9', 'claude', undefined)
+  it('laisse se rappeler deux conversations SANS projet, le cas courant', async () => {
+    const rappel = rappelDesEchangesPasses(
+      await corpusPret(),
+      'pastille',
+      'conv-9',
+      'claude',
+      undefined
+    )
     expect(rappel).toContain('sans projet')
   })
 })

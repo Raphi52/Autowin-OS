@@ -121,14 +121,15 @@ export interface IndexVoisinage {
 }
 
 /**
- * Construit l'index a partir des messages, une fois.
+ * Index VIDE, nourri message par message (`ajouter`) : la construction peut ainsi se repartir en
+ * tranches (voir `conversations.ts`) au lieu de parcourir tout le corpus d'un trait.
  *
- * Les paires sont comptees par message COURT : c'est la phrase qui rapproche, pas le document. Le
- * cout est un parcours du corpus -- paye a la premiere recherche, puis garde jusqu'a la prochaine
- * ecriture.
+ * fix-ok: cause mesurée — construit d'un trait, il bloquait le fil principal 290 ms (+27 Mo) sur le corpus
+ * réel (1616 fils, 15 691 messages) : le découpage permet de le répartir en tranches.
+ *
+ * Les paires sont comptees par message COURT : c'est la phrase qui rapproche, pas le document.
  */
-export function construireVoisinage(
-  messages: Iterable<string>,
+export function creerVoisinage(
   decoupe: (texte: string) => string[],
   /**
    * Comment reduire un mot a sa racine. Fourni par l'appelant, qui possede cette regle.
@@ -174,7 +175,6 @@ export function construireVoisinage(
       }
     }
   }
-  for (const texte of messages) absorber(texte)
   /*
    * Les voisins sont calcules A LA DEMANDE et gardes, plutot que tous d'avance.
    *
@@ -227,4 +227,15 @@ export function construireVoisinage(
     retenus.delete(mot)
   }
   return { voisins: voisinsDe, rarete, ajouter: absorber }
+}
+
+/** Index construit d'un trait à partir d'un corpus (tests et usages hors fil principal). */
+export function construireVoisinage(
+  messages: Iterable<string>,
+  decoupe: (texte: string) => string[],
+  racineDe: (mot: string) => string = (mot) => mot
+): IndexVoisinage {
+  const index = creerVoisinage(decoupe, racineDe)
+  for (const texte of messages) index.ajouter(texte)
+  return index
 }

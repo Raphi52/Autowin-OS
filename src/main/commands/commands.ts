@@ -467,6 +467,15 @@ export class AppCommandBus {
   }
 
   /**
+   * Prépare l'index du rappel AVANT le tour. `rappelPourDemande` est synchrone : il ne doit pas construire lui-même
+   * l'index (plusieurs secondes sur le fil principal). La construction se fait par tranches ; le tour attend ici,
+   * l'interface reste libre. Une fois prêt, cet appel ne coûte rien.
+   */
+  prechaufferRappel(): Promise<void> {
+    return this.os.conversations.prechaufferIndex()
+  }
+
+  /**
    * Les echanges passes que la demande suppose connus, prets a etre injectes dans le tour.
    *
    * Passe par le bus plutot que d'exposer le store : l'appelant (`agent-pilot`) n'a pas a connaitre

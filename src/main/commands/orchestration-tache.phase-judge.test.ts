@@ -24,6 +24,7 @@ function osDouble(): {
     conversations: {
       get: () => undefined,
       listAvecMessages: () => [],
+      listAvecTexte: () => [],
       attachRun: () => undefined
     },
     registry: { ids: () => ['claude'] },

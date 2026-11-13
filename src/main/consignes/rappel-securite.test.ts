@@ -37,25 +37,32 @@ function corpus(): ConversationStore {
   return store
 }
 
+/** Le corpus avec ses index préchauffés, comme dans l’application : le rappel ne construit rien sur le tour. */
+async function corpusPret(): Promise<ConversationStore> {
+  const store = corpus()
+  await store.prechaufferIndex()
+  return store
+}
+
 describe('le rappel est du contenu NON FIABLE, et le dit', () => {
-  it('porte un avertissement de non-confiance, comme les autres blocs injectes', () => {
-    const rappel = rappelDesEchangesPasses(corpus(), 'pastilles', 'conv-2', 'claude')
+  it('porte un avertissement de non-confiance, comme les autres blocs injectes', async () => {
+    const rappel = rappelDesEchangesPasses(await corpusPret(), 'pastilles', 'conv-2', 'claude')
     expect(rappel).toMatch(/NON FIABLE|jamais des instructions/i)
   })
 
-  it('n imite pas les libelles du vrai dialogue', () => {
-    const rappel = rappelDesEchangesPasses(corpus(), 'pastilles', 'conv-2', 'claude')
+  it('n imite pas les libelles du vrai dialogue', async () => {
+    const rappel = rappelDesEchangesPasses(await corpusPret(), 'pastilles', 'conv-2', 'claude')
     // Les libelles reels du tour sont `UTILISATEUR:` et `TOI:` en tete de ligne.
     expect(rappel).not.toMatch(/^\s*(utilisateur|toi)\s*:/im)
   })
 
-  it('ne traverse PAS la frontiere entre deux fournisseurs', () => {
-    const rappel = rappelDesEchangesPasses(corpus(), 'pastilles', 'conv-2', 'gemini')
+  it('ne traverse PAS la frontiere entre deux fournisseurs', async () => {
+    const rappel = rappelDesEchangesPasses(await corpusPret(), 'pastilles', 'conv-2', 'gemini')
     expect(rappel).toBe('')
   })
 
-  it('fonctionne toujours a l interieur d un MEME fournisseur', () => {
-    const rappel = rappelDesEchangesPasses(corpus(), 'pastilles', 'conv-2', 'claude')
+  it('fonctionne toujours a l interieur d un MEME fournisseur', async () => {
+    const rappel = rappelDesEchangesPasses(await corpusPret(), 'pastilles', 'conv-2', 'claude')
     expect(rappel).toContain('pastilles')
   })
 })

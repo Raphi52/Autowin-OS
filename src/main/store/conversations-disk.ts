@@ -1022,8 +1022,8 @@ export function persistConversations(
   /** Ce que le snapshot contient : tout le store, MOINS les fils dont l'archive est la copie. */
   const actives = (): Conversation[] =>
     archivees.size > 0
-      ? store.list().filter((conversation) => !archivees.has(conversation.id))
-      : store.list()
+      ? store.listAvecMessages().filter((conversation) => !archivees.has(conversation.id))
+      : store.listAvecMessages()
   /** Compteur de changements par fil : la bascule n'archive qu'un fil que rien n'a touché depuis. */
   const versions = new Map<string, number>()
   const pending: ConversationChange[] = []
@@ -1177,18 +1177,32 @@ export function persistConversations(
     armerDelai()
   }
 
+  // fix-ok: cause mesurée — l'ancienne relecture accumulait TOUTES les archives pleines (`lues`) puis
+  // les intégrait entières, et coupait le chargeur ; banc avant (1103 archives) : heap +342,8 Mo.
+  // Désormais chaque archive est réduite à son résumé et à son texte avant la suivante.
   /**
-   * RELECTURE DES ARCHIVES, juste après le démarrage et hors de son chemin critique. Une archive
-   * illisible est GARDÉE et nommée : son fil manque à la liste, il n'est pas perdu.
+   * RELECTURE DES ARCHIVES, juste après le démarrage et hors de son chemin critique. Chaque archive est
+   * lue, normalisée, puis réduite à son résumé et à son texte AVANT la suivante : une seule archive pleine
+   * tient en mémoire à la fois. Une archive illisible est GARDÉE et nommée : son fil manque à la liste,
+   * il n'est pas perdu.
    */
   const chargerArchives = async (): Promise<number> => {
     await new Promise<void>((resolve) => setImmediate(resolve))
-    const lues: Conversation[] = []
     const illisibles: string[] = []
+    let ajoutees = 0
     for (const id of [...archivees]) {
-      const conversation = await lireArchiveAsync(path, id)
-      if (conversation) lues.push(conversation)
-      else illisibles.push(id)
+      const lue = await lireArchiveAsync(path, id)
+      if (!lue) {
+        illisibles.push(id)
+        continue
+      }
+      // MÊME normalisation que le démarrage (`hydrate`) : une migration ajoutée là s'applique aussi
+      // aux fils archivés, au lieu de les laisser dans le format de l'année de leur archivage.
+      const normalisee = new ConversationStore()
+      normalisee.hydrate([lue])
+      ajoutees += store.integrerArchives(
+        normalisee.listAvecMessages().filter((c) => archivees.has(c.id))
+      )
     }
     if (illisibles.length) {
       console.warn(
@@ -1196,13 +1210,6 @@ export function persistConversations(
           illisibles.slice(0, 5).join(', ')
       )
     }
-    // MÊME normalisation que le démarrage (`hydrate`) : une migration ajoutée là s'applique aussi
-    // aux fils archivés, au lieu de les laisser dans le format de l'année de leur archivage.
-    const normalisees = new ConversationStore()
-    normalisees.hydrate(lues.filter((c) => archivees.has(c.id)))
-    const ajoutees = store.integrerArchives(normalisees.list())
-    // Tout est dans le store : plus aucune lecture à la demande.
-    store.chargeurDArchive = undefined
     try {
       options?.onArchivesChargees?.(ajoutees)
     } catch {
@@ -1333,7 +1340,7 @@ export function persistConversations(
     archivageEnCours ??= (async () => {
       await archivesChargees
       const candidats = store
-        .list()
+        .listAvecMessages()
         .filter(
           (conversation) =>
             !archivees.has(conversation.id) &&
@@ -1371,6 +1378,8 @@ export function persistConversations(
       }
       if (basculees.length === 0) return 0
       for (const id of basculees) archivees.add(id)
+      // Pas d'attente entre la vérification de version et ce retrait : rien ne peut toucher le fil entre les deux.
+      store.archiverFils(basculees)
       await reecrireSnapshot()
       return basculees.length
     })().finally(() => {
@@ -1431,19 +1440,19 @@ export function persistConversations(
   // (`index.ts`) : des tâches laissées par celle-ci écriraient alors le même fichier en parallèle
   // de la nouvelle, ou retireraient des archives dont la seule autre copie vient d'être mise de
   // côté. La compaction, elle, ne lève plus ici : en échec, le journal garde tout.
+  // LECTURE À LA DEMANDE : un fil archivé n'est gardé que résumé et texte, son historique se relit par
+  // `store.get` depuis son seul fichier. Le chargeur reste branché toute la vie du store : sans lui, un
+  // fil archivé serait déclaré inexistant (tâche planifiée liée à un vieux fil, `chat_send` d'un agent :
+  // le répartiteur créerait un fil neuf, `task-manager/chat-dispatch.ts`).
+  store.chargeurDArchive = (id) => {
+    if (!archivees.has(id)) return undefined
+    const lue = lireArchive(path, id)
+    if (!lue) return undefined
+    const normalisee = new ConversationStore()
+    normalisee.hydrate([lue])
+    return normalisee.get(id)
+  }
   if (archivees.size > 0) {
-    // FENÊTRE DE RELECTURE : jusqu'à ce que les archives soient dans le store, un fil archivé
-    // demandé par son id (tâche planifiée liée à un vieux fil, `chat_send` d'un agent) est lu À LA
-    // DEMANDE — son seul petit fichier — au lieu d'être déclaré inexistant. Sinon le répartiteur de
-    // tâches créerait un fil neuf et y rebrancherait la tâche (`task-manager/chat-dispatch.ts`).
-    store.chargeurDArchive = (id) => {
-      if (!archivees.has(id)) return undefined
-      const lue = lireArchive(path, id)
-      if (!lue) return undefined
-      const normalisee = new ConversationStore()
-      normalisee.hydrate([lue])
-      return normalisee.get(id)
-    }
     archivesChargees = chargerArchives()
     // Le store la porte aussi : ses lecteurs n'ont pas accès à cette persistance.
     store.archivesChargees = archivesChargees
