@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AppCommandBus } from '../commands/commands'
-import { gestesDeVerification, VERIFY_SANS_ISOLATION } from './verification-isolee'
+import {
+  gestesDeVerification,
+  synchroniserBureauDeVerification,
+  VERIFY_SANS_ISOLATION
+} from './verification-isolee'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
@@ -193,8 +197,50 @@ describe('verify — la suite tourne dans une copie isolée, à l’état couran
     expect(brut.data?.output ?? '').toContain(VERIFY_SANS_ISOLATION)
   })
 
-  it('un secret ou un dossier protégé ne part jamais dans la copie', () => {
-    const gestes = gestesDeVerification(
+  /**
+   * GEL MESURÉ le 2026-10-31 : 11,5 s sans interface au premier `verify` du fil. La copie naît sur
+   * `origin/main`, `main` local avait 88 commits de retard : 243 fichiers à comparer, chacun relu
+   * des deux côtés par un `readFileSync` du processus principal (357 lectures à 30 ms sur D:).
+   * L'écart grandit avec les commits distants : le gel aussi.
+   */
+  it('reporter beaucoup de fichiers laisse le processus principal tourner', async () => {
+    const workspace = espaceDeTravail()
+    const copie = copieSurLeCommit(workspace)
+    const chemins = Array.from({ length: 40 }, (_, i) => `src/f${i}.ts`)
+    for (const chemin of chemins) writeFileSync(join(workspace, chemin), `export const c = 1\n`)
+
+    let tours = 0
+    let actif = true
+    const compter = (): void => {
+      if (!actif) return
+      tours += 1
+      setImmediate(compter)
+    }
+    setImmediate(compter)
+    const rapport = await synchroniserBureauDeVerification(workspace, copie, chemins)
+    actif = false
+
+    expect(rapport.copies).toHaveLength(chemins.length)
+    expect(tours).toBeGreaterThan(0)
+  })
+
+  it('deux verify simultanés sur la même copie ne recopient pas les mêmes fichiers', async () => {
+    const workspace = espaceDeTravail()
+    const copie = copieSurLeCommit(workspace)
+    const chemins = Array.from({ length: 20 }, (_, i) => `src/g${i}.ts`)
+    for (const chemin of chemins) writeFileSync(join(workspace, chemin), `export const g = 1\n`)
+
+    const [premier, second] = await Promise.all([
+      synchroniserBureauDeVerification(workspace, copie, chemins),
+      synchroniserBureauDeVerification(workspace, copie, chemins)
+    ])
+
+    expect(premier.copies).toHaveLength(chemins.length)
+    expect(second.copies).toEqual([])
+  })
+
+  it('un secret ou un dossier protégé ne part jamais dans la copie', async () => {
+    const gestes = await gestesDeVerification(
       ['.env', 'node_modules/x.js', '../dehors.ts', 'src/a.ts'],
       'C:/ws',
       'C:/copie',

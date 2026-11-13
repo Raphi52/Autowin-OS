@@ -161,7 +161,7 @@ export async function bureauDeVerification(
     const commites = await fichiersCommitesHorsDeLaCopie(workspace, bureau)
     // Les ecarts de la copie elle-meme passent EN DERNIER : ce qu'une verification d'avant y a
     // laisse, et que le depot ne nomme plus, revient a l'etat du depot.
-    const rapport = synchroniserBureauDeVerification(workspace, bureau, [
+    const rapport = await synchroniserBureauDeVerification(workspace, bureau, [
       ...(commites ?? []),
       ...(await bus.fichiersNonCommites(workspace)),
       ...((await fichiersRestesDansLaCopie(bureau)) ?? [])

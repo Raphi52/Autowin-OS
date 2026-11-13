@@ -625,12 +625,22 @@ const REVIREMENTS =
  * meme rarete. Il faut le mot entier. C'est ce qui permet de tenir les deux bords que l'audit a
  * montres inconciliables avec un simple seuil -- separer « conversion » de « conversation » SANS
  * casser « notification » -> « notifier ».
+ *
+ * `motsJoints` : les mots du message dans leur ordre, joints par une espace (voir `motsMemoises`). Un mot ne
+ * contient jamais d'espace (`motsDe` coupe dessus) : le premier mot qui commence par la racine est en tête de
+ * la chaîne, ou juste après la première espace suivie de la racine.
  */
-function motCorrespondant(
-  motsDuMessage: readonly string[],
-  racineCherchee: string
-): string | undefined {
-  return motsDuMessage.find((mot) => mot.startsWith(racineCherchee))
+export function motCorrespondant(motsJoints: string, racineCherchee: string): string | undefined {
+  let debut: number
+  if (motsJoints.startsWith(racineCherchee)) debut = 0
+  else {
+    const apresEspace = motsJoints.indexOf(` ${racineCherchee}`)
+    if (apresEspace < 0) return undefined
+    debut = apresEspace + 1
+  }
+  const fin = motsJoints.indexOf(' ', debut)
+  const mot = motsJoints.slice(debut, fin < 0 ? undefined : fin)
+  return mot === '' ? undefined : mot
 }
 
 /**
@@ -1715,8 +1725,13 @@ export class ConversationStore {
    * La clef est le contenu lui-meme, pas le `messageId` : un message edite change de contenu et
    * obtient donc naturellement une autre entree, sans qu'aucune invalidation soit a ecrire. Le
    * corpus est deja entierement en memoire ; ce cache ajoute les mots, pas les textes.
+   *
+   * Les mots sont gardés en UNE chaîne jointe par une espace, pas en tableau. Mesure du 13/11 sur le corpus
+   * réel (1630 fils, 14 381 messages, 2,2 millions de mots) : le tableau pesait 150 Mo, parce que chaque
+   * mot y est une sous-chaîne qui retient la copie repliée ENTIÈRE de son message, en plus du coût d'un
+   * objet par mot. Jointe, la chaîne est un seul objet neuf, sans lien vers le texte replié.
    */
-  private readonly motsParMessage = new Map<string, string[]>()
+  private readonly motsParMessage = new Map<string, string>()
 
   /**
    * Pre-selection des conversations candidates.
@@ -1819,13 +1834,13 @@ export class ConversationStore {
     this.fileIndex = []
     // Les mots ENTIERS au decoupage, la racine fournie a part : l'index compte alors la presence des deux, ce
     // dont la ponderation par le mot rencontre a besoin pour discriminer.
-    const voisinage = creerVoisinage((texte) => this.motsMemoises(texte), racine)
+    const voisinage = creerVoisinage((texte) => this.motsDuMessage(texte), racine)
     const inverse = creerIndexInverse()
     const cadence = new Cadence()
     for (const { id, contenus } of photo) {
       for (const contenu of contenus) {
         voisinage.ajouter(contenu)
-        inverse.ajouter(id, this.motsMemoises(contenu).map(racine))
+        inverse.ajouter(id, this.motsDuMessage(contenu).map(racine))
         if (cadence.arret()) {
           if (generation !== this.generationIndex) return
           yield
@@ -1835,7 +1850,7 @@ export class ConversationStore {
     if (generation !== this.generationIndex) return
     for (const { id, contenu } of this.fileIndex ?? []) {
       voisinage.ajouter(contenu)
-      inverse.ajouter(id, this.motsMemoises(contenu).map(racine))
+      inverse.ajouter(id, this.motsDuMessage(contenu).map(racine))
     }
     this.fileIndex = undefined
     this.index = { voisinage, inverse }
@@ -1855,17 +1870,24 @@ export class ConversationStore {
     // Le voisinage ABSORBE le message au lieu d'etre jete : c'etait le poste dominant du gel
     // (~90 ms par tour a reconstruire tout le corpus, contre O(mots du message) ici).
     this.index.voisinage.ajouter(contenu)
-    this.index.inverse.ajouter(conversationId, this.motsMemoises(contenu).map(racine))
+    this.index.inverse.ajouter(conversationId, this.motsDuMessage(contenu).map(racine))
   }
 
-  private motsMemoises(contenu: string): string[] {
+  /** Les mots d'un message, joints par une espace (la forme gardée en cache, lue par `motCorrespondant`). */
+  private motsMemoises(contenu: string): string {
     const connu = this.motsParMessage.get(contenu)
-    if (connu) return connu
-    const mots = motsDe(contenu)
+    if (connu !== undefined) return connu
+    const mots = motsDe(contenu).join(' ')
     // Borne de securite : un corpus qui grossit ne doit pas faire grossir ce cache sans fin.
     if (this.motsParMessage.size > 40_000) this.motsParMessage.clear()
     this.motsParMessage.set(contenu, mots)
     return mots
+  }
+
+  /** Les mots d'un message en tableau, pour les index : un tableau éphémère, rien n'en est gardé. */
+  private motsDuMessage(contenu: string): string[] {
+    const joints = this.motsMemoises(contenu)
+    return joints === '' ? [] : joints.split(' ')
   }
 
   /**
@@ -2206,7 +2228,7 @@ export class ConversationStore {
         if (budgetEpuise()) break
         if (cadence.arret()) yield
         const replie = replier(message.content)
-        const motsDuMessage = this.motsMemoises(message.content)
+        const motsJoints = this.motsMemoises(message.content)
         let premierePosition = -1
         let motsIci = 0
         /*
@@ -2219,7 +2241,7 @@ export class ConversationStore {
          * TROUVE qui les separe, et elle ne dependait pas du seuil.
          */
         const peser = (racineCherchee: string, poids: number): boolean => {
-          const trouve = motCorrespondant(motsDuMessage, racineCherchee)
+          const trouve = motCorrespondant(motsJoints, racineCherchee)
           if (!trouve) return false
           const position = replie.indexOf(racineCherchee)
           motsIci += poids * index.rarete(racine(trouve)) * index.rarete(trouve)

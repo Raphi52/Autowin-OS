@@ -226,7 +226,9 @@ export const TEXTES_FR = {
   'maj.faireReparerAria': 'Faire réparer le blocage de mise à jour',
   'maj.faireReparerAide':
     "Ouvre une conversation et pré-remplit un prompt pour que l'agent résolve ce blocage, puis relance la mise à jour",
-  'maj.faireReparer': 'Faire réparer'
+  'maj.faireReparer': 'Faire réparer',
+  'maj.conflitPrevu':
+    'Conflit sur {fichiers}, modifié(s) à la fois par tes commits locaux et par {reference}. Les {nombre} commits ne passeront pas d’un clic : « Faire réparer » confie ce conflit à un agent.'
 } as const
 
 export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
@@ -413,7 +415,9 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'maj.faireReparerAria': 'Have the update blocker repaired',
   'maj.faireReparerAide':
     'Opens a conversation and pre-fills a prompt so the agent resolves this blocker, then restarts the update',
-  'maj.faireReparer': 'Get it repaired'
+  'maj.faireReparer': 'Get it repaired',
+  'maj.conflitPrevu':
+    'Conflict on {fichiers}, changed both by your local commits and by {reference}. The {nombre} commits won’t go through in one click: “Get it repaired” hands this conflict to an agent.'
 }
 
 /** Clé → raison pour laquelle son anglais reste identique au français. */
