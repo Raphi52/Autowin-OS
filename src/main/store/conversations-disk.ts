@@ -26,6 +26,7 @@ import {
   reponseAuDessusDesConsignes
 } from './conversations'
 import type { Conversation, ConversationChange, Msg } from './conversations'
+import { texteDesArchivesSurDisque } from './recherche-archives'
 import { ensureAutowinAppData } from '../app/app-data'
 import type { FinishedRunOutcome } from '../runs/run-interruption'
 import { isRecord, isOptionalString } from '../../shared/is-record'
@@ -1022,6 +1023,8 @@ export function persistConversations(
     idsArchives(path).filter((id) => !actifsAuDemarrage.has(id) && !supprimees.has(id))
   )
   const migrated = store.hydrate(chargees, options)
+  // Le texte des fils archivés vit dans une base dérivée, à côté du snapshot, plus en mémoire.
+  store.texteDesArchives = texteDesArchivesSurDisque(path)
   // Le plancher persiste est releve APRES l'hydratation : hydrate calcule le sien depuis les
   // conversations vivantes, et c'est le PLUS HAUT des deux qui doit gagner. Les fils archivés, pas
   // encore relus, comptent aussi : leur id ne doit jamais être réattribué.
@@ -1216,6 +1219,8 @@ export function persistConversations(
         normalisee.listAvecMessages().filter((c) => archivees.has(c.id))
       )
     }
+    // Ce que la base garde d'un fil qui n'est plus archivé (ravivé, supprimé hors de cette session) part.
+    store.texteDesArchives.elaguer(archivees)
     if (illisibles.length) {
       console.warn(
         `[conversations] ${illisibles.length} archive(s) illisible(s), gardée(s) sur le disque : ` +

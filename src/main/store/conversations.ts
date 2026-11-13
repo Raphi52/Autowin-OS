@@ -29,6 +29,7 @@ import { memeFamille } from './synonymes'
 import { creerVoisinage, type IndexVoisinage } from './voisinage'
 import { creerIndexInverse, type IndexInverse } from './index-inverse'
 import type { EtatDeRepriseDuFil } from '../../shared/reprise-quota'
+import { texteEnMemoire, type TexteDesArchives } from './recherche-archives'
 
 // Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -965,20 +966,61 @@ interface FilArchive {
   fil: Conversation
 }
 
-/** Ce qu'un fil archivé garde en mémoire, calculé pendant que son historique complet est là. */
-function filArchive(fil: Conversation): FilArchive {
-  return {
-    resume: resumeDuFil(fil),
-    fil: { ...fil, messages: fil.messages.map(messageLeger) }
+/** Où le `content` d'un message archivé se relit : la base du texte, le fil, le rang du message. */
+const SOURCE_DU_TEXTE = Symbol('source-du-texte')
+const RANG_DU_TEXTE = Symbol('rang-du-texte')
+
+interface SourceDuTexte {
+  texte: TexteDesArchives
+  id: string
+  /** Unique à chaque archivage : la clé du cache de mots d'un fil ré-archivé ne resert jamais. */
+  numero: number
+}
+
+let numeroDeSource = 0
+
+/**
+ * Clé du cache de mots (`motsMemoises`) : le texte lui-même pour un message en mémoire ; pour un message
+ * archivé, son identité. Le texte relu de la base est une chaîne NEUVE à chaque lecture : en faire la clé
+ * remettrait tout le texte des archives en mémoire, dans le cache.
+ */
+function cleDesMots(message: Msg, contenu: string): string {
+  const archive = message as Partial<MessageArchive>
+  const source = archive[SOURCE_DU_TEXTE]
+  return source ? `\u0000${source.numero}#${archive[RANG_DU_TEXTE]}` : contenu
+}
+
+type MessageArchive = Msg & { [SOURCE_DU_TEXTE]: SourceDuTexte; [RANG_DU_TEXTE]: number }
+
+/**
+ * `content` d'un message archivé : relu dans la base à CHAQUE lecture, jamais gardé. Une propriété propre et
+ * énumérable, pour qu'une copie (`{ ...message }`, `structuredClone`, JSON) emporte bien le texte.
+ */
+const CONTENU_ARCHIVE: PropertyDescriptor = {
+  enumerable: true,
+  configurable: true,
+  get(this: MessageArchive): string {
+    const source = this[SOURCE_DU_TEXTE]
+    return source.texte.lire(source.id, this[RANG_DU_TEXTE]) as string
+  },
+  // Ne devrait pas servir (version texte en lecture seule) ; si un lecteur écrit, il garde sa valeur.
+  set(this: Msg, valeur: string) {
+    Object.defineProperty(this, 'content', {
+      value: valeur,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
   }
 }
 
 /**
  * Un message sans sa mécanique de tour : `parts` (le texte y est déjà dans `content`), le raisonnement,
  * les journaux d'actions et de tests, les réponses remplacées. Aucun lecteur de la version texte ne les
- * lit ; ils pèsent l'essentiel du disque, et `get` les rend au fil relu.
+ * lit ; ils pèsent l'essentiel du disque, et `get` les rend au fil relu. Avec une `source`, le texte
+ * lui-même quitte la mémoire : `content` se relit dans la base.
  */
-function messageLeger(message: Msg): Msg {
+function messageLeger(message: Msg, source?: SourceDuTexte, rang = 0): Msg {
   const leger: Msg = { ...message }
   delete leger.parts
   delete leger.reponsesRemplacees
@@ -987,6 +1029,12 @@ function messageLeger(message: Msg): Msg {
   delete leger.lookDecode
   delete leger.actionsLog
   delete leger.testsDuTerminal
+  if (source) {
+    const archive = leger as MessageArchive
+    archive[SOURCE_DU_TEXTE] = source
+    archive[RANG_DU_TEXTE] = rang
+    Object.defineProperty(leger, 'content', CONTENU_ARCHIVE)
+  }
   return leger
 }
 
@@ -997,6 +1045,33 @@ export class ConversationStore {
    * démarrage, et en sort quand on le touche (il redevient actif) ou qu'on le supprime.
    */
   private readonly archives = new Map<string, FilArchive>()
+  /**
+   * Où vit le TEXTE des fils archivés. En mémoire par défaut ; la couche disque branche une base SQLite
+   * (`recherche-archives.ts`) avant de relire les archives, et le texte quitte alors la mémoire.
+   */
+  texteDesArchives: TexteDesArchives = texteEnMemoire()
+
+  /** Ce qu'un fil archivé garde en mémoire, calculé pendant que son historique complet est là. */
+  private filArchive(fil: Conversation): FilArchive {
+    const contenus = fil.messages.map((message) =>
+      typeof message.content === 'string' ? message.content : undefined
+    )
+    // Base indisponible : le texte reste en mémoire, la recherche ne perd rien.
+    const source = this.texteDesArchives.ranger(fil.id, contenus)
+      ? { texte: this.texteDesArchives, id: fil.id, numero: ++numeroDeSource }
+      : undefined
+    return {
+      resume: resumeDuFil(fil),
+      fil: { ...fil, messages: fil.messages.map((m, rang) => messageLeger(m, source, rang)) }
+    }
+  }
+
+  /** Le fil quitte l'archive (ravivé, supprimé) : son texte quitte la base avec lui. */
+  private oublierArchive(id: string): boolean {
+    if (!this.archives.delete(id)) return false
+    this.texteDesArchives.retirer(id)
+    return true
+  }
   /**
    * Les fils archivés relus à la demande et encore en mémoire, du moins récemment relu au plus récent.
    * Leur entrée d'archive reste : une éviction ne fait que rendre la place.
@@ -1241,7 +1316,7 @@ export class ConversationStore {
     // Un fil archivé qu'on touche redevient ACTIF : le journal porte son fil entier (`conversations-disk`).
     // Il n'est donc plus ni servi depuis son archive, ni candidat à l'éviction.
     this.archivesRelues.delete(id)
-    this.archives.delete(id)
+    this.oublierArchive(id)
     this.onChange?.({
       id,
       // Jamais de relecture ici : un fil absent du store est une suppression, pas un fil à charger.
@@ -1306,7 +1381,7 @@ export class ConversationStore {
     for (const id of ids) {
       const fil = this.conversations.get(id)
       if (!fil || this.archivesRelues.has(id)) continue
-      this.archives.set(id, filArchive(fil))
+      this.archives.set(id, this.filArchive(fil))
       this.conversations.delete(id)
       basculees += 1
     }
@@ -1327,7 +1402,7 @@ export class ConversationStore {
     let ajoutees = 0
     for (const conversation of archivees) {
       if (this.connait(conversation.id)) continue
-      this.archives.set(conversation.id, filArchive(conversation))
+      this.archives.set(conversation.id, this.filArchive(conversation))
       // Les index de recherche déjà construits absorbent ces messages, comme ceux d'un tour.
       for (const message of conversation.messages)
         this.indexerMessage(conversation.id, message.content)
@@ -1825,22 +1900,34 @@ export class ConversationStore {
    */
   private *construireIndexTranches(): Generator<void, void, void> {
     const generation = this.generationIndex
+    // Un message ARCHIVÉ entre dans la photo par lui-même : son texte, figé, se relit de la base au moment
+    // de l'indexer, au lieu de tout le texte des archives lu d'un coup.
     const photo = this.filsSansTri().map((fil) => ({
       id: fil.id,
-      contenus: fil.messages.flatMap((message) =>
-        typeof message.content === 'string' ? [message.content] : []
+      contenus: fil.messages.flatMap((message): (string | Msg)[] =>
+        SOURCE_DU_TEXTE in message
+          ? [message]
+          : typeof message.content === 'string'
+            ? [message.content]
+            : []
       )
     }))
     this.fileIndex = []
     // Les mots ENTIERS au decoupage, la racine fournie a part : l'index compte alors la presence des deux, ce
     // dont la ponderation par le mot rencontre a besoin pour discriminer.
-    const voisinage = creerVoisinage((texte) => this.motsDuMessage(texte), racine)
+    // `cle` : celle du message en cours (`cleDesMots`), lue par le découpage que le voisinage rappelle.
+    let cle: string | undefined
+    const voisinage = creerVoisinage((texte) => this.motsDuMessage(texte, cle), racine)
     const inverse = creerIndexInverse()
     const cadence = new Cadence()
     for (const { id, contenus } of photo) {
-      for (const contenu of contenus) {
+      for (const element of contenus) {
+        const contenu = typeof element === 'string' ? element : element.content
+        if (typeof contenu !== 'string') continue
+        cle = typeof element === 'string' ? contenu : cleDesMots(element, contenu)
         voisinage.ajouter(contenu)
-        inverse.ajouter(id, this.motsDuMessage(contenu).map(racine))
+        inverse.ajouter(id, this.motsDuMessage(contenu, cle).map(racine))
+        cle = undefined
         if (cadence.arret()) {
           if (generation !== this.generationIndex) return
           yield
@@ -1874,19 +1961,19 @@ export class ConversationStore {
   }
 
   /** Les mots d'un message, joints par une espace (la forme gardée en cache, lue par `motCorrespondant`). */
-  private motsMemoises(contenu: string): string {
-    const connu = this.motsParMessage.get(contenu)
+  private motsMemoises(contenu: string, cle = contenu): string {
+    const connu = this.motsParMessage.get(cle)
     if (connu !== undefined) return connu
     const mots = motsDe(contenu).join(' ')
     // Borne de securite : un corpus qui grossit ne doit pas faire grossir ce cache sans fin.
     if (this.motsParMessage.size > 40_000) this.motsParMessage.clear()
-    this.motsParMessage.set(contenu, mots)
+    this.motsParMessage.set(cle, mots)
     return mots
   }
 
   /** Les mots d'un message en tableau, pour les index : un tableau éphémère, rien n'en est gardé. */
-  private motsDuMessage(contenu: string): string[] {
-    const joints = this.motsMemoises(contenu)
+  private motsDuMessage(contenu: string, cle = contenu): string[] {
+    const joints = this.motsMemoises(contenu, cle)
     return joints === '' ? [] : joints.split(' ')
   }
 
@@ -1913,15 +2000,17 @@ export class ConversationStore {
     for (const conversation of this.listAvecTexte()) {
       const extraits: ConversationExtrait[] = []
       for (const message of conversation.messages) {
-        if (typeof message.content !== 'string') continue
+        // Une seule lecture : un message archivé relit son texte dans la base à chaque accès.
+        const contenu = message.content
+        if (typeof contenu !== 'string') continue
         if (cadence.arret()) yield
         motif.lastIndex = 0
-        const occurrence = motif.exec(message.content)
+        const occurrence = motif.exec(contenu)
         if (!occurrence) continue
         extraits.push({
           role: message.role,
           ts: message.ts,
-          extrait: fenetre(message.content, occurrence.index, occurrence[0].length)
+          extrait: fenetre(contenu, occurrence.index, occurrence[0].length)
         })
         if (extraits.length >= parConversation) break
       }
@@ -1985,16 +2074,14 @@ export class ConversationStore {
       let extrait: string | undefined
       let occurrences = 0
       for (const message of conversation.messages) {
-        if (typeof message.content !== 'string') continue
+        // Une seule lecture : un message archivé relit son texte dans la base à chaque accès.
+        const contenu = message.content
+        if (typeof contenu !== 'string') continue
         if (cadence.arret()) yield
         motif.lastIndex = 0
-        for (
-          let occurrence = motif.exec(message.content);
-          occurrence;
-          occurrence = motif.exec(message.content)
-        ) {
+        for (let occurrence = motif.exec(contenu); occurrence; occurrence = motif.exec(contenu)) {
           if (extrait === undefined) {
-            extrait = fenetre(message.content, occurrence.index, occurrence[0].length)
+            extrait = fenetre(contenu, occurrence.index, occurrence[0].length)
           }
           occurrences += 1
         }
@@ -2221,14 +2308,16 @@ export class ConversationStore {
       /** Messages qui portent presque tous les mots DEMANDES : un bit par mot demande porte. */
       const masquesReposes: number[] = []
       for (const [rang, message] of conversation.messages.entries()) {
-        if (typeof message.content !== 'string') continue
+        // Une seule lecture : un message archivé relit son texte dans la base à chaque accès.
+        const contenu = message.content
+        if (typeof contenu !== 'string') continue
         messagesParcourus += 1
         // Coupe AUSSI a l'interieur d'une conversation tres longue : sans cela, une seule
         // conversation de dix mille messages ignorait le budget a elle seule.
         if (budgetEpuise()) break
         if (cadence.arret()) yield
-        const replie = replier(message.content)
-        const motsJoints = this.motsMemoises(message.content)
+        const replie = replier(contenu)
+        const motsJoints = this.motsMemoises(contenu, cleDesMots(message, contenu))
         let premierePosition = -1
         let motsIci = 0
         /*
@@ -2293,14 +2382,14 @@ export class ConversationStore {
          */
         const PLAFOND_LONGUEUR = 564
         const densite =
-          motsIci / Math.sqrt(Math.max(60, Math.min(message.content.length, PLAFOND_LONGUEUR)))
+          motsIci / Math.sqrt(Math.max(60, Math.min(contenu.length, PLAFOND_LONGUEUR)))
         if (densite > meilleurScore) meilleurScore = densite
         // fix-ok: la reponse annexee au rang precedent peut etre elle-meme un resultat -- ne pas la redire.
         if (extraits.length < parConversation && !derniersRangs.includes(rang)) {
           extraits.push({
             role: message.role,
             ts: message.ts,
-            extrait: fenetre(message.content, premierePosition, 0)
+            extrait: fenetre(contenu, premierePosition, 0)
           })
           derniersRangs.push(rang)
           // La REPONSE qui suit la question porte le sens que la question demandait. « le code
@@ -2586,9 +2675,11 @@ export class ConversationStore {
       /** Le mot ENTIER a-t-il ete vu ? Le bonus s'ajoute UNE fois, apres le comptage. */
       let exact = false
       for (const message of conversation.messages) {
-        if (typeof message.content !== 'string') continue
+        // Une seule lecture : un message archivé relit son texte dans la base à chaque accès.
+        const contenu = message.content
+        if (typeof contenu !== 'string') continue
         if (cadence.arret()) yield
-        const texte = replier(message.content)
+        const texte = replier(contenu)
         /*
          * LA FORME EXACTE VAUT LE PLAFOND D'OCCURRENCES.
          *
@@ -3058,7 +3149,7 @@ export class ConversationStore {
     this.motsParMessage.clear()
     // Un fil archivé non relu n'est qu'une entrée d'archive : sa suppression le retire d'ici aussi.
     const etaitRelu = this.conversations.delete(id)
-    const etaitArchive = this.archives.delete(id)
+    const etaitArchive = this.oublierArchive(id)
     this.archivesRelues.delete(id)
     const existed = etaitRelu || etaitArchive
     if (existed) this.changed(id)
