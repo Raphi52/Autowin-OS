@@ -364,7 +364,7 @@ describe('le reflet du cadre — la lumiere du pin, rejouee sur le bord', () => 
     const host = document.createElement('div')
     document.body.append(host)
     const root = createRoot(host)
-    act(() => root.render(createElement(RefletDuCadre)))
+    act(() => root.render(createElement(RefletDuCadre, { actif: true })))
     const reflet = host.querySelector('.cadre-reflet')
     expect(reflet?.getAttribute('aria-hidden')).toBe('true')
     expect([...(reflet?.children ?? [])].map((e) => `${e.tagName}.${e.className}`)).toEqual([
@@ -377,35 +377,35 @@ describe('le reflet du cadre — la lumiere du pin, rejouee sur le bord', () => 
     host.remove()
   })
 
-  // Le canvas deborde de MARGE px de chaque cote, et la table du reflet retire exactement cette
-  // marge pour retrouver le bloc ; le decodage, dont l'anneau couvre son bord d'1 px, d'un px de plus.
-  // ENTREE QUI DOIT FAIRE ECHOUER : changer l'un sans l'autre (le reflet glisserait hors de l'anneau).
-  it('deborde du bloc de la marge que le reflet retire', () => {
-    for (const [selecteur, m] of [
-      ['.cadre-reflet', MARGE],
-      ['.look-decode-block > summary > .cadre-reflet', MARGE + 1]
-    ] as const) {
-      const regle = regleDe(selecteur)
-      expect(regle).toMatch(new RegExp(`\\btop: -${m}px;`))
-      expect(regle).toMatch(new RegExp(`\\bleft: -${m}px;`))
-      expect(regle).toMatch(new RegExp(`\\bwidth: calc\\(100% \\+ ${2 * m}px\\);`))
-      expect(regle).toMatch(new RegExp(`\\bheight: calc\\(100% \\+ ${2 * m}px\\);`))
-    }
-    expect(regleDe('.cadre-reflet')).toMatch(/\bz-index: -1;/)
-    // La scene 3D est opaque : le reflet passe dessus, sans lueur qui la voilerait.
-    expect(regleDe('.bloc-3d > .cadre-reflet')).toMatch(/--reflet-lueur: 0;/)
+  // « cette animation doit etre que sur les blocs qui ont pas fini » : un bloc fini n'a ni canvas
+  // ni animation, seulement l'anneau noir de la feuille. ENTREE QUI DOIT FAIRE ECHOUER : un reflet
+  // rendu sur un bloc fini.
+  it('ne pose rien sur un bloc fini', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    act(() => root.render(createElement(RefletDuCadre, { actif: false })))
+    expect(host.querySelector('.cadre-reflet')).toBeNull()
+    expect(host.querySelector('canvas')).toBeNull()
+    act(() => root.unmount())
+    host.remove()
   })
 
-  // Le canvas lit `--cadre-rayon` pour suivre l'arrondi : chaque bloc encadre le declare.
-  it('trouve l arrondi de chaque bloc encadre', () => {
-    for (const [fichier, selecteur] of [
-      ['anneau-activite.css', '.cadre-anneau'],
-      ['Bloc3D.css', '.bloc-3d'],
-      ['LookDecodeBlock.css', '.look-decode-block']
-    ] as const) {
-      const feuille = readFileSync(join(ICI, fichier), 'utf8')
-      expect(regleDe(selecteur, feuille), fichier).toMatch(/--cadre-rayon: \d+px;/)
-    }
+  // Le canvas deborde de MARGE px de chaque cote, et la table du reflet retire exactement cette
+  // marge pour retrouver le bloc. ENTREE QUI DOIT FAIRE ECHOUER : changer l'un sans l'autre (le
+  // reflet glisserait hors de l'anneau).
+  it('deborde du bloc de la marge que le reflet retire', () => {
+    const regle = regleDe('.cadre-reflet')
+    expect(regle).toMatch(new RegExp(`\\btop: -${MARGE}px;`))
+    expect(regle).toMatch(new RegExp(`\\bleft: -${MARGE}px;`))
+    expect(regle).toMatch(new RegExp(`\\bwidth: calc\\(100% \\+ ${2 * MARGE}px\\);`))
+    expect(regle).toMatch(new RegExp(`\\bheight: calc\\(100% \\+ ${2 * MARGE}px\\);`))
+    expect(regle).toMatch(/\bz-index: -1;/)
+  })
+
+  // Le canvas lit `--cadre-rayon` pour suivre l'arrondi du bloc.
+  it('trouve l arrondi des blocs qui portent le reflet', () => {
+    expect(regleDe('.cadre-anneau')).toMatch(/--cadre-rayon: \d+px;/)
   })
 
   // La vague diagonale, ses etapes calculees et sa place dans le groupe sont parties : plus rien ne
@@ -420,11 +420,13 @@ describe('le reflet du cadre — la lumiere du pin, rejouee sur le bord', () => 
     )
   })
 
-  // Chaque bloc encadre du fil porte le reflet. Un `<details>` replie n'affiche que son `<summary>` :
-  // le reflet y est le premier enfant. ENTREE QUI DOIT FAIRE ECHOUER : un nouveau bloc encadre sans
-  // `<RefletDuCadre />`, ou un reflet pose hors du `summary` d'un bloc repliable.
-  it('est pose dans chaque bloc encadre du fil', () => {
-    const racine = /className=\{?[`'"][^`'"]*\b(cadre-anneau|look-decode-block|bloc-3d)\b(?![-_])/g
+  // Chaque bloc encadre qui peut etre EN COURS porte le reflet, allume par CE qui le dit en cours
+  // (la meme condition que sa classe `is-live`). Le decodage d'une image et la scene 3D ne sont
+  // jamais en cours : pas de reflet. ENTREE QUI DOIT FAIRE ECHOUER : un nouveau bloc encadre sans
+  // reflet, un reflet allume par autre chose que l'etat en cours du bloc, ou un reflet remis sur un
+  // bloc qui n'est jamais en cours.
+  it('est pose dans chaque bloc qui peut etre en cours, allume par son etat en cours', () => {
+    const racine = /className=\{?[`'"][^`'"]*\bcadre-anneau\b(?![-_])/g
     const fichiers = readdirSync(ICI).filter(
       (f) => f.endsWith('.tsx') && !f.includes('.test.') && f !== 'anneau-activite.tsx'
     )
@@ -434,19 +436,22 @@ describe('le reflet du cadre — la lumiere du pin, rejouee sur le bord', () => 
       const cadres = [...source.matchAll(racine)].length
       if (cadres === 0) continue
       porteurs[f] = cadres
-      expect(source.split('<RefletDuCadre />').length - 1, f).toBe(cadres)
+      const actifs = [...source.matchAll(/<RefletDuCadre actif=\{(\w+)\} \/>/g)].map((m) => m[1]!)
+      expect(actifs.length, f).toBe(cadres)
+      const enCours = new Set([...source.matchAll(/(\w+) \? ' is-live'/g)].map((m) => m[1]!))
+      for (const actif of actifs) expect(enCours, `${f} : ${actif}`).toContain(actif)
     }
     expect(Object.keys(porteurs).sort()).toEqual([
       'ArtifactPile.tsx',
       'ArtifactPreview.tsx',
-      'Bloc3D.tsx',
       'ChatView.parts.tsx',
-      'LookDecodeBlock.tsx',
       'ThinkingBlock.tsx'
     ])
+    for (const f of ['LookDecodeBlock.tsx', 'Bloc3D.tsx'])
+      expect(readFileSync(join(ICI, f), 'utf8'), f).not.toContain('RefletDuCadre')
   })
 
-  it('est rendu dans le summary d un bloc replie (Raisonnement)', () => {
+  it('tourne sur Raisonnement en cours, dans son summary replie, et s eteint quand il finit', () => {
     const host = document.createElement('div')
     document.body.append(host)
     const root = createRoot(host)
@@ -454,6 +459,8 @@ describe('le reflet du cadre — la lumiere du pin, rejouee sur le bord', () => 
     const bloc = host.querySelector<HTMLDetailsElement>('[data-testid="thinking-block"]')!
     expect(bloc.open).toBe(false)
     expect(bloc.querySelector(':scope > summary > .cadre-reflet:first-child')).not.toBeNull()
+    act(() => root.render(createElement(ThinkingBlock, { text: 'je pese', done: true })))
+    expect(host.querySelector('.cadre-reflet')).toBeNull()
     act(() => root.unmount())
     host.remove()
   })

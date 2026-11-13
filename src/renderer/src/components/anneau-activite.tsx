@@ -124,11 +124,18 @@ export function LegendeDesOutils({
 /**
  * LE REFLET DU CADRE : la lumiere de l'anneau du bouton de verre, rejouee sur le bord du bloc
  * (reflet-du-pin.ts, place dans anneau-activite.css) — le seul reflet de l'anneau. Deux canvas : la
- * lumiere douce (lueur et verre), puis l'anneau net par-dessus. A poser DANS chaque bloc encadre, en
- * premier enfant de son `<summary>` quand le bloc est un `<details>` : hors du `summary`, un
- * `<details>` replie ne l'afficherait pas.
+ * lumiere douce (lueur et verre), puis l'anneau net par-dessus. A poser DANS chaque bloc encadre qui
+ * peut etre EN COURS, en premier enfant de son `<summary>` quand le bloc est un `<details>` : hors du
+ * `summary`, un `<details>` replie ne l'afficherait pas.
+ * SEULEMENT TANT QUE LE BLOC N'A PAS FINI (« cette animation doit etre que sur les blocs qui ont pas
+ * fini », 2026-11-13) : `actif` est l'etat « en cours » du bloc (`is-live`). Fini, le reflet est
+ * retire, canvas et memoire compris : reste l'anneau noir et son liseré de la feuille.
  */
-export function RefletDuCadre(): React.JSX.Element {
+export function RefletDuCadre({ actif }: { actif: boolean }): React.JSX.Element | null {
+  return actif ? <RefletEnCours /> : null
+}
+
+function RefletEnCours(): React.JSX.Element {
   const conteneur = useRef<HTMLSpanElement>(null)
   useEffect(() => (conteneur.current ? brancherLeReflet(conteneur.current) : undefined), [])
   return (

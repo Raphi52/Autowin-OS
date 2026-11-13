@@ -906,7 +906,7 @@ export function AssistantActivityGroup({
             setPliManuel(!capsuleOuverte)
           }}
         >
-          <RefletDuCadre />
+          <RefletDuCadre actif={running} />
           <span className="anneau-tete">
             <RondDIcone
               etats={etatsDesPhases}
@@ -1055,7 +1055,7 @@ export function AssistantActivityGroup({
         data-state={etat}
         data-testid="activity-anneau"
       >
-        <RefletDuCadre />
+        <RefletDuCadre actif={running} />
         {/* TOUTE LA LIGNE deplie, fleche comprise, comme le <summary> des autres blocs du fil :
             la fleche vivait A COTE du bouton et ne reagissait pas, alors que c'est la qu'on vise
             pour deplier. Le geste est donc pose sur la ligne ; le bouton reste la cible du clavier

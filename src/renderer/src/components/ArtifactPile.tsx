@@ -179,7 +179,7 @@ export function ArtifactPile({
             setOuverte((courant) => !courant)
           }}
         >
-          <RefletDuCadre />
+          <RefletDuCadre actif={live} />
           <span className="anneau-tete">
             <RondDIcone>{ICONE_IMAGE}</RondDIcone>
             <span className="anneau-col">

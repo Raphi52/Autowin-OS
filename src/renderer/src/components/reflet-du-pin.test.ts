@@ -355,7 +355,7 @@ describe('la couche de lumiere — lueur dehors et verre du bloc', () => {
     expect(surLeNoir).toBeCloseTo(60 * decroissance(DECROISSANCE_EXTERIEURE, 5), -1)
   })
 
-  it('eteint la lumiere quand le bloc le demande (scene 3D)', () => {
+  it('eteint la lumiere quand le bloc le demande (--reflet-lueur a 0)', () => {
     const table = tableDuBord('lumiere', l, h, r, 1 / pas, 0, fabrique)
     peindre(table, source(blanc([0, 4])), 0)
     expect(pixel(table, l / 2, -3, pas)[3]).toBe(0)

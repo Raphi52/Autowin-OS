@@ -448,7 +448,7 @@ export function ArtifactPreview({
             setIsExpanded((current) => !current)
           }}
         >
-          <RefletDuCadre />
+          <RefletDuCadre actif={live} />
           <span className="anneau-tete">
             <RondDIcone>{ICONE_IMAGE}</RondDIcone>
             <span className="anneau-col">

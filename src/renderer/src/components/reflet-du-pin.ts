@@ -1,6 +1,7 @@
 /**
  * LE REFLET DU PIN, REJOUE TEL QUEL — la lumiere qui court sur le bord des blocs encadres du fil
- * (Raisonnement, Actions, Etapes, images, decodage, scene 3D).
+ * (Raisonnement, Actions, Etapes, Orchestration, barre d'activite, images), tant qu'ils n'ont pas
+ * fini : `RefletDuCadre` (anneau-activite.tsx) ne le pose que sur un bloc en cours.
  *
  * Le modele est l'anneau d'un bouton de verre, l'epingle Pinterest 941744972113082896 (video de 5 s
  * a 30 images/s, en boucle). Deux essais l'avaient INTERPRETE — une vague diagonale qui traversait
@@ -274,7 +275,7 @@ type FabriqueImage = (largeur: number, hauteur: number) => ImageData
  * Precalcule, pour une couche d'un bloc l x h (px CSS, arrondi `rayon`), chaque pixel utile de son
  * canvas — le bloc plus MARGE de chaque cote, a `pixelsParPx` pixels par px : sa place sur le tour et
  * ses poids. L'anneau ne garde que les pixels du trait ; la lumiere, la lueur dehors et le verre
- * jusqu'a PROFONDEUR_DU_VERRE. `lueur` (0 a 1) attenue la lumiere : la scene 3D l'eteint.
+ * jusqu'a PROFONDEUR_DU_VERRE. `lueur` (0 a 1) attenue la lumiere (`--reflet-lueur`).
  */
 export function tableDuBord(
   couche: 'anneau' | 'lumiere',

@@ -145,7 +145,7 @@ function BlocRepliable({
       onToggle={(event) => setManuel(event.currentTarget.open)}
     >
       <summary>
-        <RefletDuCadre />
+        <RefletDuCadre actif={live} />
         {/* AUCUN spinner ici : un seul tourne pour tout le tour, sur la ligne « Agent »
             (demande du 2026-09-12 « met qu'un spinner sur la ligne agent »). Deux blocs
             empiles donnaient deux spinners cote a cote pour une seule attente. */}

@@ -15,8 +15,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NOM_PAGE_SCENE_3D, TYPE_MESSAGE_SCENE_3D } from '../../../shared/scene-3d'
 import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 import { codeSceneDuCarrousel } from '../../scene-3d/choix-scene.mjs'
-import { RefletDuCadre } from './anneau-activite'
-// L'anneau de son bord et son reflet sont partagés par tous les blocs du fil : anneau-activite.css et reflet-du-pin.ts.
+// L'anneau de son bord est partagé par tous les blocs du fil (anneau-activite.css) ; sans état « en cours », ce bloc n'a pas de reflet.
 import './anneau-activite.css'
 import './Bloc3D.css'
 
@@ -100,7 +99,6 @@ export function Bloc3D({ code }: { code: string }): React.JSX.Element {
       data-testid="chat-inline-scene-3d"
       aria-label={t('scene.titre')}
     >
-      <RefletDuCadre />
       <header className="bloc-3d__barre">
         <span className="bloc-3d__nom">
           {t('scene.titre')}
