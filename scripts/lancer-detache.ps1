@@ -9,11 +9,16 @@ WmiPrvSE.exe, hors du Job du tour. Il n'hérite donc pas de la fermeture.
 
 Usage :
   powershell -NoProfile -File scripts/lancer-detache.ps1 -Commande '"C:\Program Files\Git\bin\bash.exe" -lc "/d/banc/lance.sh"' -Dossier D:\banc
+  -Visible : fenêtre affichée (ShowWindow = SW_SHOWNORMAL) au lieu de cachée. Pour une application
+  graphique ouverte À LA DEMANDE de l'utilisateur sur son écran : sans ce mode, la première
+  ShowWindow d'une app WPF/WinForms reprend SW_HIDE et sa fenêtre reste invisible ; et lancée par
+  Start-Process, elle mourrait avec le tour : l'utilisateur la verrait « se fermer seule ».
 Sortie : une ligne JSON {pid, horsJob, commande}. Code 0 = lancé ET vérifié hors Job.
 #>
 param(
   [Parameter(Mandatory = $true)][string]$Commande,
-  [string]$Dossier = (Get-Location).Path
+  [string]$Dossier = (Get-Location).Path,
+  [switch]$Visible
 )
 $ErrorActionPreference = 'Stop'
 
@@ -30,8 +35,9 @@ public static class JobProbe {
 }
 '@
 
-# Fenêtre cachée : ShowWindow = 0 (SW_HIDE).
-$startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]0 }
+# Fenêtre cachée par défaut : ShowWindow = 0 (SW_HIDE) ; -Visible : 1 (SW_SHOWNORMAL).
+$affichage = if ($Visible) { [uint16]1 } else { [uint16]0 }
+$startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = $affichage }
 $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
   CommandLine = $Commande; CurrentDirectory = $Dossier; ProcessStartupInformation = $startup
 }
