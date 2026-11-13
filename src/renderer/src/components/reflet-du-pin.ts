@@ -31,9 +31,12 @@
  *   couleur du fond du theme (`--bg-0`) : en theme clair, elle eclaircit a peine le fond au lieu d'y
  *   laisser des taches colorees, et elle eclaire l'anneau d'un bloc voisin sans l'effacer.
  *
- * LE TEMPS : la video est rejouee a la cadence de l'ecran (60 images/s au plus), chaque instant
- * MELANGE ses deux images voisines — a 30 images/s, chaque image restait deux rafraichissements et
- * la gerbe saccadait. Chaque bloc a son DECALAGE (0 a DECALAGE_MAX images), tire de sa place dans la
+ * LE TEMPS : la video est rejouee a SA cadence, 30 images/s, et tous les blocs sont peints au meme
+ * tic (`cranDePeinture`) : la fenetre ne se recompose que 30 fois par seconde. Peinte a la cadence de
+ * l'ecran (60 images/s), elle coutait 3 a 21 % de la GeForce GT 1030 du poste, contre 1,2 a 1,7 % a
+ * 30 (mesure du 2026-11-13, « ramene le reflet a 30 images/s pour soulager la carte graphique »).
+ * Chaque instant peint MELANGE ses deux images voisines : un bloc decale d'une fraction d'image y
+ * reste juste. Chaque bloc a son DECALAGE (0 a DECALAGE_MAX images), tire de sa place dans la
  * page : trois blocs voisins ne s'allument pas a l'identique, comme trois objets de verre, sans ordre
  * ni sens de passage.
  *
@@ -71,8 +74,51 @@ export const MARGE = 10
 export const ECHELLE_LUEUR = 2
 /** Plus grand decalage d'un bloc sur la video, en images. */
 export const DECALAGE_MAX = 15
-/** Ecart minimal entre deux peintures d'un bloc : 60 images/s au plus, meme sur un ecran a 144 Hz. */
-const ECART_DES_PEINTURES_MS = 15
+
+/**
+ * NOIR QUAND LA LUMIERE NE PASSE PAS (« quand ya pas la lumiere qui passe ca doit etre noir la le
+ * border n'a quasi pas de noir », 2026-11-13). Au repos, l'anneau du pin est un corps noir (4 %) entre
+ * deux bords a peine plus clairs (9 a 13 %), sur 17 px d'epaisseur ; ramenes aux 3 px du trait, ces
+ * bords devenaient un liseré gris ou colore tout le long. Jusqu'a NOIR_JUSQUA (le niveau de ces bords
+ * au repos, mesure sur la video), le trait est noir ; la couleur revient en entier a COULEUR_DES, la
+ * ou la lumiere passe vraiment. Le liseré fin du bouton reste celui de la feuille (`--chrome-lisere`).
+ */
+export const NOIR_JUSQUA = 0.13
+export const COULEUR_DES = 0.35
+
+/** La part de la couleur du trait gardee, selon sa force (0 a 1) : 0 au repos, 1 dans la lumiere. */
+export function lumiereQuiPasse(force: number): number {
+  const x = Math.min(1, Math.max(0, (force - NOIR_JUSQUA) / (COULEUR_DES - NOIR_JUSQUA)))
+  return x * x * (3 - 2 * x)
+}
+/**
+ * Le cran de peinture de l'instant `ms` : la grille des 30 images/s de la video, commune a tous les
+ * blocs. On ne peint qu'au premier tic d'un nouveau cran : 30 peintures par seconde quel que soit
+ * l'ecran (60 ou 144 Hz), et toutes sur le meme tic. Un ecart minimal par bloc les etalait sur des
+ * tics differents, et la fenetre se recomposait a chacun.
+ */
+export function cranDePeinture(ms: number): number {
+  return Math.floor((ms * IMAGES_PAR_SECONDE) / 1000)
+}
+
+/** La derniere peinture commune : son cran et son instant. */
+export type DernierePeinture = { cran: number; instant: number }
+
+/**
+ * Faut-il peindre au tic `ms` ? Oui au premier tic d'un cran PLUS RECENT que la derniere peinture —
+ * et aussi quand une image entiere s'est ecoulee depuis elle (a 1 ms pres, pour les arrondis) : sur un
+ * ecran a 30 Hz, les tics tombent sur les bords des crans, et un arrondi en mettait deux dans le meme
+ * (24 peintures par seconde au lieu de 30). Une peinture faite pour ce second motif consomme le cran
+ * suivant : sans cela, le tic d'apres repeignait 16 ms plus tard (36 par seconde a 60 Hz). Si oui, la
+ * peinture est notee dans `derniere`.
+ */
+export function peindreACeTic(ms: number, derniere: DernierePeinture): boolean {
+  const cran = cranDePeinture(ms)
+  if (cran <= derniere.cran && ms - derniere.instant < 1000 / IMAGES_PAR_SECONDE - 1) return false
+  derniere.cran = Math.max(cran, derniere.cran + 1)
+  derniere.instant = ms
+  return true
+}
 
 /**
  * Decroissance de la lueur DEHORS, en px depuis le bord de l'anneau (index = distance), normee a
@@ -461,10 +507,14 @@ export function peindre(
         const a0 = s + l0 * 3
         const a1 = s + Math.min(ANNEAU_EXTERIEUR, l0 + 1) * 3
         const o = octet[p]
-        d[o] = tour[a0] + (tour[a1] - tour[a0]) * fl
-        d[o + 1] = tour[a0 + 1] + (tour[a1 + 1] - tour[a0 + 1]) * fl
-        d[o + 2] = tour[a0 + 2] + (tour[a1 + 2] - tour[a0 + 2]) * fl
-        d[o + 3] = poidsAnneau[p] * 255
+        const r = tour[a0] + (tour[a1] - tour[a0]) * fl
+        const v = tour[a0 + 1] + (tour[a1 + 1] - tour[a0 + 1]) * fl
+        const b = tour[a0 + 2] + (tour[a1 + 2] - tour[a0 + 2]) * fl
+        // Hors de la lumiere, le trait s'efface : dessous, l'anneau noir de la feuille et son liseré.
+        d[o] = r
+        d[o + 1] = v
+        d[o + 2] = b
+        d[o + 3] = poidsAnneau[p] * lumiereQuiPasse(Math.max(r, v, b) / 255) * 255
       }
       continue
     }
@@ -571,7 +621,6 @@ type Reflet = {
   /** Taille, arrondi ou theme changes : les tables sont a refaire. */
   aPreparer: boolean
   preparee: number
-  peinte: number
   aRepeindre: boolean
 }
 
@@ -586,6 +635,7 @@ const tous = new Set<Reflet>()
 const aLEcran = new Set<Reflet>()
 const parConteneur = new WeakMap<Element, Reflet>()
 let boucle = 0
+const derniere: DernierePeinture = { cran: -1, instant: -Infinity }
 let observateurDeChamp: IntersectionObserver | null = null
 let observateurDeTaille: ResizeObserver | null = null
 let observateurDeTheme: MutationObserver | null = null
@@ -644,6 +694,7 @@ function tic(maintenant: number): void {
   boucle = 0
   if (aLEcran.size === 0) return
   if (texture && eclats) {
+    const nouveauCran = peindreACeTic(maintenant, derniere)
     for (const reflet of aLEcran) {
       if (
         reflet.aPreparer &&
@@ -652,7 +703,7 @@ function tic(maintenant: number): void {
         preparer(reflet)
         reflet.preparee = maintenant
       }
-      if (!reflet.aRepeindre && maintenant - reflet.peinte < ECART_DES_PEINTURES_MS) continue
+      if (!nouveauCran && !reflet.aRepeindre) continue
       const position = positionA(maintenant, reflet.decalage)
       const source: Source = { texture, eclats, fond: reflet.fond }
       for (const couche of [reflet.lumiere, reflet.anneau]) {
@@ -661,7 +712,6 @@ function tic(maintenant: number): void {
         couche.tampon = peindre(table, source, position, couche.tampon)
         for (const zone of table.zones) ctx.putImageData(zone.image, zone.x, zone.y)
       }
-      reflet.peinte = maintenant
       reflet.aRepeindre = false
     }
   }
@@ -699,7 +749,6 @@ export function brancherLeReflet(conteneur: HTMLElement): () => void {
     decalage: 0,
     aPreparer: true,
     preparee: 0,
-    peinte: 0,
     aRepeindre: true
   }
   parConteneur.set(conteneur, reflet)

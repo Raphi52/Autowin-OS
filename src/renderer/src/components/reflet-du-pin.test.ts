@@ -21,6 +21,8 @@ import {
   IMAGES,
   LIGNES,
   MARGE,
+  NOIR_JUSQUA,
+  COULEUR_DES,
   LIGNES_REJOUEES,
   PROFONDEUR_DU_VERRE,
   VERRE_LOCAL,
@@ -28,6 +30,8 @@ import {
   VERRE_VOISINS_20,
   VERRE_VOISINS_40,
   avecLesVoisins,
+  cranDePeinture,
+  peindreACeTic,
   couleurRgb,
   decalageDe,
   decroissance,
@@ -36,6 +40,7 @@ import {
   pointDuBord,
   positionA,
   tableDuBord,
+  type DernierePeinture,
   type Source,
   type TableDuBord
 } from './reflet-du-pin'
@@ -69,6 +74,44 @@ describe('positionA — le temps de la video', () => {
     expect(vus.size).toBe(DECALAGE_MAX)
     expect(decalageDe(364, 120)).toBe(decalageDe(366, 121))
     expect(decalageDe(16, 120)).not.toBe(decalageDe(380, 120))
+  })
+})
+
+describe('peindreACeTic — 30 peintures par seconde, au meme tic pour tous les blocs', () => {
+  /**
+   * Les tics d'une seconde d'un ecran a `hz` qui peignent (une peinture a l'instant 1000), les tics
+   * impairs avances et les pairs retardes de `gigue` ms.
+   */
+  function tics(hz: number, gigue = 0): number[] {
+    const derniere: DernierePeinture = { cran: cranDePeinture(1000), instant: 1000 }
+    const peints: number[] = []
+    for (let k = 1; k <= hz; k++) {
+      const t = 1000 + (k * 1000) / hz + (k % 2 ? -gigue : gigue)
+      if (peindreACeTic(t, derniere)) peints.push(t)
+    }
+    return peints
+  }
+
+  // Peint a la cadence de l'ecran (60 images/s), le reflet coutait 3 a 21 % de la GT 1030 du poste,
+  // contre 1,2 a 1,7 % a 30 (mesure du 2026-11-13). ENTREE QUI DOIT FAIRE ECHOUER : une cadence liee a
+  // la frequence de l'ecran, ou un ecran a 30 Hz qui perd des images sur les bords des crans.
+  it('peint 30 fois par seconde, quel que soit l ecran', () => {
+    for (const hz of [30, 60, 75, 120, 144]) expect(tics(hz).length, `${hz} Hz`).toBe(30)
+  })
+
+  it('reste a 30 par seconde quand les tics de l ecran tremblent', () => {
+    expect(tics(60, 2).length).toBe(30)
+    expect(tics(144, 1).length).toBe(30)
+  })
+
+  // La decision ne depend que de l'instant et de la peinture COMMUNE : tous les blocs a l'ecran
+  // peignent au meme tic, et la fenetre ne se recompose qu'une fois par image.
+  it('ne peint jamais deux fois dans la meme image de la video', () => {
+    for (const hz of [60, 120, 144]) {
+      const peints = tics(hz)
+      for (let i = 1; i < peints.length; i++)
+        expect(peints[i]! - peints[i - 1]!, `${hz} Hz`).toBeGreaterThan(1000 / 30 - 8)
+    }
   })
 })
 
@@ -154,18 +197,36 @@ function pixel(table: TableDuBord, x: number, y: number, pas: number): number[] 
 const [l, h, r] = [350, 52, 16]
 
 describe('la couche de l anneau — la texture repeinte le long du trait', () => {
-  // ENTREE QUI DOIT FAIRE ECHOUER : un eclat peint au mauvais degre, ou un anneau transparent la ou
-  // la video le montre noir.
-  it('peint l anneau de la couleur de la texture a son degre, opaque, et rien autour', () => {
+  // ENTREE QUI DOIT FAIRE ECHOUER : un eclat peint au mauvais degre, ou un trait peint la ou la
+  // lumiere ne passe pas (il masquerait l'anneau noir de la feuille et son liseré).
+  it('peint l eclat de la couleur de la texture a son degre, et laisse le noir a la feuille', () => {
     const tex = texture((ligne, d) =>
       ligne >= 1 && ligne <= 3 && d >= 80 && d <= 100 ? [255, 0, 0] : [0, 0, 0]
     )
     const table = tableDuBord('anneau', l, h, r, 1, 1, fabrique)
     peindre(table, source(tex), 0)
     expect(pixel(table, l - 1.5, h / 2, 1)).toEqual([255, 0, 0, 255])
-    expect(pixel(table, l / 2, 1.5, 1)).toEqual([0, 0, 0, 255])
+    expect(pixel(table, l / 2, 1.5, 1)[3]).toBe(0)
     expect(pixel(table, l / 2, -4, 1)[3]).toBe(0)
     expect(pixel(table, l / 2, 8, 1)[3]).toBe(0)
+  })
+
+  // « quand ya pas la lumiere qui passe ca doit etre noir » : au niveau des bords de l'anneau du pin
+  // au repos (13 %), le trait s'efface ; la couleur revient en entier a 35 %. ENTREE QUI DOIT FAIRE
+  // ECHOUER : un trait gris ou colore la ou le pin est au repos.
+  it('efface le trait au repos et le garde entier dans la lumiere', () => {
+    const niveau = (force: number): number => {
+      const tex = texture((ligne) => (ligne >= 1 && ligne <= 3 ? [force, force, force] : [0, 0, 0]))
+      const table = tableDuBord('anneau', l, h, r, 1, 1, fabrique)
+      peindre(table, source(tex), 0)
+      return pixel(table, l / 2, 1.5, 1)[3]!
+    }
+    expect(niveau(Math.round(0.09 * 255))).toBe(0)
+    expect(niveau(Math.round(NOIR_JUSQUA * 255))).toBe(0)
+    expect(niveau(Math.round(0.24 * 255))).toBeGreaterThan(0)
+    expect(niveau(Math.round(0.24 * 255))).toBeLessThan(255)
+    expect(niveau(Math.round(COULEUR_DES * 255) + 1)).toBe(255)
+    expect(niveau(255)).toBe(255)
   })
 
   it('peint chaque tiers de l epaisseur depuis sa ligne de texture', () => {
