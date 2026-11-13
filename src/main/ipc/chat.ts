@@ -126,7 +126,7 @@ import { phasesAvecJuge } from '../orchestration/orchestration-memoire'
 import { deleteListedRun } from '../dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from '../runs/orchestrate-turn-persistence'
 import { StartupResumeQueue } from '../runs/startup-resume-queue'
-import { creerRepriseDesFils } from '../chat/reprise-fil-apres-quota'
+import { creerRepriseDesFils, filsCoupesALire } from '../chat/reprise-fil-apres-quota'
 import { type SuiviDuPlan } from '../runs/relaunch-resumable-run'
 import { type OrchestrationRunState } from '../runs/orchestration-state'
 import {
@@ -3564,7 +3564,8 @@ Le fil reprend ensuite normalement.`
    */
   const fileDesFilsCoupes = new StartupResumeQueue()
   suiviDesFilsCoupes.reprise = creerRepriseDesFils({
-    lireFils: () => os.conversations.listAvecMessages(),
+    lireFils: () => filsCoupesALire(os.conversations),
+    lireFil: (id) => os.conversations.get(id),
     filOccupe: (id) => activeChatTurns.isInFlight(id),
     filDansUnPlan: (id) => Boolean(suiviDesPlans.coordinateur?.planDuFil(id)),
     filsAvecRunAReprendre: () =>

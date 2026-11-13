@@ -61,6 +61,36 @@ export function estUneRepriseApresQuota(message: string | undefined | null): boo
 }
 
 /**
+ * Le tour qui porte l'attente : le dernier message HORS consignes. Une consigne écrite pendant un tour
+ * ne répond à rien ; une demande arrivée après la coupure a repris la main.
+ *
+ * fix-ok: une consigne écrite sous une réponse déjà commencée passe en fin de fil (`append`,
+ * `store/conversations.ts`) ; lu par `at(-1)`, ce fil passait pour « pas coupé », sans départ et sans
+ * raison affichée (5 tests rouges sur cet ordre réel).
+ */
+export function tourDuFil<T extends { orientation?: boolean }>(
+  messages: readonly T[]
+): T | undefined {
+  for (let rang = messages.length - 1; rang >= 0; rang -= 1) {
+    if (!messages[rang].orientation) return messages[rang]
+  }
+  return undefined
+}
+
+/**
+ * Ce tour est-il une coupure par le QUOTA ? C'est la première condition de la reprise : un fil dont le
+ * dernier tour ne l'est pas n'a aucun état de reprise. Le résumé la porte aussi
+ * (`dernierTourCoupeParQuota`), pour écarter ces fils sans relire leur historique.
+ */
+export function estTourCoupeParQuota(tour: {
+  role: string
+  status?: string
+  error?: string
+}): boolean {
+  return tour.role === 'assistant' && tour.status === 'failed' && estMurDeQuota(tour.error)
+}
+
+/**
  * Pourquoi un fil coupé ne repartira pas seul.
  *
  * fix-ok: `hors-du-chat` vient du fil « Assistant mails », règle mail relancée sans ses bornes, essai du contrôle

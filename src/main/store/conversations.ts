@@ -28,7 +28,11 @@ import { parseAskDecision } from '../../renderer/src/components/ask-choices'
 import { memeFamille } from './synonymes'
 import { creerVoisinage, type IndexVoisinage } from './voisinage'
 import { creerIndexInverse, type IndexInverse } from './index-inverse'
-import type { EtatDeRepriseDuFil } from '../../shared/reprise-quota'
+import {
+  estTourCoupeParQuota,
+  tourDuFil,
+  type EtatDeRepriseDuFil
+} from '../../shared/reprise-quota'
 import { texteEnMemoire, type TexteDesArchives } from './recherche-archives'
 
 // Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
@@ -348,6 +352,13 @@ export type ChampsDerivesDesMessages = {
    */
   lastAssistantAsksUser?: true
   /**
+   * Le DERNIER tour (hors consignes) est une coupure par le quota : seul un tel fil peut être repris.
+   * `filsCoupesALire` (chat/reprise-fil-apres-quota.ts) ne relit l'historique que de ceux-là.
+   * fix-ok: cause lue dans le code — la reprise relisait l'historique de chaque fil (`listAvecMessages`
+   * dans ipc/chat.ts) ; ce drapeau permet d'écarter les autres sans ce coût.
+   */
+  dernierTourCoupeParQuota?: true
+  /**
    * Un tour assistant est encore `streaming` QUELQUE PART dans le fil, pas forcément le dernier.
    * Vécu (2026-10-13) : deux runs rattachés au redémarrage travaillaient encore, mais un
    * tour de chat plus récent était terminé — `lastAssistantStatus` disait `completed` et la liste
@@ -420,6 +431,7 @@ export function resumeDuFil(conversation: Conversation): ConversationResume {
   const dernierAssistant =
     assistantsRecents.find((message) => !estAvisDeLApp(message)) ?? assistantsRecents[0]
   const dateDeLUtilisateur = lastUserMessageAt(messages)
+  const dernierTour = tourDuFil(messages)
   return {
     ...metadonnees,
     messageCount: messages.length,
@@ -439,6 +451,9 @@ export function resumeDuFil(conversation: Conversation): ConversationResume {
       ? { lastAssistantError: dernierAssistant.error }
       : {}),
     ...(dateDeLUtilisateur !== undefined ? { lastUserMessageAt: dateDeLUtilisateur } : {}),
+    ...(dernierTour !== undefined && estTourCoupeParQuota(dernierTour)
+      ? { dernierTourCoupeParQuota: true as const }
+      : {}),
     ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {}),
     ...(messages.some((m) => m.role === 'assistant' && m.status === 'streaming')
       ? { hasStreamingTurn: true as const }

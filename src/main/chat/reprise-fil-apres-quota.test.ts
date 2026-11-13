@@ -437,6 +437,7 @@ describe('creerRepriseDesFils — un seul essai, à l’heure, un fil à la fois
     const lectureDesRuns = vi.fn(() => new Set(runs))
     const reprise = creerRepriseDesFils({
       lireFils: () => fils,
+      lireFil: (id) => fils.find((fil) => fil.id === id),
       filOccupe: (id) => occupes.has(id),
       filDansUnPlan: (id) => plans.has(id),
       filsAvecRunAReprendre: lectureDesRuns,

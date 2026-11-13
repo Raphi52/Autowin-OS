@@ -53,9 +53,10 @@ import {
 } from '../runs/reveil-apres-quota'
 import {
   MARQUE_REPRISE_APRES_QUOTA,
-  estMurDeQuota,
+  estTourCoupeParQuota,
   estUneRepriseApresQuota,
   instantDeRetourAnnonce,
+  tourDuFil,
   type EtatDeRepriseDuFil,
   type RaisonDeRepriseManuelle
 } from '../../shared/reprise-quota'
@@ -98,16 +99,6 @@ const contientOrchestrate = (parts: readonly unknown[] | undefined): boolean =>
       (part as { name?: unknown }).name === 'orchestrate'
   )
 
-/**
- * Le tour coupé est le dernier message HORS consignes.
- *
- * fix-ok: une consigne écrite sous une réponse déjà commencée passe en fin de fil (`append`,
- * `store/conversations.ts`) ; lu par `at(-1)`, ce fil passait pour « pas coupé », sans départ et sans
- * raison affichée (5 tests rouges sur cet ordre réel).
- */
-const tourDuFil = (messages: FilLu['messages']): FilLu['messages'][number] | undefined =>
-  messages.findLast((message) => !message.orientation)
-
 /** La dernière demande est-elle déjà notre essai ? Une consigne glissée pendant le tour n'en est pas une. */
 function essaiDejaFait(messages: FilLu['messages']): boolean {
   for (let rang = messages.length - 1; rang >= 0; rang -= 1) {
@@ -134,8 +125,9 @@ export function etatDeRepriseDuFil(entree: {
 }): EtatDeRepriseDuFil | undefined {
   const { fil, maintenant, planDeLots, runAReprendre } = entree
   const coupe = tourDuFil(fil.messages)
-  if (coupe?.role !== 'assistant' || coupe.status !== 'failed' || !estMurDeQuota(coupe.error))
-    return undefined
+  // fix-ok: cause lue dans le code — chat.ts relisait l'historique de chaque fil pour la reprise. Ce même
+  // test est le drapeau du résumé (`dernierTourCoupeParQuota`) : `filsCoupesALire` ne lit que les fils retenus.
+  if (coupe === undefined || !estTourCoupeParQuota(coupe)) return undefined
   if (essaiDejaFait(fil.messages)) return { etat: 'essai-rate' }
   const aLaMain = (raison: RaisonDeRepriseManuelle): EtatDeRepriseDuFil => ({
     etat: 'manuelle',
@@ -172,7 +164,10 @@ export function composerMessageDeReprise(): string {
 }
 
 export interface DependancesDeLaReprise {
+  /** Les fils à examiner, avec leurs messages : ceux que `filsCoupesALire` retient. */
   lireFils: () => readonly FilLu[]
+  /** Un fil précis, quel que soit son état : son départ se relit tel quel, comme avant le filtre. */
+  lireFil: (id: string) => FilLu | undefined
   filOccupe: (id: string) => boolean
   filDansUnPlan: (id: string) => boolean
   /** Les fils qui ont un run à reprendre. Lecture disque : voir `MEMOIRE_DES_RUNS_MS`. */
@@ -184,6 +179,21 @@ export interface DependancesDeLaReprise {
     messages: { role: 'user' | 'assistant'; content: string }[]
   ) => Promise<{ ok: boolean; error?: string }>
   journal?: (message: string) => void
+}
+
+/**
+ * Les fils que la reprise relit avec leurs messages. Le résumé écarte les autres : leur premier test
+ * (`etatDeRepriseDuFil`) échouerait sans rien lire de plus. `get` rend le fil entier, archivé compris.
+ */
+export function filsCoupesALire(magasin: {
+  listResumes: () => readonly { id: string; dernierTourCoupeParQuota?: true }[]
+  get: (id: string) => FilLu | undefined
+}): FilLu[] {
+  return magasin.listResumes().flatMap((resume) => {
+    if (resume.dernierTourCoupeParQuota !== true) return []
+    const fil = magasin.get(resume.id)
+    return fil ? [fil] : []
+  })
 }
 
 export function creerRepriseDesFils(deps: DependancesDeLaReprise): {
@@ -248,7 +258,7 @@ export function creerRepriseDesFils(deps: DependancesDeLaReprise): {
     },
     mettreEnFile: deps.mettreEnFile,
     relancer: async ({ runId }) => {
-      const fil = deps.lireFils().find((candidat) => candidat.id === runId)
+      const fil = deps.lireFil(runId)
       if (!fil) return
       const issue = await deps.lancerTour(runId, [
         ...fil.messages.map(({ role, content }) => ({ role, content })),
