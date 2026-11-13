@@ -181,3 +181,16 @@ describe('plan_de_lots par le bus', () => {
     expect(coord.plans()[0].lots[0].etat).toBe('echec')
   })
 })
+
+/*
+ * Un remake en 18 lots découpé par couches (outils, logique, serveur, écrans, note) : rien de
+ * jugeable par l'utilisateur avant la moitié du plan, et la comparaison avec l'original au lot 13.
+ * Le seul critère de découpe que l'outil donnait au chef était « des fichiers séparés ».
+ */
+describe('plan_de_lots — découper pour juger tôt', () => {
+  it('le schéma du plan demande un résultat jugeable dans le premier tiers des lots', () => {
+    const plan = CATALOG.find((c) => c.name === 'plan_de_lots')?.args?.plan ?? ''
+    expect(plan).toMatch(/premier tiers des lots/)
+    expect(plan).toMatch(/jugeable par l’utilisateur/)
+  })
+})

@@ -1555,6 +1555,13 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
     // « bon » lot après lot, avec « rien à faire de ton côté » jusqu'à la note finale.
     '- vérifie le résultat des lots finis (conversation_read sur leur fil) sans refaire leur travail, et mesure-le contre le but du plan, pas seulement contre la demande du lot : ce que l’utilisateur verra est-il au niveau ? Quand le plan refait un existant, compare au même écran de l’original ;',
     '- un résultat sous ce but se dit à l’utilisateur dès ce tour, en tête de ta réponse, avec la comparaison qui le montre et ce que tu proposes ; « rien à faire de ton côté » ne s’écrit que si le but est tenu ;',
+    // Un découpage par couches (outils, logique, serveur, écrans) ne montre rien de jugeable avant
+    // la fin ; passé un tiers des lots, ce silence est lui-même le défaut à corriger.
+    ...(bilanDuPlan(plan).faits >= Math.ceil(plan.lots.length / 3)
+      ? [
+          '- le premier tiers du plan est passé : si rien de ce que l’utilisateur verra n’est encore jugeable contre ce but, c’est le découpage qui repousse le contrôle — ajoute ou avance un lot qui rend maintenant une tranche complète (un écran, un parcours) à juger ;'
+        ]
+      : []),
     // `relancerLot` et `ajouterLots` refusent un plan suspendu par le quota : sans cette branche, le
     // réveil disait « relance-le » et le chef attendait la fin de la limite pour un refus certain.
     ...(plan.statut === 'suspendu-quota'

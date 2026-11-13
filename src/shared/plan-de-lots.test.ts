@@ -1381,6 +1381,18 @@ describe('noterDecision — la mémoire partagée du plan (conv-1284)', () => {
     expect(reveil).toMatch(/« rien à faire de ton côté » ne s’écrit que si le but est tenu/)
   })
 
+  it('passé le premier tiers des lots, le réveil fait chercher un résultat déjà jugeable', () => {
+    const six = planAccepte({ lots: [1, 2, 3, 4, 5, 6].map((n) => lot(n)) })
+    const avec = (faits: number): PlanDeLots => ({
+      ...six,
+      lots: six.lots.map((l) => (l.rang <= faits ? { ...l, etat: 'fait' as const } : l))
+    })
+    expect(promptDeReveil(avec(1), [1])).not.toMatch(/premier tiers du plan est passé/)
+    const reveil = promptDeReveil(avec(2), [2])
+    expect(reveil).toMatch(/premier tiers du plan est passé/)
+    expect(reveil).toMatch(/c’est le découpage qui repousse le contrôle/)
+  })
+
   it('sans contexte, le but est le titre ; un but trop long est coupé', () => {
     expect(butDuPlan({ ...plan(), contexte: undefined, titre: 'Traduire le guide' })).toBe(
       'Traduire le guide'
