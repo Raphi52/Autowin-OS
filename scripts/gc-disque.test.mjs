@@ -293,6 +293,24 @@ describe('inventorier — ce qui grossit et ce qui pèse', () => {
     expect(zone('sessions-claude').familles).toEqual({ journal: 7 })
     expect(zone('donnees-autowin').familles).toEqual({ texte: 3 })
   })
+
+  it('ne dit « sans règle » que d’un tas lourd qu’aucune autre passe du /gc ne juge', () => {
+    // Passes du 11 au 13/11 : la corbeille, runs/ et chat-artifacts/ revenaient chaque jour à côté
+    // du seul vrai tas sans règle (quartier-3d).
+    fichier(join(ctx.donnees, 'gc-corbeille', '2026-11-01', 'MANIFEST.txt'), 1, 'xx')
+    fichier(join(ctx.donnees, 'tmp', 'a.txt'), 1, 'xx')
+    for (const dossier of ['runs', 'chat-artifacts', 'run-stdout', 'cause-en-cours'])
+      fichier(join(ctx.donnees, 'autowin-os', dossier, 'a.txt'), 1, 'xx')
+    fichier(join(ctx.donnees, 'quartier-3d', 'travail', 'rendu.png'), 1, 'xx')
+    fichier(join(ctx.donnees, 'autowin-os', 'tmp', 'a.txt'), 1, 'xx')
+
+    const bilan = inventorier(ctx)
+    const sansRegle = bilan.aVerifier.filter((v) => v.motif.includes('aucune règle'))
+
+    expect(chemins(sansRegle).sort()).toEqual(
+      [join(ctx.donnees, 'autowin-os', 'tmp'), join(ctx.donnees, 'quartier-3d')].sort()
+    )
+  })
 })
 
 describe('balayer', () => {

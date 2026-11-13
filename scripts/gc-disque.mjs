@@ -208,7 +208,25 @@ export function zonesDuPoste(ctx) {
       id: 'donnees-autowin',
       libelle: "Données d'Autowin",
       // `autowin-os/` porte presque tout : pesé à part, son détail dit QUEL dossier grossit.
-      racines: [ctx.donnees, join(ctx.donnees, 'autowin-os')]
+      racines: [ctx.donnees, join(ctx.donnees, 'autowin-os')],
+      // Jugés par d'autres passes du /gc, donc jamais « sans règle » : la corbeille par
+      // `gc-purger-corbeilles.mjs`, les états de cause par `gc-causes-en-cours.mjs`, le reste par
+      // `gc-donnees-autowin.mjs` (étape 3 du skill). Leur croissance, elle, reste signalée.
+      jugesAilleurs: [
+        join(ctx.donnees, 'gc-corbeille'),
+        join(ctx.donnees, 'tmp'),
+        ...[
+          'activity',
+          'causal-trace',
+          'chat-artifacts',
+          'turn-journals',
+          'prompt-observability',
+          'runs',
+          'run-state',
+          'run-stdout',
+          'cause-en-cours'
+        ].map((dossier) => join(ctx.donnees, 'autowin-os', dossier))
+      ]
     },
     { id: 'telechargements', libelle: 'Téléchargements', racines: [join(ctx.home, 'Downloads')] }
   ]
@@ -431,6 +449,7 @@ export function inventorier(ctx) {
       familles: {}
     }
     const enfants = {}
+    const jugesAilleurs = new Set((zone.jugesAilleurs ?? []).map(normaliser))
     for (const racine of zone.racines) {
       if (!existsSync(racine)) continue
       // Toute autre racine, y compris de la même zone, se pèse et se juge chez elle, une seule fois.
@@ -451,7 +470,7 @@ export function inventorier(ctx) {
           resume.familles[f] = (resume.familles[f] ?? 0) + t
         enfants[enfant] = pesee.taille
         // Une zone seulement pesée : ce qui y est lourd se montre, faute de règle pour le juger.
-        if (!zone.unites && pesee.taille >= seuilLourd)
+        if (!zone.unites && pesee.taille >= seuilLourd && !jugesAilleurs.has(normaliser(enfant)))
           bilan.aVerifier.push({
             chemin: enfant,
             zone: zone.id,
