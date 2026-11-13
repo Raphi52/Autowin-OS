@@ -12,6 +12,7 @@ import {
   noterDecision,
   PARALLELE_MAX,
   bilanDuPlan,
+  butDuPlan,
   compteRenduDuLot,
   creerPlan,
   decisionDeDepot,
@@ -1353,6 +1354,40 @@ describe('noterDecision — la mémoire partagée du plan (conv-1284)', () => {
     // La réponse à un lot bloqué part en ordre, sans « relancer » en plus.
     expect(reveil).toMatch(/réponds-lui avec ecrire_a_un_fil, nature « ordre »/)
     expect(reveil).toContain('ne le relance pas en plus')
+  })
+
+  /*
+   * Un remake de jeu en 18 lots (2026-11-13) : à chaque réveil, le chef jugeait le lot contre sa
+   * seule demande (tests verts, écran « rien n'est coupé, tout se lit ») et concluait « il est bon,
+   * rien à faire de ton côté ». Le but du plan n'apparaissait dans aucun réveil ; le jeu refait est
+   * sorti moins riche que l'original, et l'utilisateur ne l'a vu qu'à la fin.
+   */
+  it('le réveil remet le but du plan sous les yeux du chef et lui fait dire tout de suite un écart', () => {
+    const p = lancerCeQuiPart({
+      ...planAccepte({ lots: [lot(1), lot(2)] }),
+      contexte:
+        "But : refaire le jeu de cartes de zéro, au niveau des meilleurs jeux et au moins aussi beau que l'ancien.\nDécisions :\n- l'ancien jeu reste en lecture seule."
+    })
+    const reveil = promptDeReveil(p, [1])
+    expect(reveil).toContain(
+      "But du plan : refaire le jeu de cartes de zéro, au niveau des meilleurs jeux et au moins aussi beau que l'ancien."
+    )
+    expect(reveil).not.toContain('Décisions :\n- l')
+    expect(reveil).toMatch(
+      /mesure-le contre le but du plan, pas seulement contre la demande du lot/
+    )
+    expect(reveil).toMatch(/compare au même écran de l’original/)
+    expect(reveil).toMatch(/un résultat sous ce but se dit à l’utilisateur dès ce tour/)
+    expect(reveil).toMatch(/« rien à faire de ton côté » ne s’écrit que si le but est tenu/)
+  })
+
+  it('sans contexte, le but est le titre ; un but trop long est coupé', () => {
+    expect(butDuPlan({ ...plan(), contexte: undefined, titre: 'Traduire le guide' })).toBe(
+      'Traduire le guide'
+    )
+    const long = butDuPlan({ ...plan(), contexte: `But : ${'x'.repeat(900)}\nsuite` })
+    expect(long.length).toBe(400)
+    expect(long.endsWith('…')).toBe(true)
   })
 })
 

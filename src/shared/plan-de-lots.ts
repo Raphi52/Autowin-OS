@@ -1515,6 +1515,19 @@ export function suiteDeLOrdreAuLot(plan: PlanDeLots, lot: LotDuPlan): string {
   ].join('\n')
 }
 
+/**
+ * Le but d'ensemble tel que le chef l'a écrit en tête du contexte (sa première ligne), sinon le
+ * titre. Le réveil le remet sous les yeux du chef : sans lui, chaque lot était jugé contre sa
+ * seule demande (tests verts, écran lisible) et un résultat cumulé en dessous du but passait
+ * pour « bon » jusqu'à la note finale.
+ */
+export function butDuPlan(plan: PlanDeLots): string {
+  const premiere = (plan.contexte ?? '').split('\n').find((l) => l.trim()) ?? ''
+  const but = premiere.trim().replace(/^but\s*:\s*/i, '') || plan.titre
+  return but.length > BUT_MAX ? `${but.slice(0, BUT_MAX - 1)}…` : but
+}
+const BUT_MAX = 400
+
 /** Le tour lancé par l'app dans le fil chef quand des lots ont fini. */
 export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): string {
   const nouveaux = rangs
@@ -1530,6 +1543,7 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
     `RÉVEIL DU PLAN DE LOTS « ${plan.titre} » (${plan.id}) — message de l’app, pas de l’utilisateur.`,
     `Lots qui viennent de finir : ${nouveaux.length ? nouveaux.join(' ; ') : 'aucun'}.`,
     `Avancement : ${bilanDuPlan(plan).texte}. Statut du plan : ${LIBELLE_STATUT[plan.statut]}${plan.raison ? ` — ${plan.raison}` : ''}.`,
+    `But du plan : ${butDuPlan(plan)}`,
     ...(desLots.length
       ? [
           `Décisions notées par les lots : ${desLots.map((d) => `« ${d.texte} » (${d.de})`).join(' ; ')}.`
@@ -1537,7 +1551,10 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
       : []),
     'Les comptes rendus détaillés sont dans les messages de tes fils (en tête de ce tour, ou par lire_mes_messages).',
     'Ce que tu fais maintenant :',
-    '- vérifie le résultat des lots finis (conversation_read sur leur fil) sans refaire leur travail ;',
+    // Juger un lot contre sa seule demande laissait un remake moins bon que l'original passer
+    // « bon » lot après lot, avec « rien à faire de ton côté » jusqu'à la note finale.
+    '- vérifie le résultat des lots finis (conversation_read sur leur fil) sans refaire leur travail, et mesure-le contre le but du plan, pas seulement contre la demande du lot : ce que l’utilisateur verra est-il au niveau ? Quand le plan refait un existant, compare au même écran de l’original ;',
+    '- un résultat sous ce but se dit à l’utilisateur dès ce tour, en tête de ta réponse, avec la comparaison qui le montre et ce que tu proposes ; « rien à faire de ton côté » ne s’écrit que si le but est tenu ;',
     // `relancerLot` et `ajouterLots` refusent un plan suspendu par le quota : sans cette branche, le
     // réveil disait « relance-le » et le chef attendait la fin de la limite pour un refus certain.
     ...(plan.statut === 'suspendu-quota'
