@@ -203,7 +203,7 @@ describe('bilan des pistes prises — compté par run fini', () => {
       { taille: 4, run: null }
     ])
     expect(bilan(chemin, {})).toContain(
-      'prises traitées : 1 run lancé sans résultat noté, sur des pistes proposées dès le t1'
+      'prises traitées : 1 run lancé sans résultat noté, sur des pistes proposées dès le t1 (en cours, ou résultat jamais enregistré), 4 pistes sans run suivi'
     )
   })
 })

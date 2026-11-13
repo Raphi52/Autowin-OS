@@ -40,14 +40,18 @@ export interface MurRecurrent {
   fils: number
 }
 
-/** La signature d'une entrée : une chaîne (ancien format) ou `{ signature, derniereFois }`. */
+/**
+ * La signature d'une entrée : une chaîne (ancien format) ou `{ signature, derniereFois }`. Sans
+ * `outil::`, ce n'est pas une signature de `signatureDEchec` : elle est ignorée, jamais découpée.
+ */
 function signatureDe(entree: unknown): string | undefined {
-  if (typeof entree === 'string') return entree || undefined
-  if (entree && typeof entree === 'object' && 'signature' in entree) {
-    const { signature } = entree as { signature: unknown }
-    return typeof signature === 'string' && signature ? signature : undefined
-  }
-  return undefined
+  const brute =
+    typeof entree === 'string'
+      ? entree
+      : entree && typeof entree === 'object' && 'signature' in entree
+        ? (entree as { signature: unknown }).signature
+        : undefined
+  return typeof brute === 'string' && brute.indexOf('::') > 0 ? brute : undefined
 }
 
 /**

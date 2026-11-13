@@ -69,10 +69,14 @@ describe('mursRecurrents — les murs que plusieurs fils ont rencontrés', () =>
       'conv-2': [{ signature: INTROUVABLE, derniereFois: date }],
       'conv-3': [INTROUVABLE, RELIRE],
       'conv-4': [{ signature: INTROUVABLE, derniereFois: date }, RELIRE],
-      'conv-5': [RELIRE, 12, { pas: 'une entrée' }],
+      'conv-5': [RELIRE, 12, { pas: 'une entrée' }, 'pas une signature'],
       'conv-6': 'pas une liste'
     }
     expect(mursRecurrents(murs)).toEqual([{ signature: INTROUVABLE, fils: 4 }])
+    // Une chaîne sans `outil::` n'est pas une signature : ignorée même au seuil le plus bas.
+    expect(mursRecurrents(murs, { seuil: 1 }).map((m) => m.signature)).not.toContain(
+      'pas une signature'
+    )
     expect(mursRecurrents(murs, { seuil: 3 })).toEqual([
       { signature: INTROUVABLE, fils: 4 },
       { signature: RELIRE, fils: 3 }

@@ -451,12 +451,15 @@ function livraisonDesPrises(
     lances > 0
       ? `${lances} ${lances > 1 ? 'runs lancés' : 'run lancé'} sans résultat noté, sur des pistes proposées dès le ${plusAncien} (en cours, ou résultat jamais enregistré)`
       : ''
-  if (runsFinis.size === 0) return sansResultatTexte ? `prises traitées : ${sansResultatTexte}` : ''
+  const sansRun = prises.filter((e) => !e.traitePar).length
+  const sansSuivi =
+    sansRun > 0 ? `, ${sansRun} ${sansRun > 1 ? 'pistes' : 'piste'} sans run suivi` : ''
+  if (runsFinis.size === 0)
+    return sansResultatTexte ? `prises traitées : ${sansResultatTexte}${sansSuivi}` : ''
   const classes = [...runsFinis.values()]
   const livres = classes.filter((c) => c === 'delivered').length
   const enEchec = classes.filter((c) => c === 'defect').length
   const autres = classes.length - livres - enEchec
-  const sansRun = prises.filter((e) => !e.traitePar).length
   const nomRuns = classes.length > 1 ? 'runs finis' : 'run fini'
   const resultats = [
     `${livres} ${livres > 1 ? 'livrés' : 'livré'}`,
@@ -465,8 +468,6 @@ function livraisonDesPrises(
   ].join(', ')
   const reserve =
     'résultat du run à sa clôture, pas de chaque piste : un run refusé a pu être publié ensuite'
-  const sansSuivi =
-    sansRun > 0 ? `, ${sansRun} ${sansRun > 1 ? 'pistes' : 'piste'} sans run suivi` : ''
   return `prises traitées : ${pistes} ${pistes > 1 ? 'pistes' : 'piste'} dans ${classes.length} ${nomRuns} : ${resultats} (${reserve})${sansSuivi}${sansResultatTexte ? `, ${sansResultatTexte}` : ''}`
 }
 
