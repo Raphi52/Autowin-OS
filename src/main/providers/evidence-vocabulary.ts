@@ -207,6 +207,23 @@ function estScriptDeTestPs1(chemin: string): boolean {
   return /(?:^|[._-])tests?(?:[._-][^\\/]*)?\.ps1$/.test(nom)
 }
 
+/**
+ * Lune (le lanceur Luau des jeux Roblox) ne VÉRIFIE que s'il lance un banc ou un test :
+ * `lune run <script>` dont le script est rangé dans un dossier `bancs/` ou `tests/`, ou dont le nom
+ * le dit (`roblox-bancs`, `x.test.luau`). Sans cette règle, un lot Roblox prouvé par ses bancs
+ * (code 0) n'avait aucune preuve de vérification : contrôle final rouge sans appel au juge. Un
+ * script quelconque (`roblox-nouveau-jeu`, qui crée des fichiers) reste hors de la table.
+ */
+function isLuneTest(args: string[]): boolean {
+  if ((args[0] ?? '').toLowerCase() !== 'run') return false
+  const script = args.slice(1).find((arg) => !arg.startsWith('-'))
+  if (!script) return false
+  const dossiers = script.toLowerCase().split(/[\\/]/)
+  const nom = (dossiers.pop() ?? '').replace(/\.luau?$/, '')
+  if (dossiers.some((dossier) => ['bancs', 'banc', 'tests', 'test'].includes(dossier))) return true
+  return /(?:^|[._-])(?:bancs?|tests?)$/.test(nom)
+}
+
 /** Verbes qui CHANGENT un état. `true` = toujours ; sinon un prédicat sur les arguments. */
 const MUTATING: Record<string, Rule> = {
   git: isMutatingGit,
@@ -295,7 +312,9 @@ const VERIFYING: Record<string, Rule> = {
   powershell: isPowerShellTest,
   'powershell.exe': isPowerShellTest,
   pwsh: isPowerShellTest,
-  'pwsh.exe': isPowerShellTest
+  'pwsh.exe': isPowerShellTest,
+  lune: isLuneTest,
+  'lune.exe': isLuneTest
 }
 
 /**

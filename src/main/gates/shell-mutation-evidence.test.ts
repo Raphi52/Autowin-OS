@@ -478,3 +478,47 @@ describe('un test PowerShell lancé par fichier est une VÉRIFICATION', () => {
     expect(claudeToolEvidenceKind('Bash', commande)).not.toBe('verification')
   })
 })
+
+/**
+ * RUN ROUGE MESURÉ le 2026-11-13 (`run-911bf4e53e97-1`) — même pathologie, quatrième lanceur. Un
+ * lot Roblox prouvait son travail par `lune run scripts/roblox-bancs` (55 bancs, code 0, et code 1
+ * sur le défaut réinjecté). Le contrôle final a pourtant refusé « Échec déjà déclaré », sans même
+ * appeler le juge : sur 136 preuves du passage, AUCUNE n'était une `verification`.
+ *
+ * CAUSE : `VERIFYING` ne connaissait pas Lune, le lanceur Luau des bancs Roblox. Le verbe `lune`
+ * n'y figurant pas, un banc ressortait en `inspection` (ou en `mutation` si sa sortie était
+ * redirigée), et `evidenceSatisfiesTask` rendait faux pour tout lot dont l'oracle est un banc Lune.
+ */
+describe('un banc lancé par Lune est une VÉRIFICATION', () => {
+  it.each([
+    'lune run scripts/roblox-bancs',
+    'cd /d/MesJeux && lune run scripts/roblox-bancs > /tmp/bancs4.txt 2>&1; echo "code=$?"',
+    'lune run jeux/MonJeu/bancs/accueil jeux/MonJeu --detail',
+    'lune.exe run scripts\\roblox-bancs.luau',
+    'lune run src/partage/Carte.test.luau'
+  ])('reconnaît le banc : %s', (commande) => {
+    expect(claudeToolEvidenceKind('Bash', commande)).toBe('verification')
+  })
+
+  /** LA FRONTIÈRE : un script Lune quelconque peut écrire sans rien prouver. */
+  it.each([
+    'lune run scripts/roblox-nouveau-jeu MonJeu',
+    'lune run .tmp-lot1/t_player.luau',
+    'lune run scripts/latest.luau',
+    'lune setup'
+  ])('ne prend pas pour un banc : %s', (commande) => {
+    expect(claudeToolEvidenceKind('Bash', commande)).not.toBe('verification')
+  })
+
+  it('un lot qui édite du Luau et passe ses bancs Lune satisfait le contrôle final', () => {
+    const tache = 'refais l’accueil dans src/client/Menus/Accueil.luau'
+    const edition = ev('mutation', '', {
+      type: 'Write',
+      path: 'src/client/Menus/Accueil.luau',
+      command: undefined
+    })
+    const bancs = 'lune run scripts/roblox-bancs > /tmp/bancs4.txt 2>&1; echo "code=$?"'
+    const preuve = ev(claudeToolEvidenceKind('Bash', bancs), bancs)
+    expect(evidenceSatisfiesTask(tache, [edition, preuve])).toBe(true)
+  })
+})
