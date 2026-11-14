@@ -46,6 +46,30 @@ describe('lanceurDuLot — l’outil d’une étape de lot', () => {
     ])
   })
 
+  /*
+   * Plan-d314ed3a, lots 8 et 10 (14/11/2026) : la demande du lot dit « note-la avec plan_de_lots
+   * (action « noter ») », mais l'étape du build n'avait pas l'outil ; la décision passait par un
+   * message au chef, qui devait la noter à sa place. Seuls les gestes d'un lot passent.
+   */
+  it('plan_de_lots : « noter » et « etat » passent, signés du lot ; un geste de chef est refusé', async () => {
+    appels.length = 0
+    const lanceur = lanceurDuLot('conv-lot', {
+      ...deps,
+      catalogue: () => [...specs, { name: 'plan_de_lots', description: 'plan', args: {} }]
+    })!
+    expect((await lanceur.exec('plan_de_lots', { action: 'noter', decision: 'd' })).ok).toBe(true)
+    expect((await lanceur.exec('plan_de_lots', {})).ok).toBe(true)
+    const valider = await lanceur.exec('plan_de_lots', { action: 'valider', lot: 1 })
+    const deposer = await lanceur.exec('plan_de_lots', { plan: { lots: [] } })
+    expect(appels).toEqual([
+      { name: 'plan_de_lots', fil: 'conv-lot' },
+      { name: 'plan_de_lots', fil: 'conv-lot' }
+    ])
+    expect(valider).toMatchObject({ ok: false, error: expect.stringMatching(/« noter »/) })
+    expect(deposer.ok).toBe(false)
+    expect(lanceur.catalogue!().map((s) => s.name)).toContain('plan_de_lots')
+  })
+
   it('proprietaire_fichier répond depuis la copie de l’étape, qui ne se dénonce pas elle-même', async () => {
     // Par le bus, la commande lirait le dossier du FIL du lot : la copie du run y serait une copie
     // parmi d'autres, et l'agent lirait son propre travail comme celui d'un autre run.

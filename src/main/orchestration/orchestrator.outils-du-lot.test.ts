@@ -108,6 +108,11 @@ const orchestrateur = (
                 description: 'À qui est ce fichier ?',
                 args: { chemins: 'chemin ou liste de chemins' }
               },
+              {
+                name: 'plan_de_lots',
+                description: 'Noter une décision pour les autres lots',
+                args: { action: 'noter|etat', decision: 'la décision' }
+              },
               { name: 'remember', description: 'Retenir', args: { title: 't', fact: 'f' } }
             ]
           }
@@ -119,16 +124,21 @@ const lancer = (o: Orchestrator, fil: string): Promise<unknown> =>
   o.run('corrige le défaut nommé', undefined, undefined, undefined, undefined, '', [], fil)
 
 describe('étapes d’un run de lot : écrire au chef, savoir à qui est un fichier', () => {
-  it('le build d’un fil de lot reçoit ecrire_a_un_fil et proprietaire_fichier, et eux seuls', async () => {
+  it('le build d’un fil de lot reçoit ecrire_a_un_fil, proprietaire_fichier et plan_de_lots, et eux seuls', async () => {
     const provider = new ProviderQuiEcritAuChef()
     const executes: Array<{ name: string; args: Record<string, unknown> }> = []
     await lancer(orchestrateur(provider, executes), 'conv-lot')
     const build = provider.appels.find((o) => o.execution?.phaseAppelante === 'build')
     expect(build?.skillNodeTools?.allowedTools).toEqual([
       'mcp__autowin__ecrire_a_un_fil',
-      'mcp__autowin__proprietaire_fichier'
+      'mcp__autowin__proprietaire_fichier',
+      'mcp__autowin__plan_de_lots'
     ])
-    expect(provider.outilsListes).toEqual(['ecrire_a_un_fil', 'proprietaire_fichier'])
+    expect(provider.outilsListes).toEqual([
+      'ecrire_a_un_fil',
+      'proprietaire_fichier',
+      'plan_de_lots'
+    ])
     // Rien d'hérité du poste : l'étape reste privée des autres serveurs MCP.
     expect(build?.skillNodeTools?.inheritMachineMcp).not.toBe(true)
     expect(build?.skillNodeTools?.sansServeursUtilisateur).toBe(true)

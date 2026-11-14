@@ -18,18 +18,33 @@ import type { OrchestrationStep } from './orchestrator-contrats'
  * ecrire_a_un_fil » : sans l'outil, l'agent du build laissait sa question dans son bilan, que le
  * chef ne lisait qu'une fois le lot en échec. Les lots d'un plan travaillent en même temps sur le
  * même dépôt : proprietaire_fichier leur dit, avant d'écrire, quel autre run ou fil tient déjà un
- * fichier. Ces DEUX outils seulement, signés du fil du lot. Le juge en reste privé : il rend un
- * verdict, il n'écrit rien et n'a pas de question à poser au chef.
+ * fichier. La demande du lot lui dit aussi de noter une décision qui vaut pour les autres lots avec
+ * plan_de_lots : l'étape le reçoit, borné aux gestes d'un lot (`ACTIONS_DU_PLAN_D_UNE_ETAPE`). Ces
+ * outils seulement, signés du fil du lot. Le juge en reste privé : il rend un verdict, il n'écrit
+ * rien et n'a pas de question à poser au chef.
  */
-export const OUTILS_ETAPE_DE_LOT = ['ecrire_a_un_fil', 'proprietaire_fichier'] as const
+export const OUTILS_ETAPE_DE_LOT = [
+  'ecrire_a_un_fil',
+  'proprietaire_fichier',
+  'plan_de_lots'
+] as const
+
+/** Les actions de plan_de_lots ouvertes à un lot ; les autres sont des gestes du chef. */
+const ACTIONS_DU_PLAN_D_UNE_ETAPE = ['noter', 'etat']
 
 export const PERIMETRE_ETAPE_DE_LOT: PerimetreOutils = {
   outils: OUTILS_ETAPE_DE_LOT,
   refus: (nom) =>
-    `REFUSÉ — \`${nom}\` est indisponible depuis une étape d'un lot : seuls ${OUTILS_ETAPE_DE_LOT.join(' et ')} y sont servis. L'appel n'a pas eu lieu.`
+    `REFUSÉ — \`${nom}\` est indisponible depuis une étape d'un lot : seuls ${OUTILS_ETAPE_DE_LOT.join(', ')} y sont servis. L'appel n'a pas eu lieu.`
 }
 
 const permis = (nom: string): boolean => (OUTILS_ETAPE_DE_LOT as readonly string[]).includes(nom)
+
+/** L'action demandée à plan_de_lots, lue comme le coordinateur la lit (`CoordinateurDesPlans.outil`). */
+function actionDuPlan(args: Record<string, unknown>): string {
+  if (typeof args.action === 'string' && args.action.trim()) return args.action.trim()
+  return args.plan !== undefined ? 'deposer' : 'etat'
+}
 
 /**
  * Le lanceur des étapes d'un run lancé par `fil`, ou rien si ce fil n'est pas un lot.
@@ -59,6 +74,11 @@ export function lanceurDuLot(
     // Seconde barrière : le serveur refuse déjà tout nom hors périmètre, le lanceur aussi.
     exec: async (name, args) => {
       if (!permis(name)) return { ok: false, error: PERIMETRE_ETAPE_DE_LOT.refus(name) }
+      if (name === 'plan_de_lots' && !ACTIONS_DU_PLAN_D_UNE_ETAPE.includes(actionDuPlan(args)))
+        return {
+          ok: false,
+          error: `REFUSÉ — plan_de_lots action « ${actionDuPlan(args)} » est un geste du chef : depuis une étape d'un lot, seules « noter » et « etat » sont servies. Une question au chef passe par ecrire_a_un_fil. L'appel n'a pas eu lieu.`
+        }
       if (name !== 'proprietaire_fichier' || !dossier) return deps.exec(name, args, fil)
       try {
         const data = await lireProprietairesDeFichiers({
