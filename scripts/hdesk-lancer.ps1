@@ -30,7 +30,9 @@ param(
   # « travail non relie ». Un bureau sans fil n'est plus lancable.
   [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][string]$Travail,
   # Le fil : -Conversation, sinon AUTOWIN_CONVERSATION_ID, posee par Autowin dans l'environnement
-  # de tout agent lance par une orchestration (2026-09-14) — l'agent n'a rien a recopier.
+  # de tout agent lance par une orchestration (2026-09-14), sinon AUTOWIN_FIL_DU_CHAT, que pose le tour
+  # de chat a la place (src/main/providers/claude.ts) : sans elle, un script de capture lance du chat
+  # (roblox-capture-moteur.ps1) se voyait refuser tout bureau. L'agent n'a rien a recopier.
   [string]$Conversation = '',
   # Registre des bureaux (fiches <id>.json). Defaut : %LOCALAPPDATA%\autowin-hdesk. Les TESTS passent un dossier
   # temporaire : l'app Autowin en marche purge du registre reel toute fiche sans bureau cache vivant
@@ -40,7 +42,8 @@ param(
 $ErrorActionPreference = 'Stop'
 trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
 if ([string]::IsNullOrWhiteSpace($Conversation)) { $Conversation = [string]$env:AUTOWIN_CONVERSATION_ID }
-if ([string]::IsNullOrWhiteSpace($Conversation)) { throw "Fil absent : passe -Conversation <id> (ou lance depuis un agent Autowin, qui pose AUTOWIN_CONVERSATION_ID)." }
+if ([string]::IsNullOrWhiteSpace($Conversation)) { $Conversation = [string]$env:AUTOWIN_FIL_DU_CHAT }
+if ([string]::IsNullOrWhiteSpace($Conversation)) { throw "Fil absent : passe -Conversation <id> (ou lance depuis un agent Autowin, qui pose AUTOWIN_CONVERSATION_ID ou AUTOWIN_FIL_DU_CHAT)." }
 if ($Conversation -notmatch '^[a-zA-Z0-9_-]+$') { throw "Identifiant de fil invalide : '$Conversation'." }
 if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw "Executable introuvable : $Executable" }
 
