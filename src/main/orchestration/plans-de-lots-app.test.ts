@@ -240,6 +240,35 @@ describe('CoordinateurDesPlans — 4 lots, 2 en parallèle', () => {
     expect(reveils()).toBe(1)
   })
 
+  /*
+   * Vu sur plan-d314ed3a (14/11) : le lot 3 finit pendant le réveil du lot 1 ; le chef les reçoit
+   * TOUS LES DEUX dans ce réveil, puis un second réveil arrive pour le lot 3 déjà validé — un tour
+   * payé pour rien.
+   */
+  it('un lot reçu par le chef pendant son réveil ne relance pas de réveil pour lui', async () => {
+    const b = await demarre()
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    const reveils = (): number => b.lancements.filter((l) => l.fil === 'conv-1').length
+    expect(reveils()).toBe(1)
+    // Pendant le réveil du lot 1, le lot 2 finit ; le chef reçoit les deux dans ce même tour.
+    await b.coord.surFinDeTour('conv-101', { ok: true })
+    await recevoir(b, 1)
+    await recevoir(b, 2)
+    await b.coord.surFinDeTour('conv-1', { ok: true })
+    expect(reveils()).toBe(1)
+  })
+
+  it('jumeau : un lot fini pendant le réveil et PAS reçu garde son réveil', async () => {
+    const b = await demarre()
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    await b.coord.surFinDeTour('conv-101', { ok: true })
+    await recevoir(b, 1)
+    await b.coord.surFinDeTour('conv-1', { ok: true })
+    const reveils = b.lancements.filter((l) => l.fil === 'conv-1')
+    expect(reveils).toHaveLength(2)
+    expect(reveils[1].prompt).toMatch(/lot 2 « Écrans 2 » : à recevoir par le chef/)
+  })
+
   it('pendant un réveil, une autre fin de lot attend la fin de ce tour au lieu d’en lancer un second', async () => {
     const b = await demarre()
     await b.coord.surFinDeTour('conv-100', { ok: true })

@@ -166,6 +166,13 @@ function estPlanLisible(x: unknown): x is PlanDeLots {
   )
 }
 
+/** Le chef a déjà rendu son verdict sur ce lot : validé (`validerLot`) ou refusé (`refuserLot`). */
+function dejaRecuParLeChef(lot: LotDuPlan | undefined): boolean {
+  if (!lot) return false
+  if (lot.etat === 'fait') return (lot.raison ?? '').startsWith('validé par le chef')
+  return lot.etat !== 'a-recevoir' && lot.refus !== undefined
+}
+
 /** Le tableau d'un plan en texte, pour l'agent du chef (`plan_de_lots`, action « etat »). */
 export function tableauTexte(plan: PlanDeLots): string {
   return plan.lots
@@ -944,6 +951,15 @@ export class CoordinateurDesPlans {
     }
     // Chef occupé : il lira le compte rendu à son prochain outil ; le réveil part à la fin du tour.
     if (this.#deps.tourActif(chef)) return
+    // Un lot fini pendant le tour du chef, et que le chef a déjà reçu dans ce tour (validé ou
+    // refusé), ne vaut pas un réveil de plus : sans ce tri, le chef payait un tour pour répondre
+    // « déjà reçu ».
+    for (const rang of [...attente.rangs])
+      if (dejaRecuParLeChef(plan.lots.find((l) => l.rang === rang))) attente.rangs.delete(rang)
+    if (!attente.rangs.size) {
+      this.#enAttente.delete(chef)
+      return
+    }
     this.#enAttente.delete(chef)
     this.#reveilEnCours.add(chef)
     this.#rangsDuReveil.set(chef, { planId: attente.planId, rangs: [...attente.rangs] })
