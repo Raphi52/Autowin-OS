@@ -678,10 +678,16 @@ export class AppCommandBus {
       if (typeof c.updatedAt === 'number' && maintenant - c.updatedAt < SEUIL_FIL_ACTIF_MS)
         actifs.set(c.id, true)
     }
+    // Le chef d'un lot, lu dans les plans : un lot peut travailler dans un autre dépôt que son chef.
+    const chefDuLot = (fil: string): string | undefined => {
+      const p = this.plansDeLots?.planDuFil?.(fil)
+      return p?.role === 'enfant' ? p.plan.chef : undefined
+    }
     return {
       estActif: (fil) => actifs.has(fil),
       filsActifs: () => [...actifs.keys()],
-      dossierDe: (fil) => (actifs.has(fil) ? this.dossierRangeSur(fil) : undefined)
+      dossierDe: (fil) => (actifs.has(fil) ? this.dossierRangeSur(fil) : undefined),
+      lienDePlan: (x, y) => chefDuLot(y) === x || chefDuLot(x) === y
     }
   }
 

@@ -133,6 +133,64 @@ describe('ecrire_a_un_fil / lire_mes_messages par le bus', () => {
     expect(ctx.estActif('conv-15j')).toBe(false)
   })
 
+  it('le chef d’un plan répond à son lot rangé dans un autre dépôt ; un fil hors du plan reste refusé', async () => {
+    // Cas mesuré : le lot attendait la réponse du chef, et `ecrire_a_un_fil` refusait parce que
+    // le lot travaille dans le dépôt du jeu, le chef dans celui d'Autowin.
+    const depot = process.cwd()
+    const autre = mkdtempSync(join(tmpdir(), 'lot-autre-depot-'))
+    try {
+      const fils = [
+        { id: 'conv-chef', projectPath: depot, updatedAt: maintenant, messages: [] },
+        { id: 'conv-voisin', projectPath: depot, updatedAt: maintenant, messages: [] },
+        { id: 'conv-lot', projectPath: autre, updatedAt: maintenant, messages: [] }
+      ]
+      const b = new AppCommandBus(
+        {
+          executionWorkspace: depot,
+          conversations: {
+            get: (id: string) => fils.find((f) => f.id === id),
+            listResumes: () => fils
+          }
+        } as never,
+        () => undefined
+      )
+      b.conversationExiste = () => true
+      b.tourDeChatActif = () => true
+      const plan = { chef: 'conv-chef' } as never
+      b.plansDeLots = {
+        outil: () => ({ ok: true }) as never,
+        lancerParOrdre: async () => ({ ok: true }),
+        planDuFil: (f: string) =>
+          f === 'conv-lot'
+            ? { plan, role: 'enfant' as const, rang: 2 }
+            : f === 'conv-chef'
+              ? { plan, role: 'chef' as const }
+              : undefined
+      }
+      const ordre = await b.exec(
+        'ecrire_a_un_fil',
+        { destinataire: 'conv-lot', texte: 'réponse : option 1', nature: 'ordre' },
+        'conv-chef'
+      )
+      expect(ordre.error).toBeUndefined()
+      expect(ordre.ok).toBe(true)
+      const retour = await b.exec(
+        'ecrire_a_un_fil',
+        { destinataire: 'conv-chef', texte: 'question au chef', nature: 'question' },
+        'conv-lot'
+      )
+      expect(retour.ok).toBe(true)
+      const voisin = await b.exec(
+        'ecrire_a_un_fil',
+        { destinataire: 'conv-lot', texte: 'x' },
+        'conv-voisin'
+      )
+      expect(voisin.error).toMatch(/autre dossier/)
+    } finally {
+      rmSync(autre, { recursive: true, force: true })
+    }
+  })
+
   it('le destinataire reçoit le bloc en tête de son tour, une fois ; l’outil ne rend ensuite que du neuf', async () => {
     const { bus: b } = bus()
     await b.exec(

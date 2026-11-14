@@ -102,6 +102,32 @@ describe('ecrire_a_un_fil', () => {
     expect(envoyer({ destinataire: 'conv-B', texte: 'a'.repeat(2000) }).ok).toBe(true)
   })
 
+  it('un chef et son lot rangé dans un autre dépôt se parlent dans les deux sens ; un voisin reste refusé', () => {
+    // Un plan mené depuis Autowin peut faire travailler ses lots dans le dépôt d'un jeu : sans ce
+    // lien, le chef ne pouvait plus répondre à un lot qui l'attendait, et le lot restait bloqué.
+    const ctxPlan: ContexteFils = {
+      ...ctx,
+      lienDePlan: (x, y) => [x, y].sort().join('>') === 'conv-A>conv-X'
+    }
+    const ecrire = (de: string, a: string): ReturnType<typeof ecrireAUnFil> =>
+      ecrireAUnFil(
+        { destinataire: a, texte: `${de} vers ${a}`, nature: 'ordre' },
+        { fil: de },
+        ctxPlan,
+        {
+          journal,
+          maintenant: 1_000_000
+        }
+      )
+    expect(ecrire('conv-A', 'conv-X').ok).toBe(true)
+    expect(ecrire('conv-X', 'conv-A').ok).toBe(true)
+    expect(() => ecrire('conv-C', 'conv-X')).toThrow(/autre dossier/)
+    expect(lignes().map((l) => `${(l.de as { fil: string }).fil}>${l.a}`)).toEqual([
+      'conv-A>conv-X',
+      'conv-X>conv-A'
+    ])
+  })
+
   it('« répond à » un message adressé à un autre fil est refusé ; adressé à soi, accepté', () => {
     const versC = envoyer({ destinataire: 'conv-C', texte: 'pour C' }, 'conv-B')
     expect(() =>

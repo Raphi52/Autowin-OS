@@ -57,6 +57,13 @@ export interface ContexteFils {
   estActif: (fil: string) => boolean
   /** Fils actifs, pour nommer les destinataires possibles dans un refus. */
   filsActifs: () => string[]
+  /**
+   * Les deux fils sont-ils le chef d'un plan de lots et l'un de ses lots, dans un sens ou dans
+   * l'autre ? Un plan mené depuis un dépôt peut faire travailler ses lots dans un autre (le jeu
+   * qu'il construit) : ce lien remplace alors la règle du même dépôt, sinon le chef ne peut plus
+   * répondre à un lot qui l'attend. Absent → aucun lien.
+   */
+  lienDePlan?: (a: string, b: string) => boolean
 }
 
 /**
@@ -153,7 +160,11 @@ export function ecrireAUnFil(
       `ecrire_a_un_fil : le fil « ${a} » est inconnu, archivé ou supprimé. Fils actifs du même dépôt : ${filsDuMemeDepot()}.`
     )
   const dossierA = ctx.dossierDe(a)
-  if (dossierDe === undefined || dossierA === undefined || !memeDepot(dossierDe, dossierA))
+  const lieParUnPlan = ctx.lienDePlan?.(de, a) === true
+  if (
+    !lieParUnPlan &&
+    (dossierDe === undefined || dossierA === undefined || !memeDepot(dossierDe, dossierA))
+  )
     throw new Error(
       `ecrire_a_un_fil : ${a} travaille dans un autre dossier (${dossierA ?? 'inconnu'}) que ton fil (${dossierDe ?? 'inconnu'}) ; les messages ne vont qu’à un fil du même dépôt.`
     )
