@@ -18,7 +18,10 @@ import {
   creerPlan,
   decisionDeDepot,
   empreintePlan,
+  finDeLaPause,
   interrompreAuDemarrage,
+  pauseAvantRedemarrage,
+  RAISON_PAUSE_REDEMARRAGE,
   libelleEtat,
   lirePlanDeLots,
   lotsAPartir,
@@ -1017,6 +1020,24 @@ describe('apres — dépendances explicites entre lots', () => {
     let p = lancerCeQuiPart(planAccepte({ parallele: 1, lots: [lot(1), dep(2, [1])] }))
     p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
     expect(interrompreAuDemarrage(p)).toBe(p)
+  })
+
+  /*
+   * Plan-d314ed3a (14/11/2026) : 5 correctifs d'Autowin sur main, aucun actif. Le redémarrage
+   * attendait que plus rien ne tourne, et le plan relançait un lot à chaque fin. La pause laisse les
+   * lots en cours finir ; au redémarrage, rien n'a été coupé : le plan reste en cours.
+   */
+  it('pause avant redémarrage : dite seulement si un lot allait partir, et rien n’est interrompu', () => {
+    let p = lancerCeQuiPart(planAccepte({ parallele: 1, lots: [lot(1), lot(2)] }))
+    expect(pauseAvantRedemarrage(p)).toBe(p)
+    p = recevoir(noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan, 1)
+    const enPause = pauseAvantRedemarrage(p)
+    expect(enPause.raison).toBe(RAISON_PAUSE_REDEMARRAGE)
+    expect(enPause.statut).toBe('en-cours')
+    expect(pauseAvantRedemarrage(enPause)).toBe(enPause)
+    expect(interrompreAuDemarrage(enPause)).toBe(enPause)
+    expect(finDeLaPause(enPause).raison).toBeUndefined()
+    expect(finDeLaPause(p)).toBe(p)
   })
 
   it('un lot qui attend ne réserve pas ses fichiers', () => {

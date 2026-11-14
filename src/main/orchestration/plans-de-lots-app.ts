@@ -5,6 +5,7 @@ import { autowinAppDataRoot } from '../app/app-data'
 import {
   LIBELLE_STATUT,
   MOTIF_MAX,
+  RAISON_PAUSE_REDEMARRAGE,
   adopterLotRepris,
   ajouterLots,
   bilanDuPlan,
@@ -13,6 +14,7 @@ import {
   decisionDeDepot,
   empreintePlan,
   fichiersBloquesParLaBase,
+  finDeLaPause,
   interrompreAuDemarrage,
   libelleEtat,
   lirePlanDeLots,
@@ -26,6 +28,7 @@ import {
   noterFinDeTour,
   noterRepriseEnFile,
   noterTourDuLot,
+  pauseAvantRedemarrage,
   promptDeReveil,
   promptDuLot,
   refuserLot,
@@ -66,6 +69,8 @@ import {
 
 export const NOM_FICHIER_PLANS = 'plans-de-lots.json'
 const PLANS_GARDES = 50
+/** Une minute : le redémarrage, lui, revérifie le repos toutes les quelques secondes. */
+const REVUE_DE_PAUSE_MS = 60_000
 
 export interface DepsPlans {
   /** Crée un fil enfant dans le dossier du chef ; rend son identifiant. Lève en cas d'échec. */
@@ -93,6 +98,17 @@ export interface DepsPlans {
    * « ordre » : un fil inactif reçoit un tour, un fil occupé le lit à son prochain outil. Lève sur refus.
    */
   ordonner?: (de: string, a: string, texte: string) => Promise<unknown>
+  /**
+   * Vrai quand un redémarrage d'Autowin attend que plus rien ne tourne (`relance-auto-moteur.ts`) :
+   * aucun nouveau lot ne part, pour que ce repos vienne. Absent : jamais de pause. L'ordre du chef
+   * à un lot (`lancerParOrdre`) part quand même : c'est son geste explicite.
+   */
+  redemarrageEnAttente?: () => boolean
+  /**
+   * Rappel différé pendant une pause : un redémarrage abandonné (moteur qui ne compile plus) ne
+   * prévient personne, le plan revérifie lui-même. Défaut : `setTimeout` qui ne retient pas l'app.
+   */
+  planifier?: (rappel: () => void, delaiMs: number) => void
   /** Prévient l'écran (tableau d'avancement). */
   signaler?: () => void
   stockage?: { lire: () => string; ecrire: (contenu: string) => void }
@@ -195,6 +211,8 @@ export class CoordinateurDesPlans {
   readonly #rangsDuReveil = new Map<string, { planId: string; rangs: number[] }>()
   /** Réceptions déjà rappelées une fois : « plan:rang:fin ». */
   readonly #rappels = new Set<string>()
+  /** Un rappel de pause est déjà prévu (`#revoirLaPause`) : un seul à la fois. */
+  #pauseRevue = false
 
   constructor(deps: DepsPlans) {
     this.#deps = deps
@@ -983,6 +1001,32 @@ export class CoordinateurDesPlans {
    * Lance tout ce qui peut partir. Chaque lot est MARQUÉ lancé avant le moindre `await` : un appel
    * concurrent (fin d'un autre lot, double clic) voit la place prise et ne le relance pas.
    */
+  /**
+   * Au démarrage, une fois les reprises de l'app en file : un plan resté en cours, où rien ne
+   * tournait (mis en pause avant le redémarrage), lance ce qui peut partir. Un plan interrompu
+   * attend toujours « Reprendre ».
+   */
+  async lancerApresDemarrage(): Promise<void> {
+    for (const plan of this.#plans.filter((p) => p.statut === 'en-cours'))
+      await this.#lancerLesSuivants(plan.id)
+  }
+
+  /** Revoit les plans en pause plus tard : le redémarrage attendu peut avoir été abandonné. */
+  #revoirLaPause(): void {
+    if (this.#pauseRevue) return
+    this.#pauseRevue = true
+    const rappel = (): void => {
+      this.#pauseRevue = false
+      for (const plan of this.#plans)
+        if (plan.statut === 'en-cours' && plan.raison === RAISON_PAUSE_REDEMARRAGE)
+          this.#lancerLesSuivants(plan.id).catch((e) =>
+            this.#journal(`plan ${plan.id} : reprise après la pause non lancée`, e)
+          )
+    }
+    if (this.#deps.planifier) this.#deps.planifier(rappel, REVUE_DE_PAUSE_MS)
+    else setTimeout(rappel, REVUE_DE_PAUSE_MS).unref?.()
+  }
+
   async #lancerLesSuivants(planId: string): Promise<void> {
     const lancements: Array<Promise<void>> = []
     for (;;) {
@@ -990,6 +1034,18 @@ export class CoordinateurDesPlans {
       if (!plan) break
       if (plan.statut === 'en-cours' && !this.#deps.existe(plan.chef)) {
         this.#poser(this.#arretChefSupprime(plan))
+        break
+      }
+      // Un redémarrage attend que plus rien ne tourne : aucun nouveau lot, pour que ce repos vienne.
+      const pause = this.#deps.redemarrageEnAttente?.()
+        ? pauseAvantRedemarrage(plan, this.#deps.tourActif)
+        : finDeLaPause(plan)
+      if (pause !== plan) {
+        this.#poser(pause)
+        continue
+      }
+      if (pause.raison === RAISON_PAUSE_REDEMARRAGE) {
+        this.#revoirLaPause()
         break
       }
       // Jamais un second agent dans un fil où un tour tourne encore (agent repris, saisie manuelle).

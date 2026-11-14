@@ -3394,6 +3394,8 @@ Le fil reprend ensuite normalement.`
         .flat()
         .filter((p) => !p.vuSeulement)
         .map((p) => p.conversationId),
+    // Lu à chaque lancement : la file de redémarrage n'existe qu'une fois index.ts l'a armée.
+    redemarrageEnAttente: () => bus.redemarrageEnAttente?.() ?? false,
     // Même voie qu'un agent qui envoie un ordre : un fil inactif reçoit un tour.
     ordonner: async (de, a, texte) => {
       const r = await bus.exec('ecrire_a_un_fil', { destinataire: a, texte, nature: 'ordre' }, de)

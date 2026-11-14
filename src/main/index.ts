@@ -1212,7 +1212,7 @@ let preflightWatchHandle: { stop: () => void } | null = null
 // toute la session et relance le service s'il meurt (2026-09-04).
 let brainSupervisionHandle: { stop: () => void } | null = null
 /** Relance automatique du moteur en développement (`relance-auto-moteur.ts`), coupée à la fermeture. */
-let relanceMoteurHandle: Pick<RelanceMoteurArmee, 'arreter' | 'mettreEnFile'> | null = null
+let relanceMoteurHandle: Pick<RelanceMoteurArmee, 'arreter' | 'mettreEnFile' | 'etat'> | null = null
 
 const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
@@ -1670,6 +1670,9 @@ bus.conversationsEnVol = conversationsOccupees
 // `remove_conversation(s)` arrête le tour et le run du fil supprimé, comme le Stop.
 bus.toursDeChat = activeChatTurns
 bus.redemarrerAuRepos = (demande) => relanceMoteurHandle?.mettreEnFile(demande) ?? false
+// `relanceEnAttente` et non la seule demande : un moteur qui ne compile plus annule l'attente, et
+// un plan en pause pour un redémarrage qui ne viendra pas resterait figé.
+bus.redemarrageEnAttente = () => relanceMoteurHandle?.etat().relanceEnAttente ?? false
 // Outil `bureau_cache_fermer` (lot 1) : meme racine de scripts que la TV et les gestes,
 // `app.asar.unpacked` une fois installee.
 bus.fermerBureauCache = (demande) =>
@@ -2812,6 +2815,10 @@ app.whenReady().then(async () => {
       void startupResumeQueue.enqueue(() => relaunchResumableRun(resumableRun))
     }
   }
+  // Après les reprises, dans la même file : un plan mis en pause avant ce redémarrage repart.
+  void startupResumeQueue.enqueue(async () => {
+    await bus.plansDeLots?.lancerApresDemarrage?.()
+  })
 
   const preflightStartedAt = Date.now()
   let brainLaunch: BrainLaunchOutcome | undefined

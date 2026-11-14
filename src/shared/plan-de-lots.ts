@@ -1276,23 +1276,16 @@ export function statutApresLancements(plan: PlanDeLots): PlanDeLots {
 }
 
 /**
- * Redémarrage de l'app : un lot en cours a perdu son SUIVI, pas forcément son agent. Rien ne repart
- * seul ; un agent reconnu vivant ensuite remet son lot en cours (`adopterLotRepris`).
+ * Redémarrage de l'app : un lot en cours a perdu son SUIVI, pas forcément son agent. Ce qui tournait
+ * ne repart pas seul ; un agent reconnu vivant ensuite remet son lot en cours (`adopterLotRepris`).
  */
 export function interrompreAuDemarrage(plan: PlanDeLots): PlanDeLots {
   const tournait = plan.lots.some((l) => l.etat === 'en-cours')
-  if (plan.statut !== 'en-cours' && !tournait) return plan
-  // Aucun lot ne tournait et un lot attend le chef — rien n'a été interrompu. Le plan
-  // reste en cours : la réponse du chef (un ordre) relance le lot sans clic « Reprendre ».
-  // Même chose pour un lot qui attend sa publication : sa suite vient de la base, pas d'un agent ;
-  // et pour un lot rendu : sa suite vient du geste du chef.
-  if (
-    !tournait &&
-    plan.lots.some(
-      (l) => l.etat === 'attend-chef' || l.etat === 'attend-publication' || l.etat === 'a-recevoir'
-    )
-  )
-    return plan
+  // Aucun lot ne tournait : rien n'a été interrompu, le plan reste tel quel. Un lot qui attend le
+  // chef repart par son ordre, un lot qui attend sa publication par la base, un lot rendu par la
+  // réception du chef ; un plan mis en pause avant le redémarrage repart seul
+  // (`CoordinateurDesPlans.lancerApresDemarrage`).
+  if (!tournait) return plan
   return {
     ...plan,
     statut: plan.statut === 'en-cours' ? 'interrompu' : plan.statut,
@@ -1312,6 +1305,32 @@ export function interrompreAuDemarrage(plan: PlanDeLots): PlanDeLots {
         : l
     )
   }
+}
+
+/** Lue par l'utilisateur dans le tableau et par le chef : un constat, pas une consigne. */
+export const RAISON_PAUSE_REDEMARRAGE =
+  'en pause : Autowin redémarre pour charger son nouveau code dès que les lots en cours ont fini ; le plan repart seul ensuite.'
+
+/**
+ * PAUSE AVANT UN REDÉMARRAGE (2026-11-14). Un redémarrage attend que plus rien ne tourne ; un plan
+ * qui relance un lot à chaque fin ne laisse jamais venir ce repos, et les correctifs du moteur ne
+ * prennent jamais effet pendant le plan (plan-d314ed3a : 5 correctifs inactifs). L'app ne lance donc
+ * plus de nouveau lot ; ce plan le DIT, seulement quand un lot allait partir — sinon rien n'est en
+ * pause, et le statut du plan se recalcule comme d'habitude.
+ */
+export function pauseAvantRedemarrage(
+  plan: PlanDeLots,
+  filOccupe?: (fil: string) => boolean
+): PlanDeLots {
+  if (lotsAPartir(plan, filOccupe).length === 0) return finDeLaPause(plan)
+  return plan.raison === RAISON_PAUSE_REDEMARRAGE
+    ? plan
+    : { ...plan, raison: RAISON_PAUSE_REDEMARRAGE }
+}
+
+/** Le redémarrage est passé ou abandonné : la pause n'est plus dite. */
+export function finDeLaPause(plan: PlanDeLots): PlanDeLots {
+  return plan.raison === RAISON_PAUSE_REDEMARRAGE ? { ...plan, raison: undefined } : plan
 }
 
 const RAISON_REPRISE_EN_FILE =

@@ -326,6 +326,12 @@ export class AppCommandBus {
   redemarrerAuRepos?: (demande: { cause: string; avantRelance?: () => void }) => boolean
 
   /**
+   * Vrai quand un redémarrage (demandé ou moteur modifié) attend le repos : les plans de lots ne
+   * lancent plus de nouveau lot (`plans-de-lots-app.ts`). Absent -> jamais de pause.
+   */
+  redemarrageEnAttente?: () => boolean
+
+  /**
    * Fermeture d'un bureau caché (`bureau_cache_fermer`), câblée tardivement depuis index.ts sur
    * `fermerHdesk` : le bus ne connaît pas le chemin des scripts de l'app installée. Absent ->
    * l'outil annonce l'indisponibilité au lieu de prétendre avoir fermé.
@@ -385,7 +391,7 @@ export class AppCommandBus {
    * `lancerParOrdre` : l'ordre d'un chef vers un lot bloqué vaut relance du lot.
    */
   plansDeLots?: Pick<CoordinateurDesPlans, 'outil' | 'lancerParOrdre'> &
-    Partial<Pick<CoordinateurDesPlans, 'planDuFil'>>
+    Partial<Pick<CoordinateurDesPlans, 'planDuFil' | 'lancerApresDemarrage'>>
 
   /**
    * Le Task Manager (stockage, minuteur, rafraîchissement de l'écran), câblé TARDIVEMENT depuis

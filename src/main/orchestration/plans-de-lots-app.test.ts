@@ -20,7 +20,12 @@ interface Banc {
 }
 
 function banc(
-  options: { lancer?: DepsPlans['lancer']; contenu?: string; premierFil?: number } = {}
+  options: {
+    lancer?: DepsPlans['lancer']
+    contenu?: string
+    premierFil?: number
+    extra?: Partial<DepsPlans>
+  } = {}
 ): Banc {
   const lancements: Array<{ fil: string; prompt: string }> = []
   const actifs = new Set<string>()
@@ -69,7 +74,8 @@ function banc(
       }
     },
     maintenant: () => ++horloge,
-    nouvelId: () => `p${++id}`
+    nouvelId: () => `p${++id}`,
+    ...options.extra
   }
   return {
     coord: new CoordinateurDesPlans(deps),
@@ -539,6 +545,82 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
   it('un fichier de plans illisible ne bloque pas le démarrage', () => {
     const b = banc({ contenu: '{pas du json' })
     expect(b.coord.plans()).toEqual([])
+  })
+})
+
+/*
+ * Plan-d314ed3a (14/11/2026) : 5 correctifs d'Autowin sur main, aucun actif pendant tout le plan.
+ * Le redémarrage attend que plus rien ne tourne, et le plan relançait un lot à chaque fin : le repos
+ * ne venait jamais. Tant qu'un redémarrage attend, aucun NOUVEAU lot ne part ; au redémarrage, le
+ * plan où rien ne tournait repart seul.
+ */
+describe('CoordinateurDesPlans — un redémarrage attend le repos', () => {
+  function bancEnPause(): Banc & { attend: { oui: boolean }; rappels: Array<() => void> } {
+    const attend = { oui: false }
+    const rappels: Array<() => void> = []
+    const b = banc({
+      extra: {
+        redemarrageEnAttente: () => attend.oui,
+        planifier: (rappel) => {
+          rappels.push(rappel)
+        }
+      }
+    })
+    return { ...b, attend, rappels }
+  }
+
+  it('aucun lot de plus ne part, la pause est dite ; levée, les suivants partent', async () => {
+    const b = bancEnPause()
+    await b.coord.outil('conv-1', { plan: plan4 })
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101'])
+    b.attend.oui = true
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    await b.coord.surFinDeTour('conv-1', { ok: true })
+    await recevoir(b, 1)
+    const plan = b.coord.plans()[0]
+    expect(plan.lots.map((l) => l.etat)).toEqual(['fait', 'en-cours', 'a-faire', 'a-faire'])
+    expect(plan.raison).toMatch(/redémarre/)
+    expect(b.rappels.length).toBeGreaterThan(0)
+    // Le redémarrage est abandonné (moteur qui ne compile plus) : le rappel relance le plan.
+    b.attend.oui = false
+    b.rappels.splice(0).forEach((r) => r())
+    await Promise.resolve()
+    const repris = b.coord.plans()[0]
+    expect(repris.lots[2].etat).toBe('en-cours')
+    expect(repris.raison).toBeUndefined()
+  })
+
+  it('jumeau : sans redémarrage en attente, le lot suivant part sans pause', async () => {
+    const b = bancEnPause()
+    await b.coord.outil('conv-1', { plan: plan4 })
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    await b.coord.surFinDeTour('conv-1', { ok: true })
+    await recevoir(b, 1)
+    expect(b.coord.plans()[0].lots[2].etat).toBe('en-cours')
+    expect(b.rappels).toEqual([])
+  })
+
+  it('après le redémarrage, le plan en pause repart seul ; un plan interrompu attend « Reprendre »', async () => {
+    const b = bancEnPause()
+    await b.coord.outil('conv-1', { plan: plan4 })
+    b.attend.oui = true
+    for (const fil of ['conv-100', 'conv-101']) await b.coord.surFinDeTour(fil, { ok: true })
+    await b.coord.surFinDeTour('conv-1', { ok: true })
+    await recevoir(b, 1)
+    await recevoir(b, 2)
+    const relu = banc({ contenu: b.stockage.contenu, premierFil: 102 })
+    expect(relu.coord.plans()[0].statut).toBe('en-cours')
+    expect(relu.lancements).toEqual([])
+    await relu.coord.lancerApresDemarrage()
+    expect(relu.lancements.map((l) => l.fil)).toEqual(['conv-102', 'conv-103'])
+    expect(relu.coord.plans()[0].raison).toBeUndefined()
+    // Jumeau : des lots tournaient au redémarrage — rien ne repart sans « Reprendre ».
+    const coupe = banc()
+    await coupe.coord.outil('conv-1', { plan: plan4 })
+    const reluCoupe = banc({ contenu: coupe.stockage.contenu, premierFil: 102 })
+    await reluCoupe.coord.lancerApresDemarrage()
+    expect(reluCoupe.lancements).toEqual([])
+    expect(reluCoupe.coord.plans()[0].statut).toBe('interrompu')
   })
 })
 
