@@ -158,6 +158,15 @@ const NOMME_UNE_FORME =
 const PORTE_UN_EFFET =
   /\b(lit|lisent|ignore\w*|rend|rendent|rendu|attach\w*|disparai\w*|disparu|appel\w*|compte\w*|casse\w*|plante\w*|echou\w*|echec|rouge\w*|faux|fausse?s?|(?<!\b(?:les|des|de|ces|mes|tes|ses|nos|vos|leurs|autres|plusieurs|quelques|aux|une|cette|chaque|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|\d+)\s+)passes?|passe(?!s?\b)\w*|manqu\w*|bloqu\w*|aucun test\w*|sans test\w*|pas de test\w*|code de sortie)\b/
 
+// « compte rendu » nomme le document que chaque lot doit écrire : ni « compte » ni « rendu » n'y est un
+// effet. Le juge le cite donc souvent, et sans cette exception une remarque de forme sur ce document
+// bloquait à tous les passages. Le verbe (« le banc en compte 9 ») et un effet écrit à côté restent pris.
+const NOM_COMPTE_RENDU = /\bcomptes?[\s-]+rendus?\b/g
+
+function porteUnEffet(normalisee: string): boolean {
+  return PORTE_UN_EFFET.test(normalisee.replace(NOM_COMPTE_RENDU, ' '))
+}
+
 /**
  * Une remarque qui ne touche que la forme : une forme nommée, et aucun effet. Un écart de périmètre
  * (« ÉTENDUE — ») ne l'est jamais : une partie de la demande manque, ce n'est pas un mot mal placé.
@@ -165,7 +174,7 @@ const PORTE_UN_EFFET =
 export function remarqueDeForme(texte: string): boolean {
   const normalisee = normaliser(texte)
   if (/^\**\s*etendue\b/.test(normalisee)) return false
-  return NOMME_UNE_FORME.test(normaliser(horsCitations(texte))) && !PORTE_UN_EFFET.test(normalisee)
+  return NOMME_UNE_FORME.test(normaliser(horsCitations(texte))) && !porteUnEffet(normalisee)
 }
 
 /**
@@ -173,8 +182,7 @@ export function remarqueDeForme(texte: string): boolean {
  * « OK: forme — » qui porte un effet : le juge ne déclasse pas un défaut en simple constat de forme.
  */
 function bloqueLaPuceEtiquetee(gravite: string, texte: string): boolean {
-  if (/^ok$/i.test(gravite))
-    return /^forme\s*[—–-]/i.test(texte) && PORTE_UN_EFFET.test(normaliser(texte))
+  if (/^ok$/i.test(gravite)) return /^forme\s*[—–-]/i.test(texte) && porteUnEffet(normaliser(texte))
   return !(gravite.toUpperCase() === 'MINEUR' && remarqueDeForme(texte))
 }
 

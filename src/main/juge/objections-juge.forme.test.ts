@@ -241,6 +241,30 @@ describe('« passes » au sens de nom n’est pas un effet ; le verbe « passe �
     }
   })
 
+  it('« compte rendu » est le nom du document, pas un effet : la remarque de forme ne bloque pas', () => {
+    // Remarque réelle du juge (2026-11-14), chemin raccourci : seuls « compte » et « rendu » y
+    // étaient pris pour des effets, et trois réparations ont reçu le même refus sans pouvoir le lever.
+    const remarque =
+      "- OK: forme — première objection précédente : elle ne peut pas être corrigée, puisque les parties précédentes restent dans le texte final. La première dit toujours « 16 photos du moteur » et la suivante se dit « le seul compte rendu ». La dernière partie le reconnaît maintenant clairement, sans prétendre remplacer les autres, et donne le bon chiffre, 13. J'ai vérifié dans `seances-*.log` : 13 lignes `code=0` et aucune autre ligne `code=`."
+    expect(objectionsDuJuge(`VALIDE\nOBJECTIONS:\n${remarque}`)).toEqual([])
+    for (const texte of [
+      '- MINEUR: le titre du compte rendu garde l’ancien numéro de lot.',
+      '- OK: forme — le titre des comptes rendus et celui du compte-rendu final diffèrent.'
+    ]) {
+      expect(objectionsDuJuge(`VALIDE\nOBJECTIONS:\n${texte}`)).toEqual([])
+    }
+  })
+
+  it('le verbe « compte » et un effet dans le compte rendu restent des effets : bloque', () => {
+    for (const texte of [
+      '- OK: forme — le titre dit 12 cas, mais le banc en compte 9.',
+      '- MINEUR: le titre du compte rendu cite un test qui échoue.',
+      '- OK: forme — le compte rendu rend un chiffre faux sous un titre juste.'
+    ]) {
+      expect(objectionsDuJuge(`VALIDE\nOBJECTIONS:\n${texte}`)).toHaveLength(1)
+    }
+  })
+
   it('rejeu de la remarque qui a fait refuser le lot « Affichage » : elle ne bloque plus', () => {
     // Chemin raccourci ; le reste de la remarque est celui du juge.
     const remarque =
