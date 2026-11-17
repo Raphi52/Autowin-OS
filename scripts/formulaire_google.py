@@ -64,7 +64,7 @@ function creerFormulaire() {
       form.addParagraphTextItem().setTitle(titre).setHelpText(aide);
     });
   });
-  Logger.log('Lien a envoyer : ' + form.getPublishedUrl());
+  Logger.log('Lien à envoyer : ' + form.getPublishedUrl());
   Logger.log('Lien pour modifier : ' + form.getEditUrl());
   return { envoyer: form.getPublishedUrl(), modifier: form.getEditUrl() };
 }
