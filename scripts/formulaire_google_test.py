@@ -13,32 +13,50 @@ from formulaire_google import generer, main  # noqa: E402
 
 FAUX_FORMAPP = r"""
 const fs = require('fs'), vm = require('vm');
-const elements = [], journal = [];
-function element(type) {
-  const e = { type };
-  elements.push(e);
-  const api = {
-    setTitle(t) { e.titre = t; return api; },
-    setHelpText(t) { e.aide = t; return api; },
-    setChoiceValues(v) { e.choix = v; return api; },
-  };
-  return api;
+const journal = [];
+function nouveauFormulaire(elements) {
+  const f = { elements };
+  function poignee(e) {
+    const api = {
+      setTitle(t) { e.titre = t; return api; },
+      setHelpText(t) { e.aide = t; return api; },
+      setChoiceValues(v) { e.choix = v; return api; },
+      getTitle() { return e.titre; },
+    };
+    return api;
+  }
+  function ajouter(type) { const e = { type }; f.elements.push(e); return poignee(e); }
+  Object.assign(f, {
+    setDescription(d) { f.description = d; return f; },
+    setConfirmationMessage(m) { f.messageFin = m; return f; },
+    addSectionHeaderItem: () => ajouter('titre'), addTextItem: () => ajouter('court'),
+    addParagraphTextItem: () => ajouter('paragraphe'), addDateItem: () => ajouter('date'),
+    addMultipleChoiceItem: () => ajouter('choix'),
+    getItems(type) { return f.elements.filter((e) => !type || e.type === type).map(poignee); },
+    // Comme Google : moveItem(de, vers) refuse un rang hors limites.
+    moveItem(de, vers) {
+      if (de < 0 || de >= f.elements.length || vers < 0 || vers >= f.elements.length) throw new Error('hors limites');
+      f.elements.splice(vers, 0, f.elements.splice(de, 1)[0]);
+    },
+    getPublishedUrl: () => 'https://envoyer', getEditUrl: () => 'https://modifier',
+  });
+  return f;
 }
-const formulaire = {
-  setDescription(d) { formulaire.description = d; return formulaire; },
-  addSectionHeaderItem: () => element('titre'), addTextItem: () => element('court'),
-  addParagraphTextItem: () => element('paragraphe'), addDateItem: () => element('date'),
-  addMultipleChoiceItem: () => element('choix'),
-  getPublishedUrl: () => 'https://envoyer', getEditUrl: () => 'https://modifier',
-};
+let formulaire = nouveauFormulaire([]);
 const contexte = vm.createContext({
-  FormApp: { create(t) { formulaire.nom = t; return formulaire; } },
+  FormApp: {
+    ItemType: { SECTION_HEADER: 'titre' },
+    create(t) { formulaire.nom = t; return formulaire; },
+    openById(id) { formulaire = nouveauFormulaire(JSON.parse(process.argv[4] || '[]')); formulaire.id = id; return formulaire; },
+  },
   Logger: { log: (m) => journal.push(m) },
 });
 vm.runInContext(fs.readFileSync(process.argv[2], 'utf8'), contexte);
-const rendu = vm.runInContext('creerFormulaire()', contexte);
-process.stdout.write(JSON.stringify({ nom: formulaire.nom, description: formulaire.description, elements,
-  journal, rendu }));
+let rendu, erreur;
+try { rendu = vm.runInContext((process.argv[3] || 'creerFormulaire') + '()', contexte); }
+catch (e) { erreur = e.message; }
+process.stdout.write(JSON.stringify({ nom: formulaire.nom, id: formulaire.id, description: formulaire.description,
+  messageFin: formulaire.messageFin, elements: formulaire.elements, journal, rendu, erreur }));
 """
 
 SPEC = {
@@ -53,8 +71,11 @@ SPEC = {
     ]}],
 }
 
+# Titre de la question 1 tel que le formulaire l'affiche (le texte porte une espace insécable avant « ? »).
+PREMIERE = '1. ' + SPEC['sections'][0]['questions'][0]['texte']
 
-def executer(code):
+
+def executer(code, fonction='creerFormulaire', existants=None):
     with tempfile.TemporaryDirectory() as dossier:
         script = os.path.join(dossier, 'code.gs')
         faux = os.path.join(dossier, 'faux-formapp.js')
@@ -62,7 +83,8 @@ def executer(code):
             fh.write(code)
         with open(faux, 'w', encoding='utf-8', newline='') as fh:
             fh.write(FAUX_FORMAPP)
-        sortie = subprocess.run([shutil.which('node') or 'node', faux, script], capture_output=True,
+        sortie = subprocess.run([shutil.which('node') or 'node', faux, script, fonction,
+                                 json.dumps(existants or [], ensure_ascii=False)], capture_output=True,
                                 encoding='utf-8', check=True)
         return json.loads(sortie.stdout)
 
@@ -93,6 +115,41 @@ class FormulaireGoogle(unittest.TestCase):
         rendu = executer(generer(spec))
         self.assertEqual((rendu['nom'], rendu['description']), ('T', 'S'))
         self.assertEqual(rendu['elements'], [{'type': 'date', 'titre': 'Date'}])
+
+    def test_titres_de_bloc_et_message_de_fin_propres_au_formulaire_en_ligne(self):
+        spec = dict(SPEC, google=dict(SPEC['google'], titreIdentification='Votre profil',
+                                      titreQuestions='Les questions', noteQuestions='Quelques mots suffisent.',
+                                      messageFin='Merci.'))
+        rendu = executer(generer(spec))
+        self.assertEqual(rendu['messageFin'], 'Merci.')
+        self.assertEqual(rendu['elements'][:4], [
+            {'type': 'titre', 'titre': 'Votre profil', 'aide': ''},
+            {'type': 'court', 'titre': 'Nom'},
+            {'type': 'court', 'titre': 'Prénom'},
+            {'type': 'titre', 'titre': 'Les questions', 'aide': 'Quelques mots suffisent.'},
+        ])
+        self.assertEqual(rendu['elements'][4]['titre'], PREMIERE)
+
+    def test_appliquer_presentation_retouche_le_formulaire_existant_sans_doublon(self):
+        spec = dict(SPEC, google=dict(SPEC['google'], idFormulaire='ID-EXISTANT', titreIdentification='Votre profil',
+                                      titreQuestions='Les questions', messageFin='Merci.'))
+        code = generer(spec)
+        # Le formulaire en ligne a été créé avant les titres : on le reproduit sans eux.
+        existants = executer(generer(SPEC))['elements']
+        rendu = executer(code, 'appliquerPresentation', existants)
+        self.assertIsNone(rendu.get('erreur'))
+        self.assertEqual(rendu['id'], 'ID-EXISTANT')
+        self.assertEqual(rendu['messageFin'], 'Merci.')
+        titres = [e['titre'] for e in rendu['elements']]
+        self.assertEqual(titres[:5], ['Votre profil', 'Nom', 'Prénom', 'Les questions', PREMIERE])
+        self.assertEqual(len(titres), len(existants) + 2)
+        # Relancer ne rajoute rien : les titres déjà posés sont reconnus.
+        relance = executer(code, 'appliquerPresentation', rendu['elements'])
+        self.assertEqual(relance['elements'], rendu['elements'])
+
+    def test_appliquer_presentation_sans_identifiant_refuse_clairement(self):
+        rendu = executer(generer(SPEC), 'appliquerPresentation')
+        self.assertIn('idFormulaire', rendu['erreur'])
 
     def test_la_ligne_de_commande_ecrit_le_script(self):
         with tempfile.TemporaryDirectory() as dossier:
