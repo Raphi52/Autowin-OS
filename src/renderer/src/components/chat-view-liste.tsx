@@ -48,6 +48,7 @@ import {
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { noterDeclencheursListe, declencheursDeListe } from './rendu-long'
 import { estNonVue } from './conversation-seen'
+import { PANNEAU_BUREAUX, type PanneauOutil } from './panneau-outil'
 
 // Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type ListeDesConversationsCtx = {
@@ -120,7 +121,7 @@ export type ListeDesConversationsCtx = {
   setDossierNouveauFil: React.Dispatch<React.SetStateAction<string | null>>
   setDossiersMemorises: React.Dispatch<React.SetStateAction<string[]>>
   setOpenImage: React.Dispatch<React.SetStateAction<{ src: string; name: string } | null>>
-  setPanneauOutil: React.Dispatch<React.SetStateAction<'navigateur' | 'bureaux' | null>>
+  setPanneauOutil: React.Dispatch<React.SetStateAction<PanneauOutil>>
   setSelectedConvIds: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>
   setSurvole: React.Dispatch<React.SetStateAction<string | null>>
   showRuns: boolean
@@ -521,7 +522,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   useGuetBureauxDuFil({
     actif: isActive,
     fils: filsDesBureaux,
-    onBureauLance: () => setPanneauOutil('bureaux')
+    onBureauLance: () => setPanneauOutil(PANNEAU_BUREAUX)
   })
   /*
    * Les titres des onglets de la super conv. La signature garde la MÊME Map tant

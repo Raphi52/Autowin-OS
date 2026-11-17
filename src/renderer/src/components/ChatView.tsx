@@ -210,6 +210,15 @@ import { demandeDeSignalement } from './signaler-fils'
 import { useRenduMosaique } from './chat-view-mosaique'
 import { useRepriseDeLecture } from './chat-view-defilement'
 import { useFluxDuPilote } from './chat-view-flux-pilote'
+import {
+  basculerBureaux,
+  basculerNavigateurDans,
+  navigateurDuFil,
+  navigateurOuvertDans,
+  PANNEAU_BUREAUX,
+  sontBureauxOuverts,
+  type PanneauOutil
+} from './panneau-outil'
 
 /**
  * Miroir « dernière valeur » d'une donnée du rendu, pour les écouteurs posés une fois et les appels
@@ -1211,19 +1220,21 @@ export function ChatView({
    * UN SEUL PANNEAU À LA FOIS (2026-10-31) : navigateur et Bureaux cachés se partagent cette
    * valeur, parce qu'à 1280 px les deux ensemble ne laissent plus de place au fil. Une valeur unique
    * rend « les deux ouverts » impossible à écrire, là où deux booléens auraient dû se fermer l'un l'autre.
+   * Le navigateur y porte le fil qui l'a ouvert : il ne suit pas l'utilisateur dans un autre fil
+   * (voir `panneau-outil.ts`).
    */
-  const [panneauOutil, setPanneauOutil] = useState<'navigateur' | 'bureaux' | null>(null)
-  const navigateurOuvert = panneauOutil === 'navigateur'
-  const bureauxOuverts = panneauOutil === 'bureaux'
+  const [panneauOutil, setPanneauOutil] = useState<PanneauOutil>(null)
+  const navigateurOuvert = navigateurOuvertDans(panneauOutil, activeId)
+  const bureauxOuverts = sontBureauxOuverts(panneauOutil)
   const basculerNavigateur = (): void =>
-    setPanneauOutil((ouvert) => (ouvert === 'navigateur' ? null : 'navigateur'))
+    setPanneauOutil((ouvert) => basculerNavigateurDans(ouvert, activeRef.current))
   // Une demande venue d'ailleurs (menu de commandes, agent) rouvre le panneau, même refermé ; une
   // référence à zéro et pas à la prop : une demande faite avant le montage du chat compte aussi.
   const demandeBureauxVueRef = useRef(0)
   useEffect(() => {
     if (demandeBureaux === demandeBureauxVueRef.current) return
     demandeBureauxVueRef.current = demandeBureaux
-    setPanneauOutil('bureaux')
+    setPanneauOutil(PANNEAU_BUREAUX)
   }, [demandeBureaux])
   // Question à côté : Ctrl+;, fil unique. Son état de saisie vit dans son composant.
   const [questionACoteOuverte, setQuestionACoteOuverte] = useState(false)
@@ -1244,7 +1255,7 @@ export function ChatView({
       ongletsConnusRef.current.set(etat.conversationId, new Set(ids))
       // Fil pas encore relu : on apprend ses onglets sans ouvrir — ce n'est pas une ouverture vue.
       if (!connus || etat.conversationId !== activeRef.current) return
-      if (ids.some((id) => !connus.has(id))) setPanneauOutil('navigateur')
+      if (ids.some((id) => !connus.has(id))) setPanneauOutil(navigateurDuFil(etat.conversationId))
     })
   }, [])
   useEffect(() => {
@@ -1264,7 +1275,7 @@ export function ChatView({
       // Sans fil ouvert, pas d'onglets à montrer : le raccourci ne bascule rien d'invisible.
       if (event.key.toLowerCase() !== 'b' || !activeRef.current) return
       event.preventDefault()
-      setPanneauOutil((ouvert) => (ouvert === 'navigateur' ? null : 'navigateur'))
+      setPanneauOutil((ouvert) => basculerNavigateurDans(ouvert, activeRef.current))
     }
     document.addEventListener('keydown', surTouche)
     return () => document.removeEventListener('keydown', surTouche)
@@ -1438,7 +1449,7 @@ export function ChatView({
   async function ouvrirDansLeNavigateur(conversationId: string, adresse: string): Promise<void> {
     const api = apiNavigateur()
     if (!api) return
-    setPanneauOutil('navigateur')
+    setPanneauOutil(navigateurDuFil(conversationId))
     try {
       // Le même lien recliqué REPREND son onglet au lieu d'en empiler un de plus.
       const etat = await api.etat(conversationId)
@@ -5060,9 +5071,7 @@ export function ChatView({
               />
               <BoutonBureauxCaches
                 ouvert={bureauxOuverts}
-                onBasculer={() =>
-                  setPanneauOutil((ouvert) => (ouvert === 'bureaux' ? null : 'bureaux'))
-                }
+                onBasculer={() => setPanneauOutil(basculerBureaux)}
               />
               {/* DÉTAILS, LE MÊME BOUTON CREUX QUE LA MINI-ADRESSE (2026-10-30 : « le bouton
                   détail met lui le meme look »). Il portait le balisage de ThinkingBlock,
