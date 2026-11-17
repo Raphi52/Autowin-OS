@@ -127,6 +127,53 @@ describe('cibleDEcritureDansLeDepot — le terminal', () => {
     ).toBeUndefined()
   })
 
+  // Rapport de défaut : un script PowerShell a réécrit un fichier du dépôt par une variable, sans
+  // ouvrir la copie ; la suite du travail est partie dans la copie, le dépôt ne compilait plus.
+  it.each([
+    ["$f = 'src/a.ts'\nSet-Content -Path $f -Value $c -NoNewline", 'src/a.ts'],
+    ["$f = 'src/a.ts'\n(Get-Content $f) -replace 'a','b' | Set-Content $f", 'src/a.ts'],
+    ["$f = 'src/a.ts'\n$c | Out-File -FilePath $f -Encoding utf8", 'src/a.ts'],
+    [
+      "$path = 'src/a.cs'\n$content = @'\n// l'export : une ligne par dossier\nvar l = items.Where(i => i.Ok);\n'@\n[System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($true))",
+      'src/a.cs'
+    ],
+    ['[IO.File]::WriteAllText("$PWD/src/b.ts", $c)', 'src/b.ts'],
+    ["[IO.File]::Copy('/tmp/a.ts', 'src/c.ts', $true)", 'src/c.ts'],
+    ["$xml.Save('src/app.csproj')", 'src/app.csproj'],
+    ["$dir = 'src'\ncd $dir\nNew-Item -ItemType File neuf.ts", 'src/neuf.ts'],
+    ["@'\nSet-Content src/d.ts x\n'@ | iex", 'src/d.ts']
+  ])('PowerShell : une écriture par variable ou par .NET est vue : cas %#', (shell, vise) => {
+    expect(cible(appel('PowerShell', { shell }))).toBe(path.resolve(depot, vise))
+  })
+
+  it('une cible illisible lancée depuis le code compte comme une écriture dans le code', () => {
+    expect(cible(appel('PowerShell', { shell: 'Set-Content $inconnu x' }))).toBe(depot)
+    expect(cible(appel('Bash', { shell: 'echo x > "$SORTIE"' }))).toBe(depot)
+    expect(cible(appel('Bash', { shell: 'rm -f src/*.tmp' }))).toBe(path.join(depot, 'src'))
+  })
+
+  it.each([
+    ["$f = 'src/a.ts'\nGet-Content $f | Select-String x"],
+    ["$t = Join-Path $env:TEMP 'x.txt'\nSet-Content $t x"],
+    ['git fetch 2>$null'],
+    ['Get-ChildItem | Out-File $env:TEMP\\liste.txt'],
+    ['D=$(mktemp -d) && echo x > "$D/a"'],
+    ['echo x > "$TMPDIR/a"'],
+    ['T=$(cygpath -m "$TEMP")/juge && rm -rf "$T" && mkdir -p "$T/main"'],
+    ['T=$(cat /tmp/judge_T.txt); lune run bancs/a > $T/a.log'],
+    ['T=$(cygpath -m "$TEMP")/juge; F="$T/main/a.luau"; cp "$T/a.orig" "$F"'],
+    ['Set-Content /tmp/$nom x'],
+    ["$c = @'\nrm -rf src\n'@\nWrite-Output $c"]
+  ])('PowerShell ou sh : lecture, `$null` ou dossier temporaire, rien à isoler : %s', (shell) => {
+    expect(cible(appel('PowerShell', { shell }))).toBeUndefined()
+  })
+
+  it('une cible illisible lancée hors du code (la copie, un dossier inconnu) ne compte pas', () => {
+    const copie = path.join(depot, '.autowin-data/autowin-os/copies-de-taches/conv-1')
+    expect(cible(appel('PowerShell', { shell: 'Set-Content $f x', cwd: copie }))).toBeUndefined()
+    expect(cible(appel('Bash', { shell: 'cd "$AILLEURS" && echo x > "$f"' }))).toBeUndefined()
+  })
+
   it('une commande lancée depuis un dossier ignoré (la copie elle-même) n’écrit pas dans le code', () => {
     const copie = path.join(depot, '.autowin-data/autowin-os/copies-de-taches/conv-1')
     expect(cible(appel('Bash', { shell: 'git commit -am x', cwd: copie }))).toBeUndefined()
@@ -276,5 +323,7 @@ describe('module Codex, Grok et agy — le même contrôle, généré pour être
       motif("node --input-type=module <<'EOF'\nconst f = (x) => x.endsWith('.ts')\nEOF")
     ).toBeUndefined()
     expect(motif('echo x > src/a.ts')).toContain(copie)
+    // Les aides internes (variables, appels .NET) voyagent avec la fonction sérialisée.
+    expect(motif("$f = 'src/a.ts'\n[IO.File]::WriteAllText($f, $c)")).toContain(copie)
   })
 })

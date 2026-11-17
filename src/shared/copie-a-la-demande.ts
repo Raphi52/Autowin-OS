@@ -15,8 +15,12 @@
  * Fonctions AUTOPORTÉES : sérialisées telles quelles dans le script du contrôle. Aucune ne nomme un
  * identifiant extérieur ; ce dont elles ont besoin (chemins, git, horloge) leur est passé.
  *
- * Limite connue : un script lancé du terminal (`node scripts/x.mjs`) qui écrit lui-même dans le code
- * n'est pas vu d'avance. Ce qu'il écrit atterrit dans le dossier partagé, comme avant les copies.
+ * Une écriture du terminal dont la cible ne se lit pas (variable, sous-expression) compte comme une
+ * écriture dans le code quand la commande part du code : dans le doute, on isole (`cibleEcrite`).
+ *
+ * Limite connue : un script lancé du terminal (`node scripts/x.mjs`, `powershell -File x.ps1`) qui
+ * écrit lui-même dans le code n'est pas vu d'avance. Ce qu'il écrit atterrit dans le dossier
+ * partagé, comme avant les copies.
  */
 
 import { decouperHeredocs } from './heredocs'
@@ -93,7 +97,110 @@ export function cibleDEcritureDansLeDepot(
   }
   if (!/^(Bash|PowerShell|Monitor)$/.test(appel.outil)) return undefined
 
-  return analyser(sansCorpsDeCode(String(appel.shell ?? '')), appel.cwd || depot, 0)
+  const texte = sansHereStrings(sansCorpsDeCode(String(appel.shell ?? '')))
+  const variables = variablesAffectees(texte, appel.cwd || depot)
+  return analyser(texte, appel.cwd || depot, 0)
+
+  /**
+   * Le corps d'une here-string PowerShell (`@'` en fin de ligne … `'@` en début de ligne) est du
+   * texte, pas des commandes : le C# qu'un script y pose avant `[IO.File]::WriteAllText` porte des
+   * apostrophes et des `=>` qui faussaient la lecture de tout ce qui suit. Un corps passé à `iex` ou
+   * à un shell reste lu.
+   */
+  function sansHereStrings(source: string): string {
+    const lignes = source.split('\n')
+    const gardees: string[] = []
+    for (let i = 0; i < lignes.length; i++) {
+      const ouverture = /@(['"])\s*$/.exec(lignes[i])
+      const q = ouverture?.[1]
+      let fin = -1
+      if (ouverture && q)
+        for (let j = i + 1; j < lignes.length && fin < 0; j++)
+          if (lignes[j].trimStart().startsWith(q + '@')) fin = j
+      if (!ouverture || fin < 0) {
+        gardees.push(lignes[i])
+        continue
+      }
+      const apres = lignes[fin].trimStart().slice(2)
+      const avant = lignes[i].slice(0, ouverture.index)
+      // Sans ses délimiteurs, le corps exécuté se lit ligne à ligne comme les autres commandes.
+      if (/\|\s*(iex|invoke-expression|powershell|pwsh|bash|sh|cmd)(?=\s|$)/i.test(apres))
+        gardees.push(avant, ...lignes.slice(i + 1, fin), apres)
+      else gardees.push(avant + "@''@" + apres)
+      i = fin
+    }
+    return gardees.join('\n')
+  }
+
+  /**
+   * Les variables que la commande affecte elle-même : `$f = 'C:\x\a.cs'` (PowerShell), `F=src/a.ts`
+   * (sh). `valeur` : le chemin quand il est littéral ; `brut` : ce qui suit le `=`, relu pour savoir
+   * si la variable vise un dossier temporaire. Lecture d'un seul passage, sans portée ni ordre : la
+   * dernière affectation d'un nom l'emporte.
+   */
+  function variablesAffectees(
+    source: string,
+    base: string
+  ): Map<string, { valeur?: string; brut: string }> {
+    const vues = new Map<string, { valeur?: string; brut: string }>()
+    const affectation =
+      /(?:^|[\s;&|(])(?:\$([A-Za-z_]\w*)\s*=(?![=~])([^\n;|]*)|([A-Za-z_]\w*)=("[^"\n]*"|'[^'\n]*'|\$\([^)\n]*\)[^\s;&|]*|[^\s;&|]*))/g
+    for (const m of source.matchAll(affectation)) {
+      const brut = (m[2] ?? m[4] ?? '').trim()
+      const lu = /^(?:'([^']*)'|"([^"]*)"|([^\s'"();|&]*))$/.exec(brut)
+      const valeur = lu ? remplacer(lu[1] ?? lu[2] ?? lu[3] ?? '', base, vues) : undefined
+      vues.set((m[1] ?? m[3] ?? '').toLowerCase(), {
+        valeur: valeur && !/[$`]/.test(valeur) ? valeur : undefined,
+        brut
+      })
+    }
+    return vues
+  }
+
+  /** `$f`, `${f}`, `$PWD` remplacés par leur valeur connue ; `$env:X` et l'inconnu restent tels quels. */
+  function remplacer(
+    t: string,
+    base: string | undefined,
+    vues: Map<string, { valeur?: string; brut: string }>
+  ): string {
+    return t.replace(
+      /\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*)\b(?!:))/g,
+      (m: string, a?: string, b?: string) => {
+        const nom = (a ?? b ?? '').toLowerCase()
+        if (nom === 'pwd') return base ?? m
+        return vues.get(nom)?.valeur ?? m
+      }
+    )
+  }
+
+  /**
+   * Le chemin du code qu'une écriture vise, ou `undefined`. Une cible ILLISIBLE (variable inconnue,
+   * sous-expression, motif) lancée depuis le code du dépôt compte comme une écriture dans le code :
+   * un script PowerShell qui écrivait par `Set-Content $f` ou `[IO.File]::WriteAllText($path, …)`
+   * passait inaperçu, et le travail du fil se retrouvait coupé entre le dépôt et sa copie. Dans le
+   * doute on isole ; seuls `$null` et les dossiers temporaires sont tenus pour ailleurs.
+   */
+  function cibleEcrite(brut: string | undefined, base: string | undefined): string | undefined {
+    const t = remplacer(String(brut ?? '').trim(), base, variables)
+    const abs = versChemin(t, base)
+    if (abs) return dansLeCode(abs) ? abs : undefined
+    const coupe = t.search(/[$%`*?(){}]/)
+    if (coupe < 0 || t.startsWith('-') || /^\$null$/i.test(t)) return undefined
+    const TEMPORAIRE =
+      /\$(?:env:)?(?:temp|tmp|tmpdir|localappdata|appdata|userprofile|home)\b|%(?:temp|tmp|localappdata|appdata|userprofile)%|\/tmp\b|gettemppath|gettempfilename|new-temporaryfile|mktemp/i
+    // `F="$T/a"` après `T=$(cygpath -m "$TEMP")` : la variable hérite du dossier de celle qu'elle cite.
+    const temporaire = (texte: string, niveau: number): boolean =>
+      TEMPORAIRE.test(texte) ||
+      (niveau < 3 &&
+        [...texte.matchAll(/\$\{?([A-Za-z_]\w*)/g)].some((m) =>
+          temporaire(variables.get(m[1].toLowerCase())?.brut ?? '', niveau + 1)
+        ))
+    if (temporaire(t, 0)) return undefined
+    // La partie lisible avant la variable situe déjà l'écriture : `D:\depot\$nom`, `/tmp/*.log`.
+    const prefixe = t.slice(0, coupe).replace(/[^\\/]*$/, '')
+    const dossier = prefixe ? versChemin(prefixe, base) : base
+    return dossier && dansLeCode(dossier) ? dossier : undefined
+  }
 
   /**
    * Le corps d'un heredoc donné à un programme de code (`node <<E`, `python - <<E`), ou écrit dans un
@@ -229,8 +336,27 @@ export function cibleDEcritureDansLeDepot(
       'rename-item',
       'rni',
       'copy-item',
-      'cpi'
+      'cpi',
+      'tee-object',
+      'export-csv',
+      'epcsv',
+      'export-clixml'
     ])
+    /**
+     * Méthodes .NET qui écrivent, et la place des chemins écrits parmi leurs arguments. Un script
+     * PowerShell écrit volontiers par `[IO.File]::WriteAllText` pour choisir l'encodage.
+     */
+    const ARGUMENTS_ECRITS_DOTNET: Record<string, number[]> = {
+      'file::copy': [1],
+      'file::move': [0, 1],
+      'file::replace': [0, 1],
+      'directory::move': [0, 1],
+      'streamwriter::new': [0]
+    }
+    const ECRIT_DOTNET =
+      /^\[(?:system\.)?io\.(file|directory|streamwriter)\]::(writeall\w*|appendall\w*|appendtext|createtext|create|createdirectory|delete|openwrite|copy|move|replace|new)$|^\$\w+\.(save)$/i
+    /** Les places des chemins écrits par l'appel .NET du segment précédent, dont `(` a coupé les arguments. */
+    let argumentsDotNet: number[] | undefined
     const GIT_ECRIT = new Set([
       'add',
       'commit',
@@ -278,8 +404,24 @@ export function cibleDEcritureDansLeDepot(
         } else mots.push(brut[i])
       }
       for (const r of redirections) {
-        const abs = versChemin(r, cwd)
-        if (dansLeCode(abs)) return abs
+        const abs = cibleEcrite(r, cwd)
+        if (abs) return abs
+      }
+      if (argumentsDotNet) {
+        const places = argumentsDotNet
+        argumentsDotNet = undefined
+        const valeurs = mots.join(' ').split(',')
+        for (const k of places) {
+          const abs = cibleEcrite(valeurs[k], cwd)
+          if (abs) return abs
+        }
+        continue
+      }
+      const dotnet = ECRIT_DOTNET.exec(mots[mots.length - 1] ?? '')
+      if (dotnet) {
+        const cle = dotnet[3] ? '' : `${dotnet[1]}::${dotnet[2]}`.toLowerCase()
+        argumentsDotNet = ARGUMENTS_ECRITS_DOTNET[cle] ?? [0]
+        continue
       }
       // Affectations de variables et préfixes sans effet sur la cible.
       while (
@@ -304,7 +446,7 @@ export function cibleDEcritureDansLeDepot(
       ) {
         // Cible illisible (variable, `cd -`, `cd` seul) : la suite tourne on ne sait où. Garder
         // l'ancien dossier ferait passer un `mkdir x` lancé ailleurs pour une écriture dans le code.
-        cwd = versChemin(sansOptions[0], cwd)
+        cwd = versChemin(remplacer(sansOptions[0] ?? '', cwd, variables), cwd)
         continue
       }
       if (ECRIT_TOUT.has(nom)) cibles.push(...sansOptions)
@@ -381,8 +523,11 @@ export function cibleDEcritureDansLeDepot(
           else absolus.push(cwd)
         }
       }
-      for (const abs of [...absolus, ...cibles.map((c) => versChemin(c, cwd))])
-        if (dansLeCode(abs)) return abs
+      for (const abs of absolus) if (dansLeCode(abs)) return abs
+      for (const c of cibles) {
+        const abs = cibleEcrite(c, cwd)
+        if (abs) return abs
+      }
     }
     return undefined
   }
