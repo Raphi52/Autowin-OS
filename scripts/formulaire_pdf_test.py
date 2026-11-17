@@ -81,6 +81,48 @@ class FormulairePdf(unittest.TestCase):
         with self.assertRaises(ValueError):
             construire(spec)
 
+    def test_questions_a_cote_cadres_alignes_et_identification_en_colonnes(self):
+        spec = {'titre': 'Cote', 'densite': 'compacte',
+                'identification': {'colonnes': 4, 'champs': ['A', 'B', 'C', 'D', 'E']},
+                'sections': [{'questions': [
+                    {'texte': 'Une question assez longue pour passer sur deux lignes dans une demi-colonne',
+                     'lignes': 2},
+                    {'texte': 'Courte', 'lignes': 3, 'aCote': True},
+                    {'texte': 'Parties', 'partiesCote': True,
+                     'parties': [{'libelle': 'Oui', 'lignes': 2}, {'libelle': 'Non', 'lignes': 4}]}]}]}
+        doc = construire(spec)
+        cadres = {w.field_name: w.rect for _, w in champs(doc)}
+        self.assertEqual({round(cadres[n].y0) for n in 'ABCD'}, {round(cadres['A'].y0)})
+        self.assertGreater(cadres['E'].y0, cadres['A'].y1)
+        self.assertGreater(cadres['Q2'].x0, cadres['Q1'].x1)
+        self.assertAlmostEqual(cadres['Q1'].y1, cadres['Q2'].y1, places=1)
+        self.assertAlmostEqual(cadres['Q1'].y0, cadres['Q2'].y0, places=1)   # question longue ou courte
+        self.assertAlmostEqual(cadres['Q3_Oui'].y0, cadres['Q3_Non'].y0, places=1)
+        self.assertAlmostEqual(cadres['Q3_Oui'].y1, cadres['Q3_Non'].y1, places=1)
+        self.assertGreater(cadres['Q3_Non'].x0, cadres['Q3_Oui'].x1)
+
+    def test_une_page_remplit_la_page_au_prorata_des_lignes(self):
+        spec = {'titre': 'Une page', 'unePage': True, 'densite': 'compacte', 'sections': [{'questions': [
+            {'texte': 'Grande', 'lignes': 6}, {'texte': 'Petite', 'lignes': 2},
+            {'texte': 'Liste', 'liste': 2}]}]}
+        doc = construire(spec)
+        self.assertEqual(len(doc), 1)
+        cadres = {w.field_name: w.rect for _, w in champs(doc)}
+        bas = max(r.y1 for r in cadres.values())
+        self.assertGreater(bas, HAUTEUR - MARGE_BAS - 40)          # la page est remplie
+        self.assertGreater(cadres['Q1'].height, 2.5 * cadres['Q2'].height)
+        self.assertLess(cadres['Q3_ligne_1'].height, 20)          # une liste ne s'étire pas
+
+    def test_une_page_qui_deborde_est_refusee(self):
+        spec = {'titre': 'Trop', 'unePage': True, 'sections': [{'questions': [
+            {'texte': f'Sujet {k}', 'lignes': 8} for k in range(12)]}]}
+        with self.assertRaisesRegex(ValueError, 'unePage'):
+            construire(spec)
+
+    def test_une_densite_inconnue_est_refusee(self):
+        with self.assertRaisesRegex(ValueError, 'densite'):
+            construire({'titre': 'X', 'densite': 'serree'})
+
     def test_la_ligne_de_commande_ecrit_le_pdf(self):
         with tempfile.TemporaryDirectory() as dossier:
             source = os.path.join(dossier, 'spec.json')
