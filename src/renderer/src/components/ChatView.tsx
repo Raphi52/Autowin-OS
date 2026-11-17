@@ -211,13 +211,16 @@ import { useRenduMosaique } from './chat-view-mosaique'
 import { useRepriseDeLecture } from './chat-view-defilement'
 import { useFluxDuPilote } from './chat-view-flux-pilote'
 import {
-  basculerBureaux,
+  adopterLeFilNeuf,
+  AUCUN_PANNEAU,
+  basculerBureauxDans,
   basculerNavigateurDans,
-  navigateurDuFil,
+  bureauxOuvertsDans,
+  fermerDans,
   navigateurOuvertDans,
-  PANNEAU_BUREAUX,
-  sontBureauxOuverts,
-  type PanneauOutil
+  ouvrirDans,
+  placeDuPanneau,
+  type PanneauxParFil
 } from './panneau-outil'
 
 /**
@@ -1220,22 +1223,30 @@ export function ChatView({
    * UN SEUL PANNEAU À LA FOIS (2026-10-31) : navigateur et Bureaux cachés se partagent cette
    * valeur, parce qu'à 1280 px les deux ensemble ne laissent plus de place au fil. Une valeur unique
    * rend « les deux ouverts » impossible à écrire, là où deux booléens auraient dû se fermer l'un l'autre.
-   * Le navigateur y porte le fil qui l'a ouvert : il ne suit pas l'utilisateur dans un autre fil
+   * Chaque fil retient le sien : ouvert dans un fil, il ne suit pas l'utilisateur dans un autre
    * (voir `panneau-outil.ts`).
    */
-  const [panneauOutil, setPanneauOutil] = useState<PanneauOutil>(null)
-  const navigateurOuvert = navigateurOuvertDans(panneauOutil, activeId)
-  const bureauxOuverts = sontBureauxOuverts(panneauOutil)
+  const [panneaux, setPanneaux] = useState<PanneauxParFil>(AUCUN_PANNEAU)
+  const placePanneau = placeDuPanneau(activeId, convViewMode === 'mosaic')
+  const placePanneauRef = useRef(placePanneau)
+  useTenirRefAJour(placePanneauRef, placePanneau)
+  const navigateurOuvert = navigateurOuvertDans(panneaux, activeId)
+  const bureauxOuverts = bureauxOuvertsDans(panneaux, placePanneau)
   const basculerNavigateur = (): void =>
-    setPanneauOutil((ouvert) => basculerNavigateurDans(ouvert, activeRef.current))
-  // Une demande venue d'ailleurs (menu de commandes, agent) rouvre le panneau, même refermé ; une
-  // référence à zéro et pas à la prop : une demande faite avant le montage du chat compte aussi.
+    setPanneaux((ouverts) => basculerNavigateurDans(ouverts, activeRef.current))
+  const adopterPanneauDuFilNeuf = (conversationId: string): void =>
+    setPanneaux((ouverts) => adopterLeFilNeuf(ouverts, conversationId))
+  // Une demande venue d'ailleurs (menu de commandes, agent) rouvre le panneau du fil affiché, même
+  // refermé ; une référence à zéro et pas à la prop : une demande faite avant le montage compte aussi.
+  // Elle attend que le montage ait rouvert le fil actif de l'app : servie avant, elle ouvrait le
+  // panneau sur le fil neuf, que ce fil rouvert cachait aussitôt.
+  const [filDuMontagePose, setFilDuMontagePose] = useState(false)
   const demandeBureauxVueRef = useRef(0)
   useEffect(() => {
-    if (demandeBureaux === demandeBureauxVueRef.current) return
+    if (!filDuMontagePose || demandeBureaux === demandeBureauxVueRef.current) return
     demandeBureauxVueRef.current = demandeBureaux
-    setPanneauOutil(PANNEAU_BUREAUX)
-  }, [demandeBureaux])
+    setPanneaux((ouverts) => ouvrirDans(ouverts, placePanneauRef.current, 'bureaux'))
+  }, [demandeBureaux, filDuMontagePose])
   // Question à côté : Ctrl+;, fil unique. Son état de saisie vit dans son composant.
   const [questionACoteOuverte, setQuestionACoteOuverte] = useState(false)
   useRaccourciQuestionACote(isActive && convViewMode !== 'mosaic' && Boolean(activeId), () =>
@@ -1255,7 +1266,9 @@ export function ChatView({
       ongletsConnusRef.current.set(etat.conversationId, new Set(ids))
       // Fil pas encore relu : on apprend ses onglets sans ouvrir — ce n'est pas une ouverture vue.
       if (!connus || etat.conversationId !== activeRef.current) return
-      if (ids.some((id) => !connus.has(id))) setPanneauOutil(navigateurDuFil(etat.conversationId))
+      if (ids.some((id) => !connus.has(id))) {
+        setPanneaux((ouverts) => ouvrirDans(ouverts, etat.conversationId, 'navigateur'))
+      }
     })
   }, [])
   useEffect(() => {
@@ -1275,7 +1288,7 @@ export function ChatView({
       // Sans fil ouvert, pas d'onglets à montrer : le raccourci ne bascule rien d'invisible.
       if (event.key.toLowerCase() !== 'b' || !activeRef.current) return
       event.preventDefault()
-      setPanneauOutil((ouvert) => basculerNavigateurDans(ouvert, activeRef.current))
+      setPanneaux((ouverts) => basculerNavigateurDans(ouverts, activeRef.current))
     }
     document.addEventListener('keydown', surTouche)
     return () => document.removeEventListener('keydown', surTouche)
@@ -1449,7 +1462,7 @@ export function ChatView({
   async function ouvrirDansLeNavigateur(conversationId: string, adresse: string): Promise<void> {
     const api = apiNavigateur()
     if (!api) return
-    setPanneauOutil(navigateurDuFil(conversationId))
+    setPanneaux((ouverts) => ouvrirDans(ouverts, conversationId, 'navigateur'))
     try {
       // Le même lien recliqué REPREND son onglet au lieu d'en empiler un de plus.
       const etat = await api.etat(conversationId)
@@ -2420,7 +2433,10 @@ export function ChatView({
     void selectionInitiale
       .then(() => repriseDemarrageRef.current)
       .catch((erreur: unknown) => traceSilentFailure('selection-initiale', erreur))
-      .finally(ecouterLesElements)
+      .finally(() => {
+        ecouterLesElements()
+        if (!disposed) setFilDuMontagePose(true)
+      })
     void Promise.resolve(window.api.workflowProfileNotice?.())
       .then((notice) => {
         if (!disposed && notice && typeof notice.text === 'string') {
@@ -3862,6 +3878,7 @@ export function ChatView({
   const { queueCurrentMessage, tourEncoreVivant, rendreLaFileAuComposer, stopPilotTurn, submitBtw, handleBtw, filsAvecLotsRef, basculerModeAuto, basculerModeAutoPour, handleFork, handleModifier, handleRevenir, sendRef, pickSuggestion, annulerEnvoi, planSelection, doitAutoLancerCandidats, answerAsk, submitBtwRef, refineResumeDraft, ouvrirLogin, send } = useToursEtEnvoi({
     activeId,
     activeRef,
+    adopterPanneauDuFilNeuf,
     annulerEnvoiEnAttente,
     annulerRelanceProgrammee,
     autoActif,
@@ -4004,7 +4021,7 @@ export function ChatView({
     liveRuns, loadConv, memoriserDossier, messages, mosaicIds, onInspectTurn, ouvrirLogin,
     pickSuggestion, planSelection, rangerDans, refineResumeDraft, refreshConvs, revealLiveAction,
     runs, selectedConvIds, setAppNotice, setConvMenu, setConvSelectionMode, setDossierNouveauFil,
-    setDossiersMemorises, setOpenImage, setPanneauOutil, setSelectedConvIds, setSurvole, showRuns,
+    setDossiersMemorises, setOpenImage, setPanneaux, setSelectedConvIds, setSurvole, showRuns,
     surviole, toggleConvSelection
   })
   /*
@@ -5071,7 +5088,9 @@ export function ChatView({
               />
               <BoutonBureauxCaches
                 ouvert={bureauxOuverts}
-                onBasculer={() => setPanneauOutil(basculerBureaux)}
+                onBasculer={() =>
+                  setPanneaux((ouverts) => basculerBureauxDans(ouverts, placePanneau))
+                }
               />
               {/* DÉTAILS, LE MÊME BOUTON CREUX QUE LA MINI-ADRESSE (2026-10-30 : « le bouton
                   détail met lui le meme look »). Il portait le balisage de ThinkingBlock,
@@ -5773,7 +5792,7 @@ export function ChatView({
             key={activeId}
             conversationId={activeId}
             visible={isActive && !openImage}
-            onFermer={() => setPanneauOutil(null)}
+            onFermer={() => setPanneaux((ouverts) => fermerDans(ouverts, activeId))}
             onElementChoisi={insererElementChoisi}
             onReglages={(reglages) => {
               reglagesNavigateurRef.current = reglages
@@ -5790,8 +5809,11 @@ export function ChatView({
           <HdeskGestionView
             active={isActive}
             fils={filsDesBureaux}
-            onFermer={() => setPanneauOutil(null)}
+            onFermer={() => setPanneaux((ouverts) => fermerDans(ouverts, placePanneau))}
             onOpenConversation={(cible) => {
+              // Aller au fil d'un bureau depuis ce panneau, c'est vouloir y voir ce bureau : le
+              // panneau s'ouvre aussi dans le fil d'arrivée.
+              setPanneaux((ouverts) => ouvrirDans(ouverts, cible.conversationId, 'bureaux'))
               // Le même chemin que le reste de l'app : il sait attendre un fil pas encore listé.
               window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: cible }))
             }}

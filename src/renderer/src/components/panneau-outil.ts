@@ -2,53 +2,84 @@
  * LE PANNEAU D'OUTIL À DROITE DU FIL : un seul à la fois, navigateur intégré ou Bureaux cachés —
  * à 1280 px les deux ensemble ne laissent plus de place au fil.
  *
- * LE NAVIGATEUR APPARTIENT AU FIL QUI L'A OUVERT. Ses onglets vivent par fil : un panneau ouvert
- * pour le fil A n'a rien à montrer dans le fil B. Tenu comme une simple valeur « navigateur » pour
- * toute la vue, il suivait l'utilisateur d'un fil à l'autre, et un fil neuf le voyait surgir, vide
- * (« Aucune page ouverte »), au moment où l'envoi du premier message lui donnait un identifiant.
- * Il porte donc l'identifiant de son fil : il se cache ailleurs et revient avec ce fil.
- * Les Bureaux cachés, eux, montrent tous les fils et restent ouverts d'un fil à l'autre.
+ * CHAQUE FIL RETIENT LE SIEN. Le panneau ouvert dans le fil A n'a rien à faire dans le fil B :
+ * tenu comme une seule valeur pour toute la vue, il suivait l'utilisateur d'un fil à l'autre — le
+ * navigateur surgissait vide (« Aucune page ouverte ») dans un fil neuf, et les Bureaux cachés
+ * s'ouvraient dans des fils qui n'avaient lancé aucun bureau (« Aucun bureau caché dans ce fil »).
+ * D'où un panneau par fil : il se cache quand on quitte le fil et revient avec lui.
+ *
+ * Deux places ne sont pas des fils : le fil pas encore créé (« Nouveau fil »), dont le panneau
+ * passe au fil que crée le premier envoi, et la mosaïque, qui montre plusieurs fils à la fois et
+ * n'a donc qu'un panneau pour elle seule.
  */
-export type PanneauOutil =
-  | { readonly outil: 'navigateur'; readonly conversationId: string }
-  | { readonly outil: 'bureaux' }
-  | null
+export type OutilDuPanneau = 'navigateur' | 'bureaux'
 
-export const PANNEAU_BUREAUX: PanneauOutil = { outil: 'bureaux' }
+/** L'outil ouvert dans chaque place ; une place absente n'en a aucun. */
+export type PanneauxParFil = Readonly<Record<string, OutilDuPanneau>>
 
-export function navigateurDuFil(conversationId: string): PanneauOutil {
-  return { outil: 'navigateur', conversationId }
+export const AUCUN_PANNEAU: PanneauxParFil = {}
+
+/** Places hors fil : entre parenthèses, elles ne peuvent pas être un identifiant `conv-NNN`. */
+export const PLACE_FIL_NEUF = '(fil neuf)'
+export const PLACE_MOSAIQUE = '(mosaïque)'
+
+/** La place dont l'écran montre le panneau : la mosaïque, sinon le fil affiché, sinon le fil neuf. */
+export function placeDuPanneau(conversationId: string | null, mosaique: boolean): string {
+  if (mosaique) return PLACE_MOSAIQUE
+  return conversationId ?? PLACE_FIL_NEUF
 }
 
-/** Le navigateur ne s'affiche que dans le fil qui l'a ouvert. */
+/** Rend le même objet quand rien ne change : React n'a alors rien à redessiner. */
+export function ouvrirDans(
+  panneaux: PanneauxParFil,
+  place: string,
+  outil: OutilDuPanneau
+): PanneauxParFil {
+  return panneaux[place] === outil ? panneaux : { ...panneaux, [place]: outil }
+}
+
+export function fermerDans(panneaux: PanneauxParFil, place: string): PanneauxParFil {
+  if (!(place in panneaux)) return panneaux
+  const reste = { ...panneaux }
+  delete reste[place]
+  return reste
+}
+
+/** Le navigateur ne vit que dans un vrai fil : sans fil, il n'a pas d'onglets à montrer. */
 export function navigateurOuvertDans(
-  panneau: PanneauOutil,
+  panneaux: PanneauxParFil,
   conversationId: string | null
 ): boolean {
-  return (
-    panneau?.outil === 'navigateur' &&
-    conversationId !== null &&
-    panneau.conversationId === conversationId
-  )
+  return conversationId !== null && panneaux[conversationId] === 'navigateur'
 }
 
-export function sontBureauxOuverts(panneau: PanneauOutil): boolean {
-  return panneau?.outil === 'bureaux'
+export function bureauxOuvertsDans(panneaux: PanneauxParFil, place: string): boolean {
+  return panneaux[place] === 'bureaux'
 }
 
 /**
- * Bouton du globe et Ctrl+Shift+B : ferme le navigateur s'il est ouvert DANS CE FIL, l'y ouvre
- * sinon — y compris quand il était ouvert pour un autre fil, puisque l'utilisateur ne le voit pas.
- * Sans fil ouvert, il n'y a pas d'onglets à montrer : rien ne change.
+ * Bouton du globe et Ctrl+Shift+B : ferme le navigateur s'il est ouvert dans ce fil, l'y ouvre
+ * sinon, à la place des Bureaux cachés. Sans fil ouvert, rien ne change.
  */
 export function basculerNavigateurDans(
-  panneau: PanneauOutil,
+  panneaux: PanneauxParFil,
   conversationId: string | null
-): PanneauOutil {
-  if (conversationId === null) return panneau
-  return navigateurOuvertDans(panneau, conversationId) ? null : navigateurDuFil(conversationId)
+): PanneauxParFil {
+  if (conversationId === null) return panneaux
+  return navigateurOuvertDans(panneaux, conversationId)
+    ? fermerDans(panneaux, conversationId)
+    : ouvrirDans(panneaux, conversationId, 'navigateur')
 }
 
-export function basculerBureaux(panneau: PanneauOutil): PanneauOutil {
-  return sontBureauxOuverts(panneau) ? null : PANNEAU_BUREAUX
+export function basculerBureauxDans(panneaux: PanneauxParFil, place: string): PanneauxParFil {
+  return bureauxOuvertsDans(panneaux, place)
+    ? fermerDans(panneaux, place)
+    : ouvrirDans(panneaux, place, 'bureaux')
+}
+
+/** Le premier envoi crée le fil : le panneau ouvert sur le fil neuf passe à lui, et la place se vide. */
+export function adopterLeFilNeuf(panneaux: PanneauxParFil, conversationId: string): PanneauxParFil {
+  const outil = panneaux[PLACE_FIL_NEUF]
+  if (!outil) return panneaux
+  return ouvrirDans(fermerDans(panneaux, PLACE_FIL_NEUF), conversationId, outil)
 }

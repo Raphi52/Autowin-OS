@@ -48,7 +48,7 @@ import {
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { noterDeclencheursListe, declencheursDeListe } from './rendu-long'
 import { estNonVue } from './conversation-seen'
-import { PANNEAU_BUREAUX, type PanneauOutil } from './panneau-outil'
+import { ouvrirDans, type PanneauxParFil } from './panneau-outil'
 
 // Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type ListeDesConversationsCtx = {
@@ -121,7 +121,7 @@ export type ListeDesConversationsCtx = {
   setDossierNouveauFil: React.Dispatch<React.SetStateAction<string | null>>
   setDossiersMemorises: React.Dispatch<React.SetStateAction<string[]>>
   setOpenImage: React.Dispatch<React.SetStateAction<{ src: string; name: string } | null>>
-  setPanneauOutil: React.Dispatch<React.SetStateAction<PanneauOutil>>
+  setPanneaux: React.Dispatch<React.SetStateAction<PanneauxParFil>>
   setSelectedConvIds: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>
   setSurvole: React.Dispatch<React.SetStateAction<string | null>>
   showRuns: boolean
@@ -194,7 +194,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     setDossierNouveauFil,
     setDossiersMemorises,
     setOpenImage,
-    setPanneauOutil,
+    setPanneaux,
     setSelectedConvIds,
     setSurvole,
     showRuns,
@@ -522,7 +522,11 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   useGuetBureauxDuFil({
     actif: isActive,
     fils: filsDesBureaux,
-    onBureauLance: () => setPanneauOutil(PANNEAU_BUREAUX)
+    // Les fils guettés sont ceux du fil affiché (vide sans fil) : c'est lui qui ouvre son panneau,
+    // même quand le bureau vient d'un lot de sa super conv.
+    onBureauLance: () => {
+      if (activeId) setPanneaux((ouverts) => ouvrirDans(ouverts, activeId, 'bureaux'))
+    }
   })
   /*
    * Les titres des onglets de la super conv. La signature garde la MÊME Map tant

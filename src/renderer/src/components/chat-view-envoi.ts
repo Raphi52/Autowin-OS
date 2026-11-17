@@ -73,6 +73,8 @@ import { filDeLaVueMontee } from './vue-chat-montee'
 export type ToursEtEnvoiCtx = {
   activeId: string | null
   activeRef: React.RefObject<string | null>
+  /** Le panneau d'outil ouvert sur le fil neuf passe au fil que l'envoi vient de créer. */
+  adopterPanneauDuFilNeuf: (conversationId: string) => void
   annulerEnvoiEnAttente: (
     conversationId: string,
     receipt: import('./chat-view-types').DirectiveReceipt
@@ -213,6 +215,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
   const {
     activeId,
     activeRef,
+    adopterPanneauDuFilNeuf,
     annulerEnvoiEnAttente,
     annulerRelanceProgrammee,
     autoActif,
@@ -2002,6 +2005,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
           setActiveId(c.id)
           composerDraftKeyRef.current = c.id
           composerDraftsRef.current.set(c.id, { input: '', attachments: [], error: null })
+          adopterPanneauDuFilNeuf(c.id)
         }
         // L'intention prise AVANT la creation se pose sur le fil qui vient de naitre.
         if (autoNouveauFilRef.current) {

@@ -7,6 +7,12 @@
  * ouverts ensemble (ils ne tiennent pas à 1280 px : le fil tomberait à zéro), une demande d'ouverture
  * perdue parce que le chat n'était pas encore monté, un bureau lancé par le fil sans panneau ouvert,
  * le retour de l'ancien bloc dans le fil, un panneau refermé qui se rouvre seul sur le même bureau.
+ *
+ * DÉFAUT VÉCU (2026-11-17) : « ça m'ouvre ce panel même dans les convs non concernées, l'ouverture
+ * ou non de ce panel doit être par conv ». Ouvert dans un fil, il restait ouvert dans tous les
+ * autres (« Aucun bureau caché dans ce fil »). Doivent aussi faire échouer ce fichier : un panneau
+ * qui suit l'utilisateur dans un autre fil ou dans un fil neuf, qui ne revient pas avec son fil, ou
+ * qu'une demande faite avant le montage pose sur le fil neuf au lieu du fil que le chat rouvre.
  */
 import { act, createElement, useState } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -14,7 +20,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { BureauTv } from '../../../main/bureau/hdesk-tv'
 import type { BureauGere } from '../../../shared/hdesk-gestion'
 import { ChatView } from './ChatView'
-import { chatApi, conversation, installRafShim } from './ChatView.harness'
+import { chatApi, conversation, installRafShim, mountChat } from './ChatView.harness'
 
 const panneauBureaux = (c: Element): Element | null => c.querySelector('[data-testid="hdesk-view"]')
 const panneauNavigateur = (c: Element): Element | null =>
@@ -75,7 +81,10 @@ describe('ChatView — panneau des Bureaux cachés', () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: chatApi({
-        conversations: vi.fn().mockResolvedValue([conversation('A')]),
+        conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
+        conversation: vi.fn(async (id: string) => conversation(id)),
+        // Le fil actif de l'app, que le chat rouvre au montage.
+        appState: vi.fn(async () => ({ activeConversationId: 'A' })),
         navigateur: navigateurFactice(),
         hdeskGestionBureaux: vi.fn(async () => ({ ok: true as const, bureaux })),
         hdeskTvBureaux: lectures,
@@ -105,10 +114,14 @@ describe('ChatView — panneau des Bureaux cachés', () => {
       await new Promise((r) => setTimeout(r, 0))
     })
     demonter = async () => act(async () => racine.unmount())
-    await cliquer('.conv-pick')
+    await ouvrirLeFil('A')
     // Le fil s'ouvre en plusieurs temps : le guet ne le lit qu'une fois le fil posé.
     await vi.waitFor(() => expect(lectures).toHaveBeenCalledWith('A'))
     return hote
+  }
+
+  async function ouvrirLeFil(id: string): Promise<void> {
+    await cliquer(`.conv-item[data-conversation-id="${id}"] .conv-pick`)
   }
 
   async function cliquer(selecteur: string): Promise<void> {
@@ -157,6 +170,39 @@ describe('ChatView — panneau des Bureaux cachés', () => {
   it('une demande arrivée avant le montage du chat n’est pas perdue', async () => {
     const c = await monter(1)
     expect(panneauBureaux(c)).not.toBeNull()
+  })
+
+  it('ouvert dans A, il ne s’ouvre pas dans B, et revient avec A', async () => {
+    const c = await monter()
+    await cliquer('[data-testid="chat-bureaux-toggle"]')
+    expect(panneauBureaux(c)).not.toBeNull()
+
+    await ouvrirLeFil('B')
+    expect(panneauBureaux(c)).toBeNull()
+
+    await ouvrirLeFil('A')
+    expect(panneauBureaux(c)).not.toBeNull()
+  })
+
+  it('le fermer dans B ne le ferme pas dans A', async () => {
+    const c = await monter()
+    await cliquer('[data-testid="chat-bureaux-toggle"]')
+    await ouvrirLeFil('B')
+    await cliquer('[data-testid="chat-bureaux-toggle"]')
+    expect(panneauBureaux(c)).not.toBeNull()
+    await cliquer('[data-testid="hdesk-panneau-fermer"]')
+    expect(panneauBureaux(c)).toBeNull()
+
+    await ouvrirLeFil('A')
+    expect(panneauBureaux(c)).not.toBeNull()
+  })
+
+  it('une demande de l’app l’ouvre dans le fil affiché seulement', async () => {
+    const c = await monter()
+    await act(async () => demanderDepuisLApp?.())
+    expect(panneauBureaux(c)).not.toBeNull()
+    await ouvrirLeFil('B')
+    expect(panneauBureaux(c)).toBeNull()
   })
 
   it('en mosaïque, sans icône dans l’en-tête, une demande de l’app reste visible', async () => {
@@ -243,5 +289,76 @@ describe('ChatView — panneau des Bureaux cachés', () => {
     ])
     const ecrans = [...c.querySelectorAll('[data-testid="hdesk-antenne"]')]
     expect(ecrans.map((e) => e.getAttribute('data-bureau'))).toEqual(['chat-A'])
+  })
+})
+
+describe('ChatView — Bureaux cachés et fil neuf', () => {
+  beforeAll(installRafShim)
+  const ouvert = (c: Element): boolean => panneauBureaux(c) !== null
+
+  afterEach(() => {
+    window.localStorage.clear()
+    sessionStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  async function monterAvecEnvoi(): Promise<Awaited<ReturnType<typeof mountChat>>> {
+    const h = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([conversation('A')]),
+        conversation: vi.fn(async (id: string) => conversation(id)),
+        conversationsCreate: vi.fn().mockResolvedValue(conversation('neuf')),
+        navigateur: navigateurFactice(),
+        hdeskGestionBureaux: vi.fn(async () => ({ ok: true as const, bureaux: [] })),
+        hdeskTvBureaux: vi.fn(async () => []),
+        hdeskGestionFermer: vi.fn(),
+        hdeskGestionCreer: vi.fn()
+      })
+    )
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    return h
+  }
+
+  async function envoyer(h: Awaited<ReturnType<typeof mountChat>>): Promise<void> {
+    await h.type('lance un bureau caché')
+    await h.click('.composer-send')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+  }
+
+  it('ouvert dans A, il ne surgit ni dans le fil neuf ni dans le fil que crée l’envoi', async () => {
+    const h = await monterAvecEnvoi()
+    try {
+      await h.click('.conv-item[data-conversation-id="A"] .conv-pick')
+      await h.click('[data-testid="chat-bureaux-toggle"]')
+      expect(ouvert(h.container)).toBe(true)
+
+      await h.click('.conv-new-row')
+      expect(ouvert(h.container)).toBe(false)
+      await envoyer(h)
+      expect(ouvert(h.container)).toBe(false)
+    } finally {
+      await h.unmount()
+    }
+  })
+
+  it('ouvert sur le fil neuf, il reste ouvert dans le fil que crée l’envoi', async () => {
+    const h = await monterAvecEnvoi()
+    try {
+      await h.click('.conv-new-row')
+      await h.click('[data-testid="chat-bureaux-toggle"]')
+      expect(ouvert(h.container)).toBe(true)
+      await envoyer(h)
+      expect(ouvert(h.container)).toBe(true)
+
+      // Le fil neuf suivant repart fermé : le panneau est passé au fil créé.
+      await h.click('.conv-new-row')
+      expect(ouvert(h.container)).toBe(false)
+    } finally {
+      await h.unmount()
+    }
   })
 })
