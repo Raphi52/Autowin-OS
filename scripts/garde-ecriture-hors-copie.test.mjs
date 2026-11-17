@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { spawn, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -239,6 +239,29 @@ describe('autorisé — les jumeaux des refus', () => {
     expect(shell('echo x > D:\\AutoWinOSX\\sonde-porte.txt')).toBeUndefined()
   })
 
+  it('un chemin que git ignore (entreprise/) : la porte ne le rapatrierait jamais', () => {
+    const PROPRE = 'D:\\AutoWinOS\\entreprise\\societe\\scripts\\mesure.py'
+    const MUET = 'D:\\AutoWinOS\\muet.txt'
+    const avecGit = {
+      ...sondeFictive,
+      ignore: (depot, chemin) =>
+        !egal(depot, PARTAGE)
+          ? false
+          : egal(chemin, MUET)
+            ? undefined
+            : chemin.toLowerCase().startsWith('d:\\autowinos\\entreprise\\')
+    }
+    const via = (tool_name, tool_input) =>
+      refusEcritureHorsCopie({ tool_name, tool_input, cwd: COPIE }, avecGit)
+    expect(via('Edit', { file_path: PROPRE })).toBeUndefined()
+    expect(via('Bash', { command: `echo x > ${PROPRE}` })).toBeUndefined()
+    // Suivi par git, ou git muet : c'est du code, il passe par la copie.
+    expect(via('Edit', { file_path: SONDE_PORTE })).toMatch(/Refusé/)
+    expect(via('Write', { file_path: MUET, content: 'x' })).toMatch(/Refusé/)
+    // Une seule cible suivie suffit à refuser la commande.
+    expect(via('Bash', { command: `cp a ${PROPRE} && echo x > ${SONDE_PORTE}` })).toMatch(/Refusé/)
+  })
+
   it('un chemin qu’on ne sait pas résoudre (variable, ~) ne fait pas refuser', () => {
     expect(shell('echo x > $env:TEMP\\a.txt')).toBeUndefined()
     expect(shell('cd $dossier && echo x > sonde-porte.txt')).toBeUndefined()
@@ -370,5 +393,19 @@ describe('le script lancé comme un contrôle « avant outil »', () => {
     )
     expect(JSON.parse(avecBom.out).hookSpecificOutput.permissionDecision).toBe('deny')
     expect(await lancer(null, '{pas du json')).toEqual({ code: 0, out: '' })
+  })
+
+  it('un chemin que git ignore dans le dépôt passe ; git muet hors d’un dépôt : undefined', async () => {
+    writeFileSync(join(depot, '.gitignore'), '/entreprise/\n')
+    const propre = join(depot, 'entreprise', 'societe', 'mesure.py')
+    expect(sondeSysteme.ignore(depot, propre)).toBe(true)
+    expect(sondeSysteme.ignore(depot, join(depot, 'sonde-porte.txt'))).toBe(false)
+    expect(sondeSysteme.ignore(racine, join(racine, 'x.txt'))).toBeUndefined()
+    const { code, out } = await lancer({
+      tool_name: 'Write',
+      tool_input: { file_path: propre, content: 'x' },
+      cwd: copie
+    })
+    expect({ code, out }).toEqual({ code: 0, out: '' })
   })
 })

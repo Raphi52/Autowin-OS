@@ -17,7 +17,11 @@
  * hors périmètre, rien ne change non plus.
  *
  * CE QUI PASSE : écrire dans la copie, écrire sous `<dépôt>\.autowin-data\` (fiches des runs,
- * données de l'app), lire le dossier partagé ou en copier un fichier VERS la copie.
+ * données de l'app), écrire un chemin que git IGNORE dans le dossier partagé (`entreprise/`, propre au
+ * poste), lire le dossier partagé ou en copier un fichier VERS la copie. Un chemin ignoré n'entre
+ * jamais par la porte, qui ne fusionne que ce que git suit : renvoyer son écriture vers la copie la
+ * perdrait. C'est la définition du code de `cibleDEcritureDansLeDepot` (src/shared/copie-a-la-demande.ts) :
+ * le dépôt moins ce que git ignore. Git muet sur un chemin : il compte dans le code (refusé).
  *
  * LE SHELL NE SE JUGE PAS PARFAITEMENT. Sont refusées les formes claires : redirections (`>`, `>>`,
  * `n>`, `*>`), Set-Content/Add-Content/Out-File/Tee-Object/New-Item, cp/mv/rm/touch/mkdir/tee/sed -i/dd,
@@ -32,6 +36,7 @@
  * de réglages. Une erreur interne laisse passer, comme la garde npm : une garde en panne ne doit pas
  * refuser tous les outils de tous les agents.
  */
+import { spawnSync } from 'node:child_process'
 import { readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -83,12 +88,16 @@ export function copieDe(dossier, sonde) {
   return undefined
 }
 
-/** Écrire `chemin` toucherait le dossier partagé, hors de ses données d'app et hors de la copie. */
-function interdit(chemin, ctx) {
+/**
+ * Écrire `chemin` toucherait le code du dossier partagé : hors de ses données d'app, hors de la copie,
+ * et suivi par git (`sonde.ignore`, appelée en dernier : seulement pour un chemin déjà refusable).
+ */
+function interdit(chemin, ctx, sonde) {
   return (
     sous(chemin, ctx.partage) &&
     !sous(chemin, join(ctx.partage, DONNEES_APP)) &&
-    !sous(chemin, ctx.copie)
+    !sous(chemin, ctx.copie) &&
+    sonde.ignore?.(ctx.partage, chemin) !== true
   )
 }
 
@@ -597,7 +606,7 @@ export function refusEcritureHorsCopie(entree, sonde) {
     cibles = cibles.filter(Boolean)
   } else return undefined
 
-  const fautive = cibles.find((c) => interdit(c, ctx))
+  const fautive = cibles.find((c) => interdit(c, ctx, sonde))
   if (!fautive) return undefined
   const dansLaCopie = join(ctx.copie, relative(ctx.partage, fautive))
   return (
@@ -608,8 +617,23 @@ export function refusEcritureHorsCopie(entree, sonde) {
   )
 }
 
-/** Sonde réelle : lit le `.git` des dossiers et le `commondir` de git. Ne modifie rien. */
+/**
+ * Sonde réelle : lit le `.git` des dossiers et le `commondir` de git, demande à git s'il ignore un
+ * chemin. Ne modifie rien.
+ */
 export const sondeSysteme = {
+  /** Vrai si git ignore `chemin` dans `depot`, faux s'il le suit, `undefined` si git n'a pas su répondre. */
+  ignore(depot, chemin) {
+    try {
+      const r = spawnSync('git', ['-C', depot, 'check-ignore', '-q', '--', chemin], {
+        timeout: 5000,
+        windowsHide: true
+      })
+      return r.status === 0 ? true : r.status === 1 ? false : undefined
+    } catch {
+      return undefined
+    }
+  },
   resoudre: (base, relatif) => resolve(cheminWindows(base), cheminWindows(relatif)),
   git(dossier) {
     const g = join(dossier, '.git')
