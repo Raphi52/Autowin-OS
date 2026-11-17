@@ -1,5 +1,5 @@
 import { estDepotAutowin } from '../git/git-apres-fil'
-import { controleDeSeparation } from '../git/controle-de-separation'
+import { controleDeSeparation, texteReserve } from '../git/controle-de-separation'
 import { titreDeCommitAuto } from '../git/titre-de-commit'
 import type { TypageAvantPublication } from '../verify/typage-avant-publication'
 
@@ -983,14 +983,16 @@ export function projectPublicationNeedsRetry(report: AutoCloseReport): boolean {
 
 /**
  * Message de commit : `type(zone): phrase (run-…)` tiré de la tâche du run (`titre-de-commit.ts`)
- * Une tâche qui ne nomme pas le travail garde l'ancien `auto(run-…): …`.
+ * Une tâche qui ne nomme pas le travail garde l'ancien `auto(run-…): …`. Une tâche qui nomme l'entreprise
+ * non plus : le contrôle de séparation refuserait le commit du run entier.
  */
-function autoCloseMessage(task: string, runId: string): string {
+function autoCloseMessage(task: string, runId: string, projectRepo: string): string {
   return titreDeCommitAuto({
     id: runId,
     demande: task,
     zoneParDefaut: 'agent',
-    repli: 'travail agent'
+    repli: 'travail agent',
+    estReserve: texteReserve(projectRepo)
   })
 }
 
@@ -1020,7 +1022,7 @@ export async function closeGreenRunOnDisk(input: {
   const runGit: GitRunner = input.runGit ?? (await defaultGitRunner())
 
   const branch = autoCloseBranch(input.runId)
-  const message = autoCloseMessage(input.task, input.runId)
+  const message = autoCloseMessage(input.task, input.runId, input.projectRepo)
 
   /**
    * Publie un dépôt en n'y prenant QUE ce que le run a produit.

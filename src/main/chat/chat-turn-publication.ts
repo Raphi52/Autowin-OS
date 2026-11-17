@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { ConversationFileTrace } from '../activity/conversation-file-trace-spool'
 import { appliquerLeTour, ouvrirCopieDeBase, type CopieDeBase } from '../git/comparaison-a-la-base'
 import { exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
+import { texteReserve } from '../git/controle-de-separation'
 import { titreDeCommitAuto } from '../git/titre-de-commit'
 import { lireLangueReglee } from '../profil/langue-reglage'
 import type { Langue } from '../../shared/langue'
@@ -292,13 +293,18 @@ async function importsAtteints(
   return { directs, indirects }
 }
 
-/** `type(zone): phrase (conv-N)` depuis ce que le tour a FAIT (`titre-de-commit.ts`). */
+/**
+ * `type(zone): phrase (conv-N)` depuis ce que le tour a FAIT (`titre-de-commit.ts`). `dossier` donne les
+ * profils d'entreprise du poste : un « ✅ Fait » qui cite un fichier d'`entreprise/` ne devient pas le titre,
+ * sinon le contrôle de séparation refuse le commit et le travail du tour n'entre pas.
+ */
 function messageDeCommit(
   conversationId: string,
   request: string,
   compteRendu: string | undefined,
   fichiers: readonly string[],
-  langueDuCompteRendu: Langue
+  langueDuCompteRendu: Langue,
+  dossier?: string
 ): string {
   return titreDeCommitAuto({
     id: conversationId,
@@ -306,7 +312,8 @@ function messageDeCommit(
     compteRendu,
     langueDuCompteRendu,
     fichiers,
-    repli: 'travail du chat'
+    repli: 'travail du chat',
+    ...(dossier ? { estReserve: texteReserve(dossier) } : {})
   })
 }
 
@@ -666,7 +673,8 @@ export async function publierTourDeChat(input: {
       input.request,
       input.compteRendu,
       publier,
-      input.langueDuCompteRendu ?? lireLangueReglee()
+      input.langueDuCompteRendu ?? lireLangueReglee(),
+      repo
     ),
     paths: publier,
     runGit,
@@ -876,7 +884,8 @@ async function passerLaPorteParLaPrimitive(
       input.request,
       input.compteRendu,
       fichiers,
-      input.langueDuCompteRendu ?? lireLangueReglee()
+      input.langueDuCompteRendu ?? lireLangueReglee(),
+      copie
     )
     const messageDuCommit = `${titre.trim()}\n\n${ligneDePorte(input.conversationId)}`
     issue = await entrerLeTravailDeLaCopie({
@@ -949,7 +958,8 @@ async function passerLaPorte(
           input.request,
           input.compteRendu,
           fichiers,
-          input.langueDuCompteRendu ?? lireLangueReglee()
+          input.langueDuCompteRendu ?? lireLangueReglee(),
+          copie
         ),
       publication,
       runGit

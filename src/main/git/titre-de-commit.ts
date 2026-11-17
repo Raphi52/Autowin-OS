@@ -35,6 +35,12 @@ export interface EntreeTitreDeCommit {
   zoneParDefaut?: string
   /** Texte de l'ancien format quand la demande est vide. */
   repli?: string
+  /**
+   * Le texte nomme-t-il une entreprise du poste (`texteReserve`, `controle-de-separation.ts`) ? Un titre
+   * qui le ferait cède la place à la source suivante : le contrôle de séparation refuserait le commit
+   * entier, et le travail du tour n'entrerait pas dans main.
+   */
+  estReserve?: (texte: string) => boolean
 }
 
 const LONGUEUR_PHRASE = 72
@@ -277,21 +283,25 @@ export function titreDeCommitAuto(entree: EntreeTitreDeCommit): string {
     entree.langueDuCompteRendu === 'en' ? undefined : premiereActionFaite(entree.compteRendu)
   const fichiers = entree.fichiers ?? []
   const symptome = RAPPORT_DE_SYMPTOME.test(normaliser(texteDemande))
-  const phrase =
-    (faite && !estUneRelance(faite) ? sansMarkdown(faite) : '') ||
-    (demandeDecritUnChangement(texteDemande) ? sansMarkdown(texteDemande) : '') ||
-    phraseDesFichiers(fichiers)
-  if (!phrase) {
-    // L'ancien format, à l'identique : sans « ✅ Fait » ni demande qui nomme un changement, rien ne dit le travail.
-    const brute = sansInterjection(
-      entree.demande.replace(/\s+/gu, ' ').trim().replace(COMMANDE_SLASH, '')
-    )
-    const tete =
-      (brute && nommeUnChangement(brute) ? brute.slice(0, 100) : '') ||
-      entree.repli ||
-      'travail du chat'
-    return `auto(${entree.id}): ${tete}`
-  }
   const zone = zoneDesFichiers(fichiers) ?? commande ?? entree.zoneParDefaut ?? 'chat'
-  return `${typeDuTravail(phrase, fichiers, symptome)}(${zone}): ${borner(phrase)} (${entree.id})`
+  // Le titre ENTIER est jugé, pas la phrase : la zone et la coupe à LONGUEUR_PHRASE en font partie.
+  const libre = (titre: string): boolean => !entree.estReserve?.(titre)
+  const phrases = [
+    faite && !estUneRelance(faite) ? sansMarkdown(faite) : '',
+    demandeDecritUnChangement(texteDemande) ? sansMarkdown(texteDemande) : '',
+    phraseDesFichiers(fichiers)
+  ].filter(Boolean)
+  for (const phrase of phrases) {
+    const titre = `${typeDuTravail(phrase, fichiers, symptome)}(${zone}): ${borner(phrase)} (${entree.id})`
+    if (libre(titre)) return titre
+  }
+  // L'ancien format, à l'identique : sans « ✅ Fait » ni demande qui nomme un changement, rien ne dit le travail.
+  const brute = sansInterjection(
+    entree.demande.replace(/\s+/gu, ' ').trim().replace(COMMANDE_SLASH, '')
+  )
+  const tete =
+    (brute && nommeUnChangement(brute) && libre(brute.slice(0, 100)) ? brute.slice(0, 100) : '') ||
+    entree.repli ||
+    'travail du chat'
+  return `auto(${entree.id}): ${tete}`
 }

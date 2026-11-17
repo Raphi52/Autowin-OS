@@ -296,3 +296,63 @@ describe('relance et symptôme sous une autre forme : jamais en titre', () => {
     ).toBe('fix(a): corrige le bouton Stop (conv-1)')
   })
 })
+
+/**
+ * Un titre qui nomme l'entreprise fait refuser TOUT le commit par le contrôle de séparation : le travail
+ * n'entre pas dans main. Le « ✅ Fait » d'un travail fait sous `entreprise/` cite naturellement ses
+ * fichiers ; son nom de fichier survit au retrait du chemin. Le titre passe alors à la source suivante.
+ */
+describe('titreDeCommitAuto — titre sans nom réservé', () => {
+  const estReserve = (texte: string): boolean => /zorglub/iu.test(texte)
+  const faitReserve = [
+    '✅ Fait',
+    '1. Script `D:\\Depot\\entreprise\\acme\\scripts\\mesure-zorglub.py` complété, 30 tests verts',
+    '2. Outil d’export ajouté'
+  ].join('\n')
+
+  it('un « ✅ Fait » qui nomme un terme réservé cède la place à la demande', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-7',
+        demande: 'ajoute un tableau du nombre de commits',
+        compteRendu: faitReserve,
+        fichiers: ['scripts/office-apercu.ps1'],
+        estReserve
+      })
+    ).toBe('feat(office-apercu): ajoute un tableau du nombre de commits (conv-7)')
+  })
+
+  it('demande réservée elle aussi : le titre vient des fichiers publiés', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-7',
+        demande: 'ajoute le tableau zorglub',
+        compteRendu: faitReserve,
+        fichiers: ['scripts/office-apercu.ps1'],
+        estReserve
+      })
+    ).toBe('feat(office-apercu): modifie office-apercu.ps1 (conv-7)')
+  })
+
+  it('sans source libre, le repli neutre, jamais le texte réservé', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-7',
+        demande: 'ajoute le tableau zorglub',
+        compteRendu: faitReserve,
+        estReserve
+      })
+    ).toBe('auto(conv-7): travail du chat')
+  })
+
+  it('jumeau : sans règle de réservation, le « ✅ Fait » reste le titre', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-7',
+        demande: 'ajoute un tableau du nombre de commits',
+        compteRendu: faitReserve,
+        fichiers: ['scripts/office-apercu.ps1']
+      })
+    ).toMatch(/^feat\(office-apercu\): Script mesure-zorglub\.py complété/u)
+  })
+})

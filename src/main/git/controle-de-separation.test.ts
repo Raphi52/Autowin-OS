@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { GitRunner } from '../runs/run-autoclose'
-import { controleDeSeparation, type ResultatDeSeparation } from './controle-de-separation'
+import {
+  controleDeSeparation,
+  texteReserve,
+  type ResultatDeSeparation
+} from './controle-de-separation'
 
 /**
  * Le contrôle des commits posés par l'app : il lit le message, les chemins et le contenu que le
@@ -147,5 +151,25 @@ describe('controleDeSeparation', () => {
     expect(await controle(p.repo, p.base, p.arbreBase, 'feat : la ligne zorglub')).toEqual({
       ok: true
     })
+  })
+})
+
+describe('texteReserve', () => {
+  it('reconnaît un terme et un nom du profil, laisse passer un texte propre', () => {
+    const estReserve = texteReserve(preparer(PROFIL_VALIDE).repo)
+    expect(estReserve('feat(x): mesure zorglub (conv-1)')).toBe(true)
+    expect(estReserve('feat(x): rapport ACME du mois (conv-1)')).toBe(true)
+    expect(estReserve('feat(x): ajoute un tableau (conv-1)')).toBe(false)
+  })
+
+  it('même verdict que le contrôle sur un message de commit', async () => {
+    const p = preparer(PROFIL_VALIDE)
+    const message = 'feat(x): mesure zorglub (conv-1)'
+    const r = await controle(p.repo, p.base, p.arbreBase, message)
+    expect(texteReserve(p.repo)(message)).toBe(!r.ok)
+  })
+
+  it('sans profil sur le poste, rien n’est réservé', () => {
+    expect(texteReserve(preparer().repo)('feat(x): zorglub')).toBe(false)
   })
 })
