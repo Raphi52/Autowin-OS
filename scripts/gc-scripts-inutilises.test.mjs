@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, utimesSync, writeFileSync } from '
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { analyser } from './gc-scripts-inutilises.mjs'
+import { analyser, tracesParDefaut } from './gc-scripts-inutilises.mjs'
 
 /*
  * Les cas viennent de la passe du 06/11 (conv-1657) : un rapport d'archive qui faisait passer des
@@ -150,6 +150,41 @@ describe('gc-scripts-inutilises', () => {
     )
   })
 
+  it('examiner un script ne le lance pas ; un lanceur, même enchaîné ou par chemin entier, si', () => {
+    // Cas réel du 18/11 : la passe /gc du matin a examiné les 15 scripts signalés
+    // (`for f in scripts/… ; git log -- $f`), et celle de l'après-midi les croyait tous lancés.
+    session('inspection', 0.5, [
+      'cd "D:/AutoWinOS" && for f in scripts/mort.mjs scripts/archive.mjs; do git log -1 -- "$f"; done',
+      "git log -3 --format='%cs %h %s' -- scripts/rendu.cjs; ls -la scripts/mort.mjs",
+      'node -e \'const j=1; require("fs").readFileSync("scripts/archive.mjs")\'',
+      'grep -n canaux scripts/rendu.cjs | head'
+    ])
+    session('lancements', 1, [
+      'cd "D:/AutoWinOS" && npx tsx scripts/jeune.mjs --x',
+      'powershell -NoProfile -File D:\\AutoWinOS\\scripts\\modifie.mjs -Id 3',
+      '& "D:\\AutoWinOS\\scripts\\ancien.mjs"',
+      // Cas réels : `timeout` et sa durée précèdent le lanceur ; une boucle lance par `do` ;
+      // `node -e` exécute le module qu'il importe.
+      'timeout 900 node scripts/hier.mjs --essais 4 > /tmp/x.log 2>&1; echo "exit=$?"'
+    ])
+    session('boucle-et-import', 1, [
+      'for opt in a b; do timeout 280 npx tsx scripts/souvent.mjs conv-1 4 $opt; done',
+      'node -e \'import("file:///D:/AutoWinOS/scripts/jeune.mjs").then((m) => m.f())\''
+    ])
+    const { inutilises, gardes } = lancer()
+    for (const s of ['mort.mjs', 'archive.mjs', 'rendu.cjs'])
+      expect(inutilises.find((x) => x.chemin === 'scripts/' + s).lancements).toBe(0)
+    expect(gardes.find((x) => x.chemin === 'scripts/ancien.mjs').motif).toBe(
+      'lancé il y a moins de 7 jours'
+    )
+    expect(gardes.find((x) => x.chemin === 'scripts/modifie.mjs').lancements).toBe(1)
+    expect(gardes.find((x) => x.chemin === 'scripts/jeune.mjs').lancements).toBe(2)
+    expect(gardes.find((x) => x.chemin === 'scripts/hier.mjs').lancements).toBe(2)
+    expect(gardes.find((x) => x.chemin === 'scripts/souvent.mjs').motif).toBe(
+      'lancé dans 4 sessions'
+    )
+  })
+
   it('ne juge ni un script jeune ni un script en cours de modification', () => {
     const { gardes } = lancer({ jeunes: ['scripts/jeune.mjs'], modifies: ['scripts/modifie.mjs'] })
     expect(gardes.find((x) => x.chemin === 'scripts/jeune.mjs').motif).toBe(
@@ -242,6 +277,27 @@ describe('gc-scripts-inutilises', () => {
       'appelé par scripts/mesure.py, gardé'
     )
     expect([...chemins(inutilises), ...chemins(gardes)]).not.toContain('scripts/live.mjs')
+  })
+
+  it('lit aussi les sessions des comptes Claude de l’app, et seulement celles du dépôt', () => {
+    // Cas réel du 18/11 : `canaux-ipc.mjs`, lancé dans 9 sessions sous `claude-accounts/compte-3`,
+    // passait pour inutilisé parce que seul `~/.claude/projects` était lu.
+    const maison = join(depot, '_maison')
+    const donneesApp = join(depot, '.autowin-data', 'autowin-os')
+    const depotVise = 'D:\\AutoWinOS'
+    for (const d of [
+      join(maison, '.claude', 'projects', 'D--AutoWinOS'),
+      join(maison, '.claude', 'projects', 'D--AutreDepot'),
+      join(donneesApp, 'claude-accounts', 'compte-3', 'projects', 'D--AutoWinOS--autowin-data-x'),
+      join(donneesApp, 'claude-accounts', 'compte-3', 'projects', 'C--Users-moi'),
+      join(donneesApp, 'claude-accounts', 'compte-4')
+    ])
+      mkdirSync(d, { recursive: true })
+    expect(tracesParDefaut(depotVise, donneesApp, maison)).toEqual([
+      join(maison, '.claude', 'projects', 'D--AutoWinOS'),
+      join(donneesApp, 'claude-accounts', 'compte-3', 'projects', 'D--AutoWinOS--autowin-data-x'),
+      join(donneesApp, 'run-stdout')
+    ])
   })
 
   it('sans aucune trace lue, refuse de juger plutôt que de tout condamner', () => {

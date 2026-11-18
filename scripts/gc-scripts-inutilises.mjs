@@ -14,8 +14,9 @@
  *     lui-même branché. Un test ne branche pas : il meurt avec le script qu'il teste. Une ligne de
  *     commentaire ne branche pas non plus (`sansCommentaires`) : elle est rendue dans `aussiCiteDans`.
  *  2. PEU LANCÉ : au plus `--max-lancements` sessions d'agent (2 par défaut) l'ont exécuté sur les
- *     `--jours` derniers jours (30). On ne compte que les COMMANDES lancées, jamais les lectures ni les
- *     sorties d'outils : un `find scripts` cite tous les noms et ferait tout passer pour vivant.
+ *     `--jours` derniers jours (30). On ne compte que les COMMANDES qui l'exécutent (`scriptsLances`),
+ *     jamais les lectures, les sorties d'outils ni une commande qui l'examine (`git log`, `ls`, `for`) :
+ *     un `find scripts` cite tous les noms et ferait tout passer pour vivant.
  *  3. PAS LANCÉ RÉCEMMENT : aucun lancement depuis `--calme-jours` jours (7). Un outil manuel servi
  *     hier n'est pas un déchet, même s'il ne sert qu'une fois par mois.
  *  4. PAS JEUNE NI EN COURS : créé (premier commit) il y a plus de `--age-min-jours` jours (14), et
@@ -27,8 +28,9 @@
  * Usage, depuis le dépôt Autowin :
  *   node --no-warnings scripts/gc-scripts-inutilises.mjs [--depot <chemin>] [--traces <dossier>]...
  *        [--jours 30] [--max-lancements 2] [--calme-jours 7] [--age-min-jours 14]
- * Sans `--traces` : `~/.claude/projects/<dépôt>*` (sessions des agents Claude) et
- * `.autowin-data/autowin-os/run-stdout` (sorties brutes de tous les modèles).
+ * Sans `--traces` : `~/.claude/projects/<dépôt>*` et `.autowin-data/autowin-os/claude-accounts/
+ * <compte>/projects/<dépôt>*` (sessions des agents Claude), et `.autowin-data/autowin-os/run-stdout`
+ * (sorties brutes de tous les modèles).
  *
  * Sortie : JSON. Code 0 = passe faite, 1 = une racine ou les traces sont illisibles (rien n'est alors
  * déclaré inutilisé : une sonde aveugle ne condamne pas), 2 = commande refusée.
@@ -179,6 +181,87 @@ function nomsCites(fichier) {
   return noms
 }
 
+/** Ce qui exécute le fichier qu'on lui passe ; `git`, `ls`, `cat`, `grep` ou `for` ne font que le regarder. */
+const LANCEURS = new Set([
+  'node',
+  'nodejs',
+  'npx',
+  'tsx',
+  'ts-node',
+  'vite-node',
+  'bun',
+  'deno',
+  'electron',
+  'python',
+  'python3',
+  'pythonw',
+  'py',
+  'uv',
+  'powershell',
+  'pwsh',
+  'bash',
+  'sh',
+  'cmd',
+  'call',
+  '&',
+  '.'
+])
+/**
+ * Mots qui précèdent la commande sans la changer : `do`/`then` d'une boucle ou d'un test shell,
+ * et ceux qui enveloppent le lanceur (`env X=1 node …`, `timeout 900 node …`).
+ */
+const AVANT_LANCEUR = new Set(['env', 'time', 'exec', 'nohup', 'timeout'])
+const MOTS_DU_SHELL = new Set(['do', 'then', 'else', 'elif', 'if', 'while', 'until', '{', '!'])
+/** Ce qui suit un mot d'`AVANT_LANCEUR` sans être la commande : variable posée, option, durée. */
+const ARGUMENT_AVANT_LANCEUR = /^(\w+=|-|\d+(\.\d+)?[smhd]?$)/
+
+/**
+ * Les noms de scripts que `commande` LANCE : dans une commande simple (coupée sur `&&`, `||`, `;`,
+ * `|`, saut de ligne, `$(`) qui commence par un lanceur, ou qui est elle-même le chemin du script,
+ * l'argument doit être le chemin ENTIER du script. Un `import(…)`/`require(…)`/`from '…'` du script,
+ * où qu'il soit dans la commande (`node -e`, fichier écrit puis lancé), l'exécute aussi.
+ * Examiner un script (`git log -- scripts/x.mjs`, `for f in scripts/…`, `ls`, `readFileSync`) ne le
+ * lance pas : le compter masquait 7 jours chaque script que la passe /gc venait d'examiner.
+ */
+export function scriptsLances(commande, motif) {
+  const unSeul = new RegExp(motif.source)
+  const importe = new RegExp(
+    String.raw`(?:\bimport\s*\(|\brequire\s*\(|\bfrom\s+)\s*["'\x60][^"'\x60\s]*?` +
+      motif.source +
+      String.raw`["'\x60]`,
+    'g'
+  )
+  const lances = [...commande.matchAll(importe)].map((m) => m[1])
+  for (const segment of commande.split(/&&|\|\||[;|\n]|\$\(/)) {
+    const mots = segment.trim().split(/\s+/).filter(Boolean)
+    let i = 0
+    for (;;) {
+      if (i < mots.length && (/^\w+=/.test(mots[i]) || MOTS_DU_SHELL.has(mots[i]))) i++
+      else if (i < mots.length && AVANT_LANCEUR.has(mots[i])) {
+        i++
+        while (i < mots.length && ARGUMENT_AVANT_LANCEUR.test(mots[i])) i++
+      } else break
+    }
+    if (i >= mots.length) continue
+    const nu = (mot) => mot.replace(/^["'(]+|["')]+$/g, '')
+    const commandeNue = nu(mots[i])
+      .split(/[\\/]/)
+      .pop()
+      .toLowerCase()
+      .replace(/\.(exe|cmd)$/, '')
+    const lanceur = LANCEURS.has(commandeNue)
+    mots.slice(i).forEach((mot, rang) => {
+      if (!lanceur && rang > 0) return
+      const m = unSeul.exec(nu(mot))
+      // Le chemin seul, préfixe de dossier admis (`D:/AutoWinOS/`, `./`, `$DEPOT/`), rien après.
+      if (!m || m.index + m[0].length !== nu(mot).length) return
+      if (!/^[\w:.~${}\\/-]*$/.test(nu(mot).slice(0, m.index))) return
+      lances.push(m[1])
+    })
+  }
+  return lances
+}
+
 /** Les sessions qui ont LANCÉ chaque script : seules les chaînes `command`/`cmd` comptent. */
 export function lancementsDansLesTraces(dossiersTraces, nomsScripts, depuisMs) {
   const echappe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -219,7 +302,7 @@ export function lancementsDansLesTraces(dossiersTraces, nomsScripts, depuisMs) {
         }
         // Une sortie d'outil répète la commande et son résultat : seul l'appel compte.
         if (o?.type === 'user' || o?.toolUseResult) continue
-        for (const c of commandes(o, [])) for (const m of c.matchAll(motif)) lances.add(m[1])
+        for (const c of commandes(o, [])) for (const nom of scriptsLances(c, motif)) lances.add(nom)
       }
       for (const nom of lances) {
         const v = vus.get(nom) ?? { sessions: 0, dernier: 0 }
@@ -430,6 +513,31 @@ export function analyser({
   }
 }
 
+/**
+ * Les dossiers de sessions qui disent ce qui a été lancé dans `depot`. Les agents de l'app écrivent
+ * sous le compte Claude qui les sert (`claude-accounts/<compte>/projects`), pas dans `~/.claude` :
+ * sans eux, `canaux-ipc.mjs`, lancé dans 9 sessions, passait pour inutilisé.
+ */
+export function tracesParDefaut(depot, donneesApp, maison) {
+  // Même nom que Claude Code donne au dossier de projet : tout caractère hors [A-Za-z0-9] → « - ».
+  const slug = depot.replace(/[^A-Za-z0-9]/g, '-').toLowerCase()
+  const comptes = join(donneesApp, 'claude-accounts')
+  const racinesDeProjets = [
+    join(maison, '.claude', 'projects'),
+    ...(existsSync(comptes)
+      ? readdirSync(comptes).map((compte) => join(comptes, compte, 'projects'))
+      : [])
+  ].filter((p) => existsSync(p))
+  return [
+    ...racinesDeProjets.flatMap((projets) =>
+      readdirSync(projets)
+        .filter((n) => n.toLowerCase().startsWith(slug))
+        .map((n) => join(projets, n))
+    ),
+    join(donneesApp, 'run-stdout')
+  ]
+}
+
 function principal() {
   let options
   try {
@@ -449,18 +557,9 @@ function principal() {
   }
   const depot = resolve(options.depot)
   const donneesApp = join(depot, '.autowin-data', 'autowin-os')
-  let dossiersTraces = options.traces
-  if (!dossiersTraces?.length) {
-    // Même nom que Claude Code donne au dossier de projet : tout caractère hors [A-Za-z0-9] → « - ».
-    const slug = depot.replace(/[^A-Za-z0-9]/g, '-')
-    const projets = join(homedir(), '.claude', 'projects')
-    dossiersTraces = existsSync(projets)
-      ? readdirSync(projets)
-          .filter((n) => n.toLowerCase().startsWith(slug.toLowerCase()))
-          .map((n) => join(projets, n))
-      : []
-    dossiersTraces.push(join(donneesApp, 'run-stdout'))
-  }
+  const dossiersTraces = options.traces?.length
+    ? options.traces
+    : tracesParDefaut(depot, donneesApp, homedir())
   const nombre = (k) => {
     const n = Number(options[k])
     if (!Number.isFinite(n) || n < 0) {
