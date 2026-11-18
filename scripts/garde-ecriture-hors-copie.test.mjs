@@ -5,7 +5,12 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { copieDe, refusEcritureHorsCopie, sondeSysteme } from './garde-ecriture-hors-copie.mjs'
+import {
+  copieDe,
+  refusALaRacineDuDisque,
+  refusEcritureHorsCopie,
+  sondeSysteme
+} from './garde-ecriture-hors-copie.mjs'
 
 /*
  * Un fil qui travaille dans sa copie ne doit jamais écrire dans le dossier partagé en chemin complet :
@@ -287,6 +292,125 @@ describe('autorisé — les jumeaux des refus', () => {
 })
 
 /*
+ * RIEN DE NEUF À LA RACINE D'UN DISQUE. Relevé du 18/11 : les lots de deux plans, qui travaillaient
+ * déjà chacun dans une copie que l'app ouvre et retire, y ont créé à la main une soixantaine de copies
+ * git (`git worktree add D:\Projet-it4-lot1 …`, consigne écrite par leur chef) et des centaines de
+ * journaux (`> D:\Projet-it4-lot12-banc-1.log`, `D:\tmp-juge-lot9\`). Personne ne les range.
+ * Les commandes ci-dessous rejouent ces gestes depuis le dossier réel d'un lot : la copie d'un AUTRE
+ * projet rangée sous nos données, que la garde d'écriture hors copie laisse passer.
+ */
+describe('refusALaRacineDuDisque — rien de neuf à la racine d’un disque', () => {
+  const LOT = 'D:\\AutoWinOS\\.autowin-data\\autowin-os\\copies-de-taches\\run-2488591041a7-1'
+  const EXISTANTS = ['D:\\Projet', 'D:\\AutoWinOS', 'C:\\Users', 'D:\\vieux.log']
+  const sondeRacine = {
+    ...sondeFictive,
+    existe: (chemin) => EXISTANTS.some((e) => egal(e, chemin))
+  }
+  const appel = (tool_name, tool_input, cwd = LOT) =>
+    refusALaRacineDuDisque(
+      { hook_event_name: 'PreToolUse', tool_name, tool_input, cwd },
+      sondeRacine
+    )
+  const sh = (command, cwd) => appel('Bash', { command }, cwd)
+
+  it.each([
+    [
+      'copie git d’un lot (la consigne du chef)',
+      'git worktree add D:/Projet-it4-lot1 -b it4-lot1-cr main'
+    ],
+    [
+      'copie git relative, après cd',
+      'cd D:/Projet && git worktree add ../Projet-it3-lot5-avant 1ada470'
+    ],
+    ['copie git avec -C et -b', 'git -C D:/Projet worktree add -b lot2 D:\\Projet-lot2 main'],
+    [
+      'copie git avec -c et --detach',
+      'git -c core.longpaths=true worktree add --detach D:/Projet-lot3'
+    ],
+    ['journal d’un banc', 'lune run bancs > D:/Projet-it4-lot12-banc-1.log 2>&1'],
+    ['dossier temporaire d’un juge', 'mkdir -p D:/tmp-juge-lot9/E'],
+    ['photo copiée', 'cp zoom.png D:/lot7-zoom-tel.png'],
+    ['Set-Content', 'Set-Content D:\\tmp-enseignes.txt x'],
+    ['Out-File après un tube', "'x' | Out-File -FilePath D:\\filet-chef-a08e15c.txt"]
+  ])('refusé par le shell : %s', (_nom, commande) => {
+    const motif = sh(commande)
+    expect(motif).toMatch(/Refusé/)
+    expect(motif).toMatch(/racine/)
+  })
+
+  it('refusé par Write et Edit (Claude) et par apply_patch (Codex)', () => {
+    expect(appel('Write', { file_path: 'D:\\tmp-lot15-filet.txt', content: 'x' })).toMatch(/Refusé/)
+    expect(appel('Edit', { file_path: 'D:/tmp-lot9/b.txt' })).toMatch(/Refusé/)
+    expect(
+      appel('apply_patch', {
+        command: '*** Begin Patch\n*** Add File: D:/tmp-x/a.txt\n+x\n*** End Patch'
+      })
+    ).toMatch(/Refusé/)
+  })
+
+  it('le refus dit où écrire à la place : le dossier temporaire, et la copie de comparaison dedans', () => {
+    const motif = sh('git worktree add D:/Projet-it4-lot1 main')
+    expect(motif).toContain('D:\\Projet-it4-lot1')
+    expect(motif).toContain('$TEMP')
+    expect(motif).toContain('git worktree remove')
+    expect(motif).toContain('AUTOWIN_DEMANDE_UTILISATEUR=1')
+  })
+
+  it.each([
+    ['dans un dossier de premier niveau qui existe', 'echo x > D:/Projet/notes.txt'],
+    ['supprimer un fichier déjà à la racine', 'rm -f D:/vieux.log'],
+    ['copie de comparaison dans le dossier temporaire', 'git worktree add "$TEMP/avant" main'],
+    [
+      'copie de comparaison sous un dossier existant',
+      'git worktree add C:\\Users\\x\\Temp\\avant main'
+    ],
+    [
+      'copie sous les données d’Autowin',
+      'git worktree add D:/AutoWinOS/.autowin-data/autowin-os/copies-de-taches/avant main'
+    ],
+    ['lister ou retirer des copies', 'git worktree list; git worktree remove D:/Projet-lot2'],
+    [
+      'un clone que l’utilisateur demande sur D:\\',
+      'git clone https://exemple.test/x.git D:/NouveauProjet'
+    ],
+    ['lire la racine', 'ls D:/ > liste.txt'],
+    [
+      'demande nommée de l’utilisateur (Bash)',
+      'AUTOWIN_DEMANDE_UTILISATEUR=1 git worktree add D:/wt-export Feature/export'
+    ],
+    [
+      'demande nommée de l’utilisateur (PowerShell)',
+      '$env:AUTOWIN_DEMANDE_UTILISATEUR=1; Copy-Item rapport.zip D:\\rapport.zip'
+    ]
+  ])('autorisé : %s', (_nom, commande) => {
+    expect(sh(commande)).toBeUndefined()
+  })
+
+  it('sans sonde d’existence, ni outil, ni dossier : rien n’est refusé', () => {
+    expect(
+      refusALaRacineDuDisque(
+        { tool_name: 'Write', tool_input: { file_path: 'D:\\x.log' }, cwd: LOT },
+        sondeFictive
+      )
+    ).toBeUndefined()
+    expect(refusALaRacineDuDisque({}, sondeRacine)).toBeUndefined()
+    expect(
+      refusALaRacineDuDisque(
+        { tool_name: 'Write', tool_input: { file_path: 'D:\\x.log' } },
+        sondeRacine
+      )
+    ).toBeUndefined()
+  })
+
+  it('la garde d’écriture hors copie voit aussi une copie git créée dans le dossier partagé', () => {
+    expect(shell('git worktree add D:/AutoWinOS/copie-avant main')).toMatch(/Refusé/)
+    expect(
+      shell('git worktree add D:/AutoWinOS/.autowin-data/autowin-os/copies-de-taches/avant main')
+    ).toBeUndefined()
+  })
+})
+
+/*
  * LE SCRIPT TEL QUE LES OUTILS LE LANCENT : JSON sur l'entrée, refus structuré sur la sortie, dans une
  * vraie disposition git (dépôt, puis `git worktree add` sous ses données d'app).
  */
@@ -384,6 +508,22 @@ describe('le script lancé comme un contrôle « avant outil »', () => {
       cwd: copie
     })
     expect(dansLaCopie).toEqual({ code: 0, out: '' })
+  })
+
+  it('vraie sonde : une entrée neuve à la racine du disque est refusée, le dossier temporaire passe', async () => {
+    const absent = `${racine.slice(0, 2)}\\garde-racine-${process.pid}-${Date.now()}\\banc.log`
+    const refus = await lancer({
+      tool_name: 'Bash',
+      tool_input: { command: `echo x > "${absent}"` },
+      cwd: copie
+    })
+    expect(JSON.parse(refus.out).hookSpecificOutput.permissionDecisionReason).toMatch(/racine/)
+    const dansLeTemporaire = await lancer({
+      tool_name: 'Bash',
+      tool_input: { command: `echo x > "${join(racine, 'banc.log')}"` },
+      cwd: copie
+    })
+    expect(dansLeTemporaire).toEqual({ code: 0, out: '' })
   })
 
   it('un BOM en tête est toléré ; un JSON illisible laisse passer sans planter', async () => {

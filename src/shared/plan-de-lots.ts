@@ -291,6 +291,17 @@ export function normaliserChemin(chemin: string): string {
 const refus = (erreur: string): LecturePlan => ({ ok: false, erreur })
 
 /**
+ * UNE CONSIGNE DE PLAN QUI FAIT CRÉER UNE COPIE GIT. Chaque lot travaille déjà dans sa propre copie,
+ * que l'app ouvre, fait entrer dans le main local de son dépôt en fin de tour, puis retire. Relevé du
+ * 18/11 : deux plans ont écrit « travaille dans TA copie (git worktree add D:\…-lot<N> main) » ; une
+ * soixantaine de copies en double sont restées à la racine du disque, que rien ne range.
+ */
+const CREE_UNE_COPIE_GIT = /\bworktree\s+add\b/i
+const faitCreerUneCopieGit = (texte: string): boolean => CREE_UNE_COPIE_GIT.test(texte)
+const REFUS_COPIE_EN_DOUBLE =
+  '« git worktree add » — chaque lot travaille déjà dans sa propre copie du dépôt, que l’app ouvre, fait entrer dans main en fin de tour, puis retire. Une copie de plus, créée à la main, resterait sur le disque après le lot. Retire cette consigne : le lot travaille là où l’app le pose.'
+
+/**
  * Lecture STRICTE du plan déposé par l'agent du chef. Rien n'est deviné : un plan mal formé est
  * refusé en entier, avec le lot et le champ fautifs nommés. Seul le parallélisme trop grand est
  * ramené à la borne — et la carte d'accord le dit.
@@ -344,6 +355,7 @@ export function lirePlanDeLots(brut: unknown): LecturePlan {
       )
     if (c.length > CONTEXTE_MAX)
       return refus(`contexte de ${c.length} caractères : ${CONTEXTE_MAX} au plus.`)
+    if (faitCreerUneCopieGit(c)) return refus(`contexte : ${REFUS_COPIE_EN_DOUBLE}`)
     contexte = c
   } else
     avertissements.push(
@@ -493,6 +505,8 @@ function lireLots(
         ok: false,
         erreur: `lot ${rang} : critere de ${critere.length} caractères, ${CRITERE_MAX} au plus.`
       }
+    if (faitCreerUneCopieGit(demande) || faitCreerUneCopieGit(critere))
+      return { ok: false, erreur: `lot ${rang} : ${REFUS_COPIE_EN_DOUBLE}` }
     let modele: string | undefined
     if (l.modele !== undefined) {
       if (typeof l.modele !== 'string' || !NOM_DE_MODELE.test(l.modele.trim()))
@@ -584,6 +598,7 @@ export function noterDecision(
       ok: false,
       erreur: `decision de ${t.length} caractères : ${DECISION_MAX} au plus — une décision par note.`
     }
+  if (faitCreerUneCopieGit(t)) return { ok: false, erreur: `decision : ${REFUS_COPIE_EN_DOUBLE}` }
   const decisions = plan.decisions ?? []
   if (decisions.some((d) => d.texte.toLowerCase() === t.toLowerCase()))
     return { ok: true, plan, deja: true }

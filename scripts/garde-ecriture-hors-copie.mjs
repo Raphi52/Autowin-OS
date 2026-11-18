@@ -26,11 +26,15 @@
  * LE SHELL NE SE JUGE PAS PARFAITEMENT. Sont refusées les formes claires : redirections (`>`, `>>`,
  * `n>`, `*>`), Set-Content/Add-Content/Out-File/Tee-Object/New-Item, cp/mv/rm/touch/mkdir/tee/sed -i/dd,
  * copy/move/del de cmd, Copy-Item/Move-Item/Remove-Item/Rename-Item, -OutFile, curl -o,
- * [IO.File]::…, writeFileSync de node et open(…, 'w') de python, y compris après cd/Set-Location/pushd
+ * [IO.File]::…, writeFileSync de node et open(…, 'w') de python, `git worktree add <dossier>`,
+ * y compris après cd/Set-Location/pushd
  * et dans cmd /c, powershell -Command, bash -c. Ne sont PAS vues : un chemin bâti dans une variable
  * (`$p = 'D:\AutoWinOS'; … > $p\x`), un script lancé qui écrit lui-même, `git -C <dossier partagé>`
  * (checkout, commit…), une écriture à travers un lien de la copie (`node_modules`, relié au dépôt :
  * c'est la garde npm qui le protège), une commande coupée par Grok au-delà de 128 Kio.
+ *
+ * SECONDE RÈGLE, pour tout agent, dans une copie ou non (`refusALaRacineDuDisque`) : aucune entrée
+ * NEUVE à la racine d'un disque (`D:\x.log`, `D:\tmp-lot9\`, `git worktree add D:\Projet-lot1`).
  *
  * Aucune dépendance hors `node:` : Claude lance une COPIE de ce fichier, posée seule dans son dossier
  * de réglages. Une erreur interne laisse passer, comme la garde npm : une garde en panne ne doit pas
@@ -299,9 +303,46 @@ const PARAMS_A_VALEUR = new Set(
   ).split(' ')
 )
 
+/** Options globales de git qui prennent le mot suivant comme valeur (`git -c x=y worktree …`). */
+const GIT_OPTIONS_A_VALEUR = new Set([
+  '-c',
+  '--git-dir',
+  '--work-tree',
+  '--namespace',
+  '--config-env'
+])
+/** Options de `git worktree add` qui prennent le mot suivant comme valeur. */
+const WORKTREE_ADD_A_VALEUR = new Set(['-b', '-B', '--reason'])
+
+/**
+ * `git [-C <dossier>] [options] worktree add [options] <chemin> [<commit>]` : le dossier que git va
+ * créer. Une copie git est une écriture comme une autre, et la plus lourde : un dossier entier.
+ */
+function copiesGitDuSegment(mots, dossier, resoudre) {
+  let base = dossier
+  let i = 1
+  for (; i < mots.length; i++) {
+    const a = mots[i]
+    if (a === '-C') base = cheminDuMot(mots[++i], base, resoudre)
+    else if (GIT_OPTIONS_A_VALEUR.has(a)) i++
+    else if (!a.startsWith('-')) break
+  }
+  if (mots[i] !== 'worktree' || mots[i + 1] !== 'add') return []
+  for (let k = i + 2; k < mots.length; k++) {
+    const a = mots[k]
+    if (WORKTREE_ADD_A_VALEUR.has(a)) k++
+    else if (!a.startsWith('-')) {
+      const chemin = cheminDuMot(a, base, resoudre)
+      return chemin ? [chemin] : []
+    }
+  }
+  return []
+}
+
 /** Les chemins qu'un segment de shell écrit, résolus. */
 function ciblesDuSegment(mots, dossier, resoudre) {
   const exe = nomDe(mots[0])
+  if (exe === 'git') return copiesGitDuSegment(mots, dossier, resoudre)
   const ecrit = ECRIT_TOUT.has(exe) || ECRIT_PREMIER.has(exe) || ECRIT_DERNIER.has(exe)
   const cibles = []
   const positionnels = []
@@ -577,35 +618,42 @@ export async function copieALaDemande(entree, env = process.env) {
  * Codex (`tool_name`/`tool_input`/`cwd`) ou de Grok (`toolName`/`toolInput`/`cwd`/`workspaceRoot`) ;
  * celui d'agy passe d'abord par `entreeCommune`.
  */
-export function refusEcritureHorsCopie(entree, sonde) {
+/** L'appel lu dans l'entrée d'un CLI : nom d'outil en minuscules, arguments, dossier, commande. */
+function appelDe(entree) {
   const nom = String(entree?.tool_name ?? entree?.toolName ?? '').toLowerCase()
   const outil = entree?.tool_input ?? entree?.toolInput
   const cwd = entree?.cwd || undefined
   if (!nom || !outil || typeof outil !== 'object' || !cwd) return undefined
-  // La racine de session de Grok compte aussi : son `cwd` peut être celui d'une commande.
-  const ctx =
-    copieDe(cwd, sonde) ??
-    (entree?.workspaceRoot ? copieDe(entree.workspaceRoot, sonde) : undefined)
-  if (!ctx) return undefined
-
-  let cibles = []
   const commande = Array.isArray(outil.command) ? outil.command.join(' ') : outil.command
+  return { nom, outil, cwd, commande }
+}
+
+/** Les chemins que l'appel écrirait, résolus ; `[]` pour un outil qui n'écrit pas. */
+function ciblesDeLAppel({ nom, outil, cwd, commande }, resoudre) {
   if (
     nom === 'apply_patch' ||
     (typeof commande === 'string' && /^\s*\*\*\* Begin Patch/.test(commande))
-  ) {
-    cibles = ciblesDuCorrectif(commande, cwd, sonde.resoudre)
-  } else if (OUTILS_SHELL.has(nom)) {
-    if (typeof commande !== 'string') return undefined
-    cibles = ciblesDuShell(commande, cwd, sonde.resoudre)
-  } else if (OUTILS_ECRITURE.has(nom)) {
-    for (const k of CLES_CHEMIN) {
-      if (typeof outil[k] === 'string' && outil[k])
-        cibles.push(cheminDuMot(outil[k], cwd, sonde.resoudre))
-    }
-    cibles = cibles.filter(Boolean)
-  } else return undefined
+  )
+    return ciblesDuCorrectif(commande, cwd, resoudre)
+  if (OUTILS_SHELL.has(nom))
+    return typeof commande === 'string' ? ciblesDuShell(commande, cwd, resoudre) : []
+  if (OUTILS_ECRITURE.has(nom))
+    return CLES_CHEMIN.filter((k) => typeof outil[k] === 'string' && outil[k])
+      .map((k) => cheminDuMot(outil[k], cwd, resoudre))
+      .filter(Boolean)
+  return []
+}
 
+export function refusEcritureHorsCopie(entree, sonde) {
+  const appel = appelDe(entree)
+  if (!appel) return undefined
+  // La racine de session de Grok compte aussi : son `cwd` peut être celui d'une commande.
+  const ctx =
+    copieDe(appel.cwd, sonde) ??
+    (entree?.workspaceRoot ? copieDe(entree.workspaceRoot, sonde) : undefined)
+  if (!ctx) return undefined
+
+  const cibles = ciblesDeLAppel(appel, sonde.resoudre)
   const fautive = cibles.find((c) => interdit(c, ctx, sonde))
   if (!fautive) return undefined
   const dansLaCopie = join(ctx.copie, relative(ctx.partage, fautive))
@@ -614,6 +662,45 @@ export function refusEcritureHorsCopie(entree, sonde) {
     "L'app tourne depuis ce dossier : le travail d'un fil n'y entre que par la porte de fin de tour (« Garder »), jamais par une écriture directe. " +
     `Écris dans ta copie à la place (${dansLaCopie}) ; la porte le fera entrer. ` +
     `Seules les données de l'app (${join(ctx.partage, DONNEES_APP)}) restent ouvertes en écriture.`
+  )
+}
+
+/**
+ * Le marqueur qu'un agent pose devant sa commande quand l'utilisateur a demandé LUI-MÊME, dans son
+ * message, un emplacement à la racine d'un disque (« clone-le dans D:\ », « mets le zip sur D:\ »).
+ */
+const DEMANDE_UTILISATEUR = /\bAUTOWIN_DEMANDE_UTILISATEUR\s*=\s*['"]?1\b/
+
+/** `D:\nom` : l'entrée de premier niveau du disque où tombe `chemin` ; `undefined` hors lettre de disque. */
+export function entreeDeRacine(chemin) {
+  const m = /^([a-zA-Z]:)[\\/]+([^\\/]+)/.exec(String(chemin ?? ''))
+  return m ? `${m[1].toUpperCase()}\\${m[2]}` : undefined
+}
+
+/**
+ * RIEN DE NEUF À LA RACINE D'UN DISQUE, pour tout agent lancé par l'app, dans une copie ou non.
+ * Relevé du 18/11 : des lots qui travaillaient déjà dans une copie ouverte et retirée par l'app y ont
+ * créé à la main une soixantaine de copies git et des centaines de journaux et de dossiers `tmp-`,
+ * que rien ne range : la garde d'écriture hors copie ne protège que le dossier partagé. Une entrée
+ * qui EXISTE déjà (un projet, `D:\tmp`) reste ouverte, la supprimer aussi ; seule la création d'une
+ * nouvelle entrée de premier niveau est refusée. `sonde.existe` absente : rien n'est refusé.
+ */
+export function refusALaRacineDuDisque(entree, sonde) {
+  const appel = appelDe(entree)
+  if (!appel || typeof sonde?.existe !== 'function') return undefined
+  if (typeof appel.commande === 'string' && DEMANDE_UTILISATEUR.test(appel.commande))
+    return undefined
+  const neuve = ciblesDeLAppel(appel, sonde.resoudre)
+    .map(entreeDeRacine)
+    .find((e) => e !== undefined && !sonde.existe(e))
+  if (!neuve) return undefined
+  return (
+    `Refusé : cet appel créerait ${neuve}, à la racine du disque ${neuve.slice(0, 2)}\\. ` +
+    "Rien ne range ce qu'un agent y laisse : des lots y ont laissé une soixantaine de copies git et des centaines de journaux. " +
+    `Ton dossier de travail est ${appel.cwd} ; l'app y fait entrer ton travail dans main, sans copie de plus. ` +
+    'Journaux et fichiers de travail : dans le dossier temporaire ($TEMP en Bash, $env:TEMP en PowerShell). ' +
+    'Copie de comparaison (avant/après) : `git worktree add "$TEMP/<nom>" <commit>`, puis `git worktree remove` avant de rendre la main. ' +
+    "Seulement si l'utilisateur a demandé lui-même cet emplacement dans son message : relance la commande précédée de AUTOWIN_DEMANDE_UTILISATEUR=1."
   )
 }
 
@@ -650,6 +737,14 @@ export const sondeSysteme = {
     } catch {
       return undefined
     }
+  },
+  existe(chemin) {
+    try {
+      statSync(chemin)
+      return true
+    } catch {
+      return false
+    }
   }
 }
 
@@ -681,7 +776,8 @@ async function principal() {
   const entree = entreeCommune(brut)
   let motif
   try {
-    motif = refusEcritureHorsCopie(entree, sondeSysteme)
+    motif =
+      refusEcritureHorsCopie(entree, sondeSysteme) ?? refusALaRacineDuDisque(entree, sondeSysteme)
   } catch {
     // Une garde en panne ne refuse rien.
   }

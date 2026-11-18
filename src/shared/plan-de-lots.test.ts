@@ -294,6 +294,49 @@ describe('lirePlanDeLots — lecture stricte du plan déposé par le chef', () =
     const r = lu({ lots: [lot(1, ['src/A.tsx']), lot(2, ['src\\a.tsx'])] })
     expect(r.avertissements.join(' ')).toMatch(/lots 1 et 2 .*même fichier/)
   })
+
+  /*
+   * Relevé du 18/11 : deux plans ont écrit dans leur contexte « travaille dans TA copie (git worktree
+   * add D:\Projet-it4-lot<N> main) ». Chaque lot avait déjà la sienne, ouverte et retirée par l'app :
+   * une soixantaine de copies en double sont restées à la racine du disque.
+   */
+  it('refuse un plan qui fait créer une copie git à ses lots : contexte, demande ou critère', () => {
+    const consigne =
+      'Méthode, pour chaque lot : travaille dans TA copie (git worktree add D:\\Projet-it4-lot<N> main), commite là, puis intègre sur main.'
+    const parContexte = lirePlanDeLots({
+      contexte: `${CONTEXTE} ${consigne}`,
+      lots: [lot(1), lot(2)]
+    })
+    const parDemande = lirePlanDeLots({
+      lots: [lot(1), { ...lot(2), demande: `/build x. ${consigne}` }]
+    })
+    const parCritere = lirePlanDeLots({
+      lots: [{ ...lot(1), critere: 'git  worktree   add D:/x fait et la copie se voit' }, lot(2)]
+    })
+    for (const r of [parContexte, parDemande, parCritere]) {
+      expect(r.ok).toBe(false)
+      if (!r.ok) {
+        expect(r.erreur).toMatch(/worktree add/)
+        expect(r.erreur).toMatch(/déjà dans sa propre copie/)
+      }
+    }
+    if (!parDemande.ok) expect(parDemande.erreur).toMatch(/^lot 2/)
+    // Jumeau : nommer les copies sans en faire créer reste permis.
+    expect(
+      lu({
+        contexte: `${CONTEXTE} Les copies de travail sont gérées par l'app ; git worktree list les montre.`,
+        lots: [lot(1), lot(2)]
+      }).plan.lots
+    ).toHaveLength(2)
+  })
+
+  it('refuse aussi des lots ajoutés en route qui font créer une copie git', () => {
+    const r = ajouterLots(planAccepte({ lots: [lot(1), lot(2)] }), {
+      lots: [{ ...lot(3), demande: '/build reprends dans git worktree add ../Projet-lot3 main' }]
+    })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erreur).toMatch(/lot 3 .*worktree add/)
+  })
 })
 
 describe('lotsAPartir — parallélisme, fichiers partagés et plafond', () => {
@@ -1550,6 +1593,15 @@ describe('noterDecision — la mémoire partagée du plan (conv-1284)', () => {
     })
     expect(noterDecision(plan(), '', 'chef', 1).ok).toBe(false)
     expect(noterDecision(plan(), 42, 'chef', 1).ok).toBe(false)
+    // La décision réelle du 13/11, qui a fait créer une copie à la racine du disque par chaque lot.
+    const copieEnDouble = noterDecision(
+      plan(),
+      'Chaque lot travaille dans SA copie (git worktree add D:\\Projet-lot<N> main), y commite, puis intègre sur main.',
+      'chef',
+      1
+    )
+    expect(copieEnDouble.ok).toBe(false)
+    if (!copieEnDouble.ok) expect(copieEnDouble.erreur).toMatch(/déjà dans sa propre copie/)
     expect(noterDecision(plan(), 'x'.repeat(DECISION_MAX + 1), 'chef', 1).ok).toBe(false)
     let p = plan()
     for (let i = 0; i < DECISIONS_MAX; i++) {
