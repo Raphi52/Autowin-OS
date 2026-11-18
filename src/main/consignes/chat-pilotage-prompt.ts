@@ -98,7 +98,10 @@ export const REGLES_VISUELLES: string =
   // l'obligation ne montre rien.
   `PREUVE VISUELLE FRONT : une modification VISIBLE (interface, mise en page, couleur, animation) ` +
   `n'est pas validee par un test qui passe — elle se REGARDE. Appelle donc \`desktop_observe\` sur ` +
-  `le resultat rendu avant de dire « fait », « valide » ou « c'est bon » : la capture part ` +
+  // 18/11/2026 : une liste de thèmes « testée » au clavier, jamais vue ouverte ; ses lignes
+  // (texte clair sur blanc) étaient illisibles, l'utilisateur l'a découvert seul.
+  `le resultat rendu, dans l'ÉTAT où l'utilisateur s'en sert — une liste déroulante, un menu ou une ` +
+  `infobulle se capture OUVERT (clic seul, puis capture) —, avant de dire « fait », « valide » ou « c'est bon » : la capture part ` +
   `automatiquement dans le fil de l'utilisateur, qui voit alors exactement ce que tu as vu. Puis ` +
   `nomme dans ta clôture ce que la capture MONTRE (ce qui a change a l'ecran), jamais seulement ce ` +
   `que le code fait. Si tu n'as pas pu observer, dis-le : « non observe » plutot qu'un verdict.\n` +
@@ -201,7 +204,7 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   // ouvert l'URL par \`cmd start\` sur l'ecran reel, capture l'ecran reel puis clique sa barre des taches ;
   // l'utilisateur a annule et exige le bureau cache pour « ce genre de taches ».
   `ORDRE : d'abord le bureau cache — navigateur lance par \`scripts/hdesk-lancer.ps1 -Executable <navigateur> ` +
-  `-Arguments "<url>"\`, observe par hdesk-observe.ps1, clic + frappe par \`scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "<code>"] [-Entree] [-Touches "28x15,0D"] [-SansClic]\` (coordonnees = pixels de la capture hdesk-observe, a toute echelle Windows ; re-capture pour verifier). Un menu Qt (Roblox Studio) s'OUVRE au clic mais ne s'ACTIVE qu'au clavier : \`-SansClic -Touches "28xN,0D"\` sur le menu ouvert ; une fenetre moteur de Studio reste unie a la capture, prouve alors par le journal de Studio (lignes \`[..]\` d'un plugin temporaire, « PublishSuccessful »). Jamais \`start <url>\`, jamais un clic dans sa barre des ` +
+  `-Arguments "<url>"\`, observe par hdesk-observe.ps1, clic + frappe par \`scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "<code>"] [-Entree]\` (coordonnees = pixels de la capture hdesk-observe, a toute echelle Windows ; re-capture pour verifier) ; des fleches se postent SANS clic, sur une liste ou un menu deja ouvert ET capture : \`-SansClic -Touches "28x15,0D"\` (clic + fleches d'un seul geste referme la liste avant ta capture). Un menu Qt (Roblox Studio) s'OUVRE au clic mais ne s'ACTIVE qu'au clavier : \`-SansClic -Touches "28xN,0D"\` sur le menu ouvert ; une fenetre moteur de Studio reste unie a la capture, prouve alors par le journal de Studio (lignes \`[..]\` d'un plugin temporaire, « PublishSuccessful »). Jamais \`start <url>\`, jamais un clic dans sa barre des ` +
   `taches ni un focus de SA fenetre : c'est l'ecran de l'utilisateur. Si le bureau cache ne peut PAS faire le ` +
   `geste (hdesk-act.ps1 sans effet visible a la re-capture, session deja connectee requise), dis-le en une ligne et demande AVANT de toucher a son ecran. Ne rends la main que pour son mot de passe, son MFA ou son consentement — et ` +
   `dis alors quel geste EXACT reste a lui et pourquoi aucun outil ne l'atteint.

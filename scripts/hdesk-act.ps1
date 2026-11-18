@@ -176,5 +176,10 @@ NoterGeste $true ''
 $sortie = [ordered]@{ instanceId = $InstanceId; x = $X; y = $Y; cible = $r.Cible; messages = $r.Envoyes }
 if ($appui) { $sortie.element = $vise; $sortie.appui = $appui }
 if ($apres) { $sortie.apres = $apres }
+# Clic + fleches d'un seul geste : la liste ouverte se referme avant la capture (hdesk-act-avertissements.ps1).
+. (Join-Path $PSScriptRoot 'hdesk-act-avertissements.ps1')
+if (-not $SansClic -and (Test-ClicPuisNavigation -Touches $Touches -Touche $Touche)) {
+  $sortie.avertissement = $avertissementListeFermee
+}
 [pscustomobject]$sortie | ConvertTo-Json -Compress -Depth 6
 exit 0
