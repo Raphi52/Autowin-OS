@@ -3,6 +3,22 @@ import { CONFIG_AUTOWIN, type EtatLancement } from '../../../shared/scripts-copi
 import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 
 /**
+ * La demande envoyée au fil quand rien n'est déclaré (demande du 2026-11-18) : un bouton grisé
+ * laissait l'utilisateur écrire lui-même la déclaration. Le clic la confie à l'agent du fil, dans le
+ * dossier même que le bouton lit. La consigne reste en français quelle que soit la langue de l'app :
+ * c'est une instruction pour l'agent, comme celle de « Réparer la mise à jour ».
+ */
+function demandeDeBrancherLeLancement(erreur?: string): string {
+  const refus = erreur ? `La déclaration actuelle est refusée : « ${erreur} ». ` : ''
+  return (
+    `${refus}Branche le bouton « Lancer » de ce projet : ajoute la clé "lancement" dans ` +
+    `${CONFIG_AUTOWIN}, à la racine du dossier de ce fil, avec la commande qui lance ` +
+    `l'application. Pars de ce que le projet utilise déjà pour se lancer (script de lancement, ` +
+    `package.json, README), puis vérifie qu'Autowin lit la déclaration et que la commande démarre.`
+  )
+}
+
+/**
  * LE BOUTON « LANCER » DU PANNEAU FICHIERS (2026-09-28, veille concurrentielle : le « Run » de
  * Conductor). Il lance la commande déclarée pour le dossier de la conversation — jamais une ligne
  * choisie ici : le principal lit la déclaration et choisit le dossier (`ipc/lancement.ts`).
@@ -21,7 +37,14 @@ const SOURCES: Record<
   'package.json': { cle: 'lancement.source.packageJson' }
 }
 
-export function LancementBarre({ conversationId }: { conversationId: string }): React.JSX.Element {
+export function LancementBarre({
+  conversationId,
+  onSendPrompt
+}: {
+  conversationId: string
+  /** L'envoi au fil du panneau Fichiers (le même que sa relecture) ; absent = rien ne peut partir. */
+  onSendPrompt?: (prompt: string) => void
+}): React.JSX.Element {
   const { t } = useTextesChatDecisions()
   const [etat, setEtat] = useState<EtatLancement | null>(null)
   const [occupe, setOccupe] = useState(false)
@@ -53,7 +76,13 @@ export function LancementBarre({ conversationId }: { conversationId: string }): 
 
   if (!window.api.lancementEtat) return <></>
   const enCours = etat?.statut === 'en-cours'
+  const sansCommande = etat !== null && !etat.commande && !enCours
   const agir = async (): Promise<void> => {
+    if (sansCommande) {
+      // Rien à lancer : le clic envoie au fil la demande de brancher le bouton.
+      onSendPrompt?.(demandeDeBrancherLeLancement(etat?.erreur))
+      return
+    }
     setOccupe(true)
     setErreurAppel(undefined)
     try {
@@ -67,7 +96,6 @@ export function LancementBarre({ conversationId }: { conversationId: string }): 
       setOccupe(false)
     }
   }
-  const sansCommande = etat !== null && !etat.commande && !enCours
   const libelleDeLaSource = (source: (typeof SOURCES)[keyof typeof SOURCES]): string =>
     'chemin' in source ? source.chemin : t(source.cle)
   const fin =
@@ -90,7 +118,7 @@ export function LancementBarre({ conversationId }: { conversationId: string }): 
         <button
           className={`sc-btn sc-lancement-bouton${enCours ? ' is-on' : ''}`}
           data-testid="sc-lancement-bouton"
-          disabled={occupe || etat === null || sansCommande}
+          disabled={occupe || etat === null || (sansCommande && !onSendPrompt)}
           title={
             enCours
               ? t('lancement.arreterTitre')

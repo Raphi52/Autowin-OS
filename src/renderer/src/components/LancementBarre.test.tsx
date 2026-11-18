@@ -47,9 +47,18 @@ afterEach(() => {
   container.remove()
 })
 
-async function rendre(conversationId = 'conv-1'): Promise<void> {
+/** L'envoi au fil que le panneau Fichiers passe à la barre. */
+const envois: string[] = []
+async function rendre(
+  conversationId = 'conv-1',
+  // `null` = le panneau ne fournit aucun envoi (un `undefined` reprendrait la valeur par défaut).
+  onSendPrompt: ((prompt: string) => void) | null = (prompt) => envois.push(prompt)
+): Promise<void> {
+  envois.length = 0
   await act(async () => {
-    root.render(createElement(LancementBarre, { conversationId }))
+    root.render(
+      createElement(LancementBarre, { conversationId, onSendPrompt: onSendPrompt ?? undefined })
+    )
     await Promise.resolve()
     await Promise.resolve()
   })
@@ -75,11 +84,43 @@ describe('LancementBarre', () => {
     expect(bouton().disabled).toBe(false)
   })
 
-  it('sans déclaration : bouton inactif et la marche à suivre', async () => {
+  it('sans déclaration : le bouton reste actif et envoie au fil la demande de brancher le lancement', async () => {
     api({ statut: 'arrete', lignes: [] })
-    await rendre()
-    expect(bouton().disabled).toBe(true)
+    await rendre('conv-7')
+    expect(bouton().disabled).toBe(false)
     expect(par('sc-lancement-vide')?.textContent).toContain('"lancement"')
+    await cliquer()
+    expect(envois).toHaveLength(1)
+    expect(envois[0]).toContain('"lancement"')
+    expect(envois[0]).toContain('.autowin/scripts.json')
+    // Rien à lancer : le clic ne demande aucun démarrage au principal.
+    expect(appels).not.toContain('demarrer:conv-7')
+  })
+
+  it('déclaration invalide : la demande envoyée cite l’erreur à corriger', async () => {
+    api({
+      statut: 'arrete',
+      lignes: [],
+      erreur: '.autowin/scripts.json illisible : Unexpected token'
+    })
+    await rendre()
+    expect(bouton().disabled).toBe(false)
+    await cliquer()
+    expect(envois[0]).toContain('illisible : Unexpected token')
+  })
+
+  it('sans déclaration ni moyen d’envoyer au fil : le bouton reste inactif', async () => {
+    api({ statut: 'arrete', lignes: [] })
+    await rendre('conv-1', null)
+    expect(bouton().disabled).toBe(true)
+  })
+
+  it('avec une commande déclarée, le clic lance sans rien envoyer au fil', async () => {
+    api({ statut: 'arrete', lignes: [], commande: 'npm run dev', source: 'autowin' })
+    await rendre()
+    await cliquer()
+    expect(envois).toHaveLength(0)
+    expect(appels).toContain('demarrer:conv-1')
   })
 
   it('Lancer → en cours ; les mises à jour poussées montrent l’adresse et la sortie ; Arrêter arrête', async () => {

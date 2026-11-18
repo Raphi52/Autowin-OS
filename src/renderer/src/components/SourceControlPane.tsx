@@ -664,7 +664,11 @@ export function SourceControlPane({
 
         {/* « Lancer » vit dans l'onglet Projet ; il ne dépend pas de git. */}
         {view === 'tree' && conversationId && (
-          <LancementBarre key={conversationId} conversationId={conversationId} />
+          <LancementBarre
+            key={conversationId}
+            conversationId={conversationId}
+            onSendPrompt={onSendPrompt}
+          />
         )}
 
         {view === 'tree' && (
