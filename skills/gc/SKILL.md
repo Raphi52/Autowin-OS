@@ -77,7 +77,8 @@ collègues. Chaque commande ci-dessous se lance donc avec le dépôt comme dossi
    | Sauvegardes ponctuelles de `autowin-os/` : `*.bak`, `*.bak.N`, `*.avant-*`, `*.pre-*`, `g.tmp.jsonl` | non modifié depuis > 14 j — JAMAIS `conversations.json.pre-remake` |
    | Bancs d'essai : `autowin-os/arena-bench*/`, `banc-*/`, `critere-reprises/`, `judge-session-*/` | aucun fichier modifié depuis > 14 j |
    - **Liste vivante = `get_state`** (champ `conversations`), PUIS les archives : un fil inactif
-     depuis 14 jours quitte `conversations.json` pour `conversations.json.archive/<id>.json` et reste
+     depuis 3 jours (`SEUIL_ARCHIVE_MS`, `src/main/store/conversations-disk.ts`) quitte
+     `conversations.json` pour `conversations.json.archive/<id>.json` et reste
      VIVANT. Lire leurs ids avec `idsArchives` (`scripts/conversations-sur-disque.mjs`, qui écarte les
      pierres tombales `<id>.supprime`), par `npx tsx` depuis le dépôt (`node` seul s'arrête sur
      `ERR_UNKNOWN_FILE_EXTENSION`). JAMAIS `conversations.json` seul : les créations et suppressions
@@ -104,8 +105,12 @@ collègues. Chaque commande ci-dessous se lance donc avec le dépôt comme dossi
    jamais collecté ; une sonde qui échoue retire sa catégorie du jour, et le bilan le dit.
 4. **Signaler sans déplacer — gestes git.** Les bouger casse git : ils vont au bilan dans
    « À purger », avec la commande exacte, et attendent l'accord.
-   - **Copies de travail git orphelines** (`git worktree list`) : `bench/runs/*`,
-     `autowin-os/worktrees/panel*`, `autowin-os/worktrees/<hash>/agent__run-*`. Candidate si : HEAD
+   - **Copies de travail git orphelines** : toutes naissent dans `autowin-os/copies-de-taches/<fil ou
+     run>` (`src/main/copies/chemins-de-copies.ts`) ; restent les anciennes racines `bench/runs/*` et
+     `autowin-os/worktrees/…`. Une copie peut appartenir à UN AUTRE dépôt (un jeu, un projet d'entreprise…) :
+     lire le `gitdir:` de son fichier `.git` et lancer `git -C <ce dépôt> worktree list` ; celui
+     d'Autowin seul en a manqué 13 le 18/11. Une copie SANS `.git` (lien git perdu) ou réduite à une
+     jonction `node_modules` va dans « À vérifier », jamais déplacée. Candidate si : HEAD
      détachée, aucune modification (`git -C <copie> status --short` vide), aucun fichier modifié depuis
      > 7 jours, absente des runs en cours et de `travauxNonPublies`. Commande en DEUX temps, jamais
      enchaînés : (1) retirer la jonction `<copie>\node_modules` (`cmd /c rmdir "<copie>\node_modules"`,
