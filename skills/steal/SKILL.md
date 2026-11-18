@@ -103,6 +103,8 @@ journal des changements, code ouvert, article technique de l'éditeur, banc d'es
   ou banc relancé par nous · 🟡 = documentation ou journal des changements de l'éditeur lu ce jour, avec
   citation (un banc publié par l'éditeur reste 🟡) · 🔴 = annonce ou page commerciale (avec lien), ou
   mémoire (sans lien, écrit « de mémoire »). Un 🔴 ne devient jamais champion face à un 🟡 ou un 🟢 comparable.
+  Code ou doc d'un dépôt GitHub public : `node scripts/github-permalien.mjs <propriétaire/dépôt> <chemin>
+  --motif "<phrase citée>"` rend le commit, sa date et le lien ancré à la ligne (sans `gh`, sans jeton).
 - Écris le **MÉCANISME** du champion (comment il fait), pas son nom commercial, et accroche-le à une
   **CITATION** de 1 à 2 phrases de la source, avec un lien profond (ancre, section, permalien) et la date
   de lecture. Pas de citation → 🔴 : c'est ce mécanisme qui partira en `frame`, et une paraphrase fausse
