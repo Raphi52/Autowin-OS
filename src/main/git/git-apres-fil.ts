@@ -318,6 +318,28 @@ const echapper = (texte: string): string =>
 /** Au-delà, la note renvoie au journal au lieu de tout recopier. */
 const MOTIFS_CITES = 12
 
+/** Les lignes que la note affiche : les `MOTIFS_CITES` premiers motifs. */
+const lignesDeLaNote = (motifs: readonly string[]): string[] =>
+  motifs.slice(0, MOTIFS_CITES).map((motif) => `<div>· ${echapper(motif)}</div>`)
+
+/**
+ * UNE NOTE DÉJÀ AFFICHÉE NE REVIENT PAS. Une passe repart à chaque fin de tour du fil et à chaque
+ * redémarrage de l'app (rattrapage des commits restés sur main local) : tant que personne n'a trié,
+ * elle retrouve les mêmes motifs. Relevé du 18/11 : la même note, au caractère près, deux fois de suite
+ * dans un fil. La note revient dès qu'une ligne qu'elle afficherait est nouvelle dans CE fil, et dit
+ * alors tout ce qui reste à trier. Même règle que le rail publié (`blocDuTour`) : on lit le fil.
+ */
+export function noteATrierNouvelle(
+  conversationId: string,
+  motifs: readonly string[],
+  contenusDuFil: readonly string[]
+): string | undefined {
+  const dejaMontree = (ligne: string): boolean =>
+    contenusDuFil.some((contenu) => contenu.includes(ligne))
+  if (lignesDeLaNote(motifs).every(dejaMontree)) return undefined
+  return noteATrier(conversationId, motifs)
+}
+
 /**
  * LA NOTE QUAND RIEN NE PEUT PARTIR SEUL : ce qui reste à trier, et un bouton `/git` que
  * l'utilisateur clique LUI-MÊME. Avant, la passe envoyait ce `/git` dans le fil à sa place ; il l'a
@@ -328,7 +350,7 @@ const MOTIFS_CITES = 12
  * « 1 commit et push réussi » faisait deux blocs qui se contredisaient.
  */
 export function noteATrier(conversationId: string, motifs: readonly string[]): string {
-  const lignes = motifs.slice(0, MOTIFS_CITES).map((motif) => `<div>· ${echapper(motif)}</div>`)
+  const lignes = lignesDeLaNote(motifs)
   return [
     '```html-render',
     '<style>.awp-git{display:inline-block;margin-top:6px;color:inherit;font-weight:600;text-decoration:none;cursor:pointer}</style>',
@@ -547,6 +569,8 @@ export interface DepsGitApresFil {
     fils: readonly string[]
   ): Promise<CommitPublie[]>
   annoncer(conversationId: string, contenu: string): void
+  /** Le texte des messages du fil : une note qu'il affiche déjà n'est pas reposée (`noteATrierNouvelle`). */
+  contenusDuFil(conversationId: string): readonly string[]
   /** Juste avant la passe : ces travaux d'agents ne seront plus reproposés (voir `travauxParFil`). */
   noterTravauxTentes?(agentIds: readonly string[]): void
   journal?(message: string, detail?: unknown): void
@@ -701,7 +725,8 @@ export class FileGitApresFil {
       this.#deps.annoncer(fil, bandeauPublie(commits, issue.lignesShell, issue.notes))
     if (issue.aTrier.length) {
       this.#deps.journal?.(`passe sans publication complète pour ${fil}`, issue.aTrier)
-      this.#deps.annoncer(fil, noteATrier(fil, issue.aTrier))
+      const note = noteATrierNouvelle(fil, issue.aTrier, this.#deps.contenusDuFil(fil))
+      if (note) this.#deps.annoncer(fil, note)
     }
   }
 }

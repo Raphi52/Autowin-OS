@@ -3571,6 +3571,8 @@ Le fil reprend ensuite normalement.`
       broadcast({ type: 'refresh', scope: 'chat', convId: fil })
       broadcast({ type: 'refresh', scope: 'conversations' })
     },
+    contenusDuFil: (fil) =>
+      (os.conversations.get(fil)?.messages ?? []).map((message) => String(message.content ?? '')),
     noterTravauxTentes: (agentIds) => travauxTentes.noter(agentIds),
     journal: (message, detail) => console.warn('[git apres fil]', message, detail ?? '')
   })

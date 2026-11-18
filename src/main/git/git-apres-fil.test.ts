@@ -693,6 +693,7 @@ describe('FileGitApresFil — une passe à la fois', () => {
           return sur.commits ?? []
         },
         annoncer: (fil, contenu) => annonces.push([fil, contenu]),
+        contenusDuFil: () => [],
         noterTravauxTentes: (ids) => tentes.push(...ids),
         journal: () => undefined
       },
@@ -728,6 +729,7 @@ describe('FileGitApresFil — une passe à la fois', () => {
         lireAmont: async () => 'avant',
         commitsDepuis: async () => [],
         annoncer: () => undefined,
+        contenusDuFil: () => [],
         journal: () => undefined
       },
       { calmeMs: 0 }
@@ -767,6 +769,7 @@ describe('FileGitApresFil — une passe à la fois', () => {
         lireAmont: async () => 'avant',
         commitsDepuis: async () => [],
         annoncer: () => undefined,
+        contenusDuFil: () => [],
         journal: () => undefined
       },
       { calmeMs: 0 }
@@ -909,6 +912,67 @@ describe('FileGitApresFil — une passe à la fois', () => {
     ])
   })
 
+  /*
+   * Relevé du 18/11 : la même note « GIT : reste à trier », au caractère près, deux fois de suite dans
+   * un fil. La première après la fin de son tour ; la seconde après un redémarrage de l'app, dont le
+   * rattrapage des commits restés sur main local relance une passe sur les mêmes commits.
+   */
+  describe('la note à trier ne revient pas quand rien n’a changé', () => {
+    const COMMIT_D_UN_AUTRE =
+      'commits restés sur main local : af1d49bc6 « feat(lancement): x (conv-1979) » n’est réclamé par aucun fil qui peut publier'
+    function fileSur(contenus: Map<string, string[]>, aTrier: string[]): FileGitApresFil {
+      return new FileGitApresFil(
+        {
+          publier: async () => ({ publie: false, lignesShell: [], notes: [], aTrier }),
+          filOccupe: () => false,
+          lireAmont: async () => 'avant',
+          commitsDepuis: async () => [],
+          contenusDuFil: (fil) => contenus.get(fil) ?? [],
+          annoncer: (fil, contenu) => contenus.set(fil, [...(contenus.get(fil) ?? []), contenu]),
+          journal: () => undefined
+        },
+        { calmeMs: 0 }
+      )
+    }
+
+    it('après un redémarrage, la passe de rattrapage ne repose pas la même note', async () => {
+      const fil = new Map<string, string[]>()
+      fileSur(fil, [COMMIT_D_UN_AUTRE]).ajouter('conv-1980', [], 'conv-1980', {
+        commitsLocaux: true
+      })
+      await attendre()
+      expect(fil.get('conv-1980')).toHaveLength(1)
+      // Une file neuve : la mémoire de l'app est vide, le fil garde sa note.
+      fileSur(fil, [COMMIT_D_UN_AUTRE]).ajouter('conv-1980', [], 'conv-1980', {
+        commitsLocaux: true
+      })
+      await attendre()
+      expect(fil.get('conv-1980')).toHaveLength(1)
+    })
+
+    it('un nouveau changement à trier donne une note, avec tout ce qui reste à trier', async () => {
+      const fil = new Map<string, string[]>([
+        ['conv-1', [noteATrier('conv-1', [COMMIT_D_UN_AUTRE])]]
+      ])
+      fileSur(fil, [COMMIT_D_UN_AUTRE, 'b.ts : aussi touché par conv-8']).ajouter('conv-1', [
+        'b.ts'
+      ])
+      await attendre()
+      expect(fil.get('conv-1')).toHaveLength(2)
+      expect(fil.get('conv-1')![1]).toContain('af1d49bc6')
+      expect(fil.get('conv-1')![1]).toContain('aussi touché par conv-8')
+    })
+
+    it('la même note dans un AUTRE fil n’empêche pas celle-ci', async () => {
+      const fil = new Map<string, string[]>([
+        ['conv-2', [noteATrier('conv-2', [COMMIT_D_UN_AUTRE])]]
+      ])
+      fileSur(fil, [COMMIT_D_UN_AUTRE]).ajouter('conv-1', [], 'conv-1', { commitsLocaux: true })
+      await attendre()
+      expect(fil.get('conv-1')).toHaveLength(1)
+    })
+  })
+
   it('une passe en échec n’annonce rien et ne bloque pas la suivante', async () => {
     const journal = vi.fn()
     const lances: string[] = []
@@ -924,6 +988,7 @@ describe('FileGitApresFil — une passe à la fois', () => {
         lireAmont: async () => 'avant',
         commitsDepuis: async () => [{ sha: '1a2b3c4d', sujet: 'fix' }],
         annoncer,
+        contenusDuFil: () => [],
         journal
       },
       { calmeMs: 0 }

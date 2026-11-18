@@ -119,6 +119,18 @@ function cheminDuMot(mot, dossier, resoudre) {
 }
 
 /**
+ * SOUS GIT BASH, `/x` SANS LETTRE DE DISQUE N'EST PAS SUR LE DISQUE COURANT : `/dev/null` est le
+ * périphérique nul, `/tmp` le dossier temporaire, `/usr` le dossier de Git. Seul `/d/…` désigne un
+ * disque (`cheminWindows`). PowerShell, lui, lit `/x` comme la racine du disque courant : son
+ * `resoudre` reste celui de la sonde. Sans cette distinction, `2>/dev/null` devenait la création de
+ * `D:\dev` et la garde de racine refusait toute commande qui jette une sortie.
+ */
+function resoudreSousBash(resoudre) {
+  return (base, relatif) =>
+    /^\/(?![\\/])(?![a-zA-Z](\/|$))/.test(String(relatif)) ? undefined : resoudre(base, relatif)
+}
+
+/**
  * Découpe une commande en segments `{ mots, redirs }`, et rend `code`, la commande privée de ses
  * corps de texte. Guillemets respectés, `;` `&&` `||` `|` `&`
  * et fin de ligne séparent, les cibles de `>` sont mises à part. Les corps de here-doc (`<<EOF`) et
@@ -450,42 +462,47 @@ function ciblesDuCode(commande, resoudre) {
     .map((c) => resoudre(c, '.'))
 }
 
-/** Les chemins qu'une commande shell écrit, en suivant cd/Set-Location/pushd et les shells imbriqués. */
-function ciblesDuShell(commande, cwd, resoudre, profondeur = 0) {
+/**
+ * Les chemins qu'une commande shell écrit, en suivant cd/Set-Location/pushd et les shells imbriqués.
+ * `bash` : la commande est lue par bash ; un shell imbriqué dit le sien. Hors Windows, `/x` est un
+ * vrai chemin absolu du système et se lit tel quel : seul Git Bash a besoin de `resoudreSousBash`.
+ */
+function ciblesDuShell(commande, cwd, resoudre, profondeur = 0, bash = false) {
   const { segments, code } = segmentsDe(commande)
   const cibles = [...ciblesDuCode(code, resoudre)]
+  const lire = bash && process.platform === 'win32' ? resoudreSousBash(resoudre) : resoudre
   let dossier = cwd
   for (const seg of segments) {
     let mots = [...seg.mots]
     while (mots.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(mots[0])) mots.shift()
     for (const r of seg.redirs) {
-      const c = cheminDuMot(r, dossier, resoudre)
+      const c = cheminDuMot(r, dossier, lire)
       if (c) cibles.push(c)
     }
     if (!mots.length) continue
     const exe = nomDe(mots[0])
     // Un shell dans le shell : on lit la commande qu'il reçoit, depuis le même dossier.
     let interne
+    const interneBash = /^(bash|sh|zsh)$/.test(exe)
     if (exe === 'cmd' && mots.length > 2 && /^\/[ck]$/i.test(mots[1]))
       interne = mots.slice(2).join(' ')
-    else if (/^(bash|sh|zsh)$/.test(exe) && mots[1] === '-c') interne = mots[2]
+    else if (interneBash && mots[1] === '-c') interne = mots[2]
     else if (/^(powershell|pwsh)$/.test(exe)) {
       const k = mots.findIndex((m, idx) => idx > 0 && /^-(c|command)$/i.test(m))
       if (k > 0) interne = mots.slice(k + 1).join(' ')
     }
     if (interne !== undefined) {
-      if (profondeur < 3) cibles.push(...ciblesDuShell(interne, dossier, resoudre, profondeur + 1))
+      if (profondeur < 3)
+        cibles.push(...ciblesDuShell(interne, dossier, resoudre, profondeur + 1, interneBash))
       continue
     }
     if (/^(cd|chdir|pushd|set-location|sl|push-location)$/.test(exe)) {
       const args = mots.slice(1).filter((a) => !/^(\/d|-path|-literalpath)$/i.test(a))
       dossier =
-        args[0] === undefined || args[0] === '-'
-          ? undefined
-          : cheminDuMot(args[0], dossier, resoudre)
+        args[0] === undefined || args[0] === '-' ? undefined : cheminDuMot(args[0], dossier, lire)
       continue
     }
-    cibles.push(...ciblesDuSegment(mots, dossier, resoudre))
+    cibles.push(...ciblesDuSegment(mots, dossier, lire))
   }
   return cibles
 }
@@ -512,6 +529,8 @@ const OUTILS_SHELL = new Set([
   'exec_command',
   'local_shell'
 ])
+/** Les outils de Claude dont la commande passe par bash (Git Bash sous Windows). */
+const OUTILS_GIT_BASH = new Set(['bash', 'monitor'])
 const OUTILS_ECRITURE = new Set([
   'edit',
   'write',
@@ -636,7 +655,9 @@ function ciblesDeLAppel({ nom, outil, cwd, commande }, resoudre) {
   )
     return ciblesDuCorrectif(commande, cwd, resoudre)
   if (OUTILS_SHELL.has(nom))
-    return typeof commande === 'string' ? ciblesDuShell(commande, cwd, resoudre) : []
+    return typeof commande === 'string'
+      ? ciblesDuShell(commande, cwd, resoudre, 0, OUTILS_GIT_BASH.has(nom))
+      : []
   if (OUTILS_ECRITURE.has(nom))
     return CLES_CHEMIN.filter((k) => typeof outil[k] === 'string' && outil[k])
       .map((k) => cheminDuMot(outil[k], cwd, resoudre))

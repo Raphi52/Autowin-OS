@@ -386,6 +386,27 @@ describe('refusALaRacineDuDisque — rien de neuf à la racine d’un disque', (
     expect(sh(commande)).toBeUndefined()
   })
 
+  /*
+   * Sous Git Bash (l'outil Bash de Claude), `/dev/null` est le périphérique nul et `/tmp` le dossier
+   * temporaire : un chemin `/x` qui n'est pas une lettre de disque n'est PAS à la racine du disque
+   * courant. Refusé le 18/11 : `… 2>/dev/null` lu comme la création de `D:\dev`.
+   */
+  it.each([
+    ['jeter les erreurs', 'git status --short 2>/dev/null | head -30'],
+    ['jeter toute la sortie', 'npm ls > /dev/null 2>&1'],
+    ['écrire dans le /tmp de Git Bash', 'mkdir -p /tmp/essai && echo x > /tmp/essai/a.txt'],
+    ['bash -c imbriqué', 'bash -c "grep -r x . 2>/dev/null"']
+  ])('autorisé sous Git Bash : %s', (_nom, commande) => {
+    expect(sh(commande)).toBeUndefined()
+  })
+
+  it('sous PowerShell, `/essai` reste la racine du disque courant : refusé', () => {
+    expect(appel('PowerShell', { command: 'mkdir /essai' })).toMatch(/Refusé.*D:\\essai/)
+    expect(sh('powershell -Command "New-Item -ItemType Directory /essai"')).toMatch(/D:\\essai/)
+    // Une lettre de disque sous Git Bash reste lue comme telle.
+    expect(sh('mkdir -p /d/tmp-lot9 2>/dev/null')).toMatch(/D:\\tmp-lot9/)
+  })
+
   it('sans sonde d’existence, ni outil, ni dossier : rien n’est refusé', () => {
     expect(
       refusALaRacineDuDisque(
