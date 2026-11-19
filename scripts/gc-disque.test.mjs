@@ -4,12 +4,13 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, parse, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -292,6 +293,38 @@ describe('inventorier — ce qui grossit et ce qui pèse', () => {
 
     expect(zone('sessions-claude').familles).toEqual({ journal: 7 })
     expect(zone('donnees-autowin').familles).toEqual({ texte: 3 })
+  })
+
+  it('signale la place qu’un disque perd hors de toute zone suivie', () => {
+    // Passe du 15/11 : D: avait perdu 13 Go en un jour, dans des copies d'agents posées à la racine
+    // du disque, que le ménage ne pesait pas.
+    const disque = parse(resolve(ctx.donnees)).root.toUpperCase()
+    const espace = (libre) => [{ disque, libre, total: 1000 }]
+    fichier(join(ctx.depot, '.autowin-tmp', 'conv-1', 'a.txt'), 1, 'xxx')
+    inventorier({ ...ctx, disques: espace(100) })
+    fichier(join(ctx.depot, '.autowin-tmp', 'conv-1', 'b.txt'), 1, 'xxxx')
+
+    const bilan = inventorier({ ...ctx, disques: espace(80), seuilPerteHorsZones: 10 })
+
+    expect(bilan.aVerifier).toContainEqual(
+      expect.objectContaining({ chemin: disque, taille: 16, perdu: 20, prisParLesZones: 4 })
+    )
+  })
+
+  it('ne signale rien quand les zones expliquent la place perdue, ni quand un balayage les vide', () => {
+    const disque = parse(resolve(ctx.donnees)).root.toUpperCase()
+    const espace = (libre) => [{ disque, libre, total: 1000 }]
+    const gros = join(ctx.depot, '.autowin-tmp', 'conv-1', 'a.txt')
+    fichier(gros, 1, 'x'.repeat(30))
+    inventorier({ ...ctx, disques: espace(100) })
+    fichier(join(ctx.depot, '.autowin-tmp', 'conv-1', 'b.txt'), 1, 'x'.repeat(20))
+    const expliquee = inventorier({ ...ctx, disques: espace(80), seuilPerteHorsZones: 10 })
+    // Un balayage déplace hors des zones sans rendre de place : la zone fond, le disque ne bouge pas.
+    rmSync(gros)
+    const balayee = inventorier({ ...ctx, disques: espace(80), seuilPerteHorsZones: 10 })
+
+    for (const bilan of [expliquee, balayee])
+      expect(bilan.aVerifier.filter((v) => v.chemin === disque)).toEqual([])
   })
 
   it('ne dit « sans règle » que d’un tas lourd qu’aucune autre passe du /gc ne juge', () => {

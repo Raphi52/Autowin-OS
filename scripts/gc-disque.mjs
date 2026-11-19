@@ -54,6 +54,7 @@ const JOUR_MS = 86_400_000
 const SEUIL_CROISSANCE_OCTETS = 500 * 1024 * 1024
 const SEUIL_LOURD_OCTETS = 1024 * 1024 * 1024
 const SEUIL_A_VERIFIER_OCTETS = 100 * 1024 * 1024
+const SEUIL_PERTE_HORS_ZONES_OCTETS = 5 * 1024 * 1024 * 1024
 const DUREE_MAX_PAR_ZONE_MS = 180_000
 
 /** Le type d'un fichier, pour dire au bilan CE QUI s'accumule. */
@@ -394,6 +395,24 @@ function lireMemoire(chemin) {
   }
 }
 
+/**
+ * Par disque, ce que les zones ont pris depuis la passe d'avant, d'après leurs enfants pesés. Sans
+ * `cheminMemoire` : la mémoire de l'inventaire s'écrit après sa propre pesée.
+ */
+function priseParDisque(zonesAvant, zonesApres, cheminMemoire) {
+  const prise = new Map()
+  for (const [id, apres] of Object.entries(zonesApres)) {
+    const avant = zonesAvant?.[id]?.enfants ?? {}
+    for (const chemin of new Set([...Object.keys(avant), ...Object.keys(apres.enfants)])) {
+      if (normaliser(chemin) === normaliser(cheminMemoire)) continue
+      const disque = parse(resolve(chemin)).root.toUpperCase()
+      const ecart = (apres.enfants[chemin] ?? 0) - (avant[chemin] ?? 0)
+      prise.set(disque, (prise.get(disque) ?? 0) + ecart)
+    }
+  }
+  return prise
+}
+
 function espaceDesDisques(chemins) {
   const vus = new Map()
   for (const chemin of chemins) {
@@ -411,7 +430,8 @@ function espaceDesDisques(chemins) {
 
 /**
  * L'inventaire complet du poste. `ctx` : `{ depot, donnees, temp, home, maintenant, ignoresGit }`,
- * et en option `seuilCroissance`, `seuilLourd`, `seuilAVerifier`, `dureeMaxParZoneMs`, `memoire`.
+ * et en option `seuilCroissance`, `seuilLourd`, `seuilAVerifier`, `seuilPerteHorsZones`,
+ * `dureeMaxParZoneMs`, `memoire`, et `disques` (place libre imposée, pour les tests).
  * Ne touche à rien, sauf la mémoire de l'inventaire (`autowin-os/gc-inventaire.json`) si `memoire`
  * n'est pas `false`.
  */
@@ -420,7 +440,7 @@ export function inventorier(ctx) {
   const toutesLesRacines = zones.flatMap((z) => z.racines)
   const bilan = {
     date: new Date(ctx.maintenant).toISOString(),
-    disques: espaceDesDisques([ctx.donnees, ctx.temp, ctx.home]),
+    disques: ctx.disques ?? espaceDesDisques([ctx.donnees, ctx.temp, ctx.home]),
     zones: [],
     candidats: [],
     aVerifier: [],
@@ -429,7 +449,11 @@ export function inventorier(ctx) {
   }
   const cheminMemoire = join(ctx.donnees, 'autowin-os', 'gc-inventaire.json')
   const avant = lireMemoire(cheminMemoire)
-  const memoire = { date: bilan.date, zones: {} }
+  const memoire = {
+    date: bilan.date,
+    disques: bilan.disques.map(({ disque, libre }) => ({ disque, libre })),
+    zones: {}
+  }
   const seuilAVerifier = ctx.seuilAVerifier ?? SEUIL_A_VERIFIER_OCTETS
   const seuilLourd = ctx.seuilLourd ?? SEUIL_LOURD_OCTETS
   const retenir = (verdict) => {
@@ -527,6 +551,29 @@ export function inventorier(ctx) {
             depuis: avant.date
           })
       }
+    }
+  }
+  // La place qu'un disque perd sans qu'aucune zone ne grossisse d'autant vit dans un tas que le ménage
+  // ne pèse pas (15/11 : 13,9 Go de copies d'agents posées à la racine de D:). Une zone qui fond ne
+  // compte pas : un balayage vers une corbeille non pesée la vide sans rendre de place.
+  if (avant?.disques) {
+    const prise = priseParDisque(avant.zones, memoire.zones, cheminMemoire)
+    const seuil = ctx.seuilPerteHorsZones ?? SEUIL_PERTE_HORS_ZONES_OCTETS
+    for (const { disque, libre } of bilan.disques) {
+      const precedent = avant.disques.find((d) => d.disque === disque)
+      if (!precedent) continue
+      const perdu = precedent.libre - libre
+      const prisParLesZones = Math.max(0, prise.get(disque) ?? 0)
+      if (perdu - prisParLesZones >= seuil)
+        bilan.aVerifier.push({
+          chemin: disque,
+          zone: 'disque',
+          taille: perdu - prisParLesZones,
+          perdu,
+          prisParLesZones,
+          depuis: avant.date,
+          motif: 'place perdue hors des zones suivies : un tas que le ménage ne pèse pas'
+        })
     }
   }
   bilan.candidats.sort((a, b) => b.taille - a.taille)
