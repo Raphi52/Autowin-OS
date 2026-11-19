@@ -61,6 +61,11 @@ export async function controleDeSeparation(entree: {
   arbre: string
   message: string
   git: GitRunner
+  /**
+   * Seuls ces chemins comptent. L'index du dossier partagé porte aussi ce que d'autres fils y ont
+   * indexé : un commit `--only` ne l'emporte pas, son contrôle ne doit donc pas le lire.
+   */
+  chemins?: readonly string[]
 }): Promise<ResultatDeSeparation> {
   const regles = reglesDuPoste(entree.copie)
   if (regles.etat === 'aucune') return { ok: true }
@@ -84,7 +89,8 @@ export async function controleDeSeparation(entree: {
       '--no-abbrev',
       '--diff-filter=AM',
       entree.base,
-      entree.arbre
+      entree.arbre,
+      ...(entree.chemins?.length ? ['--', ...entree.chemins] : [])
     ],
     entree.copie
   )

@@ -142,8 +142,10 @@ export type AutoCloseResult =
          */
         | 'depot-tiers'
         /**
-         * Un élément réservé à l'entreprise (nom, terme, fichier privé) était dans un commit que le rejeu
-         * allait créer : ce commit n'a pas été fait, rien n'est parti. `detail` ne dit que « commit ».
+         * Un élément réservé à l'entreprise (nom, terme, fichier privé) était dans un commit à créer : ce
+         * commit n'a pas été fait, rien n'est parti. `detail` vaut « commit » pour un commit du rejeu (déjà
+         * dans l'historique local, aucun fichier à corriger) ; pour le commit du travail lui-même, il nomme
+         * les fichiers fautifs (`controleDeSeparation`), jamais le terme.
          */
         | 'separation-entreprise'
       detail?: string
@@ -242,6 +244,22 @@ export async function autoCloseRun(input: AutoCloseInput): Promise<AutoCloseResu
     }
 
     const baseSha = (await runGit(['rev-parse', 'HEAD'], repo)).trim()
+    // fix-ok: cause mesurée — le crochet de commit refusait un nom réservé, et la clôture rendait
+    // « failed » avec sa seule première ligne : aucun fichier nommé, aucun tour de réparation lancé
+    // (test « le commit du tour lui-même porte le terme »). Le même contrôle passe ici AVANT le commit,
+    // sur les seuls chemins du commit, et son refus nomme les fichiers (jamais le terme).
+    const separation = await controleDeSeparation({
+      copie: repo,
+      base: baseSha,
+      arbre: (await runGit(['write-tree'], repo)).trim(),
+      message,
+      git: runGit,
+      ...(paths?.length ? { chemins: paths } : {})
+    })
+    if (!separation.ok) {
+      await runGit(['read-tree', indexTree], repo)
+      return { status: 'skipped', reason: 'separation-entreprise', detail: separation.raison }
+    }
     await runGit(
       paths?.length
         ? ['commit', '--only', '-m', message, '--', ...paths]

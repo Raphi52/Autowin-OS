@@ -42,6 +42,27 @@ describe('réparation lancée par l’app après un refus de la porte', () => {
     expect(decision.prompt).toMatch(/git checkout --detach <commit>/u)
   })
 
+  // Cas réel du 2026-11-19 : tour dans le dossier partagé, commit refusé pour un nom réservé laissé
+  // dans un commentaire de test ; aucun tour de réparation ne partait, l'utilisateur restait bloqué.
+  it('un tour hors copie dont le commit porte un nom réservé : la réparation part aussi, fichier nommé', () => {
+    const rapport = {
+      project: { status: 'skipped', reason: 'separation-entreprise', detail: DETAIL }
+    }
+    const decision = decisionDeReparation(tour({ rapport }))
+    expect(decision.lancer).toBe(true)
+    if (decision.lancer) expect(decision.prompt).toContain('src/a.test.ts (contenu)')
+  })
+
+  it('un commit du rejeu déjà fait (« commit ») : aucun fichier du tour à corriger, rien ne part', () => {
+    const rapport = {
+      project: { status: 'skipped', reason: 'separation-entreprise', detail: 'commit' }
+    }
+    expect(decisionDeReparation(tour({ rapport }))).toEqual({
+      lancer: false,
+      raison: 'pas-un-refus-de-la-porte'
+    })
+  })
+
   it('un refus sans détail lance quand même le tour, qui devra retrouver la cause', () => {
     const decision = decisionDeReparation(tour({ rapport: refusDeLaPorte() }))
     expect(decision.lancer).toBe(true)

@@ -1132,6 +1132,43 @@ describe('commit de fin de run : contrôle des noms avant commit-tree', () => {
     expect(JSON.stringify(res)).not.toContain(TERME)
   })
 
+  /*
+   * Cas réel du 2026-11-19 : un tour de chat dans le dossier partagé laisse le terme dans un commentaire de
+   * test. Le crochet de commit le refusait, la clôture rendait « failed » avec la seule première ligne du
+   * crochet (sans le fichier), et aucun tour de réparation ne partait : l'utilisateur restait bloqué.
+   * Le contrôle passe donc AVANT `git commit`, sur les seuls chemins du tour, et nomme le fichier.
+   */
+  it('le commit du tour lui-même porte le terme : refus nommé avant le commit, rien commité ni indexé', async () => {
+    const { repo, remote } = await depotAvecProfil(PROFIL)
+    const teteAvant = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+    writeFileSync(join(repo, 'tour.test.ts'), `// cas réel : ${TERME}\n`)
+    // Un fichier indexé par un autre fil, hors du commit `--only` : il n'est ni lu, ni nommé, ni désindexé.
+    writeFileSync(join(repo, 'autre.ts'), `export const a = "${TERME}"\n`)
+    await realGit(['add', 'autre.ts'], repo)
+    writeFileSync(join(repo, 'propre.ts'), 'export const p = 1\n')
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/r-commit-du-tour',
+      message: 'travail du tour',
+      paths: ['tour.test.ts', 'propre.ts'],
+      runGit: await defaultGitRunner(),
+      direct: true,
+      openPr: vi.fn(async () => 'PR inutile')
+    })
+
+    expect(res).toMatchObject({ status: 'skipped', reason: 'separation-entreprise' })
+    const detail = (res as { detail?: string }).detail ?? ''
+    expect(detail).toContain('tour.test.ts (contenu)')
+    expect(detail).not.toContain('autre.ts')
+    expect(detail).not.toContain('propre.ts')
+    expect(JSON.stringify(res)).not.toContain(TERME)
+    expect((await realGit(['rev-parse', 'HEAD'], repo)).trim()).toBe(teteAvant)
+    expect(await realGit(['log', '-p', '--all'], remote)).not.toContain(TERME)
+    // L'index est rendu tel qu'il était : seul le fichier de l'autre fil y reste.
+    expect((await realGit(['diff', '--cached', '--name-only'], repo)).trim()).toBe('autre.ts')
+  })
+
   it('un commit de rattachement qui porte le terme n’entre pas dans la branche locale ; l’envoi part, réserve dite', async () => {
     const { repo, remote } = await depotAvecProfil(PROFIL)
     await commitLocalBloque(repo)

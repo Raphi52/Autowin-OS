@@ -32,7 +32,7 @@ export function composerPromptDeReparation(detail: string | undefined): string {
     raison
       ? `Raison donnée par l’app : ${raison}`
       : 'Raison non précisée par l’app : retrouve-la (fusion à blanc avec main, contrôle des noms réservés, base du fil).',
-    'Règle la cause dans la copie de ce fil, sans rien demander à l’utilisateur : corrige les fichiers nommés (un conflit se tranche par contenu, en gardant les deux apports ; un nom réservé se retire), puis rejoue les tests de ce que tu touches.',
+    'Règle la cause là où ce fil travaille (sa copie, ou son dossier s’il n’en a pas), sans rien demander à l’utilisateur : corrige les fichiers nommés (un conflit se tranche par contenu, en gardant les deux apports ; un nom réservé se retire), puis rejoue les tests de ce que tu touches.',
     // La porte publie depuis le point de départ du fil, qui ne suit que la TÊTE de la copie
     // (`recalerLaBaseSurLaCopie`) : des fichiers fusionnés à la main sur l'ancienne tête rejouent le conflit.
     'Un conflit avec main se règle en posant la copie sur main : sa tête sur le dernier commit de main (`git checkout --detach <commit>`), ton travail reposé dessus. Le fil repart alors de ce commit ; fusionner les fichiers sans déplacer la tête ferait refuser l’envoi une seconde fois.',
@@ -82,9 +82,17 @@ export function decisionDeReparation(tour: TourRefuse): DecisionDeReparation {
   const { status, reason, detail } = (
     typeof projet === 'object' && projet !== null ? projet : {}
   ) as { status?: unknown; reason?: unknown; detail?: unknown }
-  if (status !== 'skipped' || reason !== 'porte-refusee')
-    return { lancer: false, raison: 'pas-un-refus-de-la-porte' }
   const texte = typeof detail === 'string' ? detail : undefined
+  // Un tour hors copie (dossier partagé) dont le commit porte un nom réservé : le même geste que la porte
+  // d'une copie qui refuse pour cette raison, et la même réparation. « commit » seul désigne un commit
+  // déjà fait (rejeu) : aucun fichier du tour à corriger, rien à lancer.
+  const nomReserveDuTour =
+    status === 'skipped' &&
+    reason === 'separation-entreprise' &&
+    Boolean(texte?.trim()) &&
+    texte?.trim() !== 'commit'
+  if (!nomReserveDuTour && (status !== 'skipped' || reason !== 'porte-refusee'))
+    return { lancer: false, raison: 'pas-un-refus-de-la-porte' }
   if (texte?.trimEnd().endsWith(SUITE_QUAND_LA_PORTE_RETENTE_SEULE))
     return { lancer: false, raison: 'retente-seule' }
   if (estUneReparationDuRefus(tour.demande)) return { lancer: false, raison: 'deja-tentee' }
