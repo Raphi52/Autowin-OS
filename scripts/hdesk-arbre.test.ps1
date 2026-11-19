@@ -202,6 +202,10 @@ try {
   Verifier ($r.code -eq 1 -and $r.sortie -match '^\[AMBIGU\]' -and $lignes[0] -eq 2) "deux 'Doublon' -> refus qui liste les deux boutons avec leur repere ($($r.sortie))"
   $r = Appuyer $idWpf 'Valider tout'
   Verifier ($r.code -eq 1 -and $r.sortie -match '^\[INTROUVABLE\]' -and $r.sortie -match "Valider la saisie") "nom inconnu -> refus qui cite le plus proche ($($r.sortie))"
+  # Rien de proche : l'element n'est pas a l'ecran (page pas encore ouverte, appli relancee). Le refus
+  # cite ce qui L'EST et se laisse appuyer, sans les inactifs, pour viser sans relire l'arbre.
+  $r = Appuyer $idWpf 'Facturation mensuelle'
+  Verifier ($r.code -eq 1 -and $r.sortie -match '^\[INTROUVABLE\]' -and $r.sortie -match "Button 'Retirer'" -and $r.sortie -notmatch 'Bouton inactif') "nom sans rien de proche -> refus qui liste les elements a viser, sans les inactifs ($($r.sortie))"
   # Element RETIRE apres la lecture : son repere est refuse, rien n'est appuye a sa place.
   $w3 = Arbre $idWpf
   $refEph = Repere $w3 { $_.nom -eq 'Ephemere' }

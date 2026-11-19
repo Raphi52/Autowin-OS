@@ -304,7 +304,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
       'Cliquer, taper, appuyer une touche ou faire défiler dans TON bureau Windows caché (jamais la vraie souris ni le vrai clavier de l’utilisateur). Soit `element` : appuyer sur un élément de l’`arbre` de bureau_cache_observer (WPF : par l’accessibilité, où un clic posté échoue ; autre : clic à son centre, défilé à l’écran si besoin), plus sûr qu’un point. Vise-le par son REPÈRE @lecture:eN : refusé (`code: PERIME`) s’il a disparu ou changé depuis la lecture, sans appuyer sur un autre ; relis alors l’arbre. Avec `valeur`, tu REMPLIS ce champ (toute technologie, jamais un mot de passe). `element` = un seul appui ou un remplissage, sans frappe ni touche ; deux appuis rebasculent une case. Soit un clic au point (x, y), sauf `sansClic`, puis la frappe éventuelle. `action.apres` dit ce qui a changé : rien = re-observe. Un refus porte un `code` (PERIME, AMBIGU, INTROUVABLE, INACTIF, HORS_ECRAN, REFUSE…) et dit quoi faire. Seulement les bureaux de cette conversation',
     args: {
       element:
-        'facultatif — repère @lecture:eN (le plus sûr), id, nom ou libellé d’un élément de l’arbre (200 caractères au plus), à la place de x/y. Plusieurs éléments ou aucun : le refus liste les candidats ou les plus proches',
+        'facultatif — repère @lecture:eN (le plus sûr), id, nom ou libellé d’un élément de l’arbre (200 caractères au plus), à la place de x/y. Plusieurs éléments ou aucun : le refus liste les candidats, les plus proches, ou à défaut ceux à viser à l’écran',
       valeur:
         'facultatif — avec `element` : texte à mettre dans ce champ, qui REMPLACE son contenu (5000 caractères au plus ; vide = vider le champ)',
       x: 'facultatif — entier, pixels de la capture de bureau_cache_observer (0 à 32767), avec y ; sans `element`',
@@ -314,7 +314,8 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
       touche:
         'facultatif — une touche nommée : Tab, Echap, Retour, Entree, Suppr, Haut, Bas, Gauche, Droite, Debut, Fin, PageHaut, PageBas, CtrlA, CtrlC, CtrlV, CtrlX, CtrlZ',
       molette: 'facultatif — crans de molette, entier de -20 à 20 (positif = vers le haut)',
-      sansClic: 'facultatif — booléen, taper sans recliquer (garde le curseur posé)',
+      sansClic:
+        'facultatif — booléen, taper sans recliquer (garde le curseur posé) ; sans x/y, la frappe part vers le focus clavier',
       id: 'facultatif — identifiant du bureau. Absent = `chat-<id du fil>`'
     },
     argsTypes: {

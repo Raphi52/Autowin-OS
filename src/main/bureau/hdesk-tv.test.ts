@@ -567,6 +567,17 @@ describe('TV interactive — geste vers hdesk-act', () => {
   it('refuse des coordonnées non finies ou négatives', () => {
     expect(() => argumentsAct('R', { id: 'a', x: NaN, y: 1 })).toThrow()
     expect(() => argumentsAct('R', { id: 'a', x: -1, y: 1 })).toThrow()
+    expect(() => argumentsAct('R', { id: 'a', x: 1 })).toThrow(/Coordonnées invalides/)
+  })
+  // « Appuie, puis tape sans recliquer » ne donne pas de point : la frappe part vers le focus clavier
+  // (scripts/hdesk-act.cs). Un clic ou la molette sans point restent refusés.
+  it('sans x/y : frappe sans clic acceptée, sans -X/-Y ; clic ou molette refusés', () => {
+    const a = argumentsAct('R', { id: 'a', sansClic: true, touche: 'Entree' })
+    expect(a.slice(5)).toEqual(['-InstanceId', 'a', '-Touche', 'Entree', '-SansClic'])
+    expect(() => argumentsAct('R', { id: 'a', touche: 'Entree' })).toThrow(/focus clavier/)
+    expect(() => argumentsAct('R', { id: 'a', sansClic: true, molette: 2 })).toThrow(
+      /focus clavier/
+    )
   })
   // Hdesk-act.cs range x et y sur 16 bits (lParam) — x = 70000 cliquait AILLEURS, sans erreur.
   it('refuse des coordonnées énormes (> 32767) ; jumeau accepté à 32767', () => {

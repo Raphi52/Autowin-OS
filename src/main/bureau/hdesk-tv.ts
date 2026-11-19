@@ -187,8 +187,12 @@ export function origineCapture(reponse: Record<string, unknown>): OrigineCapture
  */
 export function pointEcran(g: GesteTv, origine: OrigineCapture | undefined): GesteTv {
   // Négatif = invalide aussi : -1 + origine 7 donnait 6, un clic valide à un point jamais visé.
-  if (!origine || !Number.isFinite(g?.x) || !Number.isFinite(g?.y) || g.x < 0 || g.y < 0) return g
-  return { ...g, x: g.x + origine.x, y: g.y + origine.y }
+  // Sans point (frappe vers le focus clavier) : rien à convertir.
+  const x = g?.x
+  const y = g?.y
+  if (!origine || x === undefined || y === undefined) return g
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return g
+  return { ...g, x: x + origine.x, y: y + origine.y }
 }
 
 /** Traduit une reponse `shot` en etat de TV. Bureau introuvable = ferme pendant qu'on regarde. */
@@ -521,8 +525,12 @@ export class CapteurHdesk {
  */
 export interface GesteTv {
   id: string
-  x: number
-  y: number
+  /**
+   * Point du clic, en pixels de l'écran du bureau. Absents ENSEMBLE avec `sansClic` : la frappe part
+   * vers le focus clavier (« appuie, puis tape sans recliquer » ne donne pas de point).
+   */
+  x?: number
+  y?: number
   texte?: string
   entree?: boolean
   /** Touche nommée (liste TOUCHES_TV), crans de molette (+ = haut), frappe sans reclic. */
@@ -568,10 +576,23 @@ export const VALEUR_MAX = 5000
 export function argumentsAct(racine: string, g: GesteTv, registre?: string): string[] {
   if (typeof g?.id !== 'string' || !ID_BUREAU.test(g.id))
     throw new Error('Identifiant de bureau invalide.')
-  if (!Number.isFinite(g.x) || !Number.isFinite(g.y) || g.x < 0 || g.y < 0)
-    throw new Error('Coordonnées invalides.')
-  if (g.x > COORDONNEE_MAX || g.y > COORDONNEE_MAX)
-    throw new Error(`Coordonnées hors bornes (${COORDONNEE_MAX} au plus).`)
+  const versLeFocus = g.x === undefined && g.y === undefined
+  if (versLeFocus) {
+    if (g.sansClic !== true || g.molette !== undefined)
+      throw new Error('Sans x/y, seule une frappe sans clic part (vers le focus clavier).')
+  } else {
+    if (
+      g.x === undefined ||
+      g.y === undefined ||
+      !Number.isFinite(g.x) ||
+      !Number.isFinite(g.y) ||
+      g.x < 0 ||
+      g.y < 0
+    )
+      throw new Error('Coordonnées invalides.')
+    if (g.x > COORDONNEE_MAX || g.y > COORDONNEE_MAX)
+      throw new Error(`Coordonnées hors bornes (${COORDONNEE_MAX} au plus).`)
+  }
   if (typeof g.texte === 'string' && g.texte.length > FRAPPE_MAX)
     throw new Error(`Texte trop long (${FRAPPE_MAX} caractères au plus).`)
   const args = [
@@ -581,12 +602,10 @@ export function argumentsAct(racine: string, g: GesteTv, registre?: string): str
     '-File',
     join(racine, 'scripts', 'hdesk-act.ps1'),
     '-InstanceId',
-    g.id,
-    '-X',
-    String(Math.round(g.x)),
-    '-Y',
-    String(Math.round(g.y))
+    g.id
   ]
+  if (g.x !== undefined && g.y !== undefined)
+    args.push('-X', String(Math.round(g.x)), '-Y', String(Math.round(g.y)))
   // Le texte part sur l'entrée standard (`texteDuGeste`), jamais dans la ligne de commande : celle-ci
   // se lit depuis tout processus du poste (Gestionnaire des tâches, WMI), et un code de connexion y
   // passait en clair.

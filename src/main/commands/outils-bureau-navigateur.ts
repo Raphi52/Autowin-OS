@@ -75,8 +75,7 @@ export async function outilBureauCache(
     return { data: { ...r, id, detail: r.message } }
   }
 
-  const brancheOk =
-    name === 'bureau_cache_observer' ? bus.observerBureauCache : bus.agirBureauCache
+  const brancheOk = name === 'bureau_cache_observer' ? bus.observerBureauCache : bus.agirBureauCache
   if (!bus.ficheBureauCache || !brancheOk)
     return refus(
       `${name === 'bureau_cache_observer' ? 'Capture' : 'Geste'} indisponible : aucun lanceur de scripts câblé dans ce processus.`
@@ -190,12 +189,22 @@ export async function outilBureauCache(
           }
     }
   }
-  if (!avecX && !avecY)
+  // FRAPPE VERS LE FOCUS : le refus d'un appui conseille « tape avec `sansClic: true` » ; sans x/y,
+  // la touche part là où est le curseur (scripts/hdesk-act.cs, FenetreAuFocus).
+  const versLeFocus = !avecX && !avecY && vrai('sansClic')
+  if (versLeFocus) {
+    if (nombre('molette') !== undefined)
+      return refus('Refusé : la molette vise un point — passe `x` et `y`.')
+    if (!s('texte') && !vrai('entree') && !s('touche'))
+      return refus(
+        'Refusé : `sansClic` sans x/y n’envoie qu’une frappe — passe `texte`, `touche` ou `entree`.'
+      )
+  } else if (!avecX && !avecY)
     return refus(
-      'Refusé : passe `element` (un élément de l’arbre de bureau_cache_observer), ou `x` et `y`.'
+      'Refusé : passe `element` (un élément de l’arbre de bureau_cache_observer), ou `x` et `y` — ou `sansClic: true` seul pour taper là où est le curseur.'
     )
   if (avecX !== avecY) return refus('Refusé : `x` et `y` vont ensemble.')
-  const geste: GesteTv = { id, x: Number(a.x), y: Number(a.y) }
+  const geste: GesteTv = versLeFocus ? { id } : { id, x: Number(a.x), y: Number(a.y) }
   if (s('texte')) geste.texte = s('texte')
   if (vrai('entree')) geste.entree = true
   if (s('touche')) geste.touche = s('touche')

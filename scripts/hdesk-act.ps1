@@ -10,7 +10,9 @@
   Usage : powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X 400 -Y 300 [-Texte "CODE"] [-Entree]
           powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -Element '@k3f9a2:e8'
           powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -Element '@k3f9a2:e4' -Remplir -TexteEntree  (texte sur stdin)
+          powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -SansClic -Touche Entree  (vers le focus clavier)
   Clique en (X,Y) (coordonnees de la capture hdesk-observe), puis tape -Texte dans la fenetre visee.
+  -SansClic sans -X/-Y : la frappe part vers le controle qui a le focus clavier (banc : hdesk-act.sansclic.test.ps1).
   Limite : messages fenetre (PostMessage), pas SendInput — une app qui lit le clavier brut peut les ignorer ;
   verifier par une capture hdesk-observe apres coup.
   Mesure 2026-09-24 (Brave 154, --disable-gpu) : clic + frappe RECUS par Brave (barre d'adresse = "about:blankCXC8M5FC5",
@@ -74,7 +76,10 @@ function NoterGeste([bool]$ok, [string]$erreur) {
   try {
     New-Item -ItemType Directory -Path $dossierRegistre -Force | Out-Null
     $journal = Join-Path $dossierRegistre "$InstanceId.gestes.jsonl"
-    $champs = [ordered]@{ quand = (Get-Date).ToString('o'); ok = $ok; x = $X; y = $Y; clic = (-not $SansClic) }
+    $champs = [ordered]@{ quand = (Get-Date).ToString('o'); ok = $ok }
+    # Frappe vers le focus : pas de point a noter (-1 se lirait comme une position).
+    if ($X -ge 0 -and $Y -ge 0) { $champs.x = $X; $champs.y = $Y }
+    $champs.clic = (-not $SansClic)
     if ($Element) { $champs.element = $Element }
     if ($Remplir) { $champs.remplir = $true }
     if ($Texte) { $champs.caracteres = $Texte.Length }
@@ -126,7 +131,10 @@ if ($Element) {
   throw '-Remplir va avec -Element (le champ a remplir).'
 } elseif (-not ($PSBoundParameters.ContainsKey('X') -and $PSBoundParameters.ContainsKey('Y'))) {
   if ($avecPoint) { throw '-X et -Y vont ensemble.' }
-  throw 'Passe -Element, ou -X et -Y.'
+  if (-not $SansClic) { throw 'Passe -Element, ou -X et -Y ; ou -SansClic seul pour une frappe vers le focus clavier.' }
+  if ($Molette) { throw 'La molette vise un point : passe -X et -Y.' }
+  if (-not ($Texte -or $Entree -or $Touche -or $Touches)) { throw 'Rien a envoyer : -SansClic sans point attend -Texte, -Touche, -Touches ou -Entree.' }
+  # Sans point : hdesk-act.cs envoie au controle qui a le focus clavier (FenetreAuFocus).
 }
 . (Join-Path $PSScriptRoot 'hdesk-types.ps1')
 $bureau = "AutowinTest_$InstanceId"
@@ -173,7 +181,10 @@ $r = [AutowinHdeskAct]::Run($bureau, $X, $Y, $Texte, [bool]$Entree, $Touche, $Mo
 if ($r.Error) { throw $r.Error }
 $apres = if ($appui) { EtatApres } else { $null }
 NoterGeste $true ''
-$sortie = [ordered]@{ instanceId = $InstanceId; x = $X; y = $Y; cible = $r.Cible; messages = $r.Envoyes }
+$sortie = [ordered]@{ instanceId = $InstanceId }
+if ($X -ge 0 -and $Y -ge 0) { $sortie.x = $X; $sortie.y = $Y } else { $sortie.vers = 'focus' }
+$sortie.cible = $r.Cible
+$sortie.messages = $r.Envoyes
 if ($appui) { $sortie.element = $vise; $sortie.appui = $appui }
 if ($apres) { $sortie.apres = $apres }
 # Clic + fleches d'un seul geste : la liste ouverte se referme avant la capture (hdesk-act-avertissements.ps1).

@@ -421,6 +421,33 @@ function outOfScopeName(nomme: string): string | undefined {
   return undefined
 }
 
+/*
+ * POUR UN REFUS DE CIBLE QUI DIT OÙ VISER. Une base de développement demandée sans serveur part sur
+ * le serveur par défaut (production) et y est refusée ; l'agent essayait ensuite le serveur sans son
+ * instance, refusé aussi, et ne trouvait le bon couple qu'au troisième appel. Ces deux aides ne lisent
+ * que les cibles DÉCLARÉES du catalogue (`databasesFor`, jamais `has`, qui accepte toute base d'un
+ * serveur de développement) et n'autorisent rien : le couple proposé repasse par cette garde.
+ */
+function ouEstLaBase(catalogue: SqlTargetCatalog, server: string, database: string): string {
+  const voulue = database.toLowerCase()
+  const ailleurs = catalogue
+    .servers()
+    .filter(
+      (s) =>
+        s.toLowerCase() !== server.toLowerCase() &&
+        catalogue.databasesFor(s).some((d) => d.toLowerCase() === voulue)
+    )
+  return ailleurs.length === 1
+    ? ` « ${database} » est sur ${ailleurs[0]} : passe server « ${ailleurs[0]} ».`
+    : ''
+}
+
+function serveurComplet(catalogue: SqlTargetCatalog, server: string): string {
+  const prefixe = `${server.toLowerCase()}\\`
+  const candidats = catalogue.servers().filter((s) => s.toLowerCase().startsWith(prefixe))
+  return candidats.length === 1 ? ` Tu voulais sans doute « ${candidats[0]} ».` : ''
+}
+
 /**
  * Valide la cible et la requête. Ne throw jamais : un refus est un résultat à afficher.
  *
@@ -475,8 +502,8 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
     return {
       allowed: false,
       reason: connues.length
-        ? `Base hors périmètre : « ${database} » n’est pas une base exploitée sur ${server}. Bases disponibles : ${connues.slice(0, 8).join(', ')}${connues.length > 8 ? `, … (${connues.length} au total)` : ''}.`
-        : `Serveur hors périmètre : « ${server} ». Serveurs disponibles : ${catalogue.servers().join(', ')}.`
+        ? `Base hors périmètre : « ${database} » n’est pas une base exploitée sur ${server}.${ouEstLaBase(catalogue, server, database)} Bases disponibles : ${connues.slice(0, 8).join(', ')}${connues.length > 8 ? `, … (${connues.length} au total)` : ''}.`
+        : `Serveur hors périmètre : « ${server} ».${serveurComplet(catalogue, server)} Serveurs disponibles : ${catalogue.servers().join(', ')}.`
     }
   }
 

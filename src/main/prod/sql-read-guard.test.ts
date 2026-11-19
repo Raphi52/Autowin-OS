@@ -819,6 +819,48 @@ describe('decideSqlRead — CATALOGUE lisible, secrets exclus (décision du 2026
   })
 
   it('ne touche pas aux bases : * y reste permis', () => {
-    expect(decide({ server: 'SRV-PROD\\PROD', database: 'DB_ALPHA', query: 'SELECT * FROM dbo.GREFFIER' }).allowed).toBe(true)
+    expect(
+      decide({
+        server: 'SRV-PROD\\PROD',
+        database: 'DB_ALPHA',
+        query: 'SELECT * FROM dbo.GREFFIER'
+      }).allowed
+    ).toBe(true)
+  })
+})
+
+/*
+ * Mesure du 18/11/2026 (deux fils) : une base de développement demandée sans serveur part sur le
+ * serveur par défaut (production) → « Base hors périmètre » ; l'agent essaie alors le serveur sans
+ * son instance → « Serveur hors périmètre », et ne trouve le bon couple qu'au troisième appel. Le
+ * refus dit maintenant où est la base, et quel nom complet de serveur viser. L'AUTORITÉ ne change
+ * pas : ces cas restent refusés, rien de plus n'est accepté.
+ */
+describe('decideSqlRead — un refus de cible dit où viser', () => {
+  const raison = (args: SqlReadArgs): string => {
+    const d = decide(args)
+    expect(d.allowed).toBe(false)
+    return d.allowed ? '' : d.reason
+  }
+
+  it('base présente sur un autre serveur : le refus nomme ce serveur', () => {
+    expect(
+      raison({ server: 'SRV-PROD\\PROD', database: 'app_dev', query: 'SELECT 1 AS n' })
+    ).toMatch(/« app_dev » est sur SRV-DEV\\DEV : passe server « SRV-DEV\\DEV »/)
+  })
+
+  it('serveur donné sans son instance : le refus propose le nom complet', () => {
+    expect(raison({ server: 'srv-dev', database: 'APP_DEV', query: 'SELECT 1 AS n' })).toMatch(
+      /Serveur hors périmètre : « srv-dev »\. Tu voulais sans doute « SRV-DEV\\DEV »/
+    )
+  })
+
+  it('base inconnue partout, serveur sans parent : aucune cible inventée', () => {
+    expect(
+      raison({ server: 'SRV-PROD\\PROD', database: 'DB_INCONNUE', query: 'SELECT 1 AS n' })
+    ).not.toMatch(/est sur|Tu voulais/)
+    expect(
+      raison({ server: 'SRV-AUTRE', database: 'DB_ALPHA', query: 'SELECT 1 AS n' })
+    ).not.toMatch(/Tu voulais/)
   })
 })

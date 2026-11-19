@@ -55,6 +55,8 @@ public class AutowinHdeskArbre {
   /** Candidats cites dans un refus « plusieurs elements » ; plus proches cites dans « introuvable ». */
   const int CANDIDATS_MAX = 10;
   const int PROCHES_MAX = 5;
+  /** Elements a l'ecran cites quand rien n'est proche de la cible (« introuvable ») : ~50 caracteres chacun. */
+  const int A_VISER_MAX = 15;
   /** Lectures gardees par bureau : un repere d'une lecture plus ancienne est refuse (PERIME). */
   const int LECTURES_GARDEES = 5;
   /** Ecart toleré (pixels) pour reconnaitre un element dont le fournisseur change de RuntimeId. */
@@ -420,8 +422,18 @@ public class AutowinHdeskArbre {
     }
     proches.Sort((a, b) => a.Key.CompareTo(b.Key));
     var sb = new StringBuilder("Aucun element '").Append(cible).Append("' dans ce bureau");
-    if (proches.Count == 0)
-      return sb.Append(", ni aucun element proche. Lis l'arbre (bureau_cache_observer) pour voir les noms disponibles.").ToString();
+    if (proches.Count == 0) {
+      // Rien de proche : l'element n'est pas a l'ecran (page pas encore ouverte, appli tout juste
+      // relancee). Mesure du 19/11/2026 : 6 refus de ce genre sur 4 fils, chacun suivi d'une relecture
+      // de l'arbre pour savoir quoi viser. On cite donc ce qui EST a l'ecran et se laisse appuyer.
+      var aViser = Filtrer(els, e => Agissables.Contains(e.Type) && e.Actif && e.AvecRect && !e.HorsEcran && e.Montre() != "");
+      if (aViser.Count == 0)
+        return sb.Append(", ni aucun element proche. Lis l'arbre (bureau_cache_observer) pour voir les noms disponibles.").ToString();
+      sb.Append(", ni aucun element proche : il n'est pas a l'ecran en ce moment. A viser maintenant (").Append(aViser.Count).Append(") :");
+      for (int i = 0; i < aViser.Count && i < A_VISER_MAX; i++) sb.Append("\n").Append(Decrit(aViser[i], ox, oy));
+      if (aViser.Count > A_VISER_MAX) sb.Append("\n... et ").Append(aViser.Count - A_VISER_MAX).Append(" autres : lis l'arbre (bureau_cache_observer).");
+      return sb.ToString();
+    }
     sb.Append(". Les plus proches :");
     for (int i = 0; i < proches.Count && i < PROCHES_MAX; i++) sb.Append("\n").Append(Decrit(proches[i].Value, ox, oy));
     return sb.ToString();

@@ -87,6 +87,31 @@ public sealed class AutowinHdeskAct {
     {"CtrlX", new[]{0, 24}}, {"CtrlZ", new[]{0, 26}}
   };
   public static bool ToucheConnue(string t) { return Touches.ContainsKey(t ?? ""); }
+  // FRAPPE SANS POINT : « appuie, puis tape avec -SansClic » ne donne pas de x/y. La touche va alors
+  // la ou va le clavier : le controle qui a le focus dans le fil de la fenetre du dessus du bureau
+  // (EnumDesktopWindows rend l'ordre Z, le dessus d'abord). Une info-bulle du meme fil en tete d'ordre
+  // ne gene pas : le focus est celui du fil, pas de la fenetre. Sans focus connu : la fenetre active,
+  // puis la fenetre du dessus elle-meme.
+  [StructLayout(LayoutKind.Sequential)] public struct GUITHREADINFO { public int cbSize, flags; public IntPtr hwndActive, hwndFocus, hwndCapture, hwndMenuOwner, hwndMoveSize, hwndCaret; public RECT rcCaret; }
+  [DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint tid, ref GUITHREADINFO g);
+  IntPtr FenetreAuFocus() {
+    IntPtr dessus = IntPtr.Zero;
+    EnumProc cb = (w, l) => {
+      if (!IsWindowVisible(w)) return true;
+      RECT r; if (!GetWindowRect(w, out r) || r.R <= r.L || r.B <= r.T) return true;
+      dessus = w; return false;
+    };
+    try { EnumDesktopWindows(hDesk, cb, IntPtr.Zero); } catch { }
+    GC.KeepAlive(cb);
+    if (dessus == IntPtr.Zero) return IntPtr.Zero;
+    uint pid, fil = GetWindowThreadProcessId(dessus, out pid);
+    var g = new GUITHREADINFO(); g.cbSize = Marshal.SizeOf(typeof(GUITHREADINFO));
+    if (fil != 0 && GetGUIThreadInfo(fil, ref g)) {
+      if (g.hwndFocus != IntPtr.Zero) return g.hwndFocus;
+      if (g.hwndActive != IntPtr.Zero) return g.hwndActive;
+    }
+    return dessus;
+  }
   public static AutowinHdeskAct Run(string bureau, int x, int y, string texte, bool entree) { return Run(bureau, x, y, texte, entree, "", 0, "", false); }
   // `touches` : codes de touche virtuels en hexadecimal, separes par des virgules, chacun suivi de
   // xN pour le repeter (« 28x15,0D » = 15 fois Fleche bas puis Entree). C'est la seule voie qui ACTIVE
@@ -103,10 +128,15 @@ public sealed class AutowinHdeskAct {
     if (hDesk == IntPtr.Zero) { Error = "Bureau '" + bureau + "' introuvable (Win32 " + Marshal.GetLastWin32Error() + ")."; return; }
     if (!SetThreadDesktop(hDesk)) { Error = "SetThreadDesktop a echoue (Win32 " + Marshal.GetLastWin32Error() + ")."; return; }
     var p = new POINT { X = x, Y = y };
-    IntPtr h = WindowFromPoint(p);
-    if (h == IntPtr.Zero) { Error = "Aucune fenetre en (" + x + "," + y + ") dans ce bureau." + ListerFenetres(); return; }
+    bool sansPoint = x < 0 || y < 0;
+    if (sansPoint && (!sansClic || molette != 0)) { Error = "Sans point, seule une frappe -SansClic part (vers le focus) : un clic ou la molette vise -X/-Y."; return; }
+    IntPtr h = sansPoint ? FenetreAuFocus() : WindowFromPoint(p);
+    if (h == IntPtr.Zero) {
+      Error = (sansPoint ? "Aucune fenetre visible pour recevoir la frappe dans ce bureau." : "Aucune fenetre en (" + x + "," + y + ") dans ce bureau.") + ListerFenetres();
+      return;
+    }
     var sb = new System.Text.StringBuilder(256); GetClassNameW(h, sb, 256); Cible = sb.ToString();
-    var c = p; ScreenToClient(h, ref c);
+    var c = p; if (!sansPoint) ScreenToClient(h, ref c);
     IntPtr lp = new IntPtr((c.Y << 16) | (c.X & 0xFFFF));
     if (molette != 0) {
       // WM_MOUSEWHEEL : delta en mot haut (120 par cran, positif = vers le haut), lParam en coordonnees ECRAN.

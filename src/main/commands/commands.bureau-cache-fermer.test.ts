@@ -252,13 +252,34 @@ describe('bureau_cache_lancer / observer / agir', () => {
     ['P2-6 element trop long', { element: 'x'.repeat(201) }, /trop long \(200/],
     ['P2-7 element et texte', { element: 'Champ', texte: 'abc' }, /un seul appui/],
     ['P2-7 element et touche', { element: 'Champ', touche: 'Tab' }, /un seul appui/],
-    ['P2-7 element et molette', { element: 'Liste', molette: 2 }, /un seul appui/]
+    ['P2-7 element et molette', { element: 'Liste', molette: 2 }, /un seul appui/],
+    ['P2-8 sansClic sans x/y ni frappe', { sansClic: true }, /passe `texte`, `touche` ou `entree`/],
+    ['P2-8 sansClic sans x/y avec molette', { sansClic: true, molette: 2 }, /molette vise un point/]
   ])('agir : %s → refus nommé, rien n’est envoyé', async (_cas, args, motif) => {
     const { bus, gestes } = busOutils()
     const r = await bus.exec('bureau_cache_agir', args, 'conv-222')
     expect(r.data).toMatchObject({ ok: false })
     expect(String((r.data as { detail?: string }).detail)).toMatch(motif)
     expect(gestes).toEqual([])
+  })
+
+  /*
+   * Le refus d'un appui conseille « tape avec `sansClic: true` (le curseur reste posé) » : trois fils
+   * en 3 jours ont suivi ce conseil sans x/y et pris « passe `element`, ou `x` et `y` ».
+   */
+  it('agir : `sansClic` sans x/y envoie la frappe vers le focus, sans point', async () => {
+    const { bus, gestes } = busOutils()
+    const r = await bus.exec(
+      'bureau_cache_agir',
+      { sansClic: true, texte: '300', touche: 'Tab' },
+      'conv-222'
+    )
+    expect(r.data).toMatchObject({ ok: true })
+    await bus.exec('bureau_cache_agir', { sansClic: true, touche: 'Echap' }, 'conv-222')
+    expect(gestes).toEqual([
+      { id: 'chat-conv-222', texte: '300', touche: 'Tab', sansClic: true },
+      { id: 'chat-conv-222', touche: 'Echap', sansClic: true }
+    ])
   })
 
   it('agir : le refus du script (ambigu, introuvable) est rendu tel quel', async () => {
