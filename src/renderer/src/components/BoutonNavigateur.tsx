@@ -56,16 +56,38 @@ function useEnteteAssezLarge(seuil: number): {
   return { refBouton, assezLarge }
 }
 
+/**
+ * LE PETIT CHIFFRE ROUGE SOUS L'ICÔNE (2026-11-19 : « quand un bureau caché se lance, au lieu de
+ * m'ouvrir le panel, ça doit me mettre un petit 1 rouge sous l'icône ; pareil pour les
+ * navigateurs ») : ce que l'agent a ouvert dans ce fil depuis le dernier regard sur le panneau.
+ * Caché aux lecteurs d'écran : le nom du bouton porte déjà le compte, en toutes lettres.
+ */
+function PastilleNonVus({ nombre }: { nombre: number }): React.JSX.Element | null {
+  if (nombre <= 0) return null
+  return (
+    <span className="bouton-creux-pastille" data-testid="bouton-creux-pastille" aria-hidden="true">
+      {nombre > 9 ? '9+' : nombre}
+    </span>
+  )
+}
+
+/** Le nom du bouton, suivi du compte quand l'agent a ouvert quelque chose de pas encore vu. */
+const avecLeCompte = (nom: string, compte: string | null): string =>
+  compte ? `${nom} — ${compte}` : nom
+
 export interface PropsBoutonNavigateur {
   /** Le fil affiché ; `null` sans fil ouvert : ses onglets lui appartiennent, rien à montrer. */
   conversationId: string | null
   ouvert: boolean
+  /** Pages ouvertes par l'agent dans ce fil, panneau fermé ; 0 = pas de pastille. */
+  nonVus?: number
   onBasculer: () => void
 }
 
 export function BoutonNavigateur({
   conversationId,
   ouvert,
+  nonVus = 0,
   onBasculer
 }: PropsBoutonNavigateur): React.JSX.Element {
   const [etat, setEtat] = useState<EtatNavigateur | null>(null)
@@ -93,6 +115,12 @@ export function BoutonNavigateur({
   const adresse = etatDuFil?.onglets.find((o) => o.id === etatDuFil.ongletActif)?.url ?? ''
   const site = siteDeLAdresse(adresse)
   const action = texteNavigateur(ouvert ? 'fermerPanneau' : 'ouvrirPanneau')
+  const compte =
+    nonVus > 1
+      ? texteNavigateur('pagesNonVues', { n: nonVus })
+      : nonVus === 1
+        ? texteNavigateur('pageNonVue')
+        : null
 
   return (
     <button
@@ -104,8 +132,8 @@ export function BoutonNavigateur({
       // fix-ok: cause mesurée (2026-10-29) — capture réelle sans conversation : clic sans effet visible ; sans cette ligne, NavigateurIntegre.test.tsx « aucun fil ouvert » échoue (code 1), avec elle 31/31 (code 0).
       disabled={!conversationId}
       aria-pressed={ouvert}
-      aria-label={site ? `${action} : ${site}` : action}
-      title={site ? `${action}\n${adresse}` : action}
+      aria-label={avecLeCompte(site ? `${action} : ${site}` : action, compte)}
+      title={avecLeCompte(site ? `${action}\n${adresse}` : action, compte)}
       onClick={onBasculer}
     >
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
@@ -122,12 +150,15 @@ export function BoutonNavigateur({
           {site}
         </span>
       )}
+      <PastilleNonVus nombre={nonVus} />
     </button>
   )
 }
 
 export interface PropsBoutonBureauxCaches {
   ouvert: boolean
+  /** Bureaux lancés par le fil, panneau fermé ; 0 = pas de pastille. */
+  nonVus?: number
   onBasculer: () => void
 }
 
@@ -137,10 +168,17 @@ export interface PropsBoutonBureauxCaches {
  */
 export function BoutonBureauxCaches({
   ouvert,
+  nonVus = 0,
   onBasculer
 }: PropsBoutonBureauxCaches): React.JSX.Element {
   const { t } = useTextesWorktreesEtBureaux()
-  const action = t(ouvert ? 'hdesk.panneau.fermer' : 'hdesk.panneau.ouvrir')
+  const compte =
+    nonVus > 1
+      ? t('hdesk.panneau.nouveau.plusieurs', { n: nonVus })
+      : nonVus === 1
+        ? t('hdesk.panneau.nouveau.un')
+        : null
+  const action = avecLeCompte(t(ouvert ? 'hdesk.panneau.fermer' : 'hdesk.panneau.ouvrir'), compte)
 
   return (
     <button
@@ -169,6 +207,7 @@ export function BoutonBureauxCaches({
           strokeLinecap="round"
         />
       </svg>
+      <PastilleNonVus nombre={nonVus} />
     </button>
   )
 }

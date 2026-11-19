@@ -107,13 +107,35 @@ describe('BoutonBureauxCaches', () => {
     conteneur.remove()
   })
 
-  async function monter(ouvert: boolean, onBasculer = vi.fn()): Promise<HTMLButtonElement> {
+  async function monter(
+    ouvert: boolean,
+    onBasculer = vi.fn(),
+    nonVus = 0
+  ): Promise<HTMLButtonElement> {
     conteneur = document.createElement('div')
     document.body.appendChild(conteneur)
     racine = createRoot(conteneur)
-    await act(async () => racine?.render(createElement(BoutonBureauxCaches, { ouvert, onBasculer })))
+    await act(async () =>
+      racine?.render(createElement(BoutonBureauxCaches, { ouvert, nonVus, onBasculer }))
+    )
     return conteneur.querySelector('[data-testid="chat-bureaux-toggle"]') as HTMLButtonElement
   }
+
+  // « Un petit 1 rouge sous l'icône » (2026-11-19) : le compte des bureaux pas encore regardés.
+  it('bureaux pas encore regardés : le chiffre sous l’icône, en toutes lettres dans son nom', async () => {
+    const bouton = await monter(false, vi.fn(), 2)
+    const pastille = bouton.querySelector('[data-testid="bouton-creux-pastille"]')
+    expect(pastille?.textContent).toBe('2')
+    expect(pastille?.getAttribute('aria-hidden')).toBe('true')
+    expect(bouton.getAttribute('aria-label')).toBe(
+      'Ouvrir les bureaux cachés — 2 bureaux lancés, pas encore regardés'
+    )
+  })
+
+  it('au-delà de 9, la pastille garde sa taille : « 9+ »', async () => {
+    const bouton = await monter(false, vi.fn(), 12)
+    expect(bouton.querySelector('[data-testid="bouton-creux-pastille"]')?.textContent).toBe('9+')
+  })
 
   it('est le même bouton creux que son voisin, réduit à son icône', async () => {
     const bouton = await monter(false)

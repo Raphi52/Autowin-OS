@@ -212,14 +212,18 @@ import { useRepriseDeLecture } from './chat-view-defilement'
 import { useFluxDuPilote } from './chat-view-flux-pilote'
 import {
   adopterLeFilNeuf,
-  AUCUN_PANNEAU,
   basculerBureauxDans,
   basculerNavigateurDans,
   bureauxOuvertsDans,
   fermerDans,
   navigateurOuvertDans,
+  nouveautesDans,
+  OUTILS_AU_REPOS,
   ouvrirDans,
   placeDuPanneau,
+  poserLesPanneaux,
+  signalerDans,
+  type OutilDuPanneau,
   type PanneauxParFil
 } from './panneau-outil'
 
@@ -1209,21 +1213,35 @@ export function ChatView({
   const activeRef = useRef<string | null>(null)
   /*
    * NAVIGATEUR INTÉGRÉ DU CHAT (lot 3/5) : panneau ouvert ou fermé (Ctrl+Shift+B, bouton
-   * de l'en-tête), et ouvert TOUT SEUL quand l'agent ouvre une page dans le fil actif. Les onglets
-   * déjà vus par fil vivent dans une REF : un événement d'état (chargement, titre) ne re-rend pas la
-   * vue chat, seule une ouverture de panneau le fait.
+   * de l'en-tête). Une page que l'agent ouvre dans le fil actif ne l'ouvre plus : elle ajoute 1 au
+   * compteur rouge du globe (voir `panneau-outil.ts`). Les onglets déjà vus par fil vivent dans une
+   * REF : un événement d'état (chargement, titre) ne re-rend pas la vue chat, seul un onglet neuf le fait.
    * UN SEUL PANNEAU À LA FOIS (2026-10-31) : navigateur et Bureaux cachés se partagent cette
    * valeur, parce qu'à 1280 px les deux ensemble ne laissent plus de place au fil. Une valeur unique
    * rend « les deux ouverts » impossible à écrire, là où deux booléens auraient dû se fermer l'un l'autre.
    * Chaque fil retient le sien : ouvert dans un fil, il ne suit pas l'utilisateur dans un autre
    * (voir `panneau-outil.ts`).
    */
-  const [panneaux, setPanneaux] = useState<PanneauxParFil>(AUCUN_PANNEAU)
+  const [outils, setOutils] = useState(OUTILS_AU_REPOS)
+  const { panneaux } = outils
+  /** Toute ouverture passe ici : le panneau ouvert efface son compteur dans le même état. */
+  const setPanneaux = useCallback(
+    (changer: (ouverts: PanneauxParFil) => PanneauxParFil): void =>
+      setOutils((avant) => poserLesPanneaux(avant, changer(avant.panneaux))),
+    []
+  )
+  const signalerNouveaute = useCallback(
+    (place: string, outil: OutilDuPanneau, combien = 1): void =>
+      setOutils((avant) => signalerDans(avant, place, outil, combien)),
+    []
+  )
   const placePanneau = placeDuPanneau(activeId, convViewMode === 'mosaic')
   const placePanneauRef = useRef(placePanneau)
   useTenirRefAJour(placePanneauRef, placePanneau)
   const navigateurOuvert = navigateurOuvertDans(panneaux, activeId)
   const bureauxOuverts = bureauxOuvertsDans(panneaux, placePanneau)
+  const pagesNonVues = nouveautesDans(outils, activeId, 'navigateur')
+  const bureauxNonVus = nouveautesDans(outils, placePanneau, 'bureaux')
   const basculerNavigateur = (): void =>
     setPanneaux((ouverts) => basculerNavigateurDans(ouverts, activeRef.current))
   const adopterPanneauDuFilNeuf = (conversationId: string): void =>
@@ -1238,7 +1256,7 @@ export function ChatView({
     if (!filDuMontagePose || demandeBureaux === demandeBureauxVueRef.current) return
     demandeBureauxVueRef.current = demandeBureaux
     setPanneaux((ouverts) => ouvrirDans(ouverts, placePanneauRef.current, 'bureaux'))
-  }, [demandeBureaux, filDuMontagePose])
+  }, [demandeBureaux, filDuMontagePose, setPanneaux])
   // Question à côté : Ctrl+;, fil unique. Son état de saisie vit dans son composant.
   const [questionACoteOuverte, setQuestionACoteOuverte] = useState(false)
   useRaccourciQuestionACote(isActive && convViewMode !== 'mosaic' && Boolean(activeId), () =>
@@ -1256,13 +1274,12 @@ export function ChatView({
       const connus = ongletsConnusRef.current.get(etat.conversationId)
       const ids = etat.onglets.map((onglet) => onglet.id)
       ongletsConnusRef.current.set(etat.conversationId, new Set(ids))
-      // Fil pas encore relu : on apprend ses onglets sans ouvrir — ce n'est pas une ouverture vue.
+      // Fil pas encore relu : on apprend ses onglets sans compter — ce n'est pas une ouverture vue.
       if (!connus || etat.conversationId !== activeRef.current) return
-      if (ids.some((id) => !connus.has(id))) {
-        setPanneaux((ouverts) => ouvrirDans(ouverts, etat.conversationId, 'navigateur'))
-      }
+      const neufs = ids.filter((id) => !connus.has(id)).length
+      if (neufs) signalerNouveaute(etat.conversationId, 'navigateur', neufs)
     })
-  }, [])
+  }, [signalerNouveaute])
   useEffect(() => {
     const api = apiNavigateur()
     if (!api || !activeId) return
@@ -1284,7 +1301,7 @@ export function ChatView({
     }
     document.addEventListener('keydown', surTouche)
     return () => document.removeEventListener('keydown', surTouche)
-  }, [isActive, convViewMode])
+  }, [isActive, convViewMode, setPanneaux])
   const loadConversationRequestRef = useRef(0)
   /** Tours déjà rejoués depuis le journal fichier — clé de dédup du rejeu (voir replayTurnJournal). */
   const replayedTurnsRef = useRef(new Set<string>())
@@ -4009,7 +4026,7 @@ export function ChatView({
     liveRuns, loadConv, memoriserDossier, messages, mosaicIds, onInspectTurn, ouvrirLogin,
     pickSuggestion, planSelection, rangerDans, refineResumeDraft, refreshConvs, revealLiveAction,
     runs, selectedConvIds, setAppNotice, setConvMenu, setConvSelectionMode, setDossierNouveauFil,
-    setDossiersMemorises, setOpenImage, setPanneaux, setSelectedConvIds, setSurvole, showRuns,
+    setDossiersMemorises, setOpenImage, setSelectedConvIds, setSurvole, showRuns, signalerNouveaute,
     surviole, toggleConvSelection
   })
   /*
@@ -5072,10 +5089,12 @@ export function ChatView({
               <BoutonNavigateur
                 conversationId={activeId}
                 ouvert={navigateurOuvert}
+                nonVus={pagesNonVues}
                 onBasculer={basculerNavigateur}
               />
               <BoutonBureauxCaches
                 ouvert={bureauxOuverts}
+                nonVus={bureauxNonVus}
                 onBasculer={() =>
                   setPanneaux((ouverts) => basculerBureauxDans(ouverts, placePanneau))
                 }

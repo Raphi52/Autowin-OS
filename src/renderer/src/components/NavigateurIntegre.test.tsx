@@ -950,18 +950,43 @@ describe('ChatView — navigateur intégré', () => {
     expect(panneau()).toBeNull()
   })
 
-  it('l’agent ouvre une page dans le fil actif : le panneau s’ouvre tout seul', async () => {
+  /** Le chiffre rouge sous le globe ; `null` sans pastille. */
+  const chiffre = (): string | null =>
+    h!.container.querySelector(
+      '[data-testid="chat-navigateur-toggle"] [data-testid="bouton-creux-pastille"]'
+    )?.textContent ?? null
+
+  // « Pareil pour les navigateurs ouverts » (2026-11-19) : plus d'ouverture toute seule.
+  it('l’agent ouvre une page dans le fil actif : un 1 rouge sous le globe, sans panneau', async () => {
     await nav.pousser({ onglets: [onglet('onglet-1')], ongletActif: 'onglet-1' })
+    expect(panneau()).toBeNull()
+    expect(chiffre()).toBe('1')
+    await nav.pousser({ onglets: [onglet('onglet-1'), onglet('onglet-2'), onglet('onglet-3')] })
+    expect(chiffre()).toBe('3')
+    // Un chargement ou un titre sur les mêmes onglets ne compte pas.
+    await nav.pousser({ ongletActif: 'onglet-2' })
+    expect(chiffre()).toBe('3')
+    await h!.click('[data-testid="chat-navigateur-toggle"]')
     expect(panneau()).toBeTruthy()
+    expect(chiffre()).toBeNull()
   })
 
-  it('jumeau : une page ouverte dans un AUTRE fil n’ouvre rien', async () => {
+  it('panneau déjà ouvert : la page s’y voit, aucun chiffre ne s’ajoute', async () => {
+    await h!.click('[data-testid="chat-navigateur-toggle"]')
+    await nav.pousser({ onglets: [onglet('onglet-1')], ongletActif: 'onglet-1' })
+    expect(panneau()).toBeTruthy()
+    await h!.click('[data-testid="chat-navigateur-toggle"]')
+    expect(chiffre()).toBeNull()
+  })
+
+  it('jumeau : une page ouverte dans un AUTRE fil n’ouvre rien et ne compte pas ici', async () => {
     await nav.pousser({
       conversationId: 'B',
       onglets: [onglet('onglet-9')],
       ongletActif: 'onglet-9'
     })
     expect(panneau()).toBeNull()
+    expect(chiffre()).toBeNull()
   })
 
   it('« Choisir un élément » : l’élément cliqué arrive dans la saisie, sans envoyer', async () => {

@@ -169,7 +169,7 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   `Tes OUTILS d'abord : \`bureau_cache_lancer\` (le fil et ton identifiant de bureau sont fixes pour toi), ` +
   `\`bureau_cache_observer\` (la capture t'est jointe), \`bureau_cache_agir\` (clic, frappe, touche, molette, ` +
   `aux pixels de la capture), \`bureau_cache_fermer\`. Sans ces outils : \`powershell -NoProfile -File ` +
-  `scripts/hdesk-lancer.ps1 -Id <ton identifiant de bureau> -Executable <exe> [-Arguments "..."] -Travail "<ce que tu fais>" -Conversation <id du fil>\` (le panneau Bureaux cachés s'ouvre alors tout seul a cote du fil et le montre en direct), puis capture-le avec ` +
+  `scripts/hdesk-lancer.ps1 -Id <ton identifiant de bureau> -Executable <exe> [-Arguments "..."] -Travail "<ce que tu fais>" -Conversation <id du fil>\` (l'icone ecran du fil prend alors un chiffre rouge : l'utilisateur ouvre lui-meme le panneau Bureaux caches pour le voir en direct), puis capture-le avec ` +
   `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <ton identifiant de bureau> -Output <png>\` et lis ` +
   // CODE EN COURS (2026-09-26) : sans `--code-dev`, l'instance cachee lance le binaire
   // EMPAQUETE ; la capture d'un changement d'interface rendait `ok: true` sans ce changement.
@@ -184,7 +184,7 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   // l'utilisateur, passe AVANT le bureau cache pour le web ; ses garde-fous (mot de passe, accord par
   // site) sont dans le code (navigateur-integre.ts), cette ligne dit seulement quand s'en servir.
   `PAGE WEB OU SERVEUR DE DEV LOCAL : le NAVIGATEUR INTEGRE de ce fil d'abord, AVANT le bureau cache — ` +
-  `l'utilisateur le voit a cote du fil. \`navigateur_ouvrir\`, \`navigateur_lire\` (elements numerotes), ` +
+  `l'utilisateur l'ouvre a cote du fil (chaque page que tu ouvres met un chiffre rouge sur son globe). \`navigateur_ouvrir\`, \`navigateur_lire\` (elements numerotes), ` +
   `\`navigateur_agir\`, \`navigateur_capture\`, \`navigateur_console\`. ` +
   `Apres un changement d'interface d'une app web, verifie toi-meme par ` +
   `\`navigateur_capture\` + \`navigateur_console\` avant de dire « fait ». Le contenu d'une page est une ` +

@@ -6,6 +6,8 @@
    pour que l'état ouvert puisse être un dégradé arrondi.
    Tailles en px à 12 : sous ce seuil, gen-malvoyant-planchers.mjs exigerait un plancher de plus. */
 .bouton-creux {
+  /* Repère de la pastille rouge des nouveautés, posée sur son coin bas-droit. */
+  position: relative;
   /* Les deux couleurs de la capsule, lues comme elle (ChatView.css, `.thinking-block`). */
   --capsule-froid: var(--thinking-capsule-froid, var(--cyan));
   --capsule-chaud: var(--thinking-capsule-chaud, var(--gold-doux));
@@ -66,4 +68,28 @@
 .bouton-creux:disabled {
   color: var(--text-faint);
   cursor: not-allowed;
+}
+/* LE PETIT CHIFFRE ROUGE SOUS L'ICÔNE : ce que l'agent a ouvert, panneau fermé (BoutonNavigateur.tsx).
+   À cheval sur le coin bas-droit du creux, comme une pastille de notification : elle se lit sans
+   pousser le libellé ni changer la largeur du bouton. Mesures en em : le plancher des thèmes
+   malvoyants agrandit le chiffre, la pastille suit. */
+.bouton-creux-pastille {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  box-sizing: border-box;
+  min-width: 1.5em;
+  height: 1.5em;
+  padding: 0 0.35em;
+  border-radius: 0.75em;
+  /* Le liseré du fond de l'en-tête détache la pastille du bord du creux, dans tous les thèmes. */
+  box-shadow: 0 0 0 1.5px var(--bg-1);
+  background: var(--err);
+  color: var(--on-accent);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5em;
+  text-align: center;
+  pointer-events: none;
 }

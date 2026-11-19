@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 /**
- * LE GUET QUI OUVRE LE PANNEAU DES BUREAUX CACHÉS (2026-10-31).
+ * LE GUET QUI ANNONCE LES BUREAUX CACHÉS LANCÉS PAR LE FIL (2026-10-31 ; chiffre rouge depuis le 2026-11-19).
  *
- * Entrées qui doivent faire échouer ce fichier : un panneau qui revient seul sur un bureau déjà vu, un
+ * Entrées qui doivent faire échouer ce fichier : un bureau déjà vu annoncé de nouveau, deux lancements
+ * d'une même lecture comptés pour un, un
  * bureau d'avant l'ouverture de l'app pris pour un lancement, une relance dans le même bureau ignorée,
  * une liste redemandée plus vite que 5 s (120,2 s figées), une liste en échec sans attente.
  */
@@ -85,7 +86,7 @@ describe('useGuetBureauxDuFil', () => {
     expect(rappel).toHaveBeenCalledTimes(1)
   })
 
-  it('un panneau refermé ne revient pas après un remontage, mais revient pour un autre bureau', async () => {
+  it('un bureau déjà annoncé ne l’est plus après un remontage, un autre bureau l’est', async () => {
     liste = [lance('a')]
     await rendre()
     expect(rappel).toHaveBeenCalledTimes(1)
@@ -108,11 +109,13 @@ describe('useGuetBureauxDuFil', () => {
     expect(rappel).toHaveBeenCalledTimes(2)
   })
 
-  it('plusieurs lancements d’un coup : le plus récent, celui que la liste donne en tête', async () => {
+  it('plusieurs lancements d’un coup : chacun compte, le plus récent en tête', async () => {
     liste = [lance('recent', '09:20:00'), lance('ancien')]
     await rendre()
-    expect(rappel).toHaveBeenCalledTimes(1)
-    expect(rappel.mock.lastCall?.[0].id).toBe('recent')
+    expect(rappel).toHaveBeenCalledTimes(2)
+    expect(rappel.mock.calls.map(([bureau]) => bureau.id)).toEqual(['recent', 'ancien'])
+    await attendre(5000)
+    expect(rappel).toHaveBeenCalledTimes(2)
   })
 
   it('un bureau d’avant l’ouverture de l’app n’est pas un lancement, ni un bureau sans date', async () => {

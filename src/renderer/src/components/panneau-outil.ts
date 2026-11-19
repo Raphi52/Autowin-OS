@@ -83,3 +83,77 @@ export function adopterLeFilNeuf(panneaux: PanneauxParFil, conversationId: strin
   if (!outil) return panneaux
   return ouvrirDans(fermerDans(panneaux, PLACE_FIL_NEUF), conversationId, outil)
 }
+
+/*
+ * CE QUE L'AGENT OUVRE NE S'IMPOSE PLUS À L'ÉCRAN (2026-11-19 : « quand un bureau caché se lance,
+ * au lieu de m'ouvrir le panel, ça doit me mettre un petit 1 rouge sous l'icône ; pareil pour les
+ * navigateurs ouverts »). Un bureau lancé ou une page ouverte par l'agent ne déploie plus le panneau :
+ * il ajoute 1 au compteur de l'icône du fil, que l'ouverture du panneau remet à zéro. Un panneau déjà
+ * ouvert sur cet outil montre la nouveauté lui-même : rien à compter.
+ * Le fil neuf n'a jamais de compteur : ni bureau guetté ni onglet sans fil créé.
+ */
+
+/** Nouveautés pas encore vues, par place puis par outil ; une place ou un outil absent vaut 0. */
+export type NouveautesParFil = Readonly<
+  Record<string, Readonly<Partial<Record<OutilDuPanneau, number>>>>
+>
+
+/**
+ * Panneaux et compteurs dans UN état : ouvrir un panneau efface son compteur dans le même geste,
+ * sans effet qui le rattraperait au rendu suivant (le compteur se verrait une image de trop).
+ */
+export interface OutilsDuFil {
+  panneaux: PanneauxParFil
+  nouveautes: NouveautesParFil
+}
+
+export const OUTILS_AU_REPOS: OutilsDuFil = { panneaux: AUCUN_PANNEAU, nouveautes: {} }
+
+export function nouveautesDans(
+  outils: OutilsDuFil,
+  place: string | null,
+  outil: OutilDuPanneau
+): number {
+  return place === null ? 0 : (outils.nouveautes[place]?.[outil] ?? 0)
+}
+
+/** Pose les panneaux suivants : chacun de ceux qui sont ouverts remet son compteur à zéro. */
+export function poserLesPanneaux(outils: OutilsDuFil, panneaux: PanneauxParFil): OutilsDuFil {
+  if (panneaux === outils.panneaux) return outils
+  return { panneaux, nouveautes: oublierLesOuverts(outils.nouveautes, panneaux) }
+}
+
+/** Ajoute `combien` à l'icône de l'outil, sauf si son panneau est déjà ouvert dans cette place. */
+export function signalerDans(
+  outils: OutilsDuFil,
+  place: string,
+  outil: OutilDuPanneau,
+  combien = 1
+): OutilsDuFil {
+  if (combien <= 0 || outils.panneaux[place] === outil) return outils
+  const dejaLa = outils.nouveautes[place] ?? {}
+  return {
+    ...outils,
+    nouveautes: {
+      ...outils.nouveautes,
+      [place]: { ...dejaLa, [outil]: (dejaLa[outil] ?? 0) + combien }
+    }
+  }
+}
+
+/** Rend le même objet quand rien n'est à effacer, pour ne rien redessiner. */
+function oublierLesOuverts(
+  nouveautes: NouveautesParFil,
+  panneaux: PanneauxParFil
+): NouveautesParFil {
+  let suivantes: Record<string, Partial<Record<OutilDuPanneau, number>>> | null = null
+  for (const [place, outil] of Object.entries(panneaux)) {
+    if (!nouveautes[place]?.[outil]) continue
+    suivantes ??= { ...nouveautes }
+    const reste = { ...suivantes[place] }
+    delete reste[outil]
+    if (Object.keys(reste).length) suivantes[place] = reste
+    else delete suivantes[place]
+  }
+  return suivantes ?? nouveautes
+}

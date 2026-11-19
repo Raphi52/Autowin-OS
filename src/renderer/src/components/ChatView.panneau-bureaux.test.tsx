@@ -5,8 +5,12 @@
  *
  * Entrées qui doivent faire échouer ce fichier : un bouton absent de l'en-tête, les deux panneaux
  * ouverts ensemble (ils ne tiennent pas à 1280 px : le fil tomberait à zéro), une demande d'ouverture
- * perdue parce que le chat n'était pas encore monté, un bureau lancé par le fil sans panneau ouvert,
- * le retour de l'ancien bloc dans le fil, un panneau refermé qui se rouvre seul sur le même bureau.
+ * perdue parce que le chat n'était pas encore monté, le retour de l'ancien bloc dans le fil.
+ *
+ * CHIFFRE ROUGE (2026-11-19) : « quand un bureau caché se lance, au lieu de m'ouvrir le panel, ça
+ * doit me mettre un petit 1 rouge sous l'icône ». Doivent faire échouer ce fichier : un lancement qui
+ * ouvre le panneau, un lancement sans chiffre sous l'icône, un chiffre qui survit à l'ouverture du
+ * panneau, un chiffre qui revient pour un bureau déjà compté.
  *
  * DÉFAUT VÉCU (2026-11-17) : « ça m'ouvre ce panel même dans les convs non concernées, l'ouverture
  * ou non de ce panel doit être par conv ». Ouvert dans un fil, il restait ouvert dans tous les
@@ -25,6 +29,10 @@ import { chatApi, conversation, installRafShim, mountChat } from './ChatView.har
 const panneauBureaux = (c: Element): Element | null => c.querySelector('[data-testid="hdesk-view"]')
 const panneauNavigateur = (c: Element): Element | null =>
   c.querySelector('[data-testid="navigateur-panneau"]')
+/** Le chiffre rouge sous l'icône écran ; `null` sans pastille. */
+const chiffreBureaux = (c: Element): string | null =>
+  c.querySelector('[data-testid="chat-bureaux-toggle"] [data-testid="bouton-creux-pastille"]')
+    ?.textContent ?? null
 
 function navigateurFactice(): Record<string, unknown> {
   const etat = {
@@ -237,37 +245,61 @@ describe('ChatView — panneau des Bureaux cachés', () => {
     lanceLe: new Date(Date.now() + 1000).toISOString()
   })
 
-  it('le fil lance un bureau : le panneau s’ouvre, et rien ne s’affiche dans le fil', async () => {
+  it('le fil lance un bureau : un 1 rouge sous l’icône, aucun panneau, rien dans le fil', async () => {
     const c = await monter()
-    expect(panneauBureaux(c)).toBeNull()
+    expect(chiffreBureaux(c)).toBeNull()
     lances = [lancement()]
     await quitterPuisRevenir?.()
-    expect(panneauBureaux(c)).not.toBeNull()
+    expect(chiffreBureaux(c)).toBe('1')
+    expect(panneauBureaux(c)).toBeNull()
+    expect(c.querySelector('[data-testid="chat-bureaux-toggle"]')?.getAttribute('aria-label')).toBe(
+      'Ouvrir les bureaux cachés — 1 bureau lancé, pas encore regardé'
+    )
     expect(c.querySelector('.chat-scroll [data-testid="hdesk-view"]')).toBeNull()
     expect(c.querySelector('[data-testid="hdesk-tv"]')).toBeNull()
   })
 
-  it('refermé, il ne revient pas pour le même bureau, mais pour un nouveau lancement', async () => {
+  it('ouvrir le panneau efface le chiffre ; le même bureau ne le rallume pas, un nouveau oui', async () => {
     const c = await monter()
     const premier = lancement()
     lances = [premier]
     await quitterPuisRevenir?.()
+    await cliquer('[data-testid="chat-bureaux-toggle"]')
+    expect(panneauBureaux(c)).not.toBeNull()
+    expect(chiffreBureaux(c)).toBeNull()
     await cliquer('[data-testid="hdesk-panneau-fermer"]')
     await quitterPuisRevenir?.()
-    expect(panneauBureaux(c)).toBeNull()
+    expect(chiffreBureaux(c)).toBeNull()
     lances = [{ ...premier, lanceLe: new Date(Date.now() + 2000).toISOString() }]
     await quitterPuisRevenir?.()
-    expect(panneauBureaux(c)).not.toBeNull()
+    expect(chiffreBureaux(c)).toBe('1')
+    expect(panneauBureaux(c)).toBeNull()
   })
 
-  it('un lancement prend la place du navigateur, comme une page prend celle du panneau', async () => {
+  it('deux lancements : 2 sous l’icône, et le navigateur ouvert reste à sa place', async () => {
     const c = await monter()
     await cliquer('[data-testid="chat-navigateur-toggle"]')
     expect(panneauNavigateur(c)).not.toBeNull()
+    lances = [
+      lancement(),
+      { ...lancement(), id: 'chat-A-2', lanceLe: new Date(Date.now() + 500).toISOString() }
+    ]
+    await quitterPuisRevenir?.()
+    expect(chiffreBureaux(c)).toBe('2')
+    expect(panneauNavigateur(c)).not.toBeNull()
+    expect(panneauBureaux(c)).toBeNull()
+  })
+
+  it('le chiffre appartient au fil : absent dans B, de retour avec A', async () => {
+    const c = await monter()
     lances = [lancement()]
     await quitterPuisRevenir?.()
-    expect(panneauBureaux(c)).not.toBeNull()
-    expect(panneauNavigateur(c)).toBeNull()
+    expect(chiffreBureaux(c)).toBe('1')
+    lances = []
+    await ouvrirLeFil('B')
+    expect(chiffreBureaux(c)).toBeNull()
+    await ouvrirLeFil('A')
+    expect(chiffreBureaux(c)).toBe('1')
   })
 
   it('en mosaïque, rien ne s’ouvre seul', async () => {

@@ -108,6 +108,11 @@
   font-size: 13px;
 }
 
+/* components/BoutonCreux.css — tailles */
+:root[data-theme^='malvoyant-'] .bouton-creux-pastille {
+  font-size: 13px;
+}
+
 /* components/BrainMarkdown.css — tailles */
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dt,
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dd,
@@ -287,6 +292,7 @@
 :root[data-theme^='malvoyant-'] .conv-mosaic-close-all,
 :root[data-theme^='malvoyant-'] .msg-provider-status,
 :root[data-theme^='malvoyant-'] .composer-dictee-message,
+:root[data-theme^='malvoyant-'] .conv-reprise-modele-choix,
 :root[data-theme^='malvoyant-'] .msg-orientation-tag,
 :root[data-theme^='malvoyant-'] .conv-auto-notice,
 :root[data-theme^='malvoyant-'] .conv-pane[data-density='compact'] .conv-label,

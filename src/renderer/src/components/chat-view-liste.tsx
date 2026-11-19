@@ -48,7 +48,7 @@ import {
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { noterDeclencheursListe, declencheursDeListe } from './rendu-long'
 import { estNonVue } from './conversation-seen'
-import { ouvrirDans, type PanneauxParFil } from './panneau-outil'
+import type { OutilDuPanneau } from './panneau-outil'
 
 // Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type ListeDesConversationsCtx = {
@@ -121,7 +121,8 @@ export type ListeDesConversationsCtx = {
   setDossierNouveauFil: React.Dispatch<React.SetStateAction<string | null>>
   setDossiersMemorises: React.Dispatch<React.SetStateAction<string[]>>
   setOpenImage: React.Dispatch<React.SetStateAction<{ src: string; name: string } | null>>
-  setPanneaux: React.Dispatch<React.SetStateAction<PanneauxParFil>>
+  /** Ajoute au compteur rouge d'une icône de l'en-tête (voir `panneau-outil.ts`). */
+  signalerNouveaute: (place: string, outil: OutilDuPanneau, combien?: number) => void
   setSelectedConvIds: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>
   setSurvole: React.Dispatch<React.SetStateAction<string | null>>
   showRuns: boolean
@@ -194,10 +195,10 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     setDossierNouveauFil,
     setDossiersMemorises,
     setOpenImage,
-    setPanneaux,
     setSelectedConvIds,
     setSurvole,
     showRuns,
+    signalerNouveaute,
     surviole,
     toggleConvSelection
   } = ctx
@@ -510,10 +511,10 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   const ongletDuFilOuvert =
     planDuFilOuvert && activeId ? ongletDuFil(planDuFilOuvert, activeId) : null
   /*
-   * LES BUREAUX CACHÉS DU CHANTIER (2026-10-31) : le panneau s'ouvre quand le fil lance un
-   * bureau, et il remplace le bloc qui s'affichait dans le fil. Toute la super conv compte : un lot
-   * ouvre son bureau dans son propre fil. Vide en mosaïque : plusieurs fils à l'écran, le panneau les
-   * montre tous et rien ne s'ouvre seul, faute de place à côté d'eux.
+   * LES BUREAUX CACHÉS DU CHANTIER (2026-10-31) : un bureau lancé par le fil ajoute 1 au compteur
+   * rouge de l'icône écran (2026-11-19 : il n'ouvre plus le panneau tout seul). Toute la super conv
+   * compte : un lot ouvre son bureau dans son propre fil. Vide en mosaïque : plusieurs fils à l'écran,
+   * l'en-tête n'a pas d'icône où compter.
    */
   const filsDesBureaux = useMemo(
     () => filsDuPanneau(convViewMode === 'mosaic' ? null : activeId, chefDuFilOuvert, liensDeLots),
@@ -522,10 +523,10 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   useGuetBureauxDuFil({
     actif: isActive,
     fils: filsDesBureaux,
-    // Les fils guettés sont ceux du fil affiché (vide sans fil) : c'est lui qui ouvre son panneau,
+    // Les fils guettés sont ceux du fil affiché (vide sans fil) : c'est son icône qui compte,
     // même quand le bureau vient d'un lot de sa super conv.
     onBureauLance: () => {
-      if (activeId) setPanneaux((ouverts) => ouvrirDans(ouverts, activeId, 'bureaux'))
+      if (activeId) signalerNouveaute(activeId, 'bureaux')
     }
   })
   /*

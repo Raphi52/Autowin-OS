@@ -1,6 +1,7 @@
 /**
- * LE PANNEAU S'OUVRE QUAND LE FIL LANCE UN BUREAU CACHÉ (2026-10-31) : « ça doit s'ouvrir
- * quand le chat lance une action hdesk, ça remplace le bloc qui s'affichait dans le chat ».
+ * LE FIL LANCE UN BUREAU CACHÉ (2026-10-31) : « ça remplace le bloc qui s'affichait dans le chat ».
+ * Depuis le 2026-11-19, chaque lancement ajoute 1 au petit chiffre rouge de l'icône écran au lieu
+ * d'ouvrir le panneau (« au lieu de m'ouvrir le panel, ça doit me mettre un petit 1 rouge »).
  *
  * Le guet de l'ancien bloc du fil, sans son image : la seule liste des bureaux de CE fil, et
  * de toute sa super conv : un lot ouvre son bureau dans son propre fil, pas dans celui qu'on regarde.
@@ -23,14 +24,14 @@ export const GUET_MS = 5000
 export const ATTENTE_ECHEC_MAX_MS = 60000
 
 /**
- * Sans cette borne, chaque redémarrage de l'app rouvrirait le panneau sur un bureau d'hier dès qu'on
+ * Sans cette borne, chaque redémarrage de l'app rallumerait le chiffre pour un bureau d'hier dès qu'on
  * ouvre son fil : la mémoire ci-dessous ne survit qu'à la session, et ce bureau n'a rien de « lancé ».
  */
 const OUVERTURE_APP = Date.now()
 
 /*
  * Dans sessionStorage et pas en mémoire du composant : ChatView se recharge à chaud, et un
- * panneau refermé ne doit revenir que pour un NOUVEAU lancement.
+ * bureau déjà compté ne doit pas rallumer le chiffre : seul un NOUVEAU lancement le fait.
  */
 const CLE_STOCKAGE = 'autowin.bureaux-du-fil.vus'
 
@@ -39,7 +40,7 @@ function lireVus(): Record<string, string[]> {
     const brut = JSON.parse(globalThis.sessionStorage?.getItem(CLE_STOCKAGE) ?? '{}')
     return brut && typeof brut === 'object' ? (brut as Record<string, string[]>) : {}
   } catch {
-    // Stockage illisible : au pire le panneau se rouvre une fois sur un bureau récent.
+    // Stockage illisible : au pire un bureau récent est compté une fois de plus.
     return {}
   }
 }
@@ -55,16 +56,18 @@ function ecrireVus(vus: Record<string, string[]>): void {
 /** La date en plus de l'identifiant : un agent qui relance dans le même bureau lance à nouveau. */
 const cleDuLancement = (b: BureauTv): string => `${b.id}|${b.lanceLe ?? ''}`
 
-/** Retient la liste lue et rend le lancement à montrer : le plus récent, jamais encore vu. */
+/**
+ * Retient la liste lue et rend les lancements jamais encore vus, du plus récent au plus ancien
+ * (l'ordre de fusionnerBureaux, hdesk-tv.ts) : chacun compte pour un dans le chiffre de l'icône.
+ */
 function noterLecture(
   conversationId: string,
   liste: readonly BureauTv[],
   depuis: number
-): BureauTv | null {
+): BureauTv[] {
   const vus = lireVus()
   const connus = new Set(vus[conversationId] ?? [])
-  // La liste arrive du plus récent au plus ancien (fusionnerBureaux, hdesk-tv.ts).
-  const lance = liste.find(
+  const lances = liste.filter(
     (b) => !connus.has(cleDuLancement(b)) && Date.parse(b.lanceLe ?? '') >= depuis
   )
   if (liste.some((b) => !connus.has(cleDuLancement(b)))) {
@@ -73,7 +76,7 @@ function noterLecture(
       [conversationId]: [...connus, ...liste.map(cleDuLancement)]
     })
   }
-  return lance ?? null
+  return lances
 }
 
 /**
@@ -133,8 +136,7 @@ export function useGuetBureauxDuFil({
           for (const fil of cleFils.split('\n')) {
             const liste = await lireListe(fil)
             if (!vivant) return
-            const lance = noterLecture(fil, liste, depuis)
-            if (lance) rappelRef.current(lance, fil)
+            for (const lance of noterLecture(fil, liste, depuis)) rappelRef.current(lance, fil)
           }
           echecs = 0
         } catch {

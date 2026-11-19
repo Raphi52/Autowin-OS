@@ -9,8 +9,12 @@ import {
   bureauxOuvertsDans,
   fermerDans,
   navigateurOuvertDans,
+  nouveautesDans,
+  OUTILS_AU_REPOS,
   ouvrirDans,
-  placeDuPanneau
+  placeDuPanneau,
+  poserLesPanneaux,
+  signalerDans
 } from './panneau-outil'
 
 describe('panneau d’outil du chat', () => {
@@ -73,5 +77,51 @@ describe('panneau d’outil du chat', () => {
     const dansA = ouvrirDans(AUCUN_PANNEAU, 'A', 'bureaux')
     expect(ouvrirDans(dansA, 'A', 'bureaux')).toBe(dansA)
     expect(fermerDans(dansA, 'B')).toBe(dansA)
+  })
+})
+
+/*
+ * « Quand un bureau caché se lance, au lieu de m'ouvrir le panel, ça doit me mettre un petit 1 rouge
+ * sous l'icône ; pareil pour les navigateurs ouverts » (2026-11-19).
+ */
+describe('chiffre rouge des icônes', () => {
+  it('un lancement compte sans ouvrir de panneau, et chaque fil a le sien', () => {
+    const un = signalerDans(OUTILS_AU_REPOS, 'A', 'bureaux')
+    expect(un.panneaux).toBe(AUCUN_PANNEAU)
+    expect(nouveautesDans(un, 'A', 'bureaux')).toBe(1)
+    const trois = signalerDans(signalerDans(un, 'A', 'bureaux'), 'A', 'navigateur', 2)
+    expect(nouveautesDans(trois, 'A', 'bureaux')).toBe(2)
+    expect(nouveautesDans(trois, 'A', 'navigateur')).toBe(2)
+    expect(nouveautesDans(trois, 'B', 'bureaux')).toBe(0)
+    expect(nouveautesDans(trois, null, 'navigateur')).toBe(0)
+  })
+
+  it('panneau déjà ouvert sur cet outil : la nouveauté s’y voit, rien à compter', () => {
+    const ouvert = poserLesPanneaux(OUTILS_AU_REPOS, ouvrirDans(AUCUN_PANNEAU, 'A', 'bureaux'))
+    expect(signalerDans(ouvert, 'A', 'bureaux')).toBe(ouvert)
+    // L'autre outil du même fil, lui, compte : son panneau n'est pas à l'écran.
+    expect(nouveautesDans(signalerDans(ouvert, 'A', 'navigateur'), 'A', 'navigateur')).toBe(1)
+  })
+
+  it('ouvrir le panneau remet son chiffre à zéro, pas celui de l’autre outil ni d’un autre fil', () => {
+    let outils = signalerDans(OUTILS_AU_REPOS, 'A', 'bureaux', 2)
+    outils = signalerDans(outils, 'A', 'navigateur')
+    outils = signalerDans(outils, 'B', 'bureaux')
+    outils = poserLesPanneaux(outils, basculerBureauxDans(outils.panneaux, 'A'))
+    expect(nouveautesDans(outils, 'A', 'bureaux')).toBe(0)
+    expect(nouveautesDans(outils, 'A', 'navigateur')).toBe(1)
+    expect(nouveautesDans(outils, 'B', 'bureaux')).toBe(1)
+    // Refermé, il ne ressort pas l'ancien chiffre.
+    outils = poserLesPanneaux(outils, fermerDans(outils.panneaux, 'A'))
+    expect(nouveautesDans(outils, 'A', 'bureaux')).toBe(0)
+  })
+
+  it('rien ne change → le même objet', () => {
+    expect(signalerDans(OUTILS_AU_REPOS, 'A', 'bureaux', 0)).toBe(OUTILS_AU_REPOS)
+    expect(poserLesPanneaux(OUTILS_AU_REPOS, OUTILS_AU_REPOS.panneaux)).toBe(OUTILS_AU_REPOS)
+    const ouvertSansChiffre = ouvrirDans(AUCUN_PANNEAU, 'A', 'navigateur')
+    expect(poserLesPanneaux(OUTILS_AU_REPOS, ouvertSansChiffre).nouveautes).toBe(
+      OUTILS_AU_REPOS.nouveautes
+    )
   })
 })
