@@ -760,6 +760,26 @@ describe('entrer — le travail de la copie entre dans la branche, sans toucher 
     expect(readFileSync(join(copie, 'a.txt'), 'utf8')).toBe('un\nCOPIE\ntrois\n')
   })
 
+  // conv-2032 (19/11/2026) : le dossier partagé portait, non commité, EXACTEMENT ce que la copie apportait (un geste du
+  // fil fait avant l'ouverture de sa copie, refait ensuite dans la copie). Refusé à chaque tour, et la passe horaire
+  // ne pouvait jamais le débloquer : personne d'autre ne commiterait ce fichier.
+  it('un fichier non commité du dossier partagé déjà identique à ce que la copie apporte entre, sans être réécrit', async () => {
+    const t = await temoin()
+    const copie = await ouvrir(t)
+    writeFileSync(join(copie, 'a.txt'), 'un\nCOPIE\ntrois\n')
+    writeFileSync(join(t.depot, 'a.txt'), 'un\nCOPIE\ntrois\n')
+    // Un autre fichier non commité, non visé, reste tel quel et hors du commit.
+    writeFileSync(join(t.depot, 'b.txt'), 'b\nAUTRE FIL\n')
+
+    const resultat = await entrer(t)
+    expect(resultat).toMatchObject({ ok: true, etat: 'entree', fichiers: ['a.txt'] })
+    expect(await git(t.depot, 'show', 'HEAD:a.txt')).toBe('un\nCOPIE\ntrois\n')
+    expect(readFileSync(join(t.depot, 'a.txt'), 'utf8')).toBe('un\nCOPIE\ntrois\n')
+    expect(await git(t.depot, 'show', 'HEAD:b.txt')).toBe('b\n')
+    expect(readFileSync(join(t.depot, 'b.txt'), 'utf8')).toBe('b\nAUTRE FIL\n')
+    expect((await git(t.depot, 'status', '--porcelain')).trim()).toBe('M b.txt')
+  })
+
   // `status` ne liste pas les fichiers ignorés : un fichier ignoré que la fusion écraserait doit être vérifié à part.
   it('refuse un fichier ignoré du dossier partagé que l’entrée écraserait : rien n’y est écrit, la copie reste', async () => {
     const t = await temoin()

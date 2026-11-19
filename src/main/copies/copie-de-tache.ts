@@ -460,11 +460,16 @@ async function entrerSansFile(
     return { ok: true, etat: 'rien-a-entrer', base: avance.sha }
   }
 
-  // Un fichier visé modifié et non commité dans le dossier partagé : refus, et rien n'y est écrit.
+  // Un fichier visé modifié et non commité dans le dossier partagé : refus, et rien n'y est écrit. Sauf s'il porte
+  // déjà exactement ce qui entre : il est alors indexé tel quel juste avant l'avance, que git accepte sans le réécrire.
   const sales = fichiersNonCommites(
     await git(['status', '--porcelain=v1', '-z', '--untracked-files=all'], entree.depot)
   )
-  const bloquants = ecart.fichiers.filter((chemin) => sales.has(chemin))
+  const salesVises = ecart.fichiers.filter((chemin) => sales.has(chemin))
+  const dejaIdentiques = salesVises.length
+    ? await fichiersDejaIdentiques(salesVises, teteDuDepot, arbreFusionne, entree.depot, git)
+    : []
+  const bloquants = salesVises.filter((chemin) => !dejaIdentiques.includes(chemin))
   if (bloquants.length > 0)
     return refus(
       'modifie-non-commite',
@@ -530,6 +535,8 @@ async function entrerSansFile(
         { env: AUTEUR }
       )
     ).trim()
+    // Sans cet index, git refuse l'avance (« local changes would be overwritten ») alors que rien ne changerait.
+    if (dejaIdentiques.length > 0) await git(['add', '--', ...dejaIdentiques], entree.depot)
     await git(
       ['-c', 'merge.autoStash=false', 'merge', '--ff-only', '--no-overwrite-ignore', '-q', commit],
       entree.depot
@@ -791,6 +798,40 @@ async function ecartDeLaCopie(
  */
 function fichiersNonCommites(sortie: string): Set<string> {
   return new Set(parsePorcelainPaths(sortie))
+}
+
+/**
+ * Parmi les fichiers visés non commités du dossier partagé, ceux qui portent DÉJÀ, octet pour octet, ce que la fusion
+ * y mettrait : leur contenu sur le disque (lu avec les filtres de git, comme `add`) est celui de l'arbre fusionné, et
+ * leur index n'a rien posé d'autre (tête ou arbre fusionné). Entrer ne les réécrit pas et n'y perd rien.
+ * Cause mesurée (conv-2032, 19/11/2026) : un geste du fil fait dans le dossier partagé avant l'ouverture de sa copie,
+ * refait ensuite dans la copie, était refusé à chaque tour, et la passe horaire attendait un commit que personne ne
+ * ferait. Un fichier supprimé d'un côté, absent ou illisible n'est jamais tenu pour identique : il reste refusé.
+ */
+async function fichiersDejaIdentiques(
+  chemins: readonly string[],
+  tete: string,
+  arbreFusionne: string,
+  depot: string,
+  git: GitRunner
+): Promise<string[]> {
+  const blob = async (args: string[]): Promise<string | undefined> => {
+    try {
+      return (await git(args, depot)).trim() || undefined
+    } catch {
+      return undefined
+    }
+  }
+  const identiques: string[] = []
+  for (const chemin of chemins) {
+    if (!existsSync(join(depot, chemin)) || estUnLien(join(depot, chemin))) continue
+    const cible = await blob(['rev-parse', '--verify', '-q', `${arbreFusionne}:${chemin}`])
+    if (!cible || (await blob(['hash-object', '--', chemin])) !== cible) continue
+    const indexe = await blob(['rev-parse', '--verify', '-q', `:${chemin}`])
+    const deLaTete = await blob(['rev-parse', '--verify', '-q', `${tete}:${chemin}`])
+    if (indexe === cible || indexe === deLaTete) identiques.push(chemin)
+  }
+  return identiques
 }
 
 /**
