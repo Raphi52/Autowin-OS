@@ -14,11 +14,16 @@
  * réglages, conv-1382 : un contrôle d'une proposition ne change jamais une autre). La maquette
  * écrit ses règles en conséquence : `.dk-etat-erreur .ex-champ{border-color:…}`.
  *
+ * Des états qui ne sont pas des états d'interaction — les THÈMES d'une même maquette — se lisent
+ * mal sous « États · repos · sombre » : la proposition peut nommer son panneau (`etatsTitre`,
+ * ex. « Thèmes ») et son état de départ (`etatRepos`, ex. « clair »). Rien ne change sinon.
+ *
  * Sans `data-calque` ni `etats`, rien n'est ajouté : le carrousel reste octet pour octet le même.
  */
 
 export const MAX_CALQUES = 12
 const NOM_ETAT = /^[a-z0-9-]+$/
+const TITRE_ETATS = /^[^<>&"]{1,20}$/
 
 const echapper = (texte) =>
   String(texte ?? '')
@@ -48,8 +53,12 @@ export const propositionsAvecCalques = (propositions) =>
 export function verifierEtats(propositions) {
   const erreurs = []
   propositions.forEach((p, i) => {
-    if (p?.etats === undefined) return
     const rang = `proposition ${i + 1}`
+    if (p?.etats === undefined) {
+      if (p?.etatRepos !== undefined || p?.etatsTitre !== undefined)
+        erreurs.push(`${rang} : « etatRepos » ou « etatsTitre » sans « etats » : rien à nommer`)
+      return
+    }
     if (!Array.isArray(p.etats)) {
       erreurs.push(`${rang} : « etats » : une liste de noms attendue, ex. ["survol","erreur"]`)
       return
@@ -63,6 +72,18 @@ export function verifierEtats(propositions) {
       else if (vus.has(etat)) erreurs.push(`${rang} : état « ${etat} » déclaré deux fois`)
       vus.add(etat)
     }
+    if (p.etatRepos !== undefined) {
+      if (!p.etats.length) erreurs.push(`${rang} : « etatRepos » sans « etats » : rien à nommer`)
+      else if (typeof p.etatRepos !== 'string' || !NOM_ETAT.test(p.etatRepos))
+        erreurs.push(`${rang} : « etatRepos » : lettres minuscules, chiffres et « - » seulement`)
+      else if (vus.has(p.etatRepos))
+        erreurs.push(`${rang} : « etatRepos » « ${p.etatRepos} » est déjà un état de la liste`)
+    }
+    if (
+      p.etatsTitre !== undefined &&
+      (typeof p.etatsTitre !== 'string' || !TITRE_ETATS.test(p.etatsTitre))
+    )
+      erreurs.push(`${rang} : « etatsTitre » : un mot court sans balise, ex. « Thèmes »`)
   })
   return erreurs
 }
@@ -76,13 +97,14 @@ export function panneauCalques(P) {
     const calques = calquesDe(p.html)
     const etats = etatsDe(p)
     if (!calques.length && !etats.length) return ''
+    const repos = echapper(p.etatRepos || 'repos')
     const boutonsEtats = etats.length
-      ? `<span class="dkc-cqt">États</span><button type="button" class="dkc-ce" data-rang="${p.n}" data-etat="" aria-pressed="true">repos</button>${etats
+      ? `<span class="dkc-cqt">${echapper(p.etatsTitre || 'États')}</span><button type="button" class="dkc-ce" data-rang="${p.n}" data-etat="" aria-pressed="true">${repos}</button>${etats
           .map(
             (e) =>
               `<button type="button" class="dkc-ce" data-rang="${p.n}" data-etat="${e}" aria-pressed="false">${e}</button>`
           )
-          .join('')}<span class="dkc-cev">État de la ${p.n} : repos</span>`
+          .join('')}<span class="dkc-cev">État de la ${p.n} : ${repos}</span>`
       : ''
     const montres = calques.slice(0, MAX_CALQUES)
     const liensCalques = calques.length
@@ -113,7 +135,8 @@ ${rangs}{display:flex}
 .dkc-cqt{color:var(--dk-pale);font:600 10.5px/1.2 ${mono};letter-spacing:.06em;text-transform:uppercase}
 .dkc-ce,.dkc-cl{padding:3px 9px;border:0;border-radius:999px;background-image:linear-gradient(var(--dk-gris-clair),var(--dk-gris-clair));color:var(--dk-dim);font:inherit;font-size:11.5px;text-decoration:none;cursor:pointer}
 .dkc-ce:hover,.dkc-cl:hover,.dkc-ce[aria-pressed=true]{color:var(--dk-texte)}
-.dkc-cev,.dkc-clx{color:var(--dk-dim);font:11px ${mono}}`
+.dkc-cev,.dkc-clx{color:var(--dk-dim);font:11px ${mono}}
+.dkc-cev{margin-right:10px}`
 }
 
 /** Le script : un état posé sur la diapositive et la vignette de SA proposition, jamais d'une autre. */
@@ -128,7 +151,7 @@ export const SCRIPT_CALQUES = `;(() => {
       const panneau = b.closest('.dkc-cq')
       for (const autre of panneau.querySelectorAll('.dkc-ce')) autre.setAttribute('aria-pressed', String(autre === b))
       const lu = panneau.querySelector('.dkc-cev')
-      if (lu) lu.textContent = 'État de la ' + n + ' : ' + (b.dataset.etat || 'repos')
+      if (lu) lu.textContent = 'État de la ' + n + ' : ' + (b.dataset.etat || panneau.querySelector('[data-etat=""]').textContent)
     })
   }
 })()`

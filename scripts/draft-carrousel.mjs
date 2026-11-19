@@ -77,6 +77,8 @@
  *     remplace le Mixer et ses boutons précalculés : page ```html-interactif là aussi.
  *   - `data-calque="Nom"` dans le `html` et « etats » par proposition (conv-1470) : le panneau de la
  *     proposition affichée liste ses calques et bascule ses états (draft-calques.mjs) ; page aussi.
+ *     « etatsTitre » et « etatRepos » nomment ce panneau et l'état de départ, pour des états qui
+ *     sont des THÈMES (« Thèmes · clair · sombre ») plutôt que des états d'interaction.
  *   Sortie : le fichier .md avec la clôture ```html-render — ou ```html-interactif avec une scène,
  *   des réglages ou des axes —, à contrôler par scripts/html-render-apercu.mjs (code 0) — html-interactif-apercu.mjs
  *   pour une page, plus scene-3d-apercu.mjs pour une scène — puis à poser dans le fil par `montrer_bloc`
@@ -162,9 +164,12 @@ export function verifierPropositions(spec) {
    * carrousel qui dit lui-même que le sujet est en 3D exige la scène.
    */
   if (spec.scene3d === undefined) {
-    const texte = [spec.intro, ...(Array.isArray(spec.propositions) ? spec.propositions : []).map(
-      (p) => [p?.resume, p?.visuel, p?.fonctionnement].join(' ')
-    )].join(' ')
+    const texte = [
+      spec.intro,
+      ...(Array.isArray(spec.propositions) ? spec.propositions : []).map((p) =>
+        [p?.resume, p?.visuel, p?.fonctionnement].join(' ')
+      )
+    ].join(' ')
     if (/\bblender\b|\.blend\b|\.glb\b|\bmod[ée]lis[ée]s?\b|\b3\s?d\b/iu.test(texte))
       erreurs.push(
         '« scene3d » : le sujet est modélisé en 3D (le texte le dit) — montre les modèles dans une scène three.js, pas des images redessinées'

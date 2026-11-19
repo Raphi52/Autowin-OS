@@ -63,6 +63,30 @@ describe('calques et états du carrousel /draft', () => {
     expect(html).toContain('#dkp2:checked~.dkc-cq2{display:flex}')
   })
 
+  it('nomme le panneau et l’état de repos quand la proposition les donne (thèmes)', () => {
+    const themes = {
+      ...simple(1),
+      etatsTitre: 'Thèmes',
+      etatRepos: 'clair',
+      etats: ['sombre', 'violet']
+    }
+    const html = carrouselDraft(spec([themes, simple(2)]))
+    expect(html).toContain('<span class="dkc-cqt">Thèmes</span>')
+    expect(html).toContain('data-etat="" aria-pressed="true">clair</button>')
+    expect(html).toContain('État de la 1 : clair')
+    document.body.innerHTML = html
+    new Function(SCRIPT_CALQUES)()
+    document.querySelector('.dkc-cq1 [data-etat="sombre"]').click()
+    document.querySelector('.dkc-cq1 [data-etat=""]').click()
+    expect(document.querySelector('.dkc-cq1 .dkc-cev').textContent).toBe('État de la 1 : clair')
+    const erreurs = (p) => verifierPropositions(spec([{ ...simple(1), ...p }, simple(2)]))
+    expect(erreurs({ etatRepos: 'clair' })[0]).toMatch(/sans « etats »/)
+    expect(erreurs({ etats: ['sombre'], etatRepos: 'sombre' })[0]).toMatch(/déjà un état/)
+    expect(erreurs({ etats: ['sombre'], etatRepos: 'Clair' })[0]).toMatch(/minuscules/)
+    expect(erreurs({ etats: ['sombre'], etatsTitre: '<b>x</b>' })[0]).toMatch(/etatsTitre/)
+    expect(erreurs({ etats: ['sombre'], etatsTitre: 'Thèmes', etatRepos: 'clair' })).toEqual([])
+  })
+
   it('un état ne change que sa proposition', () => {
     document.body.innerHTML = carrouselDraft(spec([avecTout(1), avecTout(2), simple(3)]))
     new Function(SCRIPT_CALQUES)()
