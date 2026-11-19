@@ -50,6 +50,8 @@
   3. un push vers GitHub qui envoie un nom ou un terme d'entreprise (fichier d'un commit envoyé,
      chemin ou message de commit) : `scripts/separation-avant-push.mjs`, mêmes règles que le test.
   Il ne vérifie PAS qu'un push a été demandé.
+- Au commit, les mêmes règles refusent déjà un nom ou un terme d'entreprise : dans les fichiers
+  (`.githooks/pre-commit`) et dans le message (`.githooks/commit-msg`), copies de travail comprises.
 - `scripts/garde-npm-modules.mjs` : refuse une commande npm qui modifie `node_modules`
   pendant que l'app tourne (l'exe Electron est verrouillé, l'install casse à mi-chemin).
 - `scripts/couleurs-en-dur.mjs` : le commit (`.githooks/pre-commit`) et la suite refusent qu'un

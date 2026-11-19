@@ -21,16 +21,56 @@
  * qu'une fois le nom deja dans l'historique. Pas de message ici : le commit n'est pas encore ecrit.
  * fix-ok: scripts/separation-avant-push.mjs — cause mesurée : sans ce mode, aucun fichier du commit n'était lu, les copies comprises
  *
+ * Mode `--message <fichier>` (appele par `.githooks/commit-msg`) : la MEME regle, appliquee au message du
+ * commit en cours. Sans lui, seul le pre-push lisait les messages : un message fautif entrait dans
+ * l'historique, bloquait ensuite TOUT envoi vers GitHub, et le retirer demandait de reecrire l'historique.
+ * Git appelle le crochet AVANT de nettoyer le message : les lignes de commentaire et tout ce qui suit les
+ * ciseaux (le diff de `commit -v`) sont ecartes ici, sinon un commit qui RETIRE un terme serait refuse sur
+ * la ligne « - » de son propre diff. Limite connue : avec `-m`, git garde une ligne qui commence par le
+ * caractere de commentaire ; elle n'est pas lue ici, et le pre-push la refusera.
+ *
  * Usage : node scripts/separation-avant-push.mjs <distant> <rev>...   (rev = <sha> ou ^<sha>)
  *         node scripts/separation-avant-push.mjs --index              (fichiers indexes du commit)
+ *         node scripts/separation-avant-push.mjs --message <fichier>  (message du commit en cours)
  * Codes : 0 = rien d'interdit ne part, ou aucun profil sur ce poste (version publique) ;
  *         1 = refus, fautes sur stderr ; 2 = verification impossible : refus au push, et au commit
  *         le crochet le signale sans refuser (un commit propre ne se refuse jamais faute de controle).
+ *         En mode --message, le code 2 sort sans rien dire : le pre-commit du meme commit a deja
+ *         signale la meme cause (profil mal forme, regles introuvables), un second avertissement la repeterait.
  */
 import { execFileSync, spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 
 const DOSSIER_ENTREPRISE = 'entreprise/'
-const AU_COMMIT = process.argv[2] === '--index'
+const MODE =
+  process.argv[2] === '--index' ? 'index' : process.argv[2] === '--message' ? 'message' : 'push'
+const AU_COMMIT = MODE !== 'push'
+
+/**
+ * Le message tel que git le gardera dans le cas courant : sans les lignes de commentaire, et coupé à la
+ * ligne des ciseaux de `commit -v`, sous laquelle git place le diff. Le caractère de commentaire est celui
+ * du dépôt (`core.commentChar`), `#` par défaut ou quand il vaut `auto`.
+ */
+function messageSansCommentaires(texte, commentaire) {
+  const lignes = texte.replace(/\r\n/g, '\n').split('\n')
+  const ciseaux = `${commentaire} ------------------------ >8 ------------------------`
+  const fin = lignes.indexOf(ciseaux)
+  return (fin < 0 ? lignes : lignes.slice(0, fin))
+    .filter((ligne) => !ligne.startsWith(commentaire))
+    .join('\n')
+}
+
+function caractereDeCommentaire() {
+  try {
+    const reglage = execFileSync('git', ['config', '--get', 'core.commentChar'], {
+      encoding: 'utf8',
+      windowsHide: true
+    }).trim()
+    return reglage.length === 1 ? reglage : '#'
+  } catch {
+    return '#' // réglage absent : git sort en code 1, le défaut de git s'applique
+  }
+}
 
 /**
  * Les fautes d'un fichier qui part : son chemin, puis son contenu. Liste vide = rien d'interdit.
@@ -147,8 +187,14 @@ function lignesDesFichiersIndexes() {
 
 async function principal() {
   const [distant, ...revs] = process.argv.slice(2)
-  if (!AU_COMMIT && (!distant || revs.length === 0)) {
-    console.error('usage : node scripts/separation-avant-push.mjs <distant> <rev>...  |  --index')
+  const fichierDuMessage = MODE === 'message' ? revs[0] : undefined
+  if (
+    (MODE === 'push' && (!distant || revs.length === 0)) ||
+    (MODE === 'message' && !fichierDuMessage)
+  ) {
+    console.error(
+      'usage : node scripts/separation-avant-push.mjs <distant> <rev>...  |  --index  |  --message <fichier>'
+    )
     return 2
   }
   // Les règles se chargent ici et non en import statique : un module absent ou cassé ferait sortir Node
@@ -167,6 +213,7 @@ async function principal() {
   const { termes, erreurs } = termesDesProfils(profils)
   // fix-ok: scripts/separation-avant-push.mjs — cause mesurée : au commit, le message ⛔ « refaire le commit » sortait alors que le commit passe (test rouge : stderr « ⛔ Verification impossible »).
   if (erreurs.length > 0) {
+    if (MODE === 'message') return 2 // déjà signalé par le pré-commit de ce commit
     if (AU_COMMIT) {
       console.error(
         `\n  ⚠️  Contrôle des noms d'entreprise non fait pour ce commit : un profil d'entreprise est mal formé.\n` +
@@ -197,6 +244,22 @@ async function principal() {
     }
     if (type !== 'blob') return
     fautes.push(...fautesDUnFichier(chemin, octets, court, faute))
+  }
+
+  if (MODE === 'message') {
+    const message = messageSansCommentaires(
+      readFileSync(fichierDuMessage, 'utf8'),
+      caractereDeCommentaire()
+    )
+    const quoi = faute(message)
+    if (!quoi) return 0
+    console.error(
+      `\n  ⛔ Commit refuse : le message du commit porte un nom ou un terme d'entreprise.\n` +
+        `    message — ${quoi}\n\n` +
+        `  Reformuler le message, puis refaire le commit (texte saisi : ${fichierDuMessage}).\n` +
+        `  Rien n'est publie.\n`
+    )
+    return 1
   }
 
   if (AU_COMMIT) {
@@ -234,7 +297,14 @@ async function principal() {
 principal().then(
   (code) => process.exit(code),
   (erreur) => {
-    if (AU_COMMIT) {
+    if (MODE === 'message') {
+      // Règles introuvables : le pré-commit l'a déjà dit. Message illisible : propre à ce crochet, on le dit.
+      if (erreur?.code === 'ENOENT' || erreur?.code === 'EACCES') {
+        console.error(
+          `\n  ⚠️  Contrôle du message de commit non fait : ${erreur.message}\n  Le commit passe ; le contrôle à l'envoi vers GitHub le refera.\n`
+        )
+      }
+    } else if (AU_COMMIT) {
       console.error(
         `\n  ⚠️  Contrôle des noms d'entreprise non fait pour ce commit : ${erreur.message}\n  Le commit passe ; le contrôle à l'envoi vers GitHub le refera.\n`
       )

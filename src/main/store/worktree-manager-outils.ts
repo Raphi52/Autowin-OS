@@ -62,8 +62,17 @@ export const FINALIZE_TIMEOUT_MS = 300_000
  * ajoute le résumé de la tâche (première ligne non vide, sans caractère de contrôle, ≤ 72
  * caractères) pour que l'historique dise CE QUI a changé — `agent run-xxx-1` seul ne disait rien.
  * fix-ok: cause mesurée — les deux commits (finalize, commitCopyIfDirty) codaient en dur `agent ${agentId}` ; test rouge (3 échecs) sans ce helper, vert avec.
+ *
+ * `estReserve` : la règle des noms d'entreprise du dépôt (`texteReserve`). La demande peut nommer
+ * l'entreprise ; ce message passe par `.githooks/commit-msg`, qui refuserait alors le commit de la copie,
+ * donc le travail du run, et il part ensuite tel quel vers l'historique publié. Le message ENTIER est jugé,
+ * coupe comprise : un résumé réservé laisse le seul préfixe.
  */
-export function messageCommitAgent(agentId: string, task?: string): string {
+export function messageCommitAgent(
+  agentId: string,
+  task?: string,
+  estReserve?: (texte: string) => boolean
+): string {
   const premiere = (task ?? '')
     .split(/\r?\n/)
     .map((ligne) =>
@@ -75,7 +84,8 @@ export function messageCommitAgent(agentId: string, task?: string): string {
     .find((ligne) => ligne.length > 0)
   if (!premiere) return `agent ${agentId}`
   const resume = premiere.length > 72 ? `${premiere.slice(0, 71).trimEnd()}…` : premiere
-  return `agent ${agentId}: ${resume}`
+  const message = `agent ${agentId}: ${resume}`
+  return estReserve?.(message) ? `agent ${agentId}` : message
 }
 
 export function assertSafeId(value: string, label: string): void {

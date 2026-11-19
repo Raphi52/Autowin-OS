@@ -11,6 +11,7 @@ import {
 } from '../copies/chemins-de-copies'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { texteReserve } from '../git/controle-de-separation'
 import type { FinalizeResult } from './worktree-manager-types'
 import {
   SAFE_ID,
@@ -805,7 +806,7 @@ export function commitCopyIfDirty(
   const dirty = this.git(path, ['status', '--porcelain=v1', '-z']).length > 0
   if (dirty) {
     this.git(path, ['add', '-A'])
-    const message = messageCommitAgent(agentId, task)
+    const message = messageCommitAgent(agentId, task, texteReserve(path))
     try {
       this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', message])
     } catch (erreur) {

@@ -224,8 +224,11 @@ describe('.githooks/pre-push — aucun nom ni terme d entreprise vers GitHub', (
 
   it('refuse un message de commit qui porte le nom de l entreprise', () => {
     const { local, publicNu } = depots()
-    avecProfil(local)
+    // Profil posé APRÈS le commit, comme pour les fichiers ci-dessous : `.githooks/commit-msg` refuse ce
+    // message au commit ; l'envoi doit encore arrêter celui qui est entré sans contrôle (autre poste,
+    // --no-verify, commit antérieur au crochet).
     commit(local, { 'a.txt': 'a\n' }, 'correctif pour ACME')
+    avecProfil(local)
 
     const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
 

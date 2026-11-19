@@ -1,0 +1,27 @@
+#!/bin/sh
+# Garde-fou : le MESSAGE d'un commit ne porte ni nom ni terme d'entreprise.
+# Le pré-commit lit les fichiers du commit, mais le message n'existe pas encore à ce moment-là ; seul le
+# pré-envoi lisait les messages, donc trop tard. Constat du 2026-11-19 : un seul message fautif, commité
+# par un agent, a bloqué l'envoi vers GitHub de 24 commits pendant cinq jours, et le retirer a demandé de
+# réécrire l'historique local. Règle et nettoyage du message : scripts/separation-avant-push.mjs --message.
+# Testé par src/main/git/githooks-pre-commit.test.ts. Échappatoire native et visible : --no-verify.
+#
+# Comme pour les fichiers, le contrôle vaut pour TOUTES les copies : leurs commits partent aussi vers GitHub.
+# Les commits que l'app pose elle-même (git commit-tree, sans crochet) passent par
+# src/main/git/controle-de-separation.ts, qui lit déjà leur message.
+#
+# Un contrôle qui ne peut pas tourner ne refuse jamais un commit, et ne le répète pas : le pré-commit du même
+# commit a déjà averti pour la même cause (node absent, règles introuvables, profil mal formé).
+garde_separation="$(dirname "$0")/../scripts/separation-avant-push.mjs"
+command -v node >/dev/null 2>&1 || exit 0
+[ -f "$garde_separation" ] || exit 0
+node "$garde_separation" --message "$1"
+code=$?
+case "$code" in
+  0 | 2) exit 0 ;;
+  1) exit 1 ;;
+  *)
+    printf '\n  ⚠️  Contrôle du message de commit non fait (code %s).\n  Le pré-envoi vers GitHub le refera : rien ne part sans lui.\n\n' "$code" >&2
+    exit 0
+    ;;
+esac

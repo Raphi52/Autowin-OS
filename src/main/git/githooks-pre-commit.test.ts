@@ -395,3 +395,100 @@ describe('.githooks/pre-commit : nom ou terme d entreprise, cas limites', () => 
     expect(String(git('rev-list', '--count', 'HEAD').stdout).trim()).toBe('2')
   })
 })
+
+/**
+ * Le MESSAGE du commit, contrôlé par `.githooks/commit-msg`. Le pré-commit ne peut pas le lire (il n'est pas
+ * encore écrit) et le pré-envoi ne le voyait qu'au moment de publier, une fois le message dans l'historique :
+ * un seul message fautif bloquait alors tout envoi vers GitHub, et le retirer demandait de réécrire l'historique.
+ * Le fichier commité est PROPRE dans ces tests : un refus ne peut venir que du message.
+ */
+describe.each(LIEUX)(
+  '.githooks/commit-msg : nom ou terme d entreprise dans le message %s',
+  (_lieu, sousDossier) => {
+    function preparer(): ReturnType<typeof depot> {
+      const d = depot(sousDossier)
+      profilFictif(d.racine)
+      d.ecrire('src/main/note.ts', PROPRE)
+      d.git('add', 'src/main/note.ts')
+      return d
+    }
+
+    it('REFUSE un titre qui porte un terme interdit, et dit que c est le message', () => {
+      const { git } = preparer()
+      const r = git('commit', '-m', 'fix(note): reprise du cas Zorglub')
+      expect(r.status).not.toBe(0)
+      expect(String(r.stderr)).toMatch(/message du commit/)
+      expect(String(git('rev-list', '--count', 'HEAD').stdout).trim()).toBe('1')
+    })
+
+    it('REFUSE un nom d entreprise dans le corps du message', () => {
+      const { git } = preparer()
+      const r = git('commit', '-m', 'fix(note): titre propre', '-m', 'Demandé par ACME.')
+      expect(r.status).not.toBe(0)
+      expect(String(r.stderr)).toMatch(/message du commit/)
+      expect(String(git('rev-list', '--count', 'HEAD').stdout).trim()).toBe('1')
+    })
+
+    it('laisse passer un message propre', () => {
+      const { git } = preparer()
+      const r = git('commit', '-q', '-m', 'fix(note): titre propre')
+      expect(r.status, String(r.stderr)).toBe(0)
+    })
+  }
+)
+
+describe('.githooks/commit-msg : cas limites', () => {
+  /** Un message écrit dans un fichier hors du dépôt, comme celui qu'un éditeur rend à git. */
+  function messageDansUnFichier(texte: string): string {
+    const dossier = mkdtempSync(join(tmpdir(), 'garde-commit-message-'))
+    dossiers.push(dossier)
+    const fichier = join(dossier, 'MESSAGE')
+    writeFileSync(fichier, texte)
+    return fichier
+  }
+
+  it('laisse passer le même message quand le poste n a pas de profil (version publique)', () => {
+    const { git, ecrire } = depot()
+    ecrire('src/main/note.ts', PROPRE)
+    git('add', 'src/main/note.ts')
+    const r = git('commit', '-q', '-m', 'fix(note): reprise du cas Zorglub')
+    expect(r.status, String(r.stderr)).toBe(0)
+  })
+
+  it('ignore les lignes de commentaire, que git retire du message', () => {
+    const { git, ecrire, racine } = depot()
+    profilFictif(racine)
+    ecrire('src/main/note.ts', PROPRE)
+    git('add', 'src/main/note.ts')
+    const fichier = messageDansUnFichier('fix(note): titre propre\n\n# zorglub, en commentaire\n')
+    const r = git('commit', '-q', '-F', fichier, '--cleanup=strip')
+    expect(r.status, String(r.stderr)).toBe(0)
+    expect(String(git('log', '-1', '--format=%B').stdout)).not.toMatch(/zorglub/i)
+  })
+
+  it('ignore le diff sous les ciseaux (commit -v) : un commit qui RETIRE le terme passe', () => {
+    const { git, ecrire, racine } = depot()
+    profilFictif(racine)
+    ecrire('src/main/note.ts', AVEC_LE_TERME)
+    git('add', 'src/main/note.ts')
+    git('commit', '-q', '--no-verify', '-m', 'ancien terme')
+    ecrire('src/main/note.ts', PROPRE)
+    git('add', 'src/main/note.ts')
+    // Un éditeur qui ne change rien : git écrit lui-même le diff (ligne « -… zorglub ») sous les ciseaux,
+    // et ne coupe qu'après le crochet.
+    const r = git(
+      '-c',
+      'core.editor=true',
+      'commit',
+      '-q',
+      '-v',
+      '-e',
+      '-m',
+      'fix(note): retrait du terme'
+    )
+    expect(r.status, String(r.stderr)).toBe(0)
+    expect(String(git('log', '-1', '--format=%B').stdout).trim()).toBe(
+      'fix(note): retrait du terme'
+    )
+  })
+})
