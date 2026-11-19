@@ -102,7 +102,6 @@ export type ToursEtEnvoiCtx = {
   composerDraftsRef: React.RefObject<Map<string, import('./chat-view-types').ComposerDraft>>
   composerRef: React.RefObject<import('./ChatComposer').ChatComposerHandle | null>
   composerSelectionGenerationRef: React.RefObject<number>
-  consommerDossierNouveauFil: () => void
   convs: import('./chat-view-types').Conv[]
   convsRef: React.RefObject<import('./chat-view-types').Conv[]>
   depotPresent: boolean
@@ -240,7 +239,6 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     composerDraftsRef,
     composerRef,
     composerSelectionGenerationRef,
-    consommerDossierNouveauFil,
     convs,
     convsRef,
     depotPresent,
@@ -1986,9 +1984,9 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
         convId = c.id
         // Le dossier arme dans « Nouveau fil » devient le dossier de travail DES le premier tour :
         // `dossierDeTravailDuTour` lit le rangement de la conversation, il doit donc etre pose avant.
+        // Il reste arme ensuite : le fil neuf suivant repart du meme dossier.
         if (dossierNouveauFilRef.current) {
           await window.api.conversationsSetProject?.(c.id, dossierNouveauFilRef.current)
-          consommerDossierNouveauFil()
         }
         // Le modèle et le compte armés dans « Nouveau fil » se posent de même AVANT le premier tour.
         await poserModeleArme(c.id)

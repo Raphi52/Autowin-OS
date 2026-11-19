@@ -132,8 +132,8 @@ export function ecrireDossiersRetires(retires: string[]): void {
   if (erreur) traceSilentFailure('dossiers-retires:persist', erreur)
 }
 /**
- * Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions JUSQU'A ce que ce
- * fil naisse : il est alors vide (`consommerDossierNouveauFil`), il ne sert qu'une fois.
+ * Dernier dossier de travail choisi pour un fil neuf, memorise entre les sessions : chaque fil neuf
+ * y nait, jusqu'au choix suivant sur la pastille.
  */
 export const CLE_DOSSIER_NOUVEAU_FIL = 'autowin.chat.dossierNouveauFil'
 

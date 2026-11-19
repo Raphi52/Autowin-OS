@@ -114,14 +114,12 @@ describe('ChatView — dossier de travail du prochain fil', () => {
   })
 
   /**
-   * DEFAUT VECU (2026-10-06) : « la conversation a dévié vers le CWD sans
-   * raison ». Un fil est ne avec un lien GitHub vers PaperTrading et a recu, a la creation,
-   * `D:\Chirurgien\AssistantChirurgien` — le dossier arme des semaines plus tot pour un AUTRE fil
-   * (conv-111/112). Le dossier du « prochain fil » n'etait jamais vide apres usage : il restait
-   * dans `autowin.chat.dossierNouveauFil` et se posait sur CHAQUE fil neuf, session apres session.
-   * Il doit servir au fil qu'il vise, un seul, comme ∞ arme sur un fil neuf.
+   * LA DEMANDE (2026-11-19) : « quand je fais une nouvelle conv ça met toujours Autowin OS en
+   * CWD, ça devrait mettre le dernier que j'ai choisi ». Le dossier choisi pour un fil neuf se
+   * vidait dès ce fil créé : le suivant retombait sur le dépôt par défaut, il fallait le rechoisir
+   * à chaque fil. Il reste maintenant armé — affiché sur la pastille — jusqu'au prochain choix.
    */
-  it("ne sert qu'au fil qui nait : le fil suivant n'herite pas du dossier", async () => {
+  it('le fil suivant reprend le dernier dossier choisi, même après redémarrage', async () => {
     const conversationsSetProject = vi.fn().mockResolvedValue('D:/Projets/Cible')
     const conversationsCreate = vi
       .fn()
@@ -145,21 +143,21 @@ describe('ChatView — dossier de travail du prochain fil', () => {
     await harness.click('.composer-send')
     expect(conversationsSetProject).toHaveBeenCalledWith('premier', 'D:/Projets/Cible')
 
-    // Le dossier arme a servi : rien ne doit en rester pour la session suivante.
-    expect(window.localStorage.getItem('autowin.chat.dossierNouveauFil')).toBeNull()
+    // Le choix survit au fil créé, et donc à un redémarrage de l'app.
+    expect(window.localStorage.getItem('autowin.chat.dossierNouveauFil')).toBe('D:/Projets/Cible')
 
     await harness.click('.conv-new-row')
-    // Sur un fil neuf, la pastille ne doit plus annoncer le dossier du fil precedent.
+    // Sur le fil neuf suivant, la pastille annonce d'emblée le dernier dossier choisi.
     expect(
       harness.container
         .querySelector('[data-testid="chat-project-dot"]')
         ?.getAttribute('aria-label')
-    ).not.toContain('Cible')
+    ).toContain('Cible')
 
     await harness.type('second tour')
     await harness.click('.composer-send')
     expect(conversationsCreate).toHaveBeenCalledTimes(2)
-    expect(conversationsSetProject).not.toHaveBeenCalledWith('second', expect.anything())
+    expect(conversationsSetProject).toHaveBeenCalledWith('second', 'D:/Projets/Cible')
   })
 
   /**

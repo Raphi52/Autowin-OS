@@ -353,6 +353,11 @@ export function ChatView({
    * Un LIBELLE deja memorise ici est ignore : avant la separation, le menu proposait des
    * categories parmi les dossiers, et en choisir une armait le prochain fil sur un dossier qui
    * n'existe pas. La pastille du haut affichait alors ce libelle comme dossier de travail.
+   *
+   * Le choix RESTE apres la creation du fil, et d'une session a l'autre : chaque fil neuf part
+   * dans le dernier dossier choisi, jusqu'au choix suivant. Le vider apres usage obligeait a le
+   * rechoisir a chaque fil, le depot par defaut revenant sinon. La pastille l'annonce avant le
+   * premier message : ce dossier ne se pose jamais sans etre affiche.
    */
   const [dossierNouveauFil, setDossierNouveauFil] = useState<string | null>(() => {
     try {
@@ -368,19 +373,6 @@ export function ChatView({
     if (dossierNouveauFil) window.localStorage.setItem(CLE_DOSSIER_NOUVEAU_FIL, dossierNouveauFil)
     else window.localStorage.removeItem(CLE_DOSSIER_NOUVEAU_FIL)
   }, [dossierNouveauFil])
-  /**
-   * fix-ok: kaizen — cause mesuree : `autowin.chat.dossierNouveauFil` n'etait jamais vide
-   * apres usage (journal des conversations : un fil recoit ce dossier a sa creation, 08:15:43) ;
-   * ChatView.dossier-nouveau-fil.test.tsx rouge (garde 'D:/Projets/Cible') puis vert.
-   * Le dossier arme sert au fil qui NAIT, puis se vide — comme ∞ arme sur un fil neuf. Il n'etait
-   * jamais vide : un fil ne d'un lien vers PaperTrading, a recu a sa creation
-   * `D:\Chirurgien\AssistantChirurgien`, arme des semaines plus tot pour un autre fil, et toute la
-   * suite du fil a derive vers ce depot.
-   */
-  function consommerDossierNouveauFil(): void {
-    dossierNouveauFilRef.current = null
-    setDossierNouveauFil(null)
-  }
   /**
    * MODÈLE ARMÉ SUR UN FIL PAS ENCORE CRÉÉ (2026-10-11 : « rends le modèle propre à
    * chaque conversation »). Même logique que le dossier armé ci-dessus : l'intention est gardée
@@ -3289,10 +3281,7 @@ export function ChatView({
     })
     // Le dossier de travail choisi pour un fil neuf se pose AVANT le premier tour.
     const dossierArme = dossierNouveauFilRef.current
-    if (dossierArme) {
-      await window.api.conversationsSetProject?.(creee.id, dossierArme)
-      consommerDossierNouveauFil()
-    }
+    if (dossierArme) await window.api.conversationsSetProject?.(creee.id, dossierArme)
     // Le modèle et le compte armés, eux aussi, se posent AVANT le premier tour (le main les lit alors).
     await poserModeleArme(creee.id)
     await poserCompteArme(creee.id)
@@ -3903,7 +3892,6 @@ export function ChatView({
     composerDraftsRef,
     composerRef,
     composerSelectionGenerationRef,
-    consommerDossierNouveauFil,
     convs,
     convsRef,
     depotPresent,
