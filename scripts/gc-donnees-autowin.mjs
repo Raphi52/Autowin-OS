@@ -125,7 +125,8 @@ export function sessionsAGarder(entrees, { isBlocked, travaux = [], autowinOs })
 
 /**
  * Le jugement, catégorie par catégorie. `ctx` : `donnees`, `maintenant`, `vivants` (Set ou `null` si
- * la sonde a échoué), `runs` (sortie de `sessionsAGarder`, ou `null`), `travaux`. Lecture seule.
+ * la sonde a échoué), `runs` (sortie de `sessionsAGarder`, ou `null`), `travaux`, et `lstat` (pour les
+ * tests seulement, `lstatSync` par défaut). Lecture seule.
  */
 export function jugerDonnees(ctx) {
   const ao = join(ctx.donnees, 'autowin-os')
@@ -133,6 +134,20 @@ export function jugerDonnees(ctx) {
   const compter = (categorie, verdict) => {
     const c = (bilan.compteurs[categorie] ??= {})
     c[verdict] = (c[verdict] ?? 0) + 1
+  }
+  /**
+   * `lstat` d'une entrée listée, ou `null` si elle a disparu entre la liste et l'examen : un run en
+   * cours efface ses fichiers d'échange (`run-stdout/….stdin`) à tout moment. Disparue, elle n'a rien
+   * à collecter ; toute autre erreur reste une panne.
+   */
+  const examiner = (chemin, categorie) => {
+    try {
+      return (ctx.lstat ?? lstatSync)(chemin)
+    } catch (erreur) {
+      if (erreur?.code !== 'ENOENT') throw erreur
+      compter(categorie, 'disparu')
+      return null
+    }
   }
   const lister = (dossier, categorie) => {
     try {
@@ -211,7 +226,7 @@ export function jugerDonnees(ctx) {
     const { bloquees, deTravaux } = ctx.runs
     for (const session of lister(join(ao, 'runs'), 'runs') ?? []) {
       const chemin = join(ao, 'runs', session)
-      if (!lstatSync(chemin).isDirectory()) continue
+      if (!examiner(chemin, 'runs')?.isDirectory()) continue
       if (bloquees.has(session) || deTravaux.has(session)) compter('runs', 'run bloqué ou travail')
       else juger(chemin, 'runs', 30, 'sortie de run sans run bloqué, hors travaux non publiés')
     }
@@ -250,7 +265,7 @@ export function jugerDonnees(ctx) {
     }
     for (const nom of cites === null ? [] : (lister(join(ao, 'run-stdout'), 'run-stdout') ?? [])) {
       const chemin = join(ao, 'run-stdout', nom)
-      if (!lstatSync(chemin).isFile()) continue
+      if (!examiner(chemin, 'run-stdout')?.isFile()) continue
       const uuid = nom.slice(0, 36)
       if (!UUID.test(uuid)) compter('run-stdout', 'ambigu')
       else if (cites.includes(uuid)) compter('run-stdout', 'cité par un run-state')
@@ -261,7 +276,8 @@ export function jugerDonnees(ctx) {
   // Sauvegardes et bancs d'autowin-os/.
   for (const nom of lister(ao, 'autowin-os') ?? []) {
     const chemin = join(ao, nom)
-    const infos = lstatSync(chemin)
+    const infos = examiner(chemin, 'autowin-os')
+    if (!infos) continue
     if (infos.isFile() && SAUVEGARDE.test(nom)) {
       if (nom.startsWith('conversations.json')) {
         compter('sauvegarde', 'conversations.json')
@@ -283,7 +299,8 @@ export function jugerDonnees(ctx) {
   // Racine des données.
   for (const nom of lister(ctx.donnees, 'racine') ?? []) {
     const chemin = join(ctx.donnees, nom)
-    const infos = lstatSync(chemin)
+    const infos = examiner(chemin, 'racine')
+    if (!infos) continue
     const vise =
       (nom === 'tmp' && infos.isDirectory()) ||
       (infos.isFile() &&

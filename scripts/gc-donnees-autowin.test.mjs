@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { lstatSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -199,5 +199,30 @@ describe('jugerDonnees', () => {
     const bilan = juger({ vivants: null, runs: null })
     expect(bilan.candidats).toEqual([])
     expect(bilan.sondesEnEchec.map((s) => s.categorie).sort()).toEqual(['runs', 'satellites'])
+  })
+
+  it('une entrée effacée entre la liste et son examen est sautée, sans arrêter la passe', () => {
+    // Passe du 14/11 : un run en cours a effacé son `….stdin` de run-stdout pendant le jugement, et
+    // le lstat qui suivait a fait tomber toute l'étape.
+    poser(`autowin-os/run-stdout/${UUID_LIBRE}.stdout.jsonl`, 30)
+    poser('autowin-os/run-state/run-a.json', 1, JSON.stringify({ agentToken: UUID_CITE }))
+    // Un effacé par boucle qui examine ses entrées : runs/, run-stdout/, autowin-os/, la racine.
+    const efface = [
+      poser(`autowin-os/run-stdout/${UUID_CITE}.stdout.jsonl.x.stdin`, 0),
+      poser('autowin-os/runs/conv-5/b/RUN.md', 40, 'x').replace(/[\\/]b[\\/]RUN\.md$/u, ''),
+      poser('autowin-os/banc-1/a.txt', 40).replace(/[\\/]a\.txt$/u, ''),
+      poser('tmp/a.txt', 40).replace(/[\\/]a\.txt$/u, '')
+    ]
+    const lstat = (chemin) => {
+      if (efface.includes(chemin))
+        throw Object.assign(new Error(`ENOENT, lstat '${chemin}'`), { code: 'ENOENT' })
+      return lstatSync(chemin)
+    }
+
+    const bilan = juger({ lstat })
+
+    expect(chemins(bilan)).toEqual([`autowin-os/run-stdout/${UUID_LIBRE}.stdout.jsonl`])
+    for (const categorie of ['runs', 'run-stdout', 'autowin-os', 'racine'])
+      expect(bilan.compteurs[categorie]?.disparu).toBe(1)
   })
 })
