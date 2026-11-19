@@ -38,6 +38,8 @@ describe('réparation lancée par l’app après un refus de la porte', () => {
     expect(estUneReparationDuRefus(decision.prompt)).toBe(true)
     // Le tour ne publie pas lui-même : l'app refait l'entrée à sa fin.
     expect(decision.prompt).toMatch(/Ne commite pas/u)
+    // Seule une tête posée sur main fait repartir le fil de main : le geste est nommé.
+    expect(decision.prompt).toMatch(/git checkout --detach <commit>/u)
   })
 
   it('un refus sans détail lance quand même le tour, qui devra retrouver la cause', () => {

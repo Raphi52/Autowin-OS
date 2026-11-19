@@ -29,6 +29,7 @@ import {
 import { entrerLeTravailDeLaCopie } from '../copies/copie-de-tache'
 import { dossierDeCopieDeTache, racineDesCopiesDeTaches } from '../copies/chemins-de-copies'
 import { lireLaBaseDuFil } from '../git/photo-du-code'
+import { recalerLaBaseSurLaCopie, type RecalageDeLaBase } from '../git/copie-du-fil-a-jour'
 import { memeCheminSurDisque } from '../fichiers/meme-chemin'
 import { SUITE_QUAND_LA_PORTE_RETENTE_SEULE } from './reparation-du-refus'
 
@@ -390,8 +391,19 @@ export async function publierTourDeChat(input: {
     // Le dépôt de la porte est celui DU FIL (sa copie notée, `porte.depot`), jamais le premier `worktree` lu dans la
     // copie : une copie liée nomme le dépôt principal, pas le projet qui l'a ouverte.
     // fix-ok: lu dans la copie, le premier worktree est le dépôt principal : le travail d'un projet lié partirait sur sa branche.
-    if (await estUneCopieDetacheeDuDepot(debut.repo, input.porte.depot, runGit))
-      return passerLaPorte(input, debut.repo, input.porte, runGit)
+    if (await estUneCopieDetacheeDuDepot(debut.repo, input.porte.depot, runGit)) {
+      // Une copie que l'agent a posée sur main (réparation d'un refus) : la base la suit avant la porte.
+      const recalage = await recalerLaBaseSurLaCopie({
+        copie: debut.repo,
+        conversationId,
+        depot: input.porte.depot,
+        runGit
+      })
+      return avecLaRaisonDuRecalage(
+        await passerLaPorte(input, debut.repo, input.porte, runGit),
+        recalage
+      )
+    }
   }
   const autresToursEnCours = (input.autresToursEnCours ?? []).filter((dossier) => dossier.trim())
   const racines = await cheminsReels([
@@ -814,6 +826,27 @@ async function estLaCopieDeLaRacineUnique(
  * Le texte d'un refus de la passe, dit à l'utilisateur tel quel. Les autres refus gardent le texte de la
  * primitive, qui nomme la cause.
  */
+/**
+ * Un refus de la porte dit aussi pourquoi la base n'a pas suivi une copie posée sur main : sans cette
+ * phrase, le tour de réparation ne saurait pas que sa tête a bougé sans ses fichiers. Elle passe DEVANT
+ * le détail, dont la fin est relue par la réparation automatique (« Autowin retentera tout seul. »).
+ */
+function avecLaRaisonDuRecalage(
+  rapportDeLaPorte: AutoCloseReport | undefined,
+  recalage: RecalageDeLaBase
+): AutoCloseReport | undefined {
+  const projet = rapportDeLaPorte?.project
+  if (
+    recalage.fait !== 'laissee' ||
+    !rapportDeLaPorte ||
+    projet?.status !== 'skipped' ||
+    projet.reason !== 'porte-refusee'
+  )
+    return rapportDeLaPorte
+  const detail = [recalage.raison, projet.detail].filter(Boolean).join(' ')
+  return { ...rapportDeLaPorte, project: { ...projet, detail } }
+}
+
 function texteDuRefusDeLaPorte(refus: {
   motif: string
   raison: string

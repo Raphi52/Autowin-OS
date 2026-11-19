@@ -33,6 +33,9 @@ export function composerPromptDeReparation(detail: string | undefined): string {
       ? `Raison donnée par l’app : ${raison}`
       : 'Raison non précisée par l’app : retrouve-la (fusion à blanc avec main, contrôle des noms réservés, base du fil).',
     'Règle la cause dans la copie de ce fil, sans rien demander à l’utilisateur : corrige les fichiers nommés (un conflit se tranche par contenu, en gardant les deux apports ; un nom réservé se retire), puis rejoue les tests de ce que tu touches.',
+    // La porte publie depuis le point de départ du fil, qui ne suit que la TÊTE de la copie
+    // (`recalerLaBaseSurLaCopie`) : des fichiers fusionnés à la main sur l'ancienne tête rejouent le conflit.
+    'Un conflit avec main se règle en posant la copie sur main : sa tête sur le dernier commit de main (`git checkout --detach <commit>`), ton travail reposé dessus. Le fil repart alors de ce commit ; fusionner les fichiers sans déplacer la tête ferait refuser l’envoi une seconde fois.',
     'Ne commite pas et ne pousse pas : l’app refait l’entrée dans main à la fin de ce tour.',
     'Termine par un compte rendu pour l’utilisateur : la cause, ce que tu as corrigé, et ce qui bloque encore s’il reste un blocage.'
   ].join('\n')

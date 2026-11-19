@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { arbreDeLaCopie } from '../orchestration/garder-un-essai'
 import { defaultGitRunner } from '../runs/run-autoclose'
-import { ligneDeMiseAJour, mettreLaCopieDuFilAJour } from './copie-du-fil-a-jour'
+import {
+  ligneDeMiseAJour,
+  mettreLaCopieDuFilAJour,
+  recalerLaBaseSurLaCopie
+} from './copie-du-fil-a-jour'
 import { ouvrirLaCopieDeTache } from '../copies/copie-de-tache'
 import { avancerLaBaseDuFil, lireLaBaseDuFil } from './photo-du-code'
 
@@ -164,5 +168,37 @@ describe('mettreLaCopieDuFilAJour — la copie suit main sans rien perdre', () =
     const { repo, copie } = await depotEtCopie()
     const issue = await mettreLaCopieDuFilAJour({ copie, conversationId: 'conv-2', depot: repo })
     expect(issue).toEqual({ fait: 'laissee', raison: 'la copie n’a pas de base' })
+  })
+})
+
+describe('recalerLaBaseSurLaCopie — la base suit la copie posée sur main, jamais plus loin', () => {
+  it('l’agent a commité dans sa copie posée sur main : la base s’arrête au commit de main', async () => {
+    const { repo, copie } = await depotEtCopie()
+    const avant = await lireLaBaseDuFil({ dossier: copie, conversationId: 'conv-1' })
+    await unAutreFilPublie(repo)
+    const main = await git(repo, 'rev-parse', 'HEAD')
+    await git(copie, 'checkout', '-q', '--detach', main)
+    writeFileSync(join(copie, 'd.txt'), 'travail commité par l’agent\n')
+    await git(copie, 'add', 'd.txt')
+    await git(copie, 'commit', '-qm', 'travail du fil')
+
+    const issue = await recalerLaBaseSurLaCopie({ copie, conversationId: 'conv-1', depot: repo })
+
+    expect(issue).toEqual({ fait: 'recalee', depuis: avant, vers: main })
+    // Le commit de l'agent reste hors de la base : la porte le publiera.
+    const base = (await lireLaBaseDuFil({ dossier: copie, conversationId: 'conv-1' })) as string
+    expect(await git(copie, 'diff', '--name-only', base, 'HEAD')).toBe('d.txt')
+  })
+
+  it('tête restée au point de départ : rien ne bouge', async () => {
+    const { repo, copie } = await depotEtCopie()
+    const avant = await lireLaBaseDuFil({ dossier: copie, conversationId: 'conv-1' })
+    writeFileSync(join(copie, 'a.txt'), 'travail du fil\n')
+    await unAutreFilPublie(repo)
+
+    const issue = await recalerLaBaseSurLaCopie({ copie, conversationId: 'conv-1', depot: repo })
+
+    expect(issue).toEqual({ fait: 'inchangee' })
+    expect(await lireLaBaseDuFil({ dossier: copie, conversationId: 'conv-1' })).toBe(avant)
   })
 })
