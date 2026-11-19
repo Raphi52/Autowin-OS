@@ -27,14 +27,15 @@
  * `n>`, `*>`), Set-Content/Add-Content/Out-File/Tee-Object/New-Item, cp/mv/rm/touch/mkdir/tee/sed -i/dd,
  * copy/move/del de cmd, Copy-Item/Move-Item/Remove-Item/Rename-Item, -OutFile, curl -o,
  * [IO.File]::…, writeFileSync de node et open(…, 'w') de python, `git worktree add <dossier>`,
- * y compris après cd/Set-Location/pushd
- * et dans cmd /c, powershell -Command, bash -c. Ne sont PAS vues : un chemin bâti dans une variable
- * (`$p = 'D:\AutoWinOS'; … > $p\x`), un script lancé qui écrit lui-même, `git -C <dossier partagé>`
+ * `--out`/`-Output` de nos scripts, y compris après cd/Set-Location/pushd, dans cmd /c, powershell
+ * -Command, bash -c, et par une variable affectée plus tôt dans la même commande (`developper`). Ne sont
+ * PAS vues : une variable venue d'ailleurs (`$TEMP`, `$env:X`), un script lancé qui écrit lui-même, `git -C <dossier partagé>`
  * (checkout, commit…), une écriture à travers un lien de la copie (`node_modules`, relié au dépôt :
  * c'est la garde npm qui le protège), une commande coupée par Grok au-delà de 128 Kio.
  *
  * SECONDE RÈGLE, pour tout agent, dans une copie ou non (`refusALaRacineDuDisque`) : aucune entrée
- * NEUVE à la racine d'un disque (`D:\x.log`, `D:\tmp-lot9\`, `git worktree add D:\Projet-lot1`).
+ * NEUVE à la racine d'un disque (`D:\x.log`, `D:\tmp-lot9\`, `git worktree add D:\Projet-lot1`) ; de
+ * même à la racine des copies de travail (`refusALaRacineDesCopies`), qui n'appartient qu'à l'app.
  *
  * TROISIÈME RÈGLE (`refusNomReserve`) : un outil d'écriture, une commande shell ou un correctif ne pose
  * pas un nom ou un terme réservé à l'entreprise dans un fichier suivi d'un dépôt qui porte des profils
@@ -323,6 +324,12 @@ const PARAMS_CHEMIN = new Set([
   '-destination',
   '-outfile'
 ])
+/**
+ * Options qui nomment le fichier écrit, quelle que soit la commande : `--out` de nos scripts
+ * (`ui-capture.mjs`), `-Output` de nos scripts PowerShell (`hdesk-observe.ps1`). `--output` n'y est
+ * pas : ailleurs (az, kubectl) il nomme un format.
+ */
+const OPTIONS_DE_SORTIE = new Set(['--out', '--sortie', '-output'])
 /** Paramètres PowerShell qui prennent le mot suivant comme valeur (les autres sont des interrupteurs). */
 const PARAMS_A_VALEUR = new Set(
   (
@@ -377,6 +384,15 @@ function ciblesDuSegment(mots, dossier, resoudre) {
   for (let i = 1; i < mots.length; i++) {
     const a = mots[i]
     const bas = a.toLowerCase()
+    if (OPTIONS_DE_SORTIE.has(bas)) {
+      cibles.push(mots[++i])
+      continue
+    }
+    const sortie = /^(--out|--sortie)=(.+)$/i.exec(a)
+    if (sortie) {
+      cibles.push(sortie[2])
+      continue
+    }
     const deux = /^(-[a-z]+):(.+)$/i.exec(a)
     // fix-ok: lu en relecture avant le premier vert — `-Path` comptait comme écriture pour toute
     // commande, donc `Get-Content -Path <partagé>` aurait été refusé ; jumeau « lire le dossier
@@ -486,15 +502,30 @@ function ciblesDuCode(commande, resoudre) {
  * `bash` : la commande est lue par bash ; un shell imbriqué dit le sien. Hors Windows, `/x` est un
  * vrai chemin absolu du système et se lit tel quel : seul Git Bash a besoin de `resoudreSousBash`.
  */
-function parcourirShell(commande, cwd, resoudre, visiteur, profondeur = 0, bash = false) {
+function parcourirShell(
+  commande,
+  cwd,
+  resoudre,
+  visiteur,
+  profondeur = 0,
+  bash = false,
+  variables = new Map()
+) {
   const { segments, code } = segmentsDe(commande)
   visiteur.code(code)
   const lire = bash && process.platform === 'win32' ? resoudreSousBash(resoudre) : resoudre
   let dossier = cwd
   let amont
   for (const seg of segments) {
-    const mots = [...seg.mots]
-    while (mots.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(mots[0])) mots.shift()
+    const mots = seg.mots.map((m) => developper(m, variables))
+    const affectations = []
+    while (mots.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(mots[0])) affectations.push(mots.shift())
+    if (nomDe(mots[0]) === 'export') affectations.push(...mots.splice(0).slice(1))
+    if (!mots.length) retenirAffectations(affectations, variables)
+    else if (mots.length === 3 && mots[1] === '=' && /^\$[A-Za-z_]\w*$/.test(seg.mots[0])) {
+      variables.set(seg.mots[0].slice(1).toLowerCase(), mots[2])
+      mots.length = 0
+    }
     const exe = nomDe(mots[0])
     // Un shell dans le shell : on lit la commande qu'il reçoit, depuis le même dossier.
     let interne
@@ -510,6 +541,7 @@ function parcourirShell(commande, cwd, resoudre, visiteur, profondeur = 0, bash 
     const etape = {
       seg,
       mots,
+      redirs: seg.redirs.map((r) => developper(r, variables)),
       exe,
       dossier,
       lire,
@@ -520,7 +552,7 @@ function parcourirShell(commande, cwd, resoudre, visiteur, profondeur = 0, bash 
     visiteur.etape(etape)
     if (interne !== undefined) {
       if (profondeur < 3)
-        parcourirShell(interne, dossier, resoudre, visiteur, profondeur + 1, interneBash)
+        parcourirShell(interne, dossier, resoudre, visiteur, profondeur + 1, interneBash, variables)
       continue
     }
     if (cd) {
@@ -531,9 +563,32 @@ function parcourirShell(commande, cwd, resoudre, visiteur, profondeur = 0, bash 
   }
 }
 
+/**
+ * UN CHEMIN BÂTI DANS UNE VARIABLE DE LA MÊME COMMANDE SE LIT AUSSI. `OUT="D:/…" && outil --out "$OUT/x.png"`
+ * est la forme qu'a prise une capture laissée dans la racine des copies : sans la variable, le chemin
+ * restait illisible et rien n'était refusé. Seules les variables affectées plus tôt dans la commande
+ * (`X=…`, `export X=…`, `$x = '…'` de PowerShell) se remplacent ; les autres (`$TEMP`, `$env:…`) restent
+ * telles quelles, et `cheminDuMot` ne lit toujours pas un mot qui en porte une.
+ */
+function developper(mot, variables) {
+  if (!variables.size || !String(mot).includes('$')) return mot
+  return String(mot).replace(/\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/g, (tout, entre, nu) => {
+    const valeur = variables.get((entre ?? nu).toLowerCase())
+    return valeur === undefined ? tout : valeur
+  })
+}
+
+/** `X=valeur` d'un segment qui ne fait qu'affecter : la variable vaut pour la suite de la commande. */
+function retenirAffectations(affectations, variables) {
+  for (const a of affectations) {
+    const egal = a.indexOf('=')
+    if (egal > 0) variables.set(a.slice(0, egal).toLowerCase(), a.slice(egal + 1))
+  }
+}
+
 /** Les cibles des redirections d'une étape, résolues depuis son dossier. */
-const redirectionsDe = ({ seg, dossier, lire }) =>
-  seg.redirs.map((r) => cheminDuMot(r, dossier, lire)).filter(Boolean)
+const redirectionsDe = ({ redirs, dossier, lire }) =>
+  redirs.map((r) => cheminDuMot(r, dossier, lire)).filter(Boolean)
 
 /** Les chemins qu'une commande shell écrit. */
 function ciblesDuShell(commande, cwd, resoudre, bash = false) {
@@ -1091,6 +1146,41 @@ export function refusALaRacineDuDisque(entree, sonde) {
   )
 }
 
+const RACINE_DES_COPIES =
+  /^(.*?[\\/]\.autowin-data[\\/][^\\/]+[\\/]copies-de-taches)[\\/]+([^\\/]+)/i
+
+/** `…\.autowin-data\<app>\copies-de-taches\nom` : l'entrée de premier niveau de la racine des copies où tombe `chemin`. */
+export function entreeDesCopies(chemin) {
+  const m = RACINE_DES_COPIES.exec(String(chemin ?? ''))
+  return m ? join(m[1], m[2]) : undefined
+}
+
+/**
+ * RIEN DE NEUF À LA RACINE DES COPIES, pour tout agent. L'app y range une copie par fil ou par
+ * exécution, et ses marqueurs ; son ménage ne sait rien de ce qu'un agent pose à côté. Relevé du 20/11 :
+ * neuf journaux de preuve et une capture d'écran y traînaient depuis dix jours, avec une copie git
+ * faite à la main, laissés par des agents qui prenaient le dossier parent de leur copie pour un
+ * brouillon. Écrire DANS une copie existante, la retirer, lire la racine : rien ne change.
+ */
+export function refusALaRacineDesCopies(entree, sonde) {
+  const appel = appelDe(entree)
+  if (!appel || typeof sonde?.existe !== 'function') return undefined
+  if (typeof appel.commande === 'string' && DEMANDE_UTILISATEUR.test(appel.commande))
+    return undefined
+  const neuve = ciblesDeLAppel(appel, sonde.resoudre)
+    .map(entreeDesCopies)
+    .find((e) => e !== undefined && !sonde.existe(e))
+  if (!neuve) return undefined
+  return (
+    `Refusé : cet appel créerait ${neuve}, à la racine des copies de travail ${dirname(neuve)}. ` +
+    "Ce dossier n'appartient qu'à l'app : elle y range une copie par fil ou par exécution, et rien ne range ce qu'un agent pose à côté (journaux de preuve et captures y sont restés dix jours). " +
+    `Fichier utile au travail : dans ta copie (${appel.cwd}). ` +
+    'Journal, capture ou sortie de preuve : dans le dossier temporaire ($TEMP en Bash, $env:TEMP en PowerShell). ' +
+    'Copie de comparaison (avant/après) : `git worktree add "$TEMP/<nom>" <commit>`, puis `git worktree remove` avant de rendre la main. ' +
+    "Seulement si l'utilisateur a demandé lui-même cet emplacement dans son message : relance la commande précédée de AUTOWIN_DEMANDE_UTILISATEUR=1."
+  )
+}
+
 /**
  * Sonde réelle : lit le `.git` des dossiers et le `commondir` de git, demande à git s'il ignore un
  * chemin. Ne modifie rien.
@@ -1164,7 +1254,9 @@ async function principal() {
   let motif
   try {
     motif =
-      refusEcritureHorsCopie(entree, sondeSysteme) ?? refusALaRacineDuDisque(entree, sondeSysteme)
+      refusEcritureHorsCopie(entree, sondeSysteme) ??
+      refusALaRacineDuDisque(entree, sondeSysteme) ??
+      refusALaRacineDesCopies(entree, sondeSysteme)
   } catch {
     // Une garde en panne ne refuse rien.
   }

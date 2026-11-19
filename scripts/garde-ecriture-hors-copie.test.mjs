@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   copieDe,
+  refusALaRacineDesCopies,
   refusALaRacineDuDisque,
   refusEcritureHorsCopie,
   refusNomReserve,
@@ -429,6 +430,93 @@ describe('refusALaRacineDuDisque — rien de neuf à la racine d’un disque', (
     expect(
       shell('git worktree add D:/AutoWinOS/.autowin-data/autowin-os/copies-de-taches/avant main')
     ).toBeUndefined()
+  })
+})
+
+/*
+ * RIEN DE NEUF À LA RACINE DES COPIES. Relevé du 20/11 : à côté des copies que l'app y range, neuf
+ * fichiers et une copie git faite à la main traînaient depuis le 10/11, laissés par deux agents qui
+ * prenaient le dossier parent de leur copie pour un brouillon. Les commandes ci-dessous sont les leurs,
+ * relevées dans leurs journaux de session : un fil qui fait une copie de preuve et y écrit ses journaux
+ * en `..`, et une exécution qui range sa capture d'écran dans le dossier nommé par une variable.
+ */
+describe('refusALaRacineDesCopies — la racine des copies n’appartient qu’à l’app', () => {
+  const RACINE = 'D:\\AutoWinOS\\.autowin-data\\autowin-os\\copies-de-taches'
+  const PREUVE = `${RACINE}\\preuve-e7f8967a6`
+  const RUN = `${RACINE}\\run-a11c09dae62e-1`
+  const EXISTANTS = [RACINE, `${RACINE}\\conv-1780`, RUN, 'D:\\AutoWinOS', PREUVE]
+  const sondeCopies = {
+    ...sondeFictive,
+    existe: (chemin) => EXISTANTS.some((e) => egal(e, chemin))
+  }
+  const appel = (tool_name, tool_input, cwd) =>
+    refusALaRacineDesCopies({ tool_name, tool_input, cwd }, sondeCopies)
+  const sh = (command, cwd = 'D:\\AutoWinOS') => appel('Bash', { command }, cwd)
+
+  it.each([
+    [
+      'la copie de preuve faite à la main',
+      'git worktree add --detach .autowin-data/autowin-os/copies-de-taches/preuve-a1b2c3 a1b2c3 2>&1 | tail -2',
+      undefined,
+      'preuve-a1b2c3'
+    ],
+    [
+      'les journaux de preuve écrits en ..',
+      'cd /d/AutoWinOS/.autowin-data/autowin-os/copies-de-taches/preuve-e7f8967a6 && npx vitest run --reporter=dot > ../preuve-e7-vitest.log 2>&1',
+      undefined,
+      'preuve-e7-vitest.log'
+    ],
+    [
+      'la capture rangée par une variable',
+      'cd "D:/AutoWinOS/.autowin-data/autowin-os/copies-de-taches/run-a11c09dae62e-1" && OUT="D:/AutoWinOS/.autowin-data/autowin-os/copies-de-taches" && timeout 590 node scripts/ui-capture.mjs --view chat --code-dev --out "$OUT/capture-liste-chat.png" > "$OUT/sortie-capture.json"',
+      undefined,
+      'sortie-capture.json'
+    ],
+    [
+      'la même capture, par --out seul',
+      'OUT="D:/AutoWinOS/.autowin-data/autowin-os/copies-de-taches"; node scripts/ui-capture.mjs --out "${OUT}/capture-liste-chat.png"',
+      RUN,
+      'capture-liste-chat.png'
+    ],
+    [
+      'une variable PowerShell',
+      'powershell -Command "$o = \'..\'; Set-Content -Path $o\\journal.log -Value x"',
+      RUN,
+      'journal.log'
+    ],
+    [
+      'une capture de bureau caché par -Output, sous PowerShell',
+      'powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId x -Output ../vue.png',
+      RUN,
+      'vue.png'
+    ]
+  ])('refusé : %s', (_cas, commande, cwd, nom) => {
+    const motif = sh(commande, cwd)
+    expect(motif).toMatch(/Refusé : cet appel créerait .*copies-de-taches/u)
+    expect(motif).toContain(nom)
+    expect(motif).toMatch(/\$TEMP/u)
+  })
+
+  it('refusé : par Write, un fichier posé à côté de la copie', () => {
+    expect(appel('Write', { file_path: '../notes.md', content: 'x' }, RUN)).toMatch(
+      /Refusé.*notes\.md/u
+    )
+  })
+
+  it.each([
+    ['écrire dans sa propre copie', 'echo x > ../run-a11c09dae62e-1/sortie.log', RUN],
+    ['écrire au fond de sa copie', 'node scripts/ui-capture.mjs --out captures/a.png', RUN],
+    ['écrire dans le dossier temporaire', 'npx vitest run > "$TEMP/preuve.log" 2>&1', RUN],
+    ['retirer une copie existante', 'git worktree remove --force ../preuve-e7f8967a6', RUN],
+    ['lire la racine', 'ls -la .. && cat ../conv-1780/AGENTS.md', RUN],
+    [
+      'l’utilisateur a demandé cet emplacement',
+      'AUTOWIN_DEMANDE_UTILISATEUR=1 echo x > ../demande.txt',
+      RUN
+    ],
+    ['un sous-dossier qui porte le même nom ailleurs', 'echo x > copies-de-taches/a.txt', RUN]
+  ])('autorisé : %s', (_cas, commande, cwd) => {
+    expect(sh(commande, cwd)).toBeUndefined()
   })
 })
 
