@@ -155,8 +155,26 @@ export function travauxNonAnnonces(
   return nouveaux
 }
 
+/**
+ * Les repères de coût du fil du TOUR (jamais de l'onglet affiché : un tour peut se jouer dans un fil
+ * que l'utilisateur ne regarde pas). Absents tant que rien n'est mesuré : une légende seule ne dit rien.
+ */
+function reperesDeCoutPourLePrompt(
+  bus: AppCommandBus,
+  conversationId: string | undefined
+): Pick<PromptSnapshot, 'reperesDeCout'> {
+  const reperes = bus.os.reperesDeCout?.(conversationId)
+  if (!reperes || !(reperes.ceFil || reperes.uneExecution || reperes.unTourDeChat)) return {}
+  return { reperesDeCout: reperes }
+}
+
 /** Version réduite pour l'injection prompt — voir {@link PromptSnapshot}. */
-export async function snapshotForPrompt(bus: AppCommandBus, jalon?: (nom: string) => void): Promise<PromptSnapshot> {
+export async function snapshotForPrompt(
+  bus: AppCommandBus,
+  jalon?: (nom: string) => void,
+  /** Fil du tour : seuls ses repères de coût sont servis. */
+  conversationId?: string
+): Promise<PromptSnapshot> {
   const full = await bus.snapshot(jalon)
   return {
     tab: full.tab,
@@ -176,6 +194,7 @@ export async function snapshotForPrompt(bus: AppCommandBus, jalon?: (nom: string
     conversationsCount: full.conversations.length,
     ...(skillsInvocables().length > 0 ? { skillsDisponibles: skillsInvocables() } : {}),
     ...clesDuCoffrePourLePrompt(),
+    ...reperesDeCoutPourLePrompt(bus, conversationId),
     ...(bus.travauxNonAnnonces(full.travauxNonPublies).length > 0
       ? {
           travauxNonFusionnes: {

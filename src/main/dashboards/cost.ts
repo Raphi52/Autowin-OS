@@ -8,6 +8,7 @@ import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { TokenUsage } from '../../shared/token-usage'
 import { resolveCostCoverage, type CostCoverage } from '../../shared/cost-estimate'
+import { ReperesDeCoutEnCours, type ReperesDeCout } from './reperes-de-cout'
 
 /** Un tour (turn) d'agent, avec son cout et sa consommation de tokens. */
 export interface TurnCost extends TokenUsage {
@@ -134,6 +135,8 @@ const ALERT_RATIO_THRESHOLD = 0.8
 
 export class CostAggregator {
   private turns: TurnCost[] = []
+  /** Repères servis à l'agent à chaque tour, tenus ligne à ligne (voir `reperes-de-cout.ts`). */
+  private readonly reperes = new ReperesDeCoutEnCours()
   /**
    * Total déjà compté PAR APPEL REPRIS. Reconstruit depuis le fichier au démarrage : c'est la base qui
    * survit à une relance, là où la mémoire d'un enregistreur repart de zéro.
@@ -205,6 +208,7 @@ export class CostAggregator {
   /** Range une ligne dans le registre et, si elle porte un appel, dans son total. */
   private memoriser(t: TurnCost): void {
     this.turns.push(t)
+    this.reperes.ajouter(t)
     if (!t.appelId) return
     const total = this.totauxParAppel.get(t.appelId) ?? {
       inputTokens: 0,
@@ -274,6 +278,11 @@ export class CostAggregator {
     } catch {
       /* best-effort */
     }
+  }
+
+  /** Ce que le fil a coûté et l'ordre de grandeur d'une exécution, pour l'état du tour. */
+  reperesDeCout(conversationId?: string): ReperesDeCout {
+    return this.reperes.reperes(conversationId)
   }
 
   /** Cout total cumule (0 si aucun tour n'a de costUsd). */

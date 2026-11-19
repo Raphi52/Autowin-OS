@@ -579,8 +579,11 @@ export class AppCommandBus {
   }
 
   /** Corps : `commands/instantanes.ts` (lot 6). */
-  snapshotForPrompt(jalon?: (nom: string) => void): Promise<PromptSnapshot> {
-    return instantanes.snapshotForPrompt(this, jalon)
+  snapshotForPrompt(
+    jalon?: (nom: string) => void,
+    conversationId?: string
+  ): Promise<PromptSnapshot> {
+    return instantanes.snapshotForPrompt(this, jalon, conversationId)
   }
 
   /**

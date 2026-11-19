@@ -1963,6 +1963,9 @@ export class AutowinOS {
   budget(): ReturnType<CostAggregator['budgetStatus']> {
     return this.cost.budgetStatus()
   }
+  reperesDeCout(conversationId?: string): ReturnType<CostAggregator['reperesDeCout']> {
+    return this.cost.reperesDeCout(conversationId)
+  }
   trustRanking(): ReturnType<TrustLedger['ranking']> {
     return this.trust.ranking()
   }

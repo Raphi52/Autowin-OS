@@ -93,7 +93,9 @@
     en valeurs distinctes de `run`, jamais en lignes ;
   - saisies de l'utilisateur : `saisies-utilisateur.jsonl` (`voie` : `message` ou `orientation`) ;
     la remise de chaque consigne envoyée pendant un tour : `orientations-en-cours.jsonl` (`par` :
-    `controle` = à l'outil suivant, `tour` = entre deux appels au modèle, `rendue` = en fin de tour).
+    `controle` = à l'outil suivant, `tour` = entre deux appels au modèle, `rendue` = en fin de tour) ;
+  - dépense d'un fil : `node scripts/cout-du-fil.mjs <id du fil>` la répartit par exécution et par
+    étape, et range les refus du contrôle final par origine (juge, fix-gate, nettoyage).
 
 ## Conventions
 - Français partout : commentaires, libellés, messages de commit.

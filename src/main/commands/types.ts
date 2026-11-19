@@ -10,6 +10,7 @@ import type { Message } from '../providers/types'
 import type { SchemaArgument } from '../skills/skill-node-mcp'
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AppDestination } from '../../shared/navigation'
+import type { ReperesDeCout } from '../dashboards/reperes-de-cout'
 import type { HypotheseDeCadrage } from '../../shared/cadrage-confiance'
 import type { OrchestrationStep, OrchestrationPhase } from '../orchestration/orchestrator'
 
@@ -194,6 +195,12 @@ export interface PromptSnapshot {
    * (`$NOM` dans sa commande) au lieu de les réclamer dans le fil ou de refuser faute de droit.
    */
   clesDuCoffre?: string[]
+  /**
+   * Ce que CE fil a déjà coûté et l'ordre de grandeur d'une exécution `orchestrate` sur ce poste :
+   * de quoi peser une exécution AVANT de la lancer (`dashboards/reperes-de-cout.ts`). Absent quand
+   * rien n'est encore mesuré.
+   */
+  reperesDeCout?: ReperesDeCout
   /**
    * DU TRAVAIL NON FUSIONNE, et la consigne pour le trier — ABSENT quand il n'y en a pas.
    *

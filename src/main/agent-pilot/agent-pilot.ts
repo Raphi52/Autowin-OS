@@ -350,7 +350,7 @@ export class AgentPilot {
     // Sous-jalons : `snapshot` recouvre trois lectures (runs, bureaux, recensement git). Les
     // marquer sépare la cause de l'effet dans l'onglet Latence de la vue Tests.
     const snapshot = snapshotDuTour(
-      await this.bus.snapshotForPrompt((nom) => timer.mark(nom)),
+      await this.bus.snapshotForPrompt((nom) => timer.mark(nom), conversationId),
       conversationId
     )
     timer.mark('snapshot')
@@ -765,7 +765,10 @@ ${repriseApresArret.pourLeModele}`)
         return
       }
 
-      const state = snapshotDuTour(await this.bus.snapshotForPrompt(), conversationId)
+      const state = snapshotDuTour(
+        await this.bus.snapshotForPrompt(undefined, conversationId),
+        conversationId
+      )
       const bloc = blocEtatSuivant(etat.dernierEtatEnvoye, state)
       etat.dernierEtatEnvoye = state
       convo.push(`TU AS ÉMIS: ${text}`)
