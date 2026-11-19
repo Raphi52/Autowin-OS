@@ -36,6 +36,9 @@
  * SECONDE RÈGLE, pour tout agent, dans une copie ou non (`refusALaRacineDuDisque`) : aucune entrée
  * NEUVE à la racine d'un disque (`D:\x.log`, `D:\tmp-lot9\`, `git worktree add D:\Projet-lot1`).
  *
+ * TROISIÈME RÈGLE (`refusNomReserve`) : un outil d'écriture ne pose pas un nom ou un terme réservé à
+ * l'entreprise dans un fichier suivi d'un dépôt qui porte des profils d'entreprise.
+ *
  * Aucune dépendance hors `node:` : Claude lance une COPIE de ce fichier, posée seule dans son dossier
  * de réglages. Une erreur interne laisse passer, comme la garde npm : une garde en panne ne doit pas
  * refuser tous les outils de tous les agents.
@@ -686,6 +689,119 @@ export function refusEcritureHorsCopie(entree, sonde) {
   )
 }
 
+/** Les clés où un outil d'écriture porte le texte qu'il pose : contenu entier, ou nouveau texte d'une retouche. */
+const CLES_TEXTE = [
+  'content',
+  'new_string',
+  'newString',
+  'new_str',
+  'file_text',
+  'new_source',
+  'CodeContent',
+  'ReplacementContent'
+]
+
+/** Le texte que l'appel écrirait, morceau par morceau (une retouche multiple en a plusieurs). */
+function textesEcrits(outil) {
+  const textes = []
+  const prendre = (objet) => {
+    for (const k of CLES_TEXTE)
+      if (typeof objet?.[k] === 'string' && objet[k]) textes.push(objet[k])
+  }
+  prendre(outil)
+  for (const liste of [outil.edits, outil.ReplacementChunks])
+    if (Array.isArray(liste)) liste.forEach(prendre)
+  return textes
+}
+
+/** Le dossier git le plus proche qui contient `chemin` (le fichier peut ne pas exister encore). */
+function depotDuFichier(chemin, sonde) {
+  for (let dossier = dirname(chemin); ;) {
+    if (sonde.git(dossier)) return dossier
+    const parent = dirname(dossier)
+    if (parent === dossier) return undefined
+    dossier = parent
+  }
+}
+
+/** Chaque passage réservé de `texte` (nom d'un profil, casse ignorée, ou terme interdit) : début et fin. */
+function passagesReserves(texte, noms, termes) {
+  const passages = []
+  const minuscules = texte.toLowerCase()
+  for (const nom of noms)
+    for (let i = minuscules.indexOf(nom); i >= 0; i = minuscules.indexOf(nom, i + nom.length))
+      passages.push([i, i + nom.length])
+  for (const { regex } of termes)
+    for (const m of texte.matchAll(new RegExp(regex.source, `${regex.flags.replace('g', '')}g`)))
+      passages.push([m.index, m.index + Math.max(1, m[0].length)])
+  return passages.sort((a, b) => a[0] - b[0])
+}
+
+/**
+ * LE NOM RÉSERVÉ SE REFUSE À L'ÉCRITURE, PAS AU COMMIT. Dans un dépôt qui porte des profils d'entreprise
+ * (`entreprise/<profil>/identite.json`, règles de `scripts/identite-entreprise.mjs`), un fichier suivi par
+ * git ne doit porter ni le nom d'un profil ni ses termes interdits. Le crochet de commit le refusait bien,
+ * mais à la fin du tour : le commit du fil échouait, l'envoi restait bloqué, et il fallait un tour de
+ * plus pour retrouver le fichier (mesuré le 2026-11-19 sur cinq fils en trois jours). Ici, l'outil
+ * d'écriture (Write, Edit, MultiEdit…) est refusé AVANT, avec la ligne fautive, le passage masqué.
+ *
+ * Mêmes règles que le crochet, chargées depuis le dépôt du fichier écrit (son module, pas une copie) ;
+ * un dépôt sans ce module (un autre projet, une copie d'un autre projet rangée chez nous) n'est pas
+ * concerné. Passent : `entreprise/`, les données de l'app, tout chemin que git ignore, un profil mal
+ * formé (le crochet laisse alors passer lui aussi). Les écritures par le shell ne sont pas lues.
+ */
+export async function refusNomReserve(entree, sonde = sondeSysteme) {
+  const appel = appelDe(entree)
+  if (!appel || !OUTILS_ECRITURE.has(appel.nom)) return undefined
+  const textes = textesEcrits(appel.outil)
+  if (!textes.length) return undefined
+  const cibles = CLES_CHEMIN.filter((k) => typeof appel.outil[k] === 'string' && appel.outil[k])
+    .map((k) => cheminDuMot(appel.outil[k], appel.cwd, sonde.resoudre))
+    .filter(Boolean)
+  for (const cible of cibles) {
+    const depot = depotDuFichier(cible, sonde)
+    if (!depot) continue
+    const module = join(depot, 'scripts', 'identite-entreprise.mjs')
+    if (!sonde.existe(module)) continue
+    const relatif = relative(depot, cible).split(sep).join('/')
+    if (relatif.startsWith('entreprise/') || relatif.startsWith(`${DONNEES_APP}/`)) continue
+    const regles = await import(pathToFileURL(module).href)
+    const profils = regles.racineDesProfils(depot)
+    if (!profils) continue
+    const { termes, erreurs } = regles.termesDesProfils(profils)
+    if (erreurs.length) continue
+    const noms = regles.nomsDesProfils(profils)
+    for (const texte of textes) {
+      const passages = passagesReserves(texte, noms, termes)
+      if (!passages.length) continue
+      if (sonde.ignore?.(depot, cible) === true) break
+      const [debut] = passages[0]
+      const ligne = texte.slice(0, debut).split('\n').length
+      const ouvre = texte.lastIndexOf('\n', debut - 1) + 1
+      const ferme = texte.indexOf('\n', debut)
+      const fin = ferme < 0 ? texte.length : ferme
+      // La ligne fautive, chaque passage réservé masqué : l'agent retrouve l'endroit sans que le terme
+      // ne reparte dans sa réponse, ni dans le fil.
+      let extrait = ''
+      let curseur = ouvre
+      for (const [a, b] of passages.filter(([a, b]) => a < fin && b > ouvre)) {
+        if (a < curseur) continue
+        extrait += `${texte.slice(curseur, a)}«…»`
+        curseur = Math.min(b, fin)
+      }
+      extrait = `${extrait}${texte.slice(curseur, fin)}`.trim().slice(0, 200)
+      return (
+        `Refusé : ce texte porte un nom ou un terme réservé à l'entreprise, et ${relatif} est suivi par git. ` +
+        `Ligne ${ligne} du texte écrit : « ${extrait} » (passage réservé masqué par «…»). ` +
+        "Le commit de fin de tour le refuserait et l'envoi du fil resterait bloqué. " +
+        'Reformule sans lui (exemple fictif, « un dépôt de l’utilisateur »…), puis réécris. ' +
+        `Restent libres : entreprise/, ${DONNEES_APP}/ et les fichiers que git ignore.`
+      )
+    }
+  }
+  return undefined
+}
+
 /**
  * Le marqueur qu'un agent pose devant sa commande quand l'utilisateur a demandé LUI-MÊME, dans son
  * message, un emplacement à la racine d'un disque (« clone-le dans D:\ », « mets le zip sur D:\ »).
@@ -807,6 +923,13 @@ async function principal() {
       motif = await copieALaDemande(entree)
     } catch {
       // Conf ou module illisible : l'appel passe, comme avant les copies.
+    }
+  }
+  if (!motif) {
+    try {
+      motif = await refusNomReserve(entree)
+    } catch {
+      // Règles du dépôt illisibles : le crochet de commit reste le filet.
     }
   }
   if (motif) process.stdout.write(JSON.stringify(sortieDuRefus(motif, entree !== brut)))

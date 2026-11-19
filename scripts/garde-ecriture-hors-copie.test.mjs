@@ -1,14 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { spawn, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   copieDe,
   refusALaRacineDuDisque,
   refusEcritureHorsCopie,
+  refusNomReserve,
   sondeSysteme
 } from './garde-ecriture-hors-copie.mjs'
 
@@ -568,5 +569,112 @@ describe('le script lancé comme un contrôle « avant outil »', () => {
       cwd: copie
     })
     expect({ code, out }).toEqual({ code: 0, out: '' })
+  })
+})
+
+/*
+ * LE NOM RÉSERVÉ SE REFUSE À L'ÉCRITURE. Cas réel du 2026-11-19 : un agent a laissé un terme réservé
+ * dans un commentaire de test ; le crochet de commit l'a refusé à la fin du tour, l'envoi du fil est
+ * resté bloqué sans que le fichier soit nommé. Même cause dans quatre autres fils en trois jours. Le
+ * terme est FICTIF, posé par le profil du dépôt de test ; les règles sont celles du vrai module, recopié.
+ * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : le terme écrit dans un fichier suivi qui passe ; le terme recopié
+ * dans le motif du refus ; un refus sur `entreprise/`, un fichier ignoré, un texte propre ou un autre projet.
+ */
+describe('refusNomReserve — un nom réservé ne s’écrit pas dans un fichier suivi', () => {
+  const TERME = 'zorglubfictif'
+  let depot
+  let autreProjet
+  beforeAll(() => {
+    const racine = realpathSync.native(mkdtempSync(join(tmpdir(), 'garde-nom-')))
+    depot = join(racine, 'autowin')
+    autreProjet = join(racine, 'projet')
+    for (const d of [depot, autreProjet]) {
+      mkdirSync(d)
+      spawnSync('git', ['init', '-q'], { cwd: d })
+    }
+    mkdirSync(join(depot, 'scripts'))
+    writeFileSync(
+      join(depot, 'scripts', 'identite-entreprise.mjs'),
+      readFileSync(join(dirname(SCRIPT), 'identite-entreprise.mjs'))
+    )
+    mkdirSync(join(depot, 'entreprise', 'acmecorp'), { recursive: true })
+    writeFileSync(
+      join(depot, 'entreprise', 'acmecorp', 'identite.json'),
+      JSON.stringify({ termesInterdits: [{ motif: TERME }] })
+    )
+    writeFileSync(join(depot, '.gitignore'), '/entreprise/\n/journal/\n')
+  })
+
+  const ecrire = (fichier, content, dossier = depot) =>
+    refusNomReserve({
+      tool_name: 'Write',
+      tool_input: { file_path: fichier, content },
+      cwd: dossier
+    })
+
+  it('refusé : le terme dans un fichier suivi, ligne nommée et passage masqué', async () => {
+    const motif = await ecrire(
+      join(depot, 'scripts', 'outil.test.mjs'),
+      `// en-tête\n// Cas réel : D:\\${TERME}, 51 commits\n`
+    )
+    expect(motif).toMatch(/Refusé : ce texte porte un nom ou un terme réservé/u)
+    expect(motif).toContain('scripts/outil.test.mjs')
+    expect(motif).toContain('Ligne 2 du texte écrit')
+    expect(motif).toContain('Cas réel : D:\\«…», 51 commits')
+    expect(motif).not.toContain(TERME)
+  })
+
+  it('refusé : le nom du profil (casse ignorée) apporté par une retouche', async () => {
+    const motif = await refusNomReserve({
+      tool_name: 'Edit',
+      tool_input: {
+        file_path: join(depot, 'src', 'x.ts'),
+        old_string: 'a',
+        new_string: 'chez AcmeCorp'
+      },
+      cwd: depot
+    })
+    expect(motif).toContain('chez «…»')
+    expect(motif?.toLowerCase()).not.toContain('acmecorp')
+  })
+
+  it.each([
+    ['un texte propre', () => ecrire(join(depot, 'src', 'x.ts'), 'export const x = 1\n')],
+    ['le profil lui-même', () => ecrire(join(depot, 'entreprise', 'acmecorp', 'n.md'), TERME)],
+    ['les données de l’app', () => ecrire(join(depot, '.autowin-data', 'note.md'), TERME)],
+    ['un fichier ignoré', () => ecrire(join(depot, 'journal', 'j.log'), TERME)],
+    ['un autre projet', () => ecrire(join(autreProjet, 'a.ts'), TERME, autreProjet)],
+    [
+      'une retouche qui RETIRE le terme',
+      () =>
+        refusNomReserve({
+          tool_name: 'Edit',
+          tool_input: { file_path: join(depot, 'a.ts'), old_string: TERME, new_string: 'un dépôt' },
+          cwd: depot
+        })
+    ],
+    [
+      'un outil de lecture',
+      () =>
+        refusNomReserve({
+          tool_name: 'Read',
+          tool_input: { file_path: join(depot, 'a.ts') },
+          cwd: depot
+        })
+    ]
+  ])('passe : %s', async (_cas, appel) => {
+    expect(await appel()).toBeUndefined()
+  })
+
+  it('le script lancé comme contrôle « avant outil » refuse l’écriture', async () => {
+    const { code, out } = await lancer({
+      tool_name: 'Write',
+      tool_input: { file_path: join(depot, 'src', 'y.ts'), content: `const t = '${TERME}'` },
+      cwd: depot
+    })
+    expect(code).toBe(0)
+    const sortie = JSON.parse(out).hookSpecificOutput
+    expect(sortie.permissionDecision).toBe('deny')
+    expect(sortie.permissionDecisionReason).not.toContain(TERME)
   })
 })
