@@ -192,6 +192,14 @@ function mesIdentites(git) {
 /** Au-delà de cette part des derniers commits, le dépôt est le tien : quelques commits de passage n'en font pas un dépôt d'équipe. */
 const PART_DEPOT_PERSO = 0.8
 
+/**
+ * L'adresse des commits qu'Autowin signe lui-même (passages de porte, entrées de copie) : la constante
+ * `AUTEUR` de src/main/copies/copie-de-tache.ts. Ces commits sont ceux de l'app de l'utilisateur, ni
+ * les siens ni ceux d'un collègue : comptés comme un autre auteur, ils faisaient d'un dépôt perso
+ * travaillé par Autowin un « dépôt d'équipe » et proposaient une demande de fusion.
+ */
+const EMAIL_AUTOWIN = 'autowin@localhost'
+
 function partDeMesCommits(git, ref, identites) {
   const moi = new Set(identites)
   const lignes = (git('log', `-${COMMITS_LUS}`, '--format=%ae%x09%an', ref) ?? '')
@@ -200,14 +208,19 @@ function partDeMesCommits(git, ref, identites) {
   const autres = new Set()
   let miens = 0
   let comptes = 0
+  let parAutowin = 0
   for (const l of lignes) {
     const [email = '', nom = ''] = l.split('\t')
     if (/\[bot\]/i.test(nom) || /\[bot\]/i.test(email)) continue
+    if (email.trim().toLowerCase() === EMAIL_AUTOWIN) {
+      parAutowin += 1
+      continue
+    }
     comptes += 1
     if (moi.has(normaliserIdentite(email)) || moi.has(normaliserIdentite(nom))) miens += 1
     else autres.add(normaliserIdentite(nom) || normaliserIdentite(email))
   }
-  return { autres: [...autres], miens, comptes, part: comptes ? miens / comptes : 1 }
+  return { autres: [...autres], miens, comptes, parAutowin, part: comptes ? miens / comptes : 1 }
 }
 
 export function deduireCible({ cwd = process.cwd(), habitudes = lireHabitudes(), identites } = {}) {
@@ -278,19 +291,20 @@ export function deduireCible({ cwd = process.cwd(), habitudes = lireHabitudes(),
   )
     ? `${distant.nom}/${branche}`
     : 'HEAD'
-  const { autres, miens, comptes, part } = partDeMesCommits(
+  const { autres, miens, comptes, parAutowin, part } = partDeMesCommits(
     git,
     refDistante,
     identites ?? mesIdentites(git)
   )
   const pourcent = Math.round(part * 100)
+  const horsAutowin = parAutowin ? `, sans compter ${parAutowin} commits d'Autowin` : ''
   if (part >= PART_DEPOT_PERSO) {
     return {
       ...commun,
       mode: 'push',
       source: 'auteurs',
       autresAuteurs: autres.length,
-      raison: `tu as écrit ${miens} des ${comptes} derniers commits de ${refDistante} (${pourcent} %) : dépôt perso, push direct`
+      raison: `tu as écrit ${miens} des ${comptes} derniers commits de ${refDistante} (${pourcent} %${horsAutowin}) : dépôt perso, push direct`
     }
   }
   return {
@@ -298,7 +312,7 @@ export function deduireCible({ cwd = process.cwd(), habitudes = lireHabitudes(),
     mode: 'pr',
     source: 'auteurs',
     autresAuteurs: autres.length,
-    raison: `${miens} commits sur ${comptes} sont de toi (${pourcent} %), ${autres.length} autre(s) auteur(s) sur ${refDistante} : dépôt d'équipe, demande de fusion`
+    raison: `${miens} commits sur ${comptes} sont de toi (${pourcent} %), ${autres.length} autre(s) auteur(s) sur ${refDistante}${horsAutowin} : dépôt d'équipe, demande de fusion`
   }
 }
 

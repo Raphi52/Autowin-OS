@@ -29,7 +29,7 @@ function dossier(prefixe) {
   return d
 }
 
-function depot({ distant = true, autreAuteur = false, mesCommits = 0 } = {}) {
+function depot({ distant = true, autreAuteur = false, mesCommits = 0, commitsAutowin = 0 } = {}) {
   const dir = dossier('git-cible-')
   const git = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8' }).trim()
   git('init', '-q', '-b', 'main')
@@ -47,6 +47,21 @@ function depot({ distant = true, autreAuteur = false, mesCommits = 0 } = {}) {
     )
     git('add', '-A')
     git('commit', '-q', '-m', `moi ${i}`)
+  }
+  // Les passages de porte d'Autowin, signés comme dans src/main/copies/copie-de-tache.ts (AUTEUR).
+  for (let i = 0; i < commitsAutowin; i += 1) {
+    writeFileSync(join(dir, `w${i}.txt`), `${i}\n`)
+    git('add', '-A')
+    git(
+      '-c',
+      'user.email=autowin@localhost',
+      '-c',
+      'user.name=Autowin',
+      'commit',
+      '-q',
+      '-m',
+      `porte ${i}`
+    )
   }
   if (autreAuteur) {
     writeFileSync(join(dir, 'b.txt'), 'b\n')
@@ -120,6 +135,25 @@ describe('deduireCible', () => {
     expect(deduireCible({ cwd: d.dir, habitudes: {} })).toMatchObject({
       mode: 'push',
       source: 'auteurs'
+    })
+  })
+
+  it("les commits d'Autowin ne font pas un autre auteur : l'app de l'utilisateur, pas un collègue", () => {
+    // Cas réel du 2026-11-19 : un dépôt de l'utilisateur, 51 commits d'Autowin sur 87, sortait « pr »
+    // avec Autowin pour seul autre auteur.
+    const d = depot({ commitsAutowin: 6 })
+    expect(deduireCible({ cwd: d.dir, habitudes: {} })).toMatchObject({
+      mode: 'push',
+      source: 'auteurs',
+      autresAuteurs: 0
+    })
+  })
+
+  it("les commits d'Autowin ne cachent pas un collègue", () => {
+    const d = depot({ autreAuteur: true, commitsAutowin: 6 })
+    expect(deduireCible({ cwd: d.dir, habitudes: {} })).toMatchObject({
+      mode: 'pr',
+      autresAuteurs: 1
     })
   })
 
