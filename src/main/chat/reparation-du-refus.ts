@@ -14,10 +14,19 @@ import { ENTETE_REPRISE_AUTOMATIQUE } from './relance-taches-de-fond'
 const MARQUE = 'Envoi refusé, réparation lancée par Autowin'
 
 /**
- * La fin du texte d'un refus que la porte réessaie seule (fichier non commité dans le dossier partagé) :
- * un tour du modèle n'y changerait rien. La phrase vit ici, à côté de celui qui la relit.
+ * La fin du texte d'un refus pour un fichier visé modifié et non commité dans le dossier partagé : la passe
+ * horaire refait l'entrée seule, mais seulement une fois ce fichier commité. La phrase vit ici, à côté de
+ * celui qui la relit pour donner au tour de réparation le geste propre à ce cas.
+ *
+ * Ce refus ne lançait autrefois aucun tour (« un tour du modèle n'y changerait rien ») : faux quand le fichier
+ * est un reste du fil lui-même (écrit avant l'ouverture de sa copie, ou par un script du terminal), que
+ * personne ne commitera. Mesuré le 2026-11-19 (conv-2032) : trois refus de suite, l'utilisateur bloqué.
  */
 export const SUITE_QUAND_LA_PORTE_RETENTE_SEULE = 'Autowin retentera tout seul.'
+
+/** Le geste d'un refus pour un fichier modifié à part dans le dossier partagé. */
+const GESTE_DU_DOSSIER_PARTAGE =
+  'Ce refus vient d’un fichier modifié et non commité dans le dossier partagé (le dépôt lui-même, pas ta copie) : la porte ne l’écrase jamais. Regarde d’abord à qui il est (`proprietaire_fichier`). À ce fil (écrit avant l’ouverture de sa copie, ou par un script lancé du terminal) : pose dans le dossier partagé la version de ta copie, car un fichier déjà identique à ce qui entre passe la porte. À un autre fil ou à l’utilisateur : n’y touche pas, nomme-le dans ton compte rendu ; Autowin refait l’entrée seul dès qu’il est commité.'
 
 /** Ce message est-il le tour de réparation composé ici ? */
 export function estUneReparationDuRefus(message: string | undefined): boolean {
@@ -32,6 +41,7 @@ export function composerPromptDeReparation(detail: string | undefined): string {
     raison
       ? `Raison donnée par l’app : ${raison}`
       : 'Raison non précisée par l’app : retrouve-la (fusion à blanc avec main, contrôle des noms réservés, base du fil).',
+    ...(raison?.endsWith(SUITE_QUAND_LA_PORTE_RETENTE_SEULE) ? [GESTE_DU_DOSSIER_PARTAGE] : []),
     'Règle la cause là où ce fil travaille (sa copie, ou son dossier s’il n’en a pas), sans rien demander à l’utilisateur : corrige les fichiers nommés (un conflit se tranche par contenu, en gardant les deux apports ; un nom réservé se retire), puis rejoue les tests de ce que tu touches.',
     // La porte publie depuis le point de départ du fil, qui ne suit que la TÊTE de la copie
     // (`recalerLaBaseSurLaCopie`) : des fichiers fusionnés à la main sur l'ancienne tête rejouent le conflit.
@@ -47,7 +57,6 @@ export type DecisionDeReparation =
       lancer: false
       raison:
         | 'pas-un-refus-de-la-porte'
-        | 'retente-seule'
         | 'deja-tentee'
         | 'tour-de-fond'
         | 'lot-de-plan'
@@ -93,8 +102,6 @@ export function decisionDeReparation(tour: TourRefuse): DecisionDeReparation {
     texte?.trim() !== 'commit'
   if (!nomReserveDuTour && (status !== 'skipped' || reason !== 'porte-refusee'))
     return { lancer: false, raison: 'pas-un-refus-de-la-porte' }
-  if (texte?.trimEnd().endsWith(SUITE_QUAND_LA_PORTE_RETENTE_SEULE))
-    return { lancer: false, raison: 'retente-seule' }
   if (estUneReparationDuRefus(tour.demande)) return { lancer: false, raison: 'deja-tentee' }
   if (tour.deFond) return { lancer: false, raison: 'tour-de-fond' }
   if (tour.lotDePlan) return { lancer: false, raison: 'lot-de-plan' }

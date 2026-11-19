@@ -77,14 +77,25 @@ describe('réparation lancée par l’app après un refus de la porte', () => {
     })
   })
 
-  it('ne lance rien quand la porte réessaie seule', () => {
+  // Cas réel du 2026-11-19 (conv-2032) : app.css écrit dans le dossier partagé avant l'ouverture de la
+  // copie. La passe horaire attendait un commit que personne ne ferait, et aucun tour ne partait : trois
+  // « Envoi refusé » de suite, l'utilisateur bloqué. Le tour de réparation part donc aussi ici.
+  it('un fichier modifié dans le dossier partagé : la réparation part, avec le geste propre à ce cas', () => {
     const rapport = refusDeLaPorte(
       `Modifié et non commité dans le dossier partagé : src/a.ts. Rien n’y a été écrit ; la copie reste. ${SUITE_QUAND_LA_PORTE_RETENTE_SEULE}`
     )
-    expect(decisionDeReparation(tour({ rapport }))).toEqual({
-      lancer: false,
-      raison: 'retente-seule'
-    })
+    const decision = decisionDeReparation(tour({ rapport }))
+    expect(decision.lancer).toBe(true)
+    if (!decision.lancer) return
+    expect(decision.prompt).toContain('src/a.ts')
+    // Le tour cherche à qui est le fichier avant d'y toucher, et ne touche jamais celui d'un autre.
+    expect(decision.prompt).toMatch(/proprietaire_fichier/u)
+    expect(decision.prompt).toMatch(/autre fil ou à l’utilisateur : n’y touche pas/u)
+  })
+
+  it('un conflit ne reçoit pas le geste du dossier partagé', () => {
+    const decision = decisionDeReparation(tour())
+    expect(decision.lancer && decision.prompt).not.toMatch(/proprietaire_fichier/u)
   })
 
   it.each([

@@ -39,12 +39,15 @@ const MOTIFS_SKIPPED: Record<string, Omit<RefusDePublication, 'titre'>> = {
     raison: 'le typage de ce qui part est rouge',
     action: 'Corrige les erreurs de typage (npm run typecheck), puis relance /git.'
   },
-  // La porte d'un fil en copie (tour de chat) : elle refuse un conflit avec la base, une base absente
-  // ou une erreur git. L'attente (`porte-en-attente`) n'est pas un refus : elle se réessaie seule.
+  // La porte d'un fil en copie (tour de chat) : elle refuse un conflit avec la base, un fichier visé
+  // modifié à part dans le dossier partagé, une base absente ou une erreur git. L'app lance alors elle-même
+  // le tour qui règle la cause (`reparation-du-refus.ts`) : l'action le dit, /git reste le dernier recours.
+  // L'attente (`porte-en-attente`) n'est pas un refus : elle se réessaie seule.
   'porte-refusee': {
     raison:
-      "la copie de ce fil n'a pas pu entrer dans main (conflit avec la base, base absente ou erreur git)",
-    action: 'Règle la cause (fichiers en conflit, base du fil), puis relance /git.'
+      "la copie de ce fil n'a pas pu entrer dans main (conflit avec la base, fichier modifié à part dans le dossier partagé, base absente ou erreur git)",
+    action:
+      'Autowin lance lui-même un tour dans ce fil pour régler la cause, une fois par demande : rien à faire de ton côté. Si ce refus suit déjà ce tour de réparation, relance /git.'
   },
   // Dépôt qui n'est pas celui d'Autowin : la clôture n'envoie rien ; le commit local reste.
   'depot-tiers': {

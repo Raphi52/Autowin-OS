@@ -128,7 +128,13 @@ describe('porte d’un fil en copie (tour de chat)', () => {
     })
     expect(refus?.titre).toBe('Envoi refusé')
     expect(refus?.raison).toContain('conflit avec la base')
+    // L'app lance elle-même le tour qui règle la cause (`reparation-du-refus.ts`) : la phrase le dit,
+    // et ne renvoie à /git qu'en dernier recours. Vécu le 2026-11-19 (conv-2032) : « relance /git »
+    // lu trois fois de suite, alors que la réparation était l'affaire d'Autowin.
+    expect(refus?.action).toMatch(/^Autowin lance lui-même/u)
     expect(refus?.action).toContain('/git')
+    // Un fichier modifié à part dans le dossier partagé est aussi un refus de la porte : la raison le nomme.
+    expect(refus?.raison).toContain('dossier partagé')
     expect(phraseDuRefus(refus!)).not.toContain('a.ts')
   })
 
