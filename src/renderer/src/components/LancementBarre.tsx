@@ -98,14 +98,17 @@ export function LancementBarre({
   }
   const libelleDeLaSource = (source: (typeof SOURCES)[keyof typeof SOURCES]): string =>
     'chemin' in source ? source.chemin : t(source.cle)
+  // La dernière ligne suit aussi une fin SANS erreur : un programme qui s'arrête aussitôt (instance
+  // déjà ouverte, fenêtre fermée) y dit pourquoi, et « Terminé (code 0) » seul laissait croire que
+  // rien ne s'était lancé.
+  const derniereLigne = etat?.lignes.length ? ` — ${etat.lignes[etat.lignes.length - 1]}` : ''
   const fin =
     etat?.statut === 'termine'
-      ? t('lancement.termine', { code: etat.code ?? 0 })
+      ? t('lancement.termine', { code: etat.code ?? 0 }) + derniereLigne
       : etat?.statut === 'echec' && etat.commande
         ? (etat.code !== undefined && etat.code !== null
             ? t('lancement.echecCode', { code: etat.code })
-            : t('lancement.echec')) +
-          (etat.lignes.length ? ` — ${etat.lignes[etat.lignes.length - 1]}` : '')
+            : t('lancement.echec')) + derniereLigne
         : undefined
 
   return (

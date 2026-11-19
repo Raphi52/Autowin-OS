@@ -184,6 +184,20 @@ describe('LancementBarre', () => {
     )
   })
 
+  it('une fin sans erreur dit aussi sa dernière ligne : la raison d’un arrêt sans fenêtre', async () => {
+    api({
+      statut: 'termine',
+      commande: 'npm run dev',
+      source: 'package.json',
+      code: 0,
+      lignes: ['starting electron app...', 'Autowin est déjà ouvert sur ces données']
+    })
+    await rendre()
+    expect(par('sc-lancement-fin')?.textContent).toBe(
+      'Terminé (code 0) — Autowin est déjà ouvert sur ces données'
+    )
+  })
+
   it('une déclaration invalide est MONTRÉE', async () => {
     api({
       statut: 'arrete',

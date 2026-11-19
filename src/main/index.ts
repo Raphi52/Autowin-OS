@@ -484,6 +484,11 @@ const ownsInstanceLock = app.requestSingleInstanceLock(
   startupTaskOccurrence ? { autowinTaskOccurrence: startupTaskOccurrence } : {}
 )
 if (!ownsInstanceLock) {
+  // Sans cette ligne, le perdant finit sans un mot (code 0) : lancé par le bouton « Lancer » d'un
+  // fil dont le dossier est ce dépôt, il ne laissait ni fenêtre ni raison à l'utilisateur.
+  console.log(
+    'Autowin est déjà ouvert sur ces données : cette instance s’arrête et remet la fenêtre existante au premier plan.'
+  )
   app.quit()
   // `app.quit()` programme la fermeture mais laisse le module continuer synchroniquement. Sans cet
   // arrêt dur, le perdant construit encore l'OS et peut lire/reprendre les mêmes checkpoints.
