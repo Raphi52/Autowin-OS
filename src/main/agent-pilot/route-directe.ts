@@ -17,18 +17,50 @@ import { commandResultSucceeded, failedOrchestrationOutcome } from './issue-des-
 import type { LecturesDuTour } from './lectures-du-tour'
 
 /**
- * Ce que la route rend quand le run s'est ARRÊTÉ au contrôle final et que le chat peut le reprendre
- * (`arretAuControleRelancable`) : le tour n'est pas clos, le modèle lit la cause et relance une
- * tâche corrigée. Sans cela, une phase nommée finissait toujours sur « reprendre le travail
- * arrêté », sans qu'aucun modèle n'ait lu pourquoi (run judge-panda-as-fait-lancer-commande-mwasivzu).
+ * Ce que la route rend quand le chat doit REPRENDRE la main au lieu de clore le tour :
+ * - le run s'est ARRÊTÉ au contrôle final (`arretAuControleRelancable`) : le modèle lit la cause et
+ *   relance une tâche corrigée. Sans cela, une phase nommée finissait toujours sur « reprendre le
+ *   travail arrêté », sans qu'aucun modèle n'ait lu pourquoi (run judge-panda-as-fait-lancer-commande-mwasivzu) ;
+ * - le run n'a jamais DÉMARRÉ (`lancementBloque`) : le modèle fait la demande lui-même, dans le fil.
+ *   Ce cas-là n'a ni issue ni compte rendu de run : la clôture est celle du modèle.
  */
 export interface RepriseApresArret {
   /** L'issue entière et la consigne de relance, poussées dans le fil du modèle. */
   pourLeModele: string
-  /** Le compte rendu affiché si le modèle ne dit rien. */
-  compteRendu: string
-  issue: Record<string, unknown>
+  /** Le compte rendu affiché si le modèle ne dit rien (absent : aucun run n'a tourné). */
+  compteRendu?: string
+  issue?: Record<string, unknown>
 }
+
+/**
+ * LE RUN N'A PAS DÉMARRÉ : sa copie de travail n'a pas pu être préparée.
+ *
+ * Toutes les erreurs « Lancement bloqué : … » sont levées AVANT le premier appel de modèle, par la
+ * préparation de la copie (`canonicalRemoteBase`, `describeForLaunch`) : rien n'a été fait, rien n'a
+ * été payé, et un second `orchestrate` dans le même tour échouerait sur la même cause, qui tient au
+ * dépôt (pas de distant `origin`, `main` divergé, origin injoignable sans repli local).
+ *
+ * Cas réel (conv-1991, 18-19/11/2026, lot 4 du plan plan-4021ed92) : la demande du lot commençait
+ * par « /build », partait droit en orchestration, et le dépôt visé n'a qu'un distant d'un autre nom. TROIS
+ * tours de suite se sont clos sur « Lancement bloqué : le distant origin est absent. » sans
+ * qu'aucun modèle ne lise la demande — même après que le chef eut écrit DANS la demande « n'appelle
+ * pas orchestrate » : cette consigne ne pouvait pas être lue, la route passe avant le modèle.
+ * Alors que le fil, lui, sait faire ce travail : sa propre copie (`copies-de-taches/<fil>`) n'exige
+ * aucun distant.
+ */
+export function lancementBloque(erreur: string | undefined): boolean {
+  return erreur !== undefined && /^\s*(?:Error:\s*)?Lancement bloqué\s*:/i.test(erreur)
+}
+
+/** Ce que le chat lit quand la tâche séparée n'a pas pu démarrer : faire la demande lui-même. */
+export const CONSIGNE_APRES_LANCEMENT_BLOQUE =
+  'La tâche séparée n’a PAS DÉMARRÉ : sa copie de travail n’a pas pu être préparée (cause ci-dessus). ' +
+  'Rien n’a été fait ni dépensé, et un nouvel `orchestrate` échouerait de la même façon dans ce tour : ' +
+  'ne le rappelle pas. Ne rends pas la main sur cet échec : fais toi-même la demande de l’utilisateur ' +
+  'dans ce fil, avec tes outils (Read, Grep, Edit, Write, Bash), en suivant la procédure de la skill ' +
+  'nommée si elle t’est remise. Si la cause ' +
+  'exige un geste que tu ne peux pas faire toi-même (intégrer deux branches divergées, rétablir le réseau), ' +
+  'dis-le en tête de ta réponse, avec la cause, avant de faire ce qui reste faisable.'
 
 export async function jouerLaRouteSansModele(
   entree: Pick<
@@ -83,6 +115,20 @@ export async function jouerLaRouteSansModele(
     ok: commandResultSucceeded(result),
     data: result.ok ? result.data : result.error
   })
+  // Le run n'a pas démarré : le tour passe au modèle, qui fait la demande dans le fil. Avant la
+  // vidange des orientations tardives : la boucle du modèle les recevra elle-même.
+  const erreurAuLancement = result.ok ? undefined : String(result.error ?? '')
+  if (!signal?.aborted && lancementBloque(erreurAuLancement)) {
+    return {
+      pourLeModele: `orchestrate → LA TÂCHE SÉPARÉE N’A PAS DÉMARRÉ :
+${bornerResultatDeCommande(
+  'orchestrate',
+  formatOrchestrationOutcomePourLeModele(false, undefined, erreurAuLancement)
+)}
+
+${CONSIGNE_APRES_LANCEMENT_BLOQUE}`
+    }
+  }
   // Le /skill vient déjà de consommer l'unique orchestration autorisée pour ce tour. Une
   // orientation arrivée pendant l'attente ne peut pas être injectée rétroactivement dans ce
   // run : surtout ne pas la transformer silencieusement en second run payant.

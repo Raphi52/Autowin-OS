@@ -498,8 +498,10 @@ export class AgentPilot {
     if (repriseApresArret) {
       // La relance du tour est celle que le modèle va faire : un second arrêt clôt le tour.
       etat.relancesApresArretRestantes = 0
-      etat.orchestrationOutcome = repriseApresArret.issue
-      etat.compteRenduOrchestration = repriseApresArret.compteRendu
+      // Lancement bloqué : aucun run n'a tourné, la clôture sera celle du modèle (route-directe.ts).
+      if (repriseApresArret.issue) etat.orchestrationOutcome = repriseApresArret.issue
+      if (repriseApresArret.compteRendu)
+        etat.compteRenduOrchestration = repriseApresArret.compteRendu
       convo.push(`RÉSULTATS:
 ${repriseApresArret.pourLeModele}`)
     }

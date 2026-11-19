@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from './agent-pilot'
 import type { PromptSnapshot } from '../commands/commands'
+import { CONSIGNE_APRES_LANCEMENT_BLOQUE, lancementBloque } from './route-directe'
 import {
   arretAuControleRelancable,
   CONSIGNE_RELANCE_APRES_ARRET
@@ -78,7 +79,12 @@ function pilote(demande: string, issues: unknown[], reponses: string[]) {
   }
   const exec = vi.fn(async (nom: string) => {
     void nom
-    return { ok: true, data: issues.shift() ?? LIVRE }
+    const issue = issues.shift() ?? LIVRE
+    // Un refus AVANT le run arrive en chaîne d'erreur, pas en issue (orchestrateOutcomeSummary).
+    if (issue && typeof issue === 'object' && 'echecAuLancement' in issue) {
+      return { ok: false, error: String(issue.echecAuLancement) }
+    }
+    return { ok: true, data: issue }
   })
   const bus = {
     catalog: () => [{ name: 'orchestrate', args: {}, description: 'workflow complet' }],
@@ -191,5 +197,64 @@ describe('travail lancé par le modèle du chat, arrêté au contrôle final', (
     expect(arretAuControleRelancable(ARRET_REEL)).toBe(true)
     expect(arretAuControleRelancable(LIVRE)).toBe(false)
     expect(arretAuControleRelancable(BLOCAGE_D_INTEGRATION)).toBe(false)
+  })
+})
+
+/**
+ * LA TÂCHE SÉPARÉE N'A PAS PU DÉMARRER : LE FIL FAIT LA DEMANDE LUI-MÊME.
+ *
+ * Cas réel (conv-1991, lot 4 du plan plan-4021ed92) : la demande du lot commence par « /build »,
+ * part droit en orchestration, et le dépôt visé n'a qu'un distant d'un autre nom. Trois tours se sont clos
+ * sur ce refus sans qu'aucun modèle ne lise la demande — même la consigne du chef « n'appelle pas
+ * orchestrate », écrite DANS la demande, ne pouvait pas être lue. Erreur mot pour mot.
+ */
+const LANCEMENT_BLOQUE = { echecAuLancement: 'Lancement bloqué : le distant origin est absent.' }
+const DEMANDE_DU_LOT =
+  '/build Porte en React les écrans EcranClients et EcranFicheClient. ' +
+  "N'appelle PAS orchestrate, même si ta demande commence par /build : fais le lot toi-même dans ton fil."
+
+describe('phase nommée dont la tâche séparée ne peut pas démarrer', () => {
+  it('rejoue conv-1991 : le tour ne se clôt pas sur le refus, le modèle reçoit la demande et la fait', async () => {
+    const p = pilote(DEMANDE_DU_LOT, [LANCEMENT_BLOQUE], ['Lot porté dans le fil, tests verts.'])
+    await p.run()
+    // Une seule tentative de lancement : le modèle ne relance pas une tâche vouée au même refus.
+    expect(p.lancements()).toBe(1)
+    expect(p.recus).toHaveLength(1)
+    // Le modèle lit la cause, la consigne de faire le travail lui-même, et la demande du lot.
+    expect(p.recus[0]).toContain('le distant origin est absent')
+    expect(p.recus[0]).toContain(JSON.stringify(CONSIGNE_APRES_LANCEMENT_BLOQUE).slice(1, 60))
+    expect(p.recus[0]).toContain('EcranFicheClient')
+    // La clôture est celle du modèle, pas le refus du lancement.
+    expect(p.finales).toHaveLength(1)
+    expect(p.finales[0]).toContain('Lot porté dans le fil')
+    expect(p.finales[0]).not.toContain('Lancement bloqué')
+  })
+
+  it('contrôle négatif : un échec du run lui-même (pas du lancement) clôt toujours le tour sans le modèle', async () => {
+    const p = pilote(
+      DEMANDE_DU_LOT,
+      [{ echecAuLancement: 'Limite d’usage atteinte pour ce compte.' }],
+      ['ne doit pas être appelé']
+    )
+    await p.run()
+    expect(p.lancements()).toBe(1)
+    expect(p.recus).toHaveLength(0)
+  })
+
+  it('la règle pure : tout « Lancement bloqué : … » levé avant le run, rien d’autre', () => {
+    expect(lancementBloque('Lancement bloqué : le distant origin est absent.')).toBe(true)
+    expect(
+      lancementBloque(
+        'Lancement bloqué : main et origin/main ont divergé ; intègre-les avant de lancer un job.'
+      )
+    ).toBe(true)
+    expect(
+      lancementBloque(
+        'Error: Lancement bloqué : origin/main ou origin/master est introuvable après fetch.'
+      )
+    ).toBe(true)
+    expect(lancementBloque('Limite d’usage atteinte pour ce compte.')).toBe(false)
+    expect(lancementBloque('Le run cite « Lancement bloqué : x » dans son rapport')).toBe(false)
+    expect(lancementBloque(undefined)).toBe(false)
   })
 })
