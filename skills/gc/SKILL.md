@@ -109,8 +109,11 @@ collègues. Chaque commande ci-dessous se lance donc avec le dépôt comme dossi
      run>` (`src/main/copies/chemins-de-copies.ts`) ; restent les anciennes racines `bench/runs/*` et
      `autowin-os/worktrees/…`. Une copie peut appartenir à UN AUTRE dépôt (un jeu, un projet d'entreprise…) :
      lire le `gitdir:` de son fichier `.git` et lancer `git -C <ce dépôt> worktree list` ; celui
-     d'Autowin seul en a manqué 13 le 18/11. Une copie SANS `.git` (lien git perdu) ou réduite à une
-     jonction `node_modules` va dans « À vérifier », jamais déplacée. Candidate si : HEAD
+     d'Autowin seul en a manqué 13 le 18/11. Une copie que git ne lit plus (`.git` absent, ou son
+     inscription retirée du dépôt : `git status` échoue, et un `2>/dev/null` en fait « 0 modification »)
+     se juge par son contenu : `node --no-warnings scripts/gc-copie-sans-git.mjs [--depot <dépôt>]
+     <copie>...` liste ce qu'elle porte que le dépôt n'a pas (`inedits`). Elle va dans « À vérifier »
+     avec ce compte, jamais déplacée. Une copie réduite à une jonction `node_modules` aussi. Candidate si : HEAD
      détachée, aucune modification (`git -C <copie> status --short` vide), aucun fichier modifié depuis
      > 7 jours, absente des runs en cours et de `travauxNonPublies`. Commande en DEUX temps, jamais
      enchaînés : (1) retirer la jonction `<copie>\node_modules` (`cmd /c rmdir "<copie>\node_modules"`,
