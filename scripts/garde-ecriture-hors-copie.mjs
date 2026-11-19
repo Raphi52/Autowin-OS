@@ -36,8 +36,9 @@
  * SECONDE RÈGLE, pour tout agent, dans une copie ou non (`refusALaRacineDuDisque`) : aucune entrée
  * NEUVE à la racine d'un disque (`D:\x.log`, `D:\tmp-lot9\`, `git worktree add D:\Projet-lot1`).
  *
- * TROISIÈME RÈGLE (`refusNomReserve`) : un outil d'écriture ne pose pas un nom ou un terme réservé à
- * l'entreprise dans un fichier suivi d'un dépôt qui porte des profils d'entreprise.
+ * TROISIÈME RÈGLE (`refusNomReserve`) : un outil d'écriture, une commande shell ou un correctif ne pose
+ * pas un nom ou un terme réservé à l'entreprise dans un fichier suivi d'un dépôt qui porte des profils
+ * d'entreprise. Le shell n'est lu que là où le texte posé est écrit dans la commande (`ecrituresDuShell`).
  *
  * Aucune dépendance hors `node:` : Claude lance une COPIE de ce fichier, posée seule dans son dossier
  * de réglages. Une erreur interne laisse passer, comme la garde npm : une garde en panne ne doit pas
@@ -134,17 +135,20 @@ function resoudreSousBash(resoudre) {
 }
 
 /**
- * Découpe une commande en segments `{ mots, redirs }`, et rend `code`, la commande privée de ses
- * corps de texte. Guillemets respectés, `;` `&&` `||` `|` `&`
+ * Découpe une commande en segments `{ mots, redirs, tube, cite, heredoc }`, et rend `code`, la commande
+ * privée de ses corps de texte. Guillemets respectés, `;` `&&` `||` `|` `&`
  * et fin de ligne séparent, les cibles de `>` sont mises à part. Les corps de here-doc (`<<EOF`) et
  * de here-string PowerShell (`@" … "@`) sont du TEXTE : ils ne sont pas lus comme des commandes.
+ * `tube` : le segment lit la sortie du précédent (`a | b`) ; `cite` : son premier mot est une chaîne
+ * entre guillemets (PowerShell l'écrit sur la sortie) ; `heredoc` : le corps du here-doc qu'il reçoit.
  */
 function segmentsDe(commande) {
   const s = String(commande ?? '')
   const segments = []
   /** Les morceaux de `s` qui sont du texte (corps de here-doc et de here-string), à écarter du code. */
   const corps = []
-  let seg = { mots: [], redirs: [] }
+  const neuf = () => ({ mots: [], redirs: [], tube: false, cite: false, heredoc: undefined })
+  let seg = neuf()
   let mot = null
   let cible = false
   let entree = false
@@ -160,12 +164,15 @@ function segmentsDe(commande) {
   const finirSegment = () => {
     finirMot()
     if (seg.mots.length || seg.redirs.length) segments.push(seg)
-    seg = { mots: [], redirs: [] }
+    seg = neuf()
   }
+  /** Le mot qui commence est le premier de la commande : une chaîne là est écrite sur la sortie. */
+  const premierMot = () => mot === null && !cible && !entree && !seg.mots.length
   let i = 0
   while (i < s.length) {
     const c = s[i]
     if (c === '"' || c === "'") {
+      if (premierMot()) seg.cite = true
       let j = i + 1
       while (j < s.length && !(s[j] === c && s[j - 1] !== '`')) j++
       mot = (mot ?? '') + s.slice(i + 1, j)
@@ -178,6 +185,7 @@ function segmentsDe(commande) {
       (s[i + 1] === '"' || s[i + 1] === "'") &&
       /^[ \t]*\r?\n/.test(s.slice(i + 2))
     ) {
+      if (!cible && !entree && !seg.mots.length) seg.cite = true
       const fin = s.indexOf(`\n${s[i + 1]}@`, i + 2)
       mot = fin < 0 ? s.slice(i + 2) : s.slice(i + 2, fin)
       corps.push([i + 2, fin < 0 ? s.length : fin])
@@ -187,13 +195,16 @@ function segmentsDe(commande) {
     if (c === '\n') {
       finirSegment()
       i++
-      // Les lignes d'un here-doc ouvert sur la ligne finie, jusqu'à son délimiteur.
+      // Les lignes d'un here-doc ouvert sur la ligne finie, jusqu'à son délimiteur ; le corps revient
+      // au segment qui l'a ouvert.
       while (heredocs.length && i < s.length) {
         const nl = s.indexOf('\n', i)
         const ligne = (nl < 0 ? s.slice(i) : s.slice(i, nl)).replace(/\r$/, '')
         corps.push([i, nl < 0 ? s.length : nl])
         i = nl < 0 ? s.length : nl + 1
-        if (ligne.trim() === heredocs[0]) heredocs.shift()
+        const ouvert = heredocs[0]
+        if (ligne.trim() === ouvert.fin) heredocs.shift()
+        else ouvert.seg.heredoc = `${ouvert.seg.heredoc ?? ''}${ligne}\n`
       }
       continue
     }
@@ -212,8 +223,10 @@ function segmentsDe(commande) {
       continue
     }
     if (c === '|') {
+      const tube = s[i + 1] !== '|'
       finirSegment()
-      i += s[i + 1] === '|' ? 2 : 1
+      seg.tube = tube
+      i += tube ? 1 : 2
       continue
     }
     if (c === '&') {
@@ -257,7 +270,7 @@ function segmentsDe(commande) {
         while (s[i] === ' ' || s[i] === '\t') i++
         const m = /^(["']?)([A-Za-z0-9_.-]+)\1/.exec(s.slice(i))
         if (m) {
-          heredocs.push(m[2])
+          heredocs.push({ fin: m[2], seg })
           i += m[0].length
         }
         continue
@@ -466,23 +479,22 @@ function ciblesDuCode(commande, resoudre) {
 }
 
 /**
- * Les chemins qu'une commande shell écrit, en suivant cd/Set-Location/pushd et les shells imbriqués.
+ * Parcourt une commande shell en suivant cd/Set-Location/pushd et les shells imbriqués : `code(code)`
+ * reçoit chaque commande privée de ses corps de texte, `etape(e)` chaque segment avec son dossier
+ * courant (`e.dossier`), la lecture de ses chemins (`e.lire`) et l'étape qui l'alimente par un tube
+ * (`e.amont`). `e.commande` est faux pour un cd ou un shell imbriqué : seules ses redirections comptent.
  * `bash` : la commande est lue par bash ; un shell imbriqué dit le sien. Hors Windows, `/x` est un
  * vrai chemin absolu du système et se lit tel quel : seul Git Bash a besoin de `resoudreSousBash`.
  */
-function ciblesDuShell(commande, cwd, resoudre, profondeur = 0, bash = false) {
+function parcourirShell(commande, cwd, resoudre, visiteur, profondeur = 0, bash = false) {
   const { segments, code } = segmentsDe(commande)
-  const cibles = [...ciblesDuCode(code, resoudre)]
+  visiteur.code(code)
   const lire = bash && process.platform === 'win32' ? resoudreSousBash(resoudre) : resoudre
   let dossier = cwd
+  let amont
   for (const seg of segments) {
-    let mots = [...seg.mots]
+    const mots = [...seg.mots]
     while (mots.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(mots[0])) mots.shift()
-    for (const r of seg.redirs) {
-      const c = cheminDuMot(r, dossier, lire)
-      if (c) cibles.push(c)
-    }
-    if (!mots.length) continue
     const exe = nomDe(mots[0])
     // Un shell dans le shell : on lit la commande qu'il reçoit, depuis le même dossier.
     let interne
@@ -494,19 +506,52 @@ function ciblesDuShell(commande, cwd, resoudre, profondeur = 0, bash = false) {
       const k = mots.findIndex((m, idx) => idx > 0 && /^-(c|command)$/i.test(m))
       if (k > 0) interne = mots.slice(k + 1).join(' ')
     }
+    const cd = /^(cd|chdir|pushd|set-location|sl|push-location)$/.test(exe)
+    const etape = {
+      seg,
+      mots,
+      exe,
+      dossier,
+      lire,
+      amont: seg.tube ? amont : undefined,
+      commande: mots.length > 0 && interne === undefined && !cd
+    }
+    amont = etape
+    visiteur.etape(etape)
     if (interne !== undefined) {
       if (profondeur < 3)
-        cibles.push(...ciblesDuShell(interne, dossier, resoudre, profondeur + 1, interneBash))
+        parcourirShell(interne, dossier, resoudre, visiteur, profondeur + 1, interneBash)
       continue
     }
-    if (/^(cd|chdir|pushd|set-location|sl|push-location)$/.test(exe)) {
+    if (cd) {
       const args = mots.slice(1).filter((a) => !/^(\/d|-path|-literalpath)$/i.test(a))
       dossier =
         args[0] === undefined || args[0] === '-' ? undefined : cheminDuMot(args[0], dossier, lire)
-      continue
     }
-    cibles.push(...ciblesDuSegment(mots, dossier, lire))
   }
+}
+
+/** Les cibles des redirections d'une étape, résolues depuis son dossier. */
+const redirectionsDe = ({ seg, dossier, lire }) =>
+  seg.redirs.map((r) => cheminDuMot(r, dossier, lire)).filter(Boolean)
+
+/** Les chemins qu'une commande shell écrit. */
+function ciblesDuShell(commande, cwd, resoudre, bash = false) {
+  const cibles = []
+  parcourirShell(
+    commande,
+    cwd,
+    resoudre,
+    {
+      code: (code) => cibles.push(...ciblesDuCode(code, resoudre)),
+      etape: (e) => {
+        cibles.push(...redirectionsDe(e))
+        if (e.commande) cibles.push(...ciblesDuSegment(e.mots, e.dossier, e.lire))
+      }
+    },
+    0,
+    bash
+  )
   return cibles
 }
 
@@ -659,7 +704,7 @@ function ciblesDeLAppel({ nom, outil, cwd, commande }, resoudre) {
     return ciblesDuCorrectif(commande, cwd, resoudre)
   if (OUTILS_SHELL.has(nom))
     return typeof commande === 'string'
-      ? ciblesDuShell(commande, cwd, resoudre, 0, OUTILS_GIT_BASH.has(nom))
+      ? ciblesDuShell(commande, cwd, resoudre, OUTILS_GIT_BASH.has(nom))
       : []
   if (OUTILS_ECRITURE.has(nom))
     return CLES_CHEMIN.filter((k) => typeof outil[k] === 'string' && outil[k])
@@ -737,6 +782,221 @@ function passagesReserves(texte, noms, termes) {
   return passages.sort((a, b) => a[0] - b[0])
 }
 
+/** Commandes qui écrivent leurs arguments sur la sortie. */
+const AFFICHE = new Set(['echo', 'printf', 'write-output'])
+/** Commandes qui écrivent leur entrée (tube, here-doc) dans les fichiers qu'elles nomment. */
+const ECRIT_L_ENTREE = new Set(['tee', 'tee-object', ...ECRIT_PREMIER])
+/** Interpréteurs dont le here-doc est du code. */
+const INTERPRETES = new Set(['node', 'python', 'python3', 'py'])
+
+/**
+ * Ce qu'une étape écrit sur sa sortie quand la commande le dit en clair : arguments d'un echo, chaîne
+ * de PowerShell, here-doc rendu par cat ou tee. `undefined` pour une sortie qu'on ne connaît pas.
+ */
+function sortieDe(e) {
+  if (!e?.commande) return undefined
+  if (e.seg.cite) return e.mots.join(' ')
+  if (AFFICHE.has(e.exe)) return e.mots.slice(1).join(' ')
+  const lit = e.exe === 'cat' && e.mots.slice(1).every((m) => m === '-')
+  if (lit || e.exe === 'tee' || e.exe === 'tee-object') return entreeDe(e)
+  return undefined
+}
+
+/** Ce qu'une étape reçoit en entrée : son here-doc, ou la sortie connue de l'étape qui l'alimente. */
+const entreeDe = (e) => e.seg.heredoc ?? sortieDe(e.amont)
+
+/** Les valeurs écrites par Set-Content, Add-Content, Out-File : `-Value`, `-InputObject`, positionnels après le chemin. */
+function valeursDeContenu(mots) {
+  const valeurs = []
+  const positionnels = []
+  for (let i = 1; i < mots.length; i++) {
+    const bas = mots[i].toLowerCase()
+    const deux = /^(-[a-z]+):(.*)$/i.exec(mots[i])
+    if (deux && /^-(value|inputobject)$/i.test(deux[1])) valeurs.push(deux[2])
+    else if (bas === '-value' || bas === '-inputobject') valeurs.push(mots[++i])
+    else if (PARAMS_CHEMIN.has(bas) || PARAMS_A_VALEUR.has(bas)) i++
+    else if (!bas.startsWith('-')) positionnels.push(mots[i])
+  }
+  return [...valeurs, ...positionnels.slice(1)]
+}
+
+/** Les scripts d'un sed : valeurs de `-e`, sinon son premier mot libre. Un script lu d'un fichier (`-f`) n'est pas lu. */
+function scriptsDeSed(mots) {
+  const scripts = []
+  const libres = []
+  let parE = false
+  for (let i = 1; i < mots.length; i++) {
+    const a = mots[i]
+    if (a === '-e' || a === '--expression') {
+      scripts.push(mots[++i] ?? '')
+      parE = true
+    } else if (a.startsWith('--expression=')) {
+      scripts.push(a.slice('--expression='.length))
+      parE = true
+    } else if (a === '-f' || a === '--file') {
+      i++
+      parE = true
+    } else if (!a.startsWith('-')) libres.push(a)
+  }
+  if (!parE && libres.length) scripts.push(libres[0])
+  return scripts
+}
+
+/**
+ * Le texte qu'un script sed POSE : remplacement de `s`, cible de `y`, ligne de `a`, `i`, `c`. Ses
+ * adresses et ses motifs sont lus, pas écrits : `s/terme/x/` et `/terme/d` retirent le terme, ils passent.
+ */
+function textesDuScriptSed(script) {
+  const s = String(script)
+  const textes = []
+  let i = 0
+  /** Lit jusqu'au délimiteur non échappé, le saute, rend le morceau lu. */
+  const jusquA = (delim) => {
+    const debut = i
+    while (i < s.length && s[i] !== delim) i += s[i] === '\\' ? 2 : 1
+    const morceau = s.slice(debut, Math.min(i, s.length))
+    i++
+    return morceau
+  }
+  while (i < s.length) {
+    const c = s[i]
+    if (/[\s;{}!,0-9$~+]/.test(c)) i++
+    else if (c === '/') {
+      i++
+      jusquA('/')
+    } else if (c === '\\') {
+      i += 2
+      jusquA(s[i - 1])
+    } else if ((c === 's' || c === 'y') && s[i + 1] && !/[\s\\\n]/.test(s[i + 1])) {
+      const delim = s[i + 1]
+      i += 2
+      jusquA(delim)
+      textes.push(jusquA(delim))
+      while (i < s.length && /[a-zA-Z0-9]/.test(s[i])) i++
+    } else if (c === 'a' || c === 'i' || c === 'c') {
+      const fin = s.indexOf('\n', i)
+      textes.push(s.slice(i + 1, fin < 0 ? s.length : fin).replace(/^\\?\s*/, ''))
+      i = fin < 0 ? s.length : fin + 1
+    } else while (i < s.length && s[i] !== ';' && s[i] !== '\n') i++
+  }
+  return textes
+}
+
+/**
+ * Code en ligne qui écrit un texte littéral à un chemin absolu littéral : `writeFile`/`appendFile` de
+ * node, `[IO.File]::WriteAllText`/`AppendAllText` de .NET, `open(…, 'w').write(…)` et `write_text` de
+ * python. Mêmes littéraux que `ciblesDuCode` : un texte bâti dans une variable n'est pas lu.
+ */
+function ecrituresDuCode(code, resoudre) {
+  const s = String(code ?? '')
+  const lit = (n) => String.raw`(["'\x60])([^"'\x60]*)` + `\\${n}`
+  const ecritures = []
+  const formes = [
+    String.raw`\b(?:writeFile|appendFile)(?:Sync)?\(\s*${lit(1)}\s*,\s*${lit(3)}`,
+    String.raw`\[(?:System\.)?IO\.File\]::(?:Write|Append)All(?:Text|Lines)\(\s*${lit(1)}\s*,\s*${lit(3)}`,
+    String.raw`\bopen\(\s*[rRbBuU]?${lit(1)}\s*,\s*[rRbB]?["'][^"']*[wa+][^"']*["'][^)]*\)\s*\.write\(\s*[rRbBuUfF]?${lit(3)}`,
+    String.raw`\bPath\(\s*[rRbBuU]?${lit(1)}\s*\)\s*\.write_text\(\s*[rRbBuUfF]?${lit(3)}`
+  ]
+  for (const forme of formes)
+    for (const m of s.matchAll(new RegExp(forme, 'gi')))
+      if (/^([a-zA-Z]:|\/[a-zA-Z]\/|\\\\)/.test(m[2]))
+        ecritures.push({ cible: resoudre(m[2], '.'), texte: m[4] })
+  return ecritures
+}
+
+/**
+ * Le texte qu'une commande shell pose, fichier par fichier : `{ cible, texte }`. Seules les formes où le
+ * texte est écrit dans la commande elle-même : echo/printf ou chaîne vers une redirection, here-doc
+ * rendu par cat ou tee, Set-Content/Add-Content/Out-File/tee alimentés par un tube ou par leurs
+ * valeurs, remplacements de `sed -i`, code en ligne. La sortie d'un programme (`grep … > f`) est inconnue.
+ */
+function ecrituresDuShell(commande, cwd, resoudre, bash = false) {
+  const ecritures = []
+  const poser = (cibles, textes) => {
+    for (const cible of cibles)
+      for (const texte of textes) if (texte) ecritures.push({ cible, texte })
+  }
+  parcourirShell(
+    commande,
+    cwd,
+    resoudre,
+    {
+      code: (code) => ecritures.push(...ecrituresDuCode(code, resoudre)),
+      etape: (e) => {
+        poser(redirectionsDe(e), [sortieDe(e)])
+        if (!e.commande) return
+        if (INTERPRETES.has(e.exe) && e.seg.heredoc)
+          ecritures.push(...ecrituresDuCode(e.seg.heredoc, resoudre))
+        const ecrit = ECRIT_L_ENTREE.has(e.exe) || e.exe === 'sed'
+        const cibles = ecrit ? ciblesDuSegment(e.mots, e.dossier, e.lire) : []
+        if (!cibles.length) return
+        if (e.exe === 'sed') poser(cibles, scriptsDeSed(e.mots).flatMap(textesDuScriptSed))
+        else
+          poser(cibles, [
+            entreeDe(e),
+            ...(ECRIT_PREMIER.has(e.exe) ? valeursDeContenu(e.mots) : [])
+          ])
+      }
+    },
+    0,
+    bash
+  )
+  return ecritures
+}
+
+/** Le texte qu'ajoute un correctif `apply_patch` (ses lignes `+`), fichier par fichier, destination d'un `Move to` comprise. */
+function ecrituresDuCorrectif(texte, cwd, resoudre) {
+  const ecritures = []
+  let courante
+  for (const ligne of String(texte).split('\n')) {
+    const entete = /^\*\*\* (Add File|Update File|Delete File|Move to):\s*(.+?)\s*$/.exec(ligne)
+    if (entete) {
+      const cible = entete[1] === 'Delete File' ? undefined : cheminDuMot(entete[2], cwd, resoudre)
+      if (entete[1] === 'Move to' && courante) courante.cible = cible
+      else {
+        courante = cible ? { cible, texte: '' } : undefined
+        if (courante) ecritures.push(courante)
+      }
+    } else if (courante && ligne.startsWith('+')) courante.texte += `${ligne.slice(1)}\n`
+  }
+  return ecritures.filter((e) => e.cible && e.texte)
+}
+
+/**
+ * Les règles de nom réservé d'un dépôt, depuis SON module (`scripts/identite-entreprise.mjs`) ;
+ * `undefined` pour un dépôt sans ce module, sans profil, ou au profil mal formé (le crochet de commit
+ * laisse alors passer lui aussi).
+ */
+async function reglesDuDepot(depot, sonde) {
+  const module = join(depot, 'scripts', 'identite-entreprise.mjs')
+  if (!sonde.existe(module)) return undefined
+  const regles = await import(pathToFileURL(module).href)
+  const profils = regles.racineDesProfils(depot)
+  if (!profils) return undefined
+  const { termes, erreurs } = regles.termesDesProfils(profils)
+  if (erreurs.length) return undefined
+  return { noms: regles.nomsDesProfils(profils), termes }
+}
+
+/** Ce que l'appel poserait, fichier par fichier : `{ cible, texte }`, quel que soit l'outil. */
+function ecrituresDeLAppel({ nom, outil, cwd, commande }, resoudre) {
+  if (
+    nom === 'apply_patch' ||
+    (typeof commande === 'string' && /^\s*\*\*\* Begin Patch/.test(commande))
+  )
+    return ecrituresDuCorrectif(commande, cwd, resoudre)
+  if (OUTILS_SHELL.has(nom))
+    return typeof commande === 'string'
+      ? ecrituresDuShell(commande, cwd, resoudre, OUTILS_GIT_BASH.has(nom))
+      : []
+  if (!OUTILS_ECRITURE.has(nom)) return []
+  const textes = textesEcrits(outil)
+  return CLES_CHEMIN.filter((k) => typeof outil[k] === 'string' && outil[k])
+    .map((k) => cheminDuMot(outil[k], cwd, resoudre))
+    .filter(Boolean)
+    .flatMap((cible) => textes.map((texte) => ({ cible, texte })))
+}
+
 /**
  * LE NOM RÉSERVÉ SE REFUSE À L'ÉCRITURE, PAS AU COMMIT. Dans un dépôt qui porte des profils d'entreprise
  * (`entreprise/<profil>/identite.json`, règles de `scripts/identite-entreprise.mjs`), un fichier suivi par
@@ -748,56 +1008,46 @@ function passagesReserves(texte, noms, termes) {
  * Mêmes règles que le crochet, chargées depuis le dépôt du fichier écrit (son module, pas une copie) ;
  * un dépôt sans ce module (un autre projet, une copie d'un autre projet rangée chez nous) n'est pas
  * concerné. Passent : `entreprise/`, les données de l'app, tout chemin que git ignore, un profil mal
- * formé (le crochet laisse alors passer lui aussi). Les écritures par le shell ne sont pas lues.
+ * formé (le crochet laisse alors passer lui aussi). Le shell est lu aussi (`ecrituresDuShell`), dans ses
+ * formes claires ; un correctif `apply_patch` par ses lignes ajoutées.
  */
 export async function refusNomReserve(entree, sonde = sondeSysteme) {
   const appel = appelDe(entree)
-  if (!appel || !OUTILS_ECRITURE.has(appel.nom)) return undefined
-  const textes = textesEcrits(appel.outil)
-  if (!textes.length) return undefined
-  const cibles = CLES_CHEMIN.filter((k) => typeof appel.outil[k] === 'string' && appel.outil[k])
-    .map((k) => cheminDuMot(appel.outil[k], appel.cwd, sonde.resoudre))
-    .filter(Boolean)
-  for (const cible of cibles) {
+  if (!appel) return undefined
+  /** Les règles de chaque dépôt touché, chargées une fois par appel. */
+  const reglesDe = new Map()
+  for (const { cible, texte } of ecrituresDeLAppel(appel, sonde.resoudre)) {
     const depot = depotDuFichier(cible, sonde)
     if (!depot) continue
-    const module = join(depot, 'scripts', 'identite-entreprise.mjs')
-    if (!sonde.existe(module)) continue
     const relatif = relative(depot, cible).split(sep).join('/')
     if (relatif.startsWith('entreprise/') || relatif.startsWith(`${DONNEES_APP}/`)) continue
-    const regles = await import(pathToFileURL(module).href)
-    const profils = regles.racineDesProfils(depot)
-    if (!profils) continue
-    const { termes, erreurs } = regles.termesDesProfils(profils)
-    if (erreurs.length) continue
-    const noms = regles.nomsDesProfils(profils)
-    for (const texte of textes) {
-      const passages = passagesReserves(texte, noms, termes)
-      if (!passages.length) continue
-      if (sonde.ignore?.(depot, cible) === true) break
-      const [debut] = passages[0]
-      const ligne = texte.slice(0, debut).split('\n').length
-      const ouvre = texte.lastIndexOf('\n', debut - 1) + 1
-      const ferme = texte.indexOf('\n', debut)
-      const fin = ferme < 0 ? texte.length : ferme
-      // La ligne fautive, chaque passage réservé masqué : l'agent retrouve l'endroit sans que le terme
-      // ne reparte dans sa réponse, ni dans le fil.
-      let extrait = ''
-      let curseur = ouvre
-      for (const [a, b] of passages.filter(([a, b]) => a < fin && b > ouvre)) {
-        if (a < curseur) continue
-        extrait += `${texte.slice(curseur, a)}«…»`
-        curseur = Math.min(b, fin)
-      }
-      extrait = `${extrait}${texte.slice(curseur, fin)}`.trim().slice(0, 200)
-      return (
-        `Refusé : ce texte porte un nom ou un terme réservé à l'entreprise, et ${relatif} est suivi par git. ` +
-        `Ligne ${ligne} du texte écrit : « ${extrait} » (passage réservé masqué par «…»). ` +
-        "Le commit de fin de tour le refuserait et l'envoi du fil resterait bloqué. " +
-        'Reformule sans lui (exemple fictif, « un dépôt de l’utilisateur »…), puis réécris. ' +
-        `Restent libres : entreprise/, ${DONNEES_APP}/ et les fichiers que git ignore.`
-      )
+    if (!reglesDe.has(depot)) reglesDe.set(depot, await reglesDuDepot(depot, sonde))
+    const regles = reglesDe.get(depot)
+    if (!regles) continue
+    const passages = passagesReserves(texte, regles.noms, regles.termes)
+    if (!passages.length || sonde.ignore?.(depot, cible) === true) continue
+    const [debut] = passages[0]
+    const ligne = texte.slice(0, debut).split('\n').length
+    const ouvre = texte.lastIndexOf('\n', debut - 1) + 1
+    const ferme = texte.indexOf('\n', debut)
+    const fin = ferme < 0 ? texte.length : ferme
+    // La ligne fautive, chaque passage réservé masqué : l'agent retrouve l'endroit sans que le terme
+    // ne reparte dans sa réponse, ni dans le fil.
+    let extrait = ''
+    let curseur = ouvre
+    for (const [a, b] of passages.filter(([a, b]) => a < fin && b > ouvre)) {
+      if (a < curseur) continue
+      extrait += `${texte.slice(curseur, a)}«…»`
+      curseur = Math.min(b, fin)
     }
+    extrait = `${extrait}${texte.slice(curseur, fin)}`.trim().slice(0, 200)
+    return (
+      `Refusé : ce texte porte un nom ou un terme réservé à l'entreprise, et ${relatif} est suivi par git. ` +
+      `Ligne ${ligne} du texte écrit : « ${extrait} » (passage réservé masqué par «…»). ` +
+      "Le commit de fin de tour le refuserait et l'envoi du fil resterait bloqué. " +
+      'Reformule sans lui (exemple fictif, « un dépôt de l’utilisateur »…), puis réécris. ' +
+      `Restent libres : entreprise/, ${DONNEES_APP}/ et les fichiers que git ignore.`
+    )
   }
   return undefined
 }

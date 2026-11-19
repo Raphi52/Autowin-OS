@@ -677,4 +677,110 @@ describe('refusNomReserve — un nom réservé ne s’écrit pas dans un fichier
     expect(sortie.permissionDecision).toBe('deny')
     expect(sortie.permissionDecisionReason).not.toContain(TERME)
   })
+
+  /**
+   * LE SHELL ÉCRIT AUSSI. Sans ces cas, `echo … > fichier` ou un `sed -i` posait le terme sans que la garde
+   * le lise, et seul le commit de fin de tour le refusait. Chaque forme claire où le texte posé est écrit
+   * dans la commande est lue ; une sortie inconnue (`grep … > f`, un script lancé) ne l'est pas.
+   */
+  const commande = (tool_name, command, dossier = depot) =>
+    refusNomReserve({ tool_name, tool_input: { command }, cwd: dossier })
+  const bash = (command, dossier) => commande('Bash', command, dossier)
+  const ps = (command) => commande('PowerShell', command)
+  const enAvant = () => depot.split('\\').join('/')
+
+  it.each([
+    ['echo vers un fichier', () => bash(`echo "// ${TERME}" > scripts/a.mjs`), 'scripts/a.mjs'],
+    ['printf en ajout', () => bash(`printf '%s\\n' 'x ${TERME}' >> src/b.ts`), 'src/b.ts'],
+    [
+      'un here-doc',
+      () => bash(`cat > src/c.ts <<'EOF'\nconst a = 1\nconst t = '${TERME}'\nEOF`),
+      'src/c.ts'
+    ],
+    ['un here-doc passé à tee', () => bash(`cat <<EOF | tee src/d.ts\n${TERME}\nEOF`), 'src/d.ts'],
+    ['Set-Content -Value', () => ps(`Set-Content -Path src/e.ts -Value '${TERME}'`), 'src/e.ts'],
+    ['une chaîne passée à Out-File', () => ps(`'${TERME}' | Out-File src/f.ts`), 'src/f.ts'],
+    [
+      'une here-string passée à Set-Content',
+      () => ps(`@"\nligne\n${TERME}\n"@ | Set-Content src/g.ts`),
+      'src/g.ts'
+    ],
+    ['Add-Content positionnel', () => ps(`Add-Content src/h.ts "${TERME}"`), 'src/h.ts'],
+    ['le remplacement d’un sed -i', () => bash(`sed -i 's/x/${TERME}/g' src/i.ts`), 'src/i.ts'],
+    ['une ligne ajoutée par sed -i', () => bash(`sed -i '3a ${TERME}' src/i2.ts`), 'src/i2.ts'],
+    [
+      'writeFileSync de node -e',
+      () => bash(`node -e "require('fs').writeFileSync('${enAvant()}/src/j.ts', '${TERME}')"`),
+      'src/j.ts'
+    ],
+    [
+      'node lu dans un here-doc',
+      () =>
+        bash(
+          `node <<'EOF'\nrequire('fs').writeFileSync('${enAvant()}/src/j2.ts', '${TERME}')\nEOF`
+        ),
+      'src/j2.ts'
+    ],
+    [
+      'WriteAllText de .NET',
+      () => ps(`[IO.File]::WriteAllText('${enAvant()}/src/k.ts', '${TERME}')`),
+      'src/k.ts'
+    ],
+    [
+      'un correctif apply_patch de Codex',
+      () =>
+        refusNomReserve({
+          tool_name: 'apply_patch',
+          tool_input: {
+            command: `*** Begin Patch\n*** Add File: src/l.ts\n+const a = 1\n+// ${TERME}\n*** End Patch\n`
+          },
+          cwd: depot
+        }),
+      'src/l.ts'
+    ],
+    ['un bash -c imbriqué', () => bash(`bash -c "echo ${TERME} > src/m.ts"`), 'src/m.ts'],
+    ['après cd', () => bash(`cd src && echo ${TERME} > n.ts`), 'src/n.ts']
+  ])('refusé par le shell : %s', async (_cas, appel, fichier) => {
+    const motif = await appel()
+    expect(motif).toMatch(/Refusé : ce texte porte un nom ou un terme réservé/u)
+    expect(motif).toContain(fichier)
+    expect(motif).toContain('«…»')
+    expect(motif).not.toContain(TERME)
+  })
+
+  it('refusé par le shell : la ligne du here-doc est nommée', async () => {
+    const motif = await bash(`cat > src/c.ts <<'EOF'\nconst a = 1\nconst t = '${TERME}'\nEOF`)
+    expect(motif).toContain('Ligne 2 du texte écrit')
+    expect(motif).toContain("const t = '«…»'")
+  })
+
+  it.each([
+    ['un sed qui RETIRE le terme', () => bash(`sed -i 's/${TERME}/un dépôt/g' src/a.ts`)],
+    ['un sed qui supprime ses lignes', () => bash(`sed -i '/${TERME}/d' src/a.ts`)],
+    ['une sortie inconnue (grep -v)', () => bash(`grep -v ${TERME} src/a.ts > src/a2.ts`)],
+    ['une simple recherche', () => bash(`git log --grep=${TERME} --oneline`)],
+    ['un echo sans fichier', () => bash(`echo ${TERME}`)],
+    ['un texte propre', () => bash(`echo propre > src/a.ts`)],
+    ['vers le profil', () => bash(`echo ${TERME} > entreprise/acmecorp/n.md`)],
+    ['vers un fichier ignoré', () => bash(`echo ${TERME} > journal/j.log`)],
+    ['vers le dossier temporaire', () => bash(`echo ${TERME} > /tmp/x.txt`)],
+    ['dans un autre projet', () => bash(`echo ${TERME} > a.ts`, autreProjet)],
+    ['une lecture PowerShell', () => ps(`Get-Content src/a.ts | Select-String ${TERME}`)],
+    ['une copie (contenu non lu)', () => bash(`cp src/a.ts src/b.ts`)]
+  ])('passe par le shell : %s', async (_cas, appel) => {
+    expect(await appel()).toBeUndefined()
+  })
+
+  it('le script lancé comme contrôle « avant outil » refuse aussi la commande', async () => {
+    const { code, out } = await lancer({
+      tool_name: 'Bash',
+      tool_input: { command: `echo '${TERME}' > src/z.ts` },
+      cwd: depot
+    })
+    expect(code).toBe(0)
+    const sortie = JSON.parse(out).hookSpecificOutput
+    expect(sortie.permissionDecision).toBe('deny')
+    expect(sortie.permissionDecisionReason).toContain('src/z.ts')
+    expect(sortie.permissionDecisionReason).not.toContain(TERME)
+  })
 })
