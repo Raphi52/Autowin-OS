@@ -1,3 +1,6 @@
+/**
+ * PREUVE DE LA MÉMOIRE dans l'app empaquetée : une note marquée se retrouve par la recherche de la vue Knowledge, sur une instance cachée.
+ */
 import { racineDepot } from './racine-depot.mjs'
 import { reserverInstance } from './avec-instance-headless.mjs'
 import { execFileSync } from 'node:child_process'

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { analyser, tracesParDefaut } from './gc-scripts-inutilises.mjs'
 
 /*
- * Les cas viennent de la passe du 06/11 (conv-1657) : un rapport d'archive qui faisait passer des
+ * Les cas viennent de la passe du 06/11 : un rapport d'archive qui faisait passer des
  * scripts morts pour branchés, un test Python lancé par npm qui a besoin d'un script que rien ne cite,
  * le mot « rendu » qui liait un test à `rendu.cjs`, et une sortie d'outil qui cite tous les noms.
  */
@@ -298,6 +298,26 @@ describe('gc-scripts-inutilises', () => {
       join(donneesApp, 'claude-accounts', 'compte-3', 'projects', 'D--AutoWinOS--autowin-data-x'),
       join(donneesApp, 'run-stdout')
     ])
+  })
+
+  /*
+   * Mesuré le 20/11 : `scripts/desktop-control-live-probe.ts`, cité nulle part depuis août, n'était
+   * jamais proposé à la purge — le `/gc` ne regardait que `.mjs .cjs .mts .ps1 .py .sh`.
+   */
+  it('voit aussi les scripts .ts, .cs et .vbs, mais ni les déclarations de types ni un .ts importé', () => {
+    ecrire('scripts/sonde.ts')
+    ecrire('scripts/capture.cs')
+    ecrire('scripts/amorce.vbs')
+    ecrire('scripts/types.d.mts')
+    ecrire('scripts/outil-ts.ts')
+    ecrire('src/main/x.ts', "import { f } from '../../scripts/outil-ts'")
+    const { inutilises, gardes } = lancer({ commites: true })
+    const vus = [...chemins(inutilises), ...chemins(gardes)]
+    expect(chemins(inutilises)).toEqual(
+      expect.arrayContaining(['scripts/sonde.ts', 'scripts/capture.cs', 'scripts/amorce.vbs'])
+    )
+    expect(vus).not.toContain('scripts/types.d.mts')
+    expect(chemins(inutilises)).not.toContain('scripts/outil-ts.ts')
   })
 
   it('sans aucune trace lue, refuse de juger plutôt que de tout condamner', () => {

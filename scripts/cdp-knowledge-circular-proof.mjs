@@ -1,3 +1,7 @@
+/**
+ * PREUVE DE LA VUE KNOWLEDGE EN GRAPHE CIRCULAIRE, sur une instance cachée de l'app empaquetée et un Brain de test.
+ * Usage : npm run test:knowledge-circulaire (appelé par build:desktop).
+ */
 import { racineDepot } from './racine-depot.mjs'
 import { reserverInstance } from './avec-instance-headless.mjs'
 import { execFileSync } from 'node:child_process'

@@ -32,6 +32,17 @@
   Une interface nouvelle se regarde sur un thème sombre ET un clair : `--theme nebuleuse-verre`
   puis `--theme holographique-clair`.
 
+## Scripts — chercher avant d'écrire, ranger selon leur durée de vie
+- Avant d'écrire un script : `node scripts/trouver-script.mjs <mots>` cherche dans l'en-tête de ceux
+  du dépôt et donne leur usage ; `--tout` rend le catalogue par famille.
+- Script pour CE travail seulement (sonde, mesure, correctif d'un coup, preuve d'un tour) :
+  `.autowin-tmp/<id du fil>/`, ignoré par git et purgé par `/gc` après 7 jours sans modification.
+- `scripts/` ne reçoit qu'un outil que d'autres demandes rappelleront : la première ligne de son
+  commentaire d'en-tête dit ce qu'il fait (`scripts/trouver-script.test.mjs` refuse sinon), et il a son test.
+  Propre à une entreprise → `entreprise/<nom>/scripts/`.
+- Un script de `scripts/` que plus rien n'appelle ni ne lance est proposé à la purge par `/gc`
+  (`scripts/gc-scripts-inutilises.mjs`).
+
 ## Interface — déclinable avec nos thèmes, par défaut
 - Une couleur passe par un jeton : `var(--text)`, `--text-dim`, `--line`, `--bg-0` à `3`, `--gold`,
   `--rose`, `--ok`, `--warn`, `--err`. Transparence : `color-mix(in srgb, var(--gold) 30%, transparent)`.

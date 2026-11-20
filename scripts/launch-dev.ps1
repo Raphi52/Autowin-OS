@@ -1,3 +1,4 @@
+# LANCE LE DEV D'AUTOWIN OS (npm run dev) dans son terminal, sans console de plus ; une relance reprend le terminal déjà ouvert.
 param(
   [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
   # Injecté par le test. En vrai : `Start-DevLoop`, qui n'alloue AUCUNE console (voir plus bas).

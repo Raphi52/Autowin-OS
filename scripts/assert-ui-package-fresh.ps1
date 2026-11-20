@@ -1,3 +1,5 @@
+# CONTRÔLE DE FRAÎCHEUR : refuse (« STALE package ») un app.asar plus ancien que la source la plus récente.
+# Usage : powershell -NoProfile -File scripts/assert-ui-package-fresh.ps1 [-Package <app.asar>]
 param(
   [string]$Root = (Split-Path -Parent $PSScriptRoot),
   [string]$Package = 'dist\win-unpacked\resources\app.asar'

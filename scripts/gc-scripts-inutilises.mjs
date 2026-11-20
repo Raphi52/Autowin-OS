@@ -41,8 +41,9 @@ import { homedir } from 'node:os'
 import { basename, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
+// Ce qu'est un script (extensions, tests, déclarations) : une seule définition, partagée avec le catalogue.
+import { estDuCode, estUnTest } from './trouver-script.mjs'
 
-const EXT_SCRIPT = /\.(mjs|cjs|mts|ps1|py|sh)$/
 const EXT_TEXTE =
   /\.(ts|tsx|mts|mjs|cjs|js|jsx|json|md|ps1|psm1|py|sh|yml|yaml|toml|txt|cmd|bat|html)$|^pre-commit$|^pre-push$|^post-merge$|^commit-msg$/
 const DOSSIERS_IGNORES = new Set([
@@ -80,7 +81,6 @@ function lister(dossier, garder, acc = []) {
 }
 
 const versSlash = (p) => p.split(sep).join('/')
-const estTest = (nom) => /\.test\.|\.selftest\.|_test\.py$|^test_.*\.py$/.test(nom)
 
 /** Les fichiers dont le CONTENU branche un script : tout ce qui n'est pas `scripts/`. */
 export function racinesDuDepot(depot, donneesApp) {
@@ -177,7 +177,12 @@ function nomsCites(fichier) {
     const module = nom.replace(/\.py$/, '')
     noms.push(`import ${module}`, `from ${module} import`)
   }
-  if (/\.(mjs|cjs|mts)$/.test(nom)) noms.push('./' + nom.replace(/\.(mjs|cjs|mts)$/, ''))
+  // Un module s'importe aussi sans extension : `./x` depuis `scripts/`, `../../scripts/x` depuis `src/`
+  // (le cas d'un `.ts`, que tsx résout sans extension).
+  if (/\.(mjs|cjs|js|mts|ts)$/.test(nom)) {
+    const module = nom.replace(/\.(mjs|cjs|js|mts|ts)$/, '')
+    noms.push('./' + module, 'scripts/' + module)
+  }
   return noms
 }
 
@@ -378,10 +383,10 @@ export function analyser({
   ageMinJours = 14,
   git = infosGit
 }) {
-  const tous = lister(join(depot, 'scripts'), (n) => EXT_SCRIPT.test(n))
+  const tous = lister(join(depot, 'scripts'), estDuCode)
   const relatif = (f) => versSlash(relative(depot, f))
-  const scripts = tous.filter((f) => !estTest(basename(f)))
-  const tests = tous.filter((f) => estTest(basename(f)))
+  const scripts = tous.filter((f) => !estUnTest(basename(f)))
+  const tests = tous.filter((f) => estUnTest(basename(f)))
 
   // 1. Branchés : par une racine, puis de proche en proche par un script déjà branché.
   // Le branchement se lit sans les commentaires ; `racines` garde le texte entier pour signaler

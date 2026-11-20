@@ -1,3 +1,4 @@
+# MET À JOUR LE RACCOURCI « Autowin OS » du bureau vers l'exécutable empaqueté (dist/win-unpacked), puis le relit pour le prouver ; appelé par build:desktop.
 param(
   [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
   [string]$ShortcutPath = (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Autowin OS.lnk')

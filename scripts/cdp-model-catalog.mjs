@@ -1,3 +1,6 @@
+/**
+ * SONDE CDP du catalogue de modèles (Agent Studio › Modèles & topologie) : libellés et espacement relevés, capture à l'appui.
+ */
 import { assertModelCatalogProof } from './cdp-proof-validation.mjs'
 import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
 import { attendreDansLaPage } from './cdp-attente.mjs'

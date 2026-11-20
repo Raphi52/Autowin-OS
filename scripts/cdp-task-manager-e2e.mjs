@@ -1,3 +1,6 @@
+/**
+ * PREUVE DE BOUT EN BOUT DU TASK MANAGER sur une instance cachée : tâche créée par le formulaire, relais Windows vérifié, capture et JSON de preuve.
+ */
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'

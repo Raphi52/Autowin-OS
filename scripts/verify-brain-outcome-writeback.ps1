@@ -1,3 +1,4 @@
+# REJOUE LES TESTS de l'apprentissage par les résultats du Brain en une commande — oracle déclaré dans package.json (autowin.learningOracles).
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot

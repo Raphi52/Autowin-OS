@@ -1,3 +1,5 @@
+# MÉNAGE DES ARTEFACTS GÉNÉRÉS à la racine du dépôt (captures de debug, dist-*, anciens paquets de preuve) ; -Check échoue s'il en reste, sans rien supprimer.
+# Usage : npm run clean:generated
 param(
   [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
   [switch]$Check

@@ -1,3 +1,6 @@
+/**
+ * SONDE CDP DU CHEMIN CRITIQUE de l'Observatoire : une conversation témoin, ouverte et filtrée, jusqu'au détail causal capturé (lancée par verifier-chemin-critique.mjs).
+ */
 import { agirJusqua, attendreDansLaPage, attendreStabilite } from './cdp-attente.mjs'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'

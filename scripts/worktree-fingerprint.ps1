@@ -1,3 +1,4 @@
+# EMPREINTE DE L'ARBRE DE TRAVAIL : hachage du diff suivi et des fichiers non suivis, pour savoir si deux états du dépôt sont identiques.
 param(
   [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot)
 )

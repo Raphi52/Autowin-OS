@@ -1,3 +1,5 @@
+# CONTRÔLE DU PAQUET : app.asar n'embarque aucune donnée d'exécution (.autowin-data) et contient ses workers.
+# Usage : npm run test:package-content (appelé par build:desktop).
 param(
   [string]$Root = (Split-Path -Parent $PSScriptRoot),
   [string]$Package = 'dist\win-unpacked\resources\app.asar'

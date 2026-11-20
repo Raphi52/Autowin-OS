@@ -15,11 +15,12 @@ un permis d'inventer du périmètre — il forge la PLUS PETITE capacité qui d�
 
 1. **Qu'est-ce qui est bloqué, exactement ?** Nomme l'exécution, l'étape, et l'échec observable
    (message de refus, code de sortie, commande absente). Pas de blocage nommé → pas de forge.
-2. **Est-ce que ça existe déjà ?** Cherche dans le catalogue, dans le dépôt (`find_in_files`) et dans le Brain
-   (`brain_query`) AVANT d'écrire quoi que ce soit. Le doublon est le mode d'échec numéro un : une seconde
-   commande qui fait ce qu'une commande existante fait déjà coupe la vérité en deux.
+2. **Est-ce que ça existe déjà ?** Cherche dans le catalogue, dans les scripts (`node scripts/trouver-script.mjs <mots>`),
+   dans le dépôt (`find_in_files`) et dans le Brain (`brain_query`) AVANT d'écrire quoi que ce soit. Le doublon est
+   le mode d'échec numéro un : une seconde commande qui fait ce qu'une commande existante fait déjà coupe la vérité en deux.
 3. **Un outil est-il la bonne forme ?** Un besoin ponctuel est une commande lancée une fois, pas une capacité permanente.
-   Ne forge que ce qui sera rappelé, ou ce sans quoi l'exécution ne peut pas continuer.
+   Ne forge que ce qui sera rappelé, ou ce sans quoi l'exécution ne peut pas continuer. Un script d'un seul usage
+   va dans `.autowin-tmp/<id du fil>/`, jamais dans `scripts/`.
 
 Si la réponse à la question 2 est « oui », arrête-toi et utilise-le. Rapporte la recherche, ne forge pas.
 
@@ -33,7 +34,8 @@ un jour.
 
 Choisis la forme la moins chère qui satisfasse le contrat, dans cet ordre :
 - une commande existante avec d'autres arguments (aucun nouvel outil du tout),
-- un script dans le dépôt, appelé par le lanceur autorisé,
+- un script dans `scripts/`, appelé par le lanceur autorisé — découvrable par la première ligne de son
+  commentaire d'en-tête, que `node scripts/trouver-script.mjs` montre (son test refuse un script sans elle),
 - un hook de mod du CLI (`tool.call`, `prompt.attachment`, `tool.describe`), quand le manque se comble au moment où le modèle appelle ou lit un outil : écris-le d'abord dans `<copie du run>/.autowin/mod-run/` (relu par les étapes suivantes du même run), puis promeus-le vers `mods/autowin/` avec `.autowin/mod-run/PROMOTION.md` (`Corrige:` / `Risque:`) et `src/shared/mod-autowin.test.ts` vert — le contrôle final refuse sinon,
 - une vraie capacité câblée dans le bus de commandes de l'app.
 

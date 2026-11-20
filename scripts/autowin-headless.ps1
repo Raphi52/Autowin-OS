@@ -1,4 +1,6 @@
-﻿param(
+﻿# INSTANCE CACHÉE D'AUTOWIN : démarre (-Action Start), interroge ou arrête une instance isolée de l'app sur son port CDP, empaquetée ou en code de dev.
+# Usage : powershell -NoProfile -File scripts/autowin-headless.ps1 -InstanceId <id> [-Action Start|Status|Stop] [-Port 9240]
+param(
   [ValidateSet('Start', 'Status', 'Stop')][string]$Action = 'Start',
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
   [ValidateRange(1024, 65535)][int]$Port = 9240,

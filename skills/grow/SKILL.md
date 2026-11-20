@@ -14,7 +14,9 @@ est la PREMIÈRE à en profiter. L'ajout reste ensuite dans le kit pour toutes l
 ## Ce que grow peut créer — tout ce qui sert la demande
 
 - **un outil** : un script `scripts/<nom>.mjs` (ou `.ps1`, `.py`) qui fait le geste à la place de la main —
-  calcul, conversion, extraction, capture, comparaison, vérification ;
+  calcul, conversion, extraction, capture, comparaison, vérification. Il n'entre dans `scripts/` que si
+  d'autres demandes le rappelleront, avec sa description en première ligne d'en-tête et son test ; un
+  script qui ne sert que CETTE demande n'est pas un ajout au kit : il va dans `.autowin-tmp/<id du fil>/` ;
 - **une skill** : `skills/<nom>/SKILL.md`, quand la demande déroule une procédure que le kit n'a pas ;
 - **un format de rendu** : page ```html-interactif (graphique, simulateur, 3D avec `THREE`), schéma ```mermaid,
   bloc de données `aw-*` — ou un nouveau rendu dans l'interface (`src/renderer/`) ;
@@ -45,8 +47,9 @@ la demande.
    - un format pauvre (texte là où un aperçu, un graphique, une 3D montrerait) ;
    - une vérification improvisée qu'aucun test ou script ne rejoue ;
    - une information longue à trouver qu'une note ou une injection aurait servie.
-2. **Doublon d'abord (réflexe 4).** Grep `skills/`, `scripts/`, `src/main`, `src/renderer` : la capacité existe
-   peut-être déjà. Existe → sers-t'en pour la demande, et corrige la description ou l'injection qui l'a cachée.
+2. **Doublon d'abord (réflexe 4).** `node scripts/trouver-script.mjs <mots du geste>` pour les scripts, puis grep
+   `skills/`, `src/main`, `src/renderer` : la capacité existe peut-être déjà. Existe → sers-t'en pour la demande,
+   et corrige la description (première ligne d'en-tête du script) ou l'injection qui l'a cachée.
 3. **Retiens UN ajout** : celui qui améliore le plus le résultat de CETTE demande, borné à 1-3 fichiers.
    Plus large → note-le (`remember`, type `decision`) et traite la demande sans.
 4. **Crée-le et prouve-le** : propriété des fichiers vérifiée (réflexe 14), test rouge puis vert ou capture

@@ -1,3 +1,6 @@
+/**
+ * TAILLE DE FENÊTRE ÉMULÉE PAR CDP le temps d'une capture, puis rendue — module importé par les sondes cdp-* et ui-capture.mjs.
+ */
 export const withDeviceMetricsOverride = async (send, metrics, run, restore = async () => {}) => {
   await send('Emulation.setDeviceMetricsOverride', metrics)
   try {

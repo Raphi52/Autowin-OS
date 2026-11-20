@@ -1,3 +1,5 @@
+# CRÉE LE RACCOURCI « Autowin OS Dev » du bureau, qui lance scripts/launch_dev.py avec un Python graphique, sans console.
+# Usage : npm run dev:shortcut
 param(
   [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot)
 )

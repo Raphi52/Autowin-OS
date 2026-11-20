@@ -1,3 +1,4 @@
+// CAPTURE D'UN BUREAU WINDOWS CACHÉ (HDESK), chargée par hdesk-observe.ps1 et hdesk-tv.ps1 ; rend l'origine du recadrage pour viser les clics.
 using System;
 using System.Collections.Generic;
 using System.Drawing;

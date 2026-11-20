@@ -1,3 +1,6 @@
+/**
+ * SONDE CDP de l'onglet Skills des Réglages : chaque source de skills s'ouvre et liste ses skills (jouée par verifier-sondes-lecture.mjs).
+ */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { cheminArtefact } from './racine-depot.mjs'
 import { portCdp } from './cdp-port.mjs'

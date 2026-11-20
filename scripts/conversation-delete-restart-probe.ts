@@ -1,3 +1,6 @@
+/**
+ * SONDE DE REDÉMARRAGE lancée par src/main/activity/conversation-git-state.test.ts : une suppression tracée dans un processus se relit dans un autre.
+ */
 import { execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { resolve } from 'node:path'

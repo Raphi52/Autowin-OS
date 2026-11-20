@@ -1,3 +1,7 @@
+/**
+ * PREUVE CDP DE L'INTERFACE : capture une section de l'app (thème, survol) ; --verify-navigation vérifie que chaque pastille ouvre sa vue.
+ * Usage : node scripts/autowin-cdp-proof.mjs [--section <id>] [--theme <id>] [--verify-navigation] [--out <png>]
+ */
 import { cheminAudit, ecrireSousDepot } from './racine-depot.mjs'
 import { portCdp } from './cdp-port.mjs'
 

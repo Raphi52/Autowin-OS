@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+/**
+ * EXPORTE LE CONTEXTE « Compute Fabric » : les sources de docs/compute-fabric/context-sources.json en un Markdown ; --check vérifie son empreinte sans écrire.
+ * Usage : npm run context:compute-fabric
+ */
 
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'

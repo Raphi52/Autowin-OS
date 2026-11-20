@@ -1,3 +1,6 @@
+/**
+ * SONDE CDP de l'onglet Hooks des Réglages : la source Codex s'affiche ; capture et état en JSON (jouée par verifier-sondes-lecture.mjs).
+ */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { assertHooksProof } from './cdp-proof-validation.mjs'
 import { cheminArtefact } from './racine-depot.mjs'

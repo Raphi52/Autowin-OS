@@ -1,3 +1,6 @@
+/**
+ * RÈGLES DE VALIDITÉ des preuves CDP (catalogue de modèles, bloc Frame, panneaux, hooks) : une preuve vide échoue au lieu de passer.
+ */
 export function assertModelCatalogProof({ labels }) {
   if (!Array.isArray(labels) || labels.length === 0) {
     throw new Error('Preuve CDP invalide : catalogue de modèles vide')
