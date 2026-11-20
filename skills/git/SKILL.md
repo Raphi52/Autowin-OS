@@ -163,9 +163,14 @@ exceptions, chacune nommée dans le rapport :
 - un secret (`.env`, clé, jeton) : jamais commité, nommé ;
 - tes propres brouillons d'enquête : supprimés, pas commités.
 
-**Comment** : une copie séparée posée sur `<distant>/<branche>`, HORS du dépôt
-(`git worktree add --detach ../<dépôt>-git-<conv> <distant>/<branche>`), avec une jonction vers
-`node_modules` si les tests en ont besoin. Y poser les fichiers, **un commit par origine** (fil ou
+**Comment** : une copie séparée posée sur `<distant>/<branche>`, HORS du dépôt et dans le dossier
+temporaire (`git worktree add --detach "$TEMP/<dépôt>-git-<conv>" <distant>/<branche>`) : la garde
+d'Autowin refuse toute création à la racine d'un disque, donc `../<dépôt>-git-<conv>` pour un dépôt
+posé en `D:\<dépôt>` (refusé en conv-2052). Si les tests en ont besoin, une jonction vers
+`node_modules`, créée par PowerShell (`New-Item -ItemType Junction -Path <copie>\node_modules -Target
+<dépôt>\node_modules`) : `cmd //c mklink /J` depuis Git Bash échoue sur la conversion des chemins.
+Elle se retire par `cmd /c rmdir <copie>\node_modules`, qui n'ôte que le lien ; jamais `rm -rf`, qui
+viderait le vrai `node_modules`. Y poser les fichiers, **un commit par origine** (fil ou
 sujet), au format de messages que le dépôt déclare (`AGENTS.md`, `CONTRIBUTING`, historique récent).
 
 **Vérifier dans cette copie** : tests des fichiers touchés, typage s'il existe, contrôles déclarés par
