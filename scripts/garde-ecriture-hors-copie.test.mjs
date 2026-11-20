@@ -615,6 +615,93 @@ describe('refusALaRacineDesDonnees — ni journal, ni correctif, ni capture à l
 })
 
 /*
+ * LES DOSSIERS DE PREUVE, sous `.autowin-data` et sous son dossier de l'app. Relevé du 20/11 : quinze
+ * dossiers laissés par des agents, de deux à six semaines (`captures-lot8`, `captures-conv-1857`,
+ * `preuve-conv-1008`, `tmp-conv-1286`, `apercu-board` avec un profil de navigateur, `rendu-anneau`),
+ * que ni l'app ni une procédure n'utilisait. Un dossier qui existe reste ouvert.
+ * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un de ces dossiers créé qui passe ; un refus dans un dossier
+ * existant, plus bas dans l'arbre, hors de `.autowin-data` ou sur un nom d'un autre genre.
+ */
+describe('refusALaRacineDesDonnees — ni dossier de captures, de preuve, d’aperçu ou de rendu neuf', () => {
+  const DONNEES = 'D:\\AutoWinOS\\.autowin-data'
+  const EXISTANTS = [
+    'D:\\AutoWinOS',
+    DONNEES,
+    `${DONNEES}\\autowin-os`,
+    `${DONNEES}\\autowin-os\\runs`,
+    `${DONNEES}\\preuves-run-c8986125c02a`
+  ]
+  const sondeDonnees = {
+    ...sondeFictive,
+    existe: (chemin) => EXISTANTS.some((e) => egal(e, chemin))
+  }
+  const appel = (tool_name, tool_input) =>
+    refusALaRacineDesDonnees({ tool_name, tool_input, cwd: 'D:\\AutoWinOS' }, sondeDonnees)
+  const sh = (command) => appel('Bash', { command })
+
+  it.each([
+    [
+      'les journaux d’un lot, dans un dossier à lui',
+      'mkdir -p .autowin-data/autowin-os/captures-lot9 && npx vitest run > .autowin-data/autowin-os/captures-lot9/red.log 2>&1',
+      'captures-lot9'
+    ],
+    [
+      'une capture par --out',
+      'node scripts/ui-capture.mjs --code-dev --out .autowin-data/preuve-conv-2040/accueil.png',
+      'preuve-conv-2040'
+    ],
+    [
+      'une capture de bureau caché par -Output',
+      'powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId x -Output D:\\AutoWinOS\\.autowin-data\\apercu-board\\vue.png',
+      'apercu-board'
+    ],
+    [
+      'un dossier de rendu créé seul',
+      'mkdir /d/AutoWinOS/.autowin-data/rendu-anneau',
+      'rendu-anneau'
+    ],
+    [
+      'un dossier temporaire sous l’app',
+      'cp -r src/renderer/src/assets .autowin-data/autowin-os/tmp-conv-2040',
+      'tmp-conv-2040'
+    ],
+    [
+      'une capture posée seule',
+      'echo x > .autowin-data/capture-cpick-2040.png',
+      'capture-cpick-2040.png'
+    ]
+  ])('refusé : %s', (_cas, commande, nom) => {
+    const motif = sh(commande)
+    expect(motif).toMatch(/Refusé : cet appel créerait .*à la racine des données de l'app/u)
+    expect(motif).toContain(nom)
+    expect(motif).toMatch(/\$TEMP/u)
+  })
+
+  it('refusé : par Write, une image dans un dossier neuf', () => {
+    expect(
+      appel('Write', { file_path: `${DONNEES}\\tmp-conv-2040\\rendu.png`, content: 'x' })
+    ).toMatch(/Refusé.*tmp-conv-2040/u)
+  })
+
+  it.each([
+    [
+      'écrire dans un dossier de preuve existant',
+      'echo x > .autowin-data/preuves-run-c8986125c02a/b.png'
+    ],
+    ['un tel nom plus bas dans l’arbre', 'echo x > .autowin-data/autowin-os/runs/tmp-x/a.log'],
+    [
+      'le dossier temporaire',
+      'mkdir -p "$TEMP/captures-lot9" && echo x > "$TEMP/captures-lot9/a.log"'
+    ],
+    ['un tel nom hors des données', 'mkdir -p docs/tmp-conv-1 && echo x > docs/tmp-conv-1/a.md'],
+    ['un nom d’un autre genre', 'echo x >> .autowin-data/kaizen-treated.jsonl'],
+    ['lire', 'ls .autowin-data && ls .autowin-data/autowin-os']
+  ])('autorisé : %s', (_cas, commande) => {
+    expect(sh(commande)).toBeUndefined()
+  })
+})
+
+/*
  * LE SCRIPT TEL QUE LES OUTILS LE LANCENT : JSON sur l'entrée, refus structuré sur la sortie, dans une
  * vraie disposition git (dépôt, puis `git worktree add` sous ses données d'app).
  */
@@ -746,6 +833,14 @@ describe('le script lancé comme un contrôle « avant outil »', () => {
       cwd: copie
     })
     expect(reglage).toEqual({ code: 0, out: '' })
+    const dossierDePreuve = await lancer({
+      tool_name: 'Bash',
+      tool_input: { command: `mkdir -p "${join(depot, '.autowin-data', 'preuve-banc-9')}"` },
+      cwd: copie
+    })
+    expect(JSON.parse(dossierDePreuve.out).hookSpecificOutput.permissionDecisionReason).toMatch(
+      /preuve-banc-9/
+    )
   })
 
   it('un BOM en tête est toléré ; un JSON illisible laisse passer sans planter', async () => {

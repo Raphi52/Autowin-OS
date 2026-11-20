@@ -36,7 +36,8 @@
  * SECONDE RÈGLE, pour tout agent, dans une copie ou non (`refusALaRacineDuDisque`) : aucune entrée
  * NEUVE à la racine d'un disque (`D:\x.log`, `D:\tmp-lot9\`, `git worktree add D:\Projet-lot1`) ; de
  * même à la racine des copies de travail (`refusALaRacineDesCopies`), qui n'appartient qu'à l'app ;
- * à la racine des données de l'app, ni journal, ni correctif, ni capture (`refusALaRacineDesDonnees`).
+ * à la racine des données de l'app, ni journal, ni correctif, ni capture, ni dossier de preuve
+ * (`refusALaRacineDesDonnees`).
  *
  * TROISIÈME RÈGLE (`refusNomReserve`) : un outil d'écriture, une commande shell ou un correctif ne pose
  * pas un nom ou un terme réservé à l'entreprise dans un fichier suivi d'un dépôt qui porte des profils
@@ -1212,21 +1213,48 @@ export function journalALaRacineDesDonnees(chemin) {
   return m && JOURNAL_D_AGENT.test(m[2]) ? join(m[1], m[2]) : undefined
 }
 
+/** Les deux premiers niveaux sous `.autowin-data` : `…\.autowin-data`, son entrée, puis l'entrée suivante. */
+const SOUS_LES_DONNEES = /^(.*?[\\/]\.autowin-data)[\\/]+([^\\/]+)(?:[\\/]+([^\\/]+))?/i
+
 /**
- * NI JOURNAL, NI CORRECTIF, NI CAPTURE NEUFS À LA RACINE DES DONNÉES DE L'APP, pour tout agent. Relevé
- * du 20/11 : vingt et un journaux de preuve de lots et un correctif mis de côté y traînaient depuis dix
- * à douze jours, parmi les fichiers de l'app, que son ménage ne trie pas. L'app écrit les siens sans
- * passer par cette garde (`crash.log` compris) ; un fichier qui existe reste ouvert, un sous-dossier
- * aussi.
+ * Le genre des dossiers de preuve d'agents : `captures-lot8`, `capture-actions-…`, `preuve-conv-1008`,
+ * `preuves-run-…`, `tmp-conv-1286`, `apercu-board`, `rendu-anneau`. L'app n'en crée aucun à ces racines.
+ */
+const PREUVE_D_AGENT = /^(?:captures?|preuves?|tmp|apercu|rendu)-/i
+
+/**
+ * `…\.autowin-data\preuve-conv-1008` ou `…\.autowin-data\autowin-os\captures-lot8` : l'entrée de ce
+ * genre que créerait `chemin` à l'une des deux racines des données, sinon `undefined`.
+ */
+export function preuveALaRacineDesDonnees(chemin) {
+  const m = SOUS_LES_DONNEES.exec(String(chemin ?? ''))
+  if (!m) return undefined
+  if (PREUVE_D_AGENT.test(m[2])) return join(m[1], m[2])
+  return m[2].toLowerCase() === DOSSIER_DES_DONNEES && m[3] && PREUVE_D_AGENT.test(m[3])
+    ? join(m[1], m[2], m[3])
+    : undefined
+}
+
+/**
+ * NI JOURNAL, NI CORRECTIF, NI CAPTURE, NI DOSSIER DE PREUVE NEUFS À LA RACINE DES DONNÉES DE L'APP,
+ * pour tout agent. Relevé du 20/11 : vingt-deux journaux et correctifs à la racine de `autowin-os`, et
+ * quinze dossiers de captures, de preuve, d'aperçu ou de rendu sous `.autowin-data` et `autowin-os`, y
+ * traînaient depuis deux à six semaines, parmi les fichiers de l'app, que son ménage ne trie pas. L'app
+ * écrit les siens sans passer par cette garde (`crash.log` compris) ; une entrée qui existe reste
+ * ouverte, un autre sous-dossier aussi.
  */
 export function refusALaRacineDesDonnees(entree, sonde) {
-  const trouve = entreeNeuve(entree, sonde, journalALaRacineDesDonnees)
+  const trouve = entreeNeuve(
+    entree,
+    sonde,
+    (chemin) => journalALaRacineDesDonnees(chemin) ?? preuveALaRacineDesDonnees(chemin)
+  )
   if (!trouve) return undefined
   const { neuve, appel } = trouve
   return (
     `Refusé : cet appel créerait ${neuve}, à la racine des données de l'app ${dirname(neuve)}. ` +
-    "L'app y range ses propres fichiers et son ménage ne trie pas ce qu'un agent pose à côté (vingt et un journaux de preuve et un correctif y sont restés douze jours). " +
-    'Journal, capture ou sortie de preuve : dans le dossier temporaire ($TEMP en Bash, $env:TEMP en PowerShell). ' +
+    "L'app y range ses propres fichiers et son ménage ne trie pas ce qu'un agent pose à côté (vingt-deux journaux et correctifs, et quinze dossiers de captures et de preuve, y sont restés jusqu'à six semaines). " +
+    'Journal, capture, aperçu ou sortie de preuve, en fichier ou en dossier : dans le dossier temporaire ($TEMP en Bash, $env:TEMP en PowerShell). ' +
     `Correctif à garder : applique-le dans ton dossier de travail (${appel.cwd}), d'où l'app fait entrer ton travail dans main. ` +
     "Seulement si l'utilisateur a demandé lui-même cet emplacement dans son message : relance la commande précédée de AUTOWIN_DEMANDE_UTILISATEUR=1."
   )
