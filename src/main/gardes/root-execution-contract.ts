@@ -136,7 +136,10 @@ function verificationTargetsRequest(task: string, item: ExecutionEvidence): bool
   if (item.kind !== 'verification' || !successfulEvidence(item) || (item.exitCode ?? 0) !== 0) {
     return false
   }
-  const requested = task
+  // Seule la demande propre choisit la commande attendue : « vitest à côté de chaque .tsx », lu dans
+  // le contexte commun d'un plan, faisait refuser `tests.ps1` (code 0, vitest compris) trois fois de
+  // suite au lot 7 de plan-02e10bc4 (run-26218cd842c9-1, 2026-11-20).
+  const requested = demandePropre(task)
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
@@ -373,6 +376,16 @@ const HORS_PERIMETRE =
 const MARQUEUR_DOSSIER_JOINT = '=== DOSSIER DE PREUVE AUTOWIN OS ==='
 
 /**
+ * La demande PROPRE au tour ou au lot : sans le dossier de preuve joint (une donnée rapportée) ni le
+ * contexte commun d'un plan de lots (recopié dans chaque lot, il décrit le dépôt). Ce qui suit ces
+ * marqueurs n'exige ni un fichier (`ciblesNommees`) ni une commande de test
+ * (`verificationTargetsRequest`).
+ */
+function demandePropre(task: string): string {
+  return task.split(MARQUEUR_DOSSIER_JOINT)[0].split(ENTETE_CONTEXTE_COMMUN)[0]
+}
+
+/**
  * Un chemin cité AVEC sa lettre de lecteur (`D:/Depot/src/x.ts:12`), ramené au chemin dans son dépôt.
  *
  * Un run écrit dans une copie du dépôt : ses chemins modifiés finissent par `src/x.ts`, jamais par
@@ -398,8 +411,7 @@ export function ciblesNommees(
   task: string,
   existe: (chemin: string) => boolean = existsSync
 ): string[] {
-  const demande = task.split(MARQUEUR_DOSSIER_JOINT)[0].split(ENTETE_CONTEXTE_COMMUN)[0]
-  const texte = demande.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  const texte = demandePropre(task).normalize('NFD').replace(/\p{Diacritic}/gu, '')
   const cibles: string[] = []
   for (const match of texte.matchAll(CIBLE_ANCREE)) {
     const index = match.index ?? 0
