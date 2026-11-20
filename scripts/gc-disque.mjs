@@ -289,6 +289,44 @@ export function peser(chemin, { exclure = [], echeance = Infinity } = {}) {
   return pesee
 }
 
+/**
+ * Les gros fichiers écrits depuis `depuisMs` sous `racine`, du plus gros au plus petit : ce qui a pris
+ * la place qu'un disque perd hors des zones. Ne suit ni lien ni jonction, saute `exclure` (pesés par
+ * leur zone) et s'arrête à `echeance` (`coupee` le dit).
+ */
+export function grosFichiersEcrits(racine, { depuisMs, seuil, exclure = [], echeance = Infinity }) {
+  const exclus = new Set(exclure.map(normaliser))
+  const fichiers = []
+  let coupee = false
+  const pile = [racine]
+  while (pile.length > 0) {
+    if (Date.now() > echeance) {
+      coupee = true
+      break
+    }
+    const courant = pile.pop()
+    let infos
+    try {
+      infos = lstatSync(courant)
+    } catch {
+      continue
+    }
+    if (infos.isSymbolicLink()) continue
+    if (infos.isDirectory()) {
+      if (!exclus.has(normaliser(courant))) for (const enfant of lister(courant)) pile.push(enfant)
+      continue
+    }
+    if (infos.size >= seuil && infos.mtimeMs >= depuisMs)
+      fichiers.push({
+        chemin: courant,
+        taille: infos.size,
+        modifie: new Date(infos.mtimeMs).toISOString()
+      })
+  }
+  fichiers.sort((a, b) => b.taille - a.taille)
+  return { fichiers: fichiers.slice(0, 5), coupee }
+}
+
 /** Les entrées ignorées par git, en chemins relatifs (`dossier/` pour un dossier). `null` si git échoue. */
 export function ignoresParGit(depot) {
   const sortie = spawnSync('git', ['-C', depot, 'status', '--porcelain', '--ignored', '-z'], {
@@ -452,8 +490,10 @@ export function inventorier(ctx) {
   const memoire = {
     date: bilan.date,
     disques: bilan.disques.map(({ disque, libre }) => ({ disque, libre })),
-    zones: {}
+    zones: {},
+    temoins: {}
   }
+  const seuilCroissance = ctx.seuilCroissance ?? SEUIL_CROISSANCE_OCTETS
   const seuilAVerifier = ctx.seuilAVerifier ?? SEUIL_A_VERIFIER_OCTETS
   const seuilLourd = ctx.seuilLourd ?? SEUIL_LOURD_OCTETS
   const retenir = (verdict) => {
@@ -538,11 +578,10 @@ export function inventorier(ctx) {
     // Un tas qui grossit se voit, même si aucune règle ne le connaît.
     const precedent = avant?.zones?.[zone.id]
     if (precedent) {
-      const seuil = ctx.seuilCroissance ?? SEUIL_CROISSANCE_OCTETS
       for (const [chemin, taille] of Object.entries(enfants)) {
         if (normaliser(chemin) === normaliser(cheminMemoire)) continue
         const ancien = precedent.enfants?.[chemin] ?? 0
-        if (taille - ancien >= seuil)
+        if (taille - ancien >= seuilCroissance)
           bilan.croissance.push({
             zone: zone.id,
             chemin,
@@ -552,6 +591,28 @@ export function inventorier(ctx) {
           })
       }
     }
+  }
+  // Un gros fichier nommé par une passe d'avant (ci-dessous) reste suivi, pour quelques stat par jour :
+  // sa croissance se lit comme celle d'une zone, et explique la place que le disque perd.
+  const priseParTemoins = new Map()
+  for (const [chemin, ancien] of Object.entries(avant?.temoins ?? {})) {
+    let taille
+    try {
+      taille = lstatSync(chemin).size
+    } catch {
+      continue
+    }
+    memoire.temoins[chemin] = taille
+    const disque = parse(resolve(chemin)).root.toUpperCase()
+    priseParTemoins.set(disque, (priseParTemoins.get(disque) ?? 0) + taille - ancien)
+    if (taille - ancien >= seuilCroissance)
+      bilan.croissance.push({
+        zone: 'temoin',
+        chemin,
+        avant: ancien,
+        apres: taille,
+        depuis: avant.date
+      })
   }
   // La place qu'un disque perd sans qu'aucune zone ne grossisse d'autant vit dans un tas que le ménage
   // ne pèse pas (15/11 : 13,9 Go de copies d'agents posées à la racine de D:). Une zone qui fond ne
@@ -563,17 +624,32 @@ export function inventorier(ctx) {
       const precedent = avant.disques.find((d) => d.disque === disque)
       if (!precedent) continue
       const perdu = precedent.libre - libre
-      const prisParLesZones = Math.max(0, prise.get(disque) ?? 0)
-      if (perdu - prisParLesZones >= seuil)
-        bilan.aVerifier.push({
-          chemin: disque,
-          zone: 'disque',
-          taille: perdu - prisParLesZones,
-          perdu,
-          prisParLesZones,
-          depuis: avant.date,
-          motif: 'place perdue hors des zones suivies : un tas que le ménage ne pèse pas'
-        })
+      const prisParLesZones = Math.max(
+        0,
+        (prise.get(disque) ?? 0) + (priseParTemoins.get(disque) ?? 0)
+      )
+      if (perdu - prisParLesZones < seuil) continue
+      // Le tas se cherche dans le dossier personnel s'il est sur ce disque (20/11 : cache mail de
+      // Kerio et disque de Docker sous AppData\Local), sinon depuis la racine (15/11).
+      const surCeDisque = parse(resolve(ctx.home)).root.toUpperCase() === disque
+      const recherche = grosFichiersEcrits(surCeDisque ? ctx.home : disque, {
+        depuisMs: Date.parse(avant.date),
+        seuil: seuilCroissance,
+        exclure: toutesLesRacines,
+        echeance: Date.now() + (ctx.dureeMaxParZoneMs ?? DUREE_MAX_PAR_ZONE_MS)
+      })
+      for (const { chemin, taille } of recherche.fichiers) memoire.temoins[chemin] = taille
+      bilan.aVerifier.push({
+        chemin: disque,
+        zone: 'disque',
+        taille: perdu - prisParLesZones,
+        perdu,
+        prisParLesZones,
+        depuis: avant.date,
+        suspects: recherche.fichiers,
+        ...(recherche.coupee ? { rechercheCoupee: true } : {}),
+        motif: 'place perdue hors des zones suivies : un tas que le ménage ne pèse pas'
+      })
     }
   }
   bilan.candidats.sort((a, b) => b.taille - a.taille)

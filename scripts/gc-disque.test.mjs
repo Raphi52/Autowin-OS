@@ -311,6 +311,33 @@ describe('inventorier — ce qui grossit et ce qui pèse', () => {
     )
   })
 
+  it('nomme les gros fichiers écrits hors des zones, puis dit de combien ils ont grossi', () => {
+    // Passe du 20/11 : C: avait perdu 16,8 Go en un jour, dont 12,8 hors des zones. Le cache mail de
+    // Kerio (12,5 Go) et le disque de Docker (6,5 Go), dans AppData\Local, ont été trouvés à la main.
+    const disque = parse(resolve(ctx.home)).root.toUpperCase()
+    const espace = (libre) => [{ disque, libre, total: 1000 }]
+    fichier(join(ctx.home, 'AppData', 'Local', 'Ancien', 'archive.bin'), 10, 'x'.repeat(40))
+    inventorier({ ...ctx, disques: espace(100) })
+    const cache = join(ctx.home, 'AppData', 'Local', 'Kerio', 'cache.FDB')
+    fichier(cache, 0, 'x'.repeat(30))
+    fichier(join(ctx.home, 'AppData', 'Local', 'Kerio', 'debug.log'), 0, 'x')
+    // Pesé par sa zone : ni compté hors des zones, ni suspect.
+    fichier(join(ctx.home, 'Downloads', 'installeur.exe'), 0, 'x'.repeat(50))
+
+    const bilan = inventorier({ ...ctx, disques: espace(20), seuilPerteHorsZones: 10 })
+
+    expect(bilan.aVerifier.find((v) => v.chemin === disque)?.suspects).toEqual([
+      expect.objectContaining({ chemin: cache, taille: 30 })
+    ])
+    fichier(cache, 0, 'x'.repeat(45))
+    const lendemain = inventorier({ ...ctx, disques: espace(5), seuilPerteHorsZones: 10 })
+    expect(lendemain.croissance).toContainEqual(
+      expect.objectContaining({ zone: 'temoin', chemin: cache, avant: 30, apres: 45 })
+    )
+    // Sa croissance explique la place perdue : pas de nouvelle alerte, ni de nouvelle recherche.
+    expect(lendemain.aVerifier.filter((v) => v.chemin === disque)).toEqual([])
+  })
+
   it('ne signale rien quand les zones expliquent la place perdue, ni quand un balayage les vide', () => {
     const disque = parse(resolve(ctx.donnees)).root.toUpperCase()
     const espace = (libre) => [{ disque, libre, total: 1000 }]
