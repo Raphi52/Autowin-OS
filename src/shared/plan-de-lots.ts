@@ -34,6 +34,15 @@ export const LOTS_MAX = 20
 export const PARALLELE_MAX = LOTS_MAX
 /** Le défaut d'avant : il reste dans l'empreinte des plans au parallélisme par défaut (`empreintePlan`). */
 const PARALLELE_DEFAUT_AVANT = 3
+
+/**
+ * Le parallélisme d'un plan relu du disque. Avant le 2026-11-20, 3 était à la fois le défaut et le
+ * MAXIMUM du schéma de l'outil : un plan enregistré à 3 voulait dire « autant que permis », il passe
+ * donc au maximum d'aujourd'hui. Une limite plus basse (1, 2) a été choisie par le chef : elle reste.
+ */
+export function paralleleRelu(parallele: number): number {
+  return parallele === PARALLELE_DEFAUT_AVANT ? PARALLELE_MAX : parallele
+}
 /** Même borne que le texte d'une tâche du découpage en fils (`lancer-en-fils`). */
 export const DEMANDE_MAX = 4_000
 export const FICHIERS_MAX = 40
