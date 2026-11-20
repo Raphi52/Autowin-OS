@@ -82,6 +82,21 @@ describe('brouillon-eml', () => {
     ).toMatch(/^To: julien@exemple\.fr, sebastien@exemple\.fr$/m)
   })
 
+  it('met les personnes en copie dans Cc, contrôlées comme les destinataires', () => {
+    expect(construireEml({ objet, corps })).not.toMatch(/^Cc:/m)
+    const eml = construireEml({
+      objet,
+      corps,
+      a: ['edouard@exemple.fr'],
+      cc: ['julien@exemple.fr', 'sebastien@exemple.fr']
+    })
+    expect(eml).toMatch(/^To: edouard@exemple\.fr$/m)
+    expect(eml).toMatch(/^Cc: julien@exemple\.fr, sebastien@exemple\.fr$/m)
+    expect(() => construireEml({ objet, corps, cc: ['x@y.fr\r\nBcc: z@w.fr'] })).toThrow(
+      /adresse invalide/
+    )
+  })
+
   it('refuse ce qui injecterait un en-tête ou un message vide', () => {
     expect(() => construireEml({ objet, corps, a: ['x@y.fr\r\nBcc: z@w.fr'] })).toThrow(
       /adresse invalide/

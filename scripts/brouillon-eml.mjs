@@ -12,7 +12,7 @@
 // passé en argument peut arriver abîmé, un fichier jamais).
 //
 //   node scripts/brouillon-eml.mjs --objet-fichier <objet.txt> --corps-fichier <corps.txt> \
-//     [--piece <chemin>]... [--a <adresse>]... --sortie <brouillon.eml> [--remplacer]
+//     [--piece <chemin>]... [--a <adresse>]... [--cc <adresse>]... --sortie <brouillon.eml> [--remplacer]
 //
 // Codes de sortie : 0 écrit · 2 argument invalide · 3 fichier introuvable · 4 sortie déjà présente
 
@@ -61,15 +61,15 @@ export function enTeteEncode(texte) {
 
 /**
  * Construit le texte du .eml.
- * @param {{objet: string, corps: string, pieces?: {nom: string, contenu: Buffer}[], a?: string[]}} m
+ * @param {{objet: string, corps: string, pieces?: {nom: string, contenu: Buffer}[], a?: string[], cc?: string[]}} m
  */
-export function construireEml({ objet, corps, pieces = [], a = [] }) {
+export function construireEml({ objet, corps, pieces = [], a = [], cc = [] }) {
   const objetPropre = String(objet ?? '')
     .replace(/[\r\n]+/g, ' ')
     .trim()
   if (!objetPropre) throw new Error('objet vide')
   if (!String(corps ?? '').trim()) throw new Error('corps vide')
-  for (const adr of a) if (!ADRESSE.test(adr)) throw new Error(`adresse invalide : ${adr}`)
+  for (const adr of [...a, ...cc]) if (!ADRESSE.test(adr)) throw new Error(`adresse invalide : ${adr}`)
   for (const p of pieces) {
     if (!p.nom || /["\\\r\n]/.test(p.nom))
       throw new Error(`nom de pièce jointe invalide : ${p.nom}`)
@@ -86,6 +86,7 @@ export function construireEml({ objet, corps, pieces = [], a = [] }) {
 
   const tetes = []
   if (a.length) tetes.push(`To: ${a.join(', ')}`)
+  if (cc.length) tetes.push(`Cc: ${cc.join(', ')}`)
   tetes.push(`Subject: ${enTeteEncode(objetPropre)}`, 'X-Unsent: 1', 'MIME-Version: 1.0')
 
   if (!pieces.length) return [...tetes, partieTexte, ''].join(CRLF)
@@ -117,7 +118,7 @@ export function construireEml({ objet, corps, pieces = [], a = [] }) {
 }
 
 function lireArgs(argv) {
-  const o = { pieces: [], a: [] }
+  const o = { pieces: [], a: [], cc: [] }
   for (let i = 0; i < argv.length; i++) {
     const cle = argv[i]
     const val = () => {
@@ -129,6 +130,7 @@ function lireArgs(argv) {
     else if (cle === '--corps-fichier') o.corpsFichier = val()
     else if (cle === '--piece') o.pieces.push(val())
     else if (cle === '--a') o.a.push(val())
+    else if (cle === '--cc') o.cc.push(val())
     else if (cle === '--sortie') o.sortie = val()
     else if (cle === '--remplacer') o.remplacer = true
     else throw new Error(`argument inconnu : ${cle}`)
@@ -163,7 +165,8 @@ function principal() {
       objet: readFileSync(o.objetFichier, 'utf8'),
       corps: readFileSync(o.corpsFichier, 'utf8'),
       pieces: o.pieces.map((f) => ({ nom: basename(f), contenu: readFileSync(f) })),
-      a: o.a
+      a: o.a,
+      cc: o.cc
     })
   } catch (e) {
     console.error(`ECHEC - ${e.message}`)
