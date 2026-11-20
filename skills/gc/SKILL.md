@@ -89,9 +89,10 @@ collègues. Chaque commande ci-dessous se lance donc avec le dépôt comme dossi
    - **Runs bloqués = scan complet, jamais `runsBlocked` de `get_state`** (une fenêtre de 24 RUN.md :
      les passes des 02 et 03/10 ont mis 42 runs rouges en corbeille sur la foi d'une liste vide).
      L'outil ci-dessous fait ce scan (`scanRuns` sans borne, puis `isBlocked`).
-   - **`conversations.json.pre-remake` ne part jamais** : filet pris une seule fois par
-     `backupBeforeFirstMigratedWrite` (`src/main/store/conversations-disk.ts`), recréé dès qu'il manque
-     à partir de données déjà migrées — le déplacer ne libère rien et perd le vrai filet.
+   - **`conversations.json.pre-remake` ne part jamais seul** : l'original de la conversion de
+     septembre 2026 est dans `.autowin-data/sauvegardes/`. L'app n'en prend plus de copie
+     (`writeConversationSnapshot`, `src/main/store/conversations-disk.ts`) : une copie trouvée ailleurs
+     se signale à l'utilisateur, qui décide.
    - Hors périmètre absolu : `claude-accounts/` hors `projects/`, `Cache/`, `Code Cache/`, `GPUCache/`,
      `Local Storage/`, `Session Storage/`, `Network/`, fichiers `*-wal`, `whisper/`, `piper/`,
      `worktrees/` (→ étape 4), tout `*.json` de configuration à la racine.

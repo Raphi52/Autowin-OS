@@ -426,8 +426,13 @@ describe('conversations-disk — lecture tolerante apres le retrait de `category
   })
 })
 
-describe('conversations-disk — sauvegarde avant la premiere ecriture migree', () => {
-  it('la 1re ecriture pose `.pre-remake` contenant l’ORIGINAL intact, la 2nde ne l’ecrase pas', () => {
+/*
+ * Le filet `.pre-remake` de la conversion de septembre 2026 se reprenait dès qu'il manquait, donc sur
+ * des données déjà converties : 73 Mo revenus à la racine des données après un ménage. Il n'est plus
+ * pris. ENTRÉE QUI DOIT FAIRE ÉCHOUER : une écriture qui pose de nouveau `.pre-remake`.
+ */
+describe('conversations-disk — aucune copie `.pre-remake` à l’écriture', () => {
+  it('ni à la 1re écriture d’un ancien fichier, ni à la suivante', () => {
     const p = join(dir, 'legacy-pre-remake.json')
     const backup = `${p}.pre-remake`
     const legacy = JSON.stringify([
@@ -451,22 +456,15 @@ describe('conversations-disk — sauvegarde avant la premiere ecriture migree', 
     a.hydrate(loadConversations(p))
     saveConversations(a.list(), p)
 
-    expect(existsSync(backup)).toBe(true)
-    const sauve = JSON.parse(readFileSync(backup, 'utf8')) as Record<string, unknown>[]
-    // L'ORIGINAL, pas le snapshot migre : les deux champs que l'ancien binaire EXIGEAIT sont la.
-    expect(sauve[0].category).toBe('codex')
-    expect(sauve[0].workspaceId).toBe('ws-1')
-    // Et le fichier vivant, lui, ne les porte plus.
+    expect(existsSync(backup)).toBe(false)
+    // La conversion, elle, a bien eu lieu : le fichier vivant ne porte plus `category`.
     const vivant = JSON.parse(readFileSync(p, 'utf8')) as Record<string, unknown>[]
     expect(vivant[0]).not.toHaveProperty('category')
 
-    // CYCLE 2 : une seconde ecriture ne doit PAS remplacer le filet par un snapshot deja migre.
     const b = new ConversationStore(() => 20)
     b.hydrate(loadConversations(p))
     saveConversations(b.list(), p)
-    const sauveApres = JSON.parse(readFileSync(backup, 'utf8')) as Record<string, unknown>[]
-    expect(sauveApres[0].category).toBe('codex')
-    expect(readFileSync(backup, 'utf8')).toBe(legacy)
+    expect(existsSync(backup)).toBe(false)
   })
 })
 

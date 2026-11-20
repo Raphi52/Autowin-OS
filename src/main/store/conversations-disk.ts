@@ -66,8 +66,8 @@ export class ConversationPersistenceError extends Error {
  * reste écrit tel quel, donc rien ne se perd.
  *
  * Pourquoi `''` et pas l'absence du champ : la version précédente du binaire EXIGE un `content`
- * texte (`isConversationMessage`) et déclarerait le fichier entier illisible sans lui — le piège
- * décrit plus bas, à `backupBeforeFirstMigratedWrite`. Avec `''`, un retour arrière relit encore ses
+ * texte (`isConversationMessage`) et déclarerait le fichier entier illisible sans lui : un seul champ
+ * manquant faisait déclarer le store ENTIER corrompu. Avec `''`, un retour arrière relit encore ses
  * conversations ; seul le texte à plat de ces messages lui manquerait, leurs `parts` restant entières.
  *
  * Conséquence assumée : le texte à plat suit la version COURANTE de `flattenChatParts`, comme il le
@@ -773,36 +773,15 @@ function chargerConversationsEtJournal(path: string): {
   return { conversations, supprimees }
 }
 
-/**
- * Copie de sauvegarde UNIQUE prise avant la toute premiere ecriture de ce build.
- *
- * Ce build a cesse d'ecrire `category` et `workspaceId`, que la version PRECEDENTE du binaire
- * EXIGEAIT (`isConversation` etait tout-ou-rien : un seul champ manquant faisait declarer le store
- * ENTIER corrompu). Le rollback du CODE est donc en un geste, mais il rendrait l'utilisateur a un
- * binaire incapable de relire ses propres donnees migrees. Le repli `.tmp` ne couvre pas ce cas :
- * il rattrape une ecriture INTERROMPUE, pas un snapshot valide-mais-plus-recent.
- *
- * Restauration : `copy conversations.json.pre-remake conversations.json` (et supprimer
- * `conversations.json.journal.jsonl`).
- *
- * Prise UNE SEULE FOIS : si la copie existe deja, on ne l'ecrase pas — sinon elle serait remplacee
- * par un snapshot deja migre, c'est-a-dire par exactement ce dont elle protege.
+/*
+ * Plus de copie `conversations.json.pre-remake` avant la première écriture : ce filet couvrait la
+ * conversion de septembre 2026 (retrait de `category` et `workspaceId`), dont l'original reste dans
+ * `.autowin-data/sauvegardes/`. Il se reprenait dès que la copie manquait, donc sur des données déjà
+ * converties : exactement ce dont il devait protéger, et 73 Mo qui revenaient après chaque ménage.
  */
-function backupBeforeFirstMigratedWrite(path: string): void {
-  const backup = `${path}.pre-remake`
-  if (!existsSync(path) || existsSync(backup)) return
-  try {
-    copyFileSync(path, backup)
-  } catch {
-    // Une sauvegarde impossible ne doit pas empecher l'application d'ecrire ses conversations :
-    // perdre le filet est moins grave que perdre le tour en cours.
-  }
-}
-
 function writeConversationSnapshot(all: Conversation[], path: string): void {
   try {
     mkdirSync(dirname(path), { recursive: true })
-    backupBeforeFirstMigratedWrite(path)
     const tmp = `${path}.tmp`
     writeFileSync(tmp, JSON.stringify(all.map(conversationPourLeDisque), null, 1), 'utf8')
     renameSync(tmp, path)
@@ -836,7 +815,6 @@ function writeConversationSnapshot(all: Conversation[], path: string): void {
 async function writeConversationSnapshotAsync(all: Conversation[], path: string): Promise<void> {
   try {
     await mkdir(dirname(path), { recursive: true })
-    backupBeforeFirstMigratedWrite(path)
     const tmp = `${path}.tmp`
     await writeFile(tmp, JSON.stringify(all.map(conversationPourLeDisque), null, 1), 'utf8')
     await rename(tmp, path)
@@ -1291,7 +1269,6 @@ export function persistConversations(
         const tmp = `${path}.archivage.tmp`
         try {
           await mkdir(dirname(path), { recursive: true })
-          backupBeforeFirstMigratedWrite(path)
           await writeFile(tmp, corps, 'utf8')
           // Une fermeture a posé entre-temps un snapshot COMPLET et plus récent : il gagne.
           if (snapshotsDeFermeture !== fermeturesAuDepot) {
