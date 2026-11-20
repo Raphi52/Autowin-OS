@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CoordinateurDesPlans, type DepsPlans } from './plans-de-lots-app'
 import { ecrireAUnFil, type ContexteFils } from '../conversations/messages-entre-fils-app'
 import { lignesDuJournal, type IoJournalFils } from '../../shared/messages-entre-fils'
+import { PARALLELE_MAX } from '../../shared/plan-de-lots'
 
 /*
  * SUPER CONVERSATION — le coordinateur côté app, sur de faux fils : aucun appel de
@@ -1075,6 +1076,20 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
     const plan = b.coord.plans()[0]
     expect(plan.lots.map((l) => l.etat)).toEqual(['echec', 'echec'])
     expect(plan.toursLances).toBe(0)
+  })
+
+  it('un plan enregistré à 3 (l’ancien maximum) est relu au maximum d’aujourd’hui ; 2 reste 2', async () => {
+    // plan-fa346ed4 : déposé avant le 2026-11-20, il portait 3 et gardait 10 lots prêts en file.
+    for (const [enregistre, relu] of [
+      [3, PARALLELE_MAX],
+      [2, 2]
+    ] as const) {
+      const b = banc()
+      await b.coord.outil('conv-1', { plan: plan2() })
+      const disque = JSON.parse(b.stockage.contenu) as { plans: Array<Record<string, unknown>> }
+      disque.plans[0].parallele = enregistre
+      expect(banc({ contenu: JSON.stringify(disque) }).coord.plans()[0].parallele).toBe(relu)
+    }
   })
 
   it('le contexte et les décisions survivent au disque ; une décision abîmée est sautée', async () => {

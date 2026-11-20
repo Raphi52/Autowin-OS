@@ -28,6 +28,7 @@ import {
   noterFinDeTour,
   noterRepriseEnFile,
   noterTourDuLot,
+  paralleleRelu,
   pauseAvantRedemarrage,
   promptDeReveil,
   promptDuLot,
@@ -255,6 +256,7 @@ export class CoordinateurDesPlans {
       // `repris`, compte, et « Reprendre » n'y lance jamais un second agent.
       const interrompu = interrompreAuDemarrage({
         ...p,
+        parallele: paralleleRelu(p.parallele),
         avertissements: p.avertissements ?? [],
         // Une décision abîmée sur disque est sautée, pas le plan.
         ...(p.decisions
