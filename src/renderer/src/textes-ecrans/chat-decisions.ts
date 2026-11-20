@@ -192,11 +192,11 @@ export const TEXTES_FR = {
   'candidats.jouera': 'Le workflow intelligent jouera :',
   'candidats.lancera': 'Le workflow intelligent lancera',
   'candidats.lancera.lots': '{n} lots en parallèle',
-  'candidats.lancera.suite': ', {parallele} à la fois, chacun dans son fil, {max} pistes au plus :',
+  'candidats.lancera.suite': ', chacun dans son fil, {max} pistes au plus :',
   'candidats.lot.piste': '— piste {positions}',
   'candidats.lot.pistes': '— pistes {positions}',
   'candidats.lancerTitre':
-    "Garde les candidats cochés et choisit la voie de chaque piste : correction directe (build → jugement) pour une correction déjà localisée par le scout, sinon le workflow complet (cadrage → build → nettoyage → jugement). Dès deux lots, ils partent en super conversation : 3 à la fois, chacun dans son fil, 3 pistes au plus, jusqu'au commit publié",
+    "Garde les candidats cochés et choisit la voie de chaque piste : correction directe (build → jugement) pour une correction déjà localisée par le scout, sinon le workflow complet (cadrage → build → nettoyage → jugement). Dès deux lots, ils partent en super conversation : tous ensemble, chacun dans son fil, 3 pistes au plus, jusqu'au commit publié",
   'candidats.lancer': 'Lancer le workflow intelligent',
   'candidats.lancerLots': 'Lancer le workflow intelligent ({n} lots)',
   'candidats.planLance': 'Plan lancé ({n} lots) : suis-le au-dessus de la saisie',
@@ -407,11 +407,11 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'candidats.lancera': 'The smart workflow will launch',
   'candidats.lancera.lots': '{n} parallel batches',
   'candidats.lancera.suite':
-    ', {parallele} at a time, each in its own thread, {max} leads at most:',
+    ', each in its own thread, {max} leads at most:',
   'candidats.lot.piste': '— lead {positions}',
   'candidats.lot.pistes': '— leads {positions}',
   'candidats.lancerTitre':
-    'Keeps the ticked candidates and picks the path of each lead: direct fix (build → judgement) for a fix the scout already located, otherwise the full workflow (framing → build → cleanup → judgement). From two batches on, they go out as a super conversation: 3 at a time, each in its own thread, 3 leads at most, up to the published commit',
+    'Keeps the ticked candidates and picks the path of each lead: direct fix (build → judgement) for a fix the scout already located, otherwise the full workflow (framing → build → cleanup → judgement). From two batches on, they go out as a super conversation: all at once, each in its own thread, 3 leads at most, up to the published commit',
   'candidats.lancer': 'Launch the smart workflow',
   'candidats.lancerLots': 'Launch the smart workflow ({n} batches)',
   'candidats.planLance': 'Plan launched ({n} batches): follow it above the input',

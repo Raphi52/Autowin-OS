@@ -1116,19 +1116,12 @@ describe('CoordinateurDesPlans — le bouton du workflow intelligent', () => {
     }))
   })
 
-  it('un clic lance le plan : 3 fils à la fois, le 4e part à la fin du premier', async () => {
+  it('un clic lance le plan : toutes les pistes partent ensemble, chacune dans son fil', async () => {
+    // Depuis le 2026-11-20, plus de file de 3 : des pistes sans fichier commun partent toutes.
     const b = banc()
     const r = await b.coord.lancerSelection('conv-1', selection())
     expect(r.ok).toBe(true)
-    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101', 'conv-102'])
-    await b.coord.surFinDeTour('conv-100', { ok: true, texte: 'fait' })
-    // Le fil chef est réveillé après chaque lot : on ne compare ici que les fils de lots.
-    expect(b.lancements.filter((l) => l.fil !== 'conv-1').map((l) => l.fil)).toEqual([
-      'conv-100',
-      'conv-101',
-      'conv-102',
-      'conv-103'
-    ])
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101', 'conv-102', 'conv-103'])
   })
 
   it('le lot garde sa demande EN TÊTE : un /build y reste reconnu', async () => {
@@ -1144,7 +1137,7 @@ describe('CoordinateurDesPlans — le bouton du workflow intelligent', () => {
     await b.coord.lancerSelection('conv-1', selection())
     const r = await b.coord.lancerSelection('conv-1', selection())
     expect(r.ok && r.deja).toBe(true)
-    expect(b.lancements).toHaveLength(3)
+    expect(b.lancements).toHaveLength(4)
   })
 
   it('une AUTRE sélection pendant le plan s’ajoute à lui, au lieu d’être refusée', async () => {
@@ -1165,12 +1158,12 @@ describe('CoordinateurDesPlans — le bouton du workflow intelligent', () => {
       'interrompu',
       'interrompu',
       'interrompu',
-      'a-faire'
+      'interrompu'
     ])
     const r = await apres.reprendre('conv-1', vu!.plan.id)
     expect(r.ok).toBe(true)
     expect(apres.planDuFil('conv-1')?.plan.lots.filter((l) => l.etat === 'en-cours')).toHaveLength(
-      3
+      4
     )
   })
 

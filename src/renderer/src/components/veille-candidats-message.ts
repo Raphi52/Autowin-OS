@@ -387,7 +387,7 @@ export interface LotDeLancement {
  *
  * Les corrections directes sont rangées EN PREMIER : courtes, elles livrent vite. Dans chaque voie,
  * l'ordre du scout est gardé. Deux lots ou plus partent en super conversation (`selectionAPlanifier`)
- * Chacun dans son fil, 3 à la fois, ceux qui annoncent un même fichier l'un après l'autre.
+ * Chacun dans son fil, tous ensemble, ceux qui annoncent un même fichier l'un après l'autre.
  */
 export function planDeLancement(selection: readonly CandidatAffiche[]): LotDeLancement[] {
   const voies = selection.map(voieDeLaPiste)

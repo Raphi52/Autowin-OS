@@ -18,7 +18,7 @@ import {
 } from './veille-candidats-message'
 import './CandidatsPickPanel.css'
 import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
-import { PARALLELE_MAX, type SelectionAPlanifier } from '../../../shared/plan-de-lots'
+import { type SelectionAPlanifier } from '../../../shared/plan-de-lots'
 
 /** L'issue du dépôt du plan. `repli` : ce fil ne mène pas de plan, les lots s'enchaînent ici. */
 export type IssuePlanDeSelection = { ok: true } | { ok: false; erreur: string; repli?: boolean }
@@ -313,7 +313,7 @@ export function CandidatsPickPanel({
       {plan.length > 1 && (
         <div className="cpick-voie" data-testid="cpick-voie">
           {t('candidats.lancera')} <b>{t('candidats.lancera.lots', { n: plan.length })}</b>
-          {t('candidats.lancera.suite', { parallele: PARALLELE_MAX, max: MAX_PISTES_PAR_LOT })}
+          {t('candidats.lancera.suite', { max: MAX_PISTES_PAR_LOT })}
           <ol className="cpick-lots">
             {plan.map((lot, rang) => (
               <li key={rang} data-testid="cpick-lot" data-voie={lot.voie}>
