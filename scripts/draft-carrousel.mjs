@@ -177,6 +177,23 @@ export function verifierPropositions(spec) {
   }
   if (spec.mixer !== undefined && typeof spec.mixer !== 'boolean')
     erreurs.push('« mixer » : true ou false attendu')
+  /*
+   * UN CHAMP DE PROPOSITION POSÉ EN TÊTE EST PERDU (conv-2023, 2026-11-19) : « etatsTitre » et
+   * « etatRepos » mis à la racine du JSON n'ont rien nommé, le panneau a gardé « États · repos »
+   * sans aucun message. Ces champs se lisent proposition par proposition (draft-calques.mjs,
+   * draft-axes.mjs) ; « css », lui, existe aux deux niveaux.
+   */
+  for (const cle of [
+    'etats',
+    'etatsTitre',
+    'etatRepos',
+    'visuel',
+    'fonctionnement',
+    'resume',
+    'html'
+  ])
+    if (spec[cle] !== undefined)
+      erreurs.push(`« ${cle} » en tête du JSON est ignoré : il se pose sur chaque proposition`)
   const propositions = spec.propositions
   if (!Array.isArray(propositions) || propositions.length < 2 || propositions.length > 10) {
     erreurs.push('« propositions » : de 2 à 10 attendues')

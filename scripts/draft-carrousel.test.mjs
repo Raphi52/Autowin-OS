@@ -177,6 +177,18 @@ describe('carrousel /draft : ce que le fil affiche', () => {
     )
   })
 
+  // conv-2023 : « etatsTitre » et « etatRepos » posés en tête du JSON ne nommaient rien, en silence.
+  it('refuse un champ de proposition posé en tête du JSON, au lieu de l’ignorer', () => {
+    const erreurs = verifierPropositions({
+      ...propositions(2),
+      etatsTitre: 'Thèmes',
+      etatRepos: 'clair'
+    })
+    expect(erreurs.join(' ')).toMatch(/« etatsTitre » en tête du JSON est ignoré/)
+    expect(erreurs.join(' ')).toMatch(/« etatRepos » en tête du JSON est ignoré/)
+    expect(verifierPropositions(propositions(2))).toEqual([])
+  })
+
   /*
    * BOUTON MIXER (conv-321, 2026-10-17 : « ajoute un bouton mixer pour choisir plusieurs éléments
    * d'un draft en affinage »). Le fil n'exécute aucun script et envoie le TEXTE du lien cliqué
