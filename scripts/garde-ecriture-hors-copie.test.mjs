@@ -5,9 +5,12 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { AUTOWIN_APP_DATA_DIR } from '../src/shared/app-identity'
 import {
   copieDe,
+  DOSSIER_DES_DONNEES,
   refusALaRacineDesCopies,
+  refusALaRacineDesDonnees,
   refusALaRacineDuDisque,
   refusEcritureHorsCopie,
   refusNomReserve,
@@ -521,6 +524,97 @@ describe('refusALaRacineDesCopies — la racine des copies n’appartient qu’�
 })
 
 /*
+ * LA RACINE DES DONNÉES DE L'APP. Relevé du 20/11 : vingt et un journaux de preuve de lots
+ * (`captures-lot8-*.log`, `judge-lot8-*.log`, `juge-lot2-*.log`) et un correctif mis de côté
+ * (`conv-1783-masquer-decoches.patch`) y traînaient depuis dix à douze jours. L'app écrit ses propres
+ * fichiers sans passer par la garde ; un agent, lui, crée parfois à la main un réglage de l'app
+ * (`navigateur-sites.json`) : seuls journaux, correctifs et captures sont refusés.
+ * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un de ces journaux qui passe ; un réglage `.json` ou `.md`
+ * refusé ; un refus sous un sous-dossier, sur un fichier existant ou hors du dossier de l'app.
+ */
+describe('refusALaRacineDesDonnees — ni journal, ni correctif, ni capture à la racine des données', () => {
+  const RACINE = 'D:\\AutoWinOS\\.autowin-data\\autowin-os'
+  const COPIE_1783 = `${RACINE}\\copies-de-taches\\conv-1783`
+  const EXISTANTS = ['D:\\AutoWinOS', RACINE, `${RACINE}\\crash.log`, `${RACINE}\\runs`, COPIE_1783]
+  const sondeDonnees = {
+    ...sondeFictive,
+    existe: (chemin) => EXISTANTS.some((e) => egal(e, chemin))
+  }
+  const appel = (tool_name, tool_input, cwd = 'D:\\AutoWinOS') =>
+    refusALaRacineDesDonnees({ tool_name, tool_input, cwd }, sondeDonnees)
+  const sh = (command, cwd) => appel('Bash', { command }, cwd)
+
+  it.each([
+    [
+      'le journal de preuve d’un lot',
+      'npx vitest run src/main/runs/run-autoclose.test.ts > .autowin-data/autowin-os/captures-lot8-red-autoclose.log 2>&1',
+      undefined,
+      'captures-lot8-red-autoclose.log'
+    ],
+    [
+      'le typage du juge, en chemin Git Bash, depuis une copie',
+      'npm run typecheck > /d/AutoWinOS/.autowin-data/autowin-os/judge-lot8-typecheck.log 2>&1',
+      COPIE,
+      'judge-lot8-typecheck.log'
+    ],
+    [
+      'le correctif mis de côté en ../..',
+      'git diff > ../../conv-1783-masquer-decoches.patch',
+      COPIE_1783,
+      'conv-1783-masquer-decoches.patch'
+    ],
+    [
+      'une capture par --out',
+      'node scripts/ui-capture.mjs --code-dev --out .autowin-data/autowin-os/capture-chat.png',
+      undefined,
+      'capture-chat.png'
+    ],
+    [
+      'une sortie par Out-File, sous PowerShell',
+      'powershell -Command "npm test | Out-File D:\\AutoWinOS\\.autowin-data\\autowin-os\\suite.log"',
+      undefined,
+      'suite.log'
+    ]
+  ])('refusé : %s', (_cas, commande, cwd, nom) => {
+    const motif = sh(commande, cwd)
+    expect(motif).toMatch(/Refusé : cet appel créerait .*à la racine des données de l'app/u)
+    expect(motif).toContain(nom)
+    expect(motif).toMatch(/\$TEMP/u)
+  })
+
+  it('refusé : par Write, des notes en .txt', () => {
+    expect(appel('Write', { file_path: `${RACINE}\\notes-lot9.txt`, content: 'x' })).toMatch(
+      /Refusé.*notes-lot9\.txt/u
+    )
+  })
+
+  it.each([
+    ['compléter un journal que l’app tient déjà', 'echo x >> .autowin-data/autowin-os/crash.log'],
+    ['écrire sous un sous-dossier', 'echo x > .autowin-data/autowin-os/runs/r1/preuve.log'],
+    ['écrire dans le dossier temporaire', 'npx vitest run > "$TEMP/preuve.log" 2>&1'],
+    ['lire la racine', 'ls .autowin-data/autowin-os && cat .autowin-data/autowin-os/crash.log'],
+    [
+      'l’utilisateur a demandé cet emplacement',
+      'AUTOWIN_DEMANDE_UTILISATEUR=1 echo x > .autowin-data/autowin-os/demande.log'
+    ],
+    ['un dossier du même nom hors des données', 'echo x > docs/autowin-os/a.log']
+  ])('autorisé : %s', (_cas, commande) => {
+    expect(sh(commande)).toBeUndefined()
+  })
+
+  it.each([
+    ['un réglage de l’app créé à la main', `${RACINE}\\navigateur-sites.json`],
+    ['la mémoire de tête', `${RACINE}\\memoire-de-tete.md`]
+  ])('autorisé : par Write, %s', (_cas, file_path) => {
+    expect(appel('Write', { file_path, content: '{}' })).toBeUndefined()
+  })
+
+  it('le dossier surveillé est celui que l’app nomme (src/shared/app-identity.ts)', () => {
+    expect(DOSSIER_DES_DONNEES).toBe(AUTOWIN_APP_DATA_DIR)
+  })
+})
+
+/*
  * LE SCRIPT TEL QUE LES OUTILS LE LANCENT : JSON sur l'entrée, refus structuré sur la sortie, dans une
  * vraie disposition git (dépôt, puis `git worktree add` sous ses données d'app).
  */
@@ -634,6 +728,24 @@ describe('le script lancé comme un contrôle « avant outil »', () => {
       cwd: copie
     })
     expect(dansLeTemporaire).toEqual({ code: 0, out: '' })
+  })
+
+  it('vraie sonde : un journal neuf à la racine des données est refusé, un réglage .json passe', async () => {
+    const donnees = join(depot, '.autowin-data', 'autowin-os')
+    const refus = await lancer({
+      tool_name: 'Bash',
+      tool_input: { command: `npm test > "${join(donnees, 'banc-lot9.log')}" 2>&1` },
+      cwd: copie
+    })
+    expect(JSON.parse(refus.out).hookSpecificOutput.permissionDecisionReason).toMatch(
+      /racine des données de l'app/
+    )
+    const reglage = await lancer({
+      tool_name: 'Write',
+      tool_input: { file_path: join(donnees, 'navigateur-sites.json'), content: '{}' },
+      cwd: copie
+    })
+    expect(reglage).toEqual({ code: 0, out: '' })
   })
 
   it('un BOM en tête est toléré ; un JSON illisible laisse passer sans planter', async () => {

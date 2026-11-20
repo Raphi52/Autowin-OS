@@ -35,7 +35,8 @@
  *
  * SECONDE RÈGLE, pour tout agent, dans une copie ou non (`refusALaRacineDuDisque`) : aucune entrée
  * NEUVE à la racine d'un disque (`D:\x.log`, `D:\tmp-lot9\`, `git worktree add D:\Projet-lot1`) ; de
- * même à la racine des copies de travail (`refusALaRacineDesCopies`), qui n'appartient qu'à l'app.
+ * même à la racine des copies de travail (`refusALaRacineDesCopies`), qui n'appartient qu'à l'app ;
+ * à la racine des données de l'app, ni journal, ni correctif, ni capture (`refusALaRacineDesDonnees`).
  *
  * TROISIÈME RÈGLE (`refusNomReserve`) : un outil d'écriture, une commande shell ou un correctif ne pose
  * pas un nom ou un terme réservé à l'entreprise dans un fichier suivi d'un dépôt qui porte des profils
@@ -1120,22 +1121,33 @@ export function entreeDeRacine(chemin) {
 }
 
 /**
- * RIEN DE NEUF À LA RACINE D'UN DISQUE, pour tout agent lancé par l'app, dans une copie ou non.
- * Relevé du 18/11 : des lots qui travaillaient déjà dans une copie ouverte et retirée par l'app y ont
- * créé à la main une soixantaine de copies git et des centaines de journaux et de dossiers `tmp-`,
- * que rien ne range : la garde d'écriture hors copie ne protège que le dossier partagé. Une entrée
- * qui EXISTE déjà (un projet, `D:\tmp`) reste ouverte, la supprimer aussi ; seule la création d'une
- * nouvelle entrée de premier niveau est refusée. `sonde.existe` absente : rien n'est refusé.
+ * Ce que créerait l'appel parmi les entrées que surveille une règle de racine : `versEntree` donne,
+ * pour chaque cible, l'entrée surveillée où elle tombe (ou `undefined`). Une entrée qui existe déjà
+ * reste ouverte. Rien n'est refusé sans `sonde.existe`, ni quand l'utilisateur a demandé l'emplacement.
  */
-export function refusALaRacineDuDisque(entree, sonde) {
+function entreeNeuve(entree, sonde, versEntree) {
   const appel = appelDe(entree)
   if (!appel || typeof sonde?.existe !== 'function') return undefined
   if (typeof appel.commande === 'string' && DEMANDE_UTILISATEUR.test(appel.commande))
     return undefined
   const neuve = ciblesDeLAppel(appel, sonde.resoudre)
-    .map(entreeDeRacine)
+    .map(versEntree)
     .find((e) => e !== undefined && !sonde.existe(e))
-  if (!neuve) return undefined
+  return neuve ? { neuve, appel } : undefined
+}
+
+/**
+ * RIEN DE NEUF À LA RACINE D'UN DISQUE, pour tout agent lancé par l'app, dans une copie ou non.
+ * Relevé du 18/11 : des lots qui travaillaient déjà dans une copie ouverte et retirée par l'app y ont
+ * créé à la main une soixantaine de copies git et des centaines de journaux et de dossiers `tmp-`,
+ * que rien ne range : la garde d'écriture hors copie ne protège que le dossier partagé. Une entrée
+ * qui EXISTE déjà (un projet, `D:\tmp`) reste ouverte, la supprimer aussi ; seule la création d'une
+ * nouvelle entrée de premier niveau est refusée.
+ */
+export function refusALaRacineDuDisque(entree, sonde) {
+  const trouve = entreeNeuve(entree, sonde, entreeDeRacine)
+  if (!trouve) return undefined
+  const { neuve, appel } = trouve
   return (
     `Refusé : cet appel créerait ${neuve}, à la racine du disque ${neuve.slice(0, 2)}\\. ` +
     "Rien ne range ce qu'un agent y laisse : des lots y ont laissé une soixantaine de copies git et des centaines de journaux. " +
@@ -1163,20 +1175,59 @@ export function entreeDesCopies(chemin) {
  * brouillon. Écrire DANS une copie existante, la retirer, lire la racine : rien ne change.
  */
 export function refusALaRacineDesCopies(entree, sonde) {
-  const appel = appelDe(entree)
-  if (!appel || typeof sonde?.existe !== 'function') return undefined
-  if (typeof appel.commande === 'string' && DEMANDE_UTILISATEUR.test(appel.commande))
-    return undefined
-  const neuve = ciblesDeLAppel(appel, sonde.resoudre)
-    .map(entreeDesCopies)
-    .find((e) => e !== undefined && !sonde.existe(e))
-  if (!neuve) return undefined
+  const trouve = entreeNeuve(entree, sonde, entreeDesCopies)
+  if (!trouve) return undefined
+  const { neuve, appel } = trouve
   return (
     `Refusé : cet appel créerait ${neuve}, à la racine des copies de travail ${dirname(neuve)}. ` +
     "Ce dossier n'appartient qu'à l'app : elle y range une copie par fil ou par exécution, et rien ne range ce qu'un agent pose à côté (journaux de preuve et captures y sont restés dix jours). " +
     `Fichier utile au travail : dans ta copie (${appel.cwd}). ` +
     'Journal, capture ou sortie de preuve : dans le dossier temporaire ($TEMP en Bash, $env:TEMP en PowerShell). ' +
     'Copie de comparaison (avant/après) : `git worktree add "$TEMP/<nom>" <commit>`, puis `git worktree remove` avant de rendre la main. ' +
+    "Seulement si l'utilisateur a demandé lui-même cet emplacement dans son message : relance la commande précédée de AUTOWIN_DEMANDE_UTILISATEUR=1."
+  )
+}
+
+/**
+ * Le dossier des données de l'app sous `.autowin-data` : recopie d'`AUTOWIN_APP_DATA_DIR`
+ * (src/shared/app-identity.ts), que ce fichier autonome ne peut pas importer ; un test les compare.
+ */
+export const DOSSIER_DES_DONNEES = 'autowin-os'
+
+const RACINE_DES_DONNEES = new RegExp(
+  `^(.*?[\\\\/]\\.autowin-data[\\\\/]${DOSSIER_DES_DONNEES})[\\\\/]+([^\\\\/]+)$`,
+  'i'
+)
+
+/**
+ * Ce qu'un agent laisse à la racine des données et dont l'app n'a pas besoin qu'il crée : journaux et
+ * sorties, correctifs, captures. Le reste (`.json`, `.jsonl`, `.md`…) est le genre des fichiers de
+ * l'app, et un agent en crée parfois un à la main pour la régler (`navigateur-sites.json`).
+ */
+const JOURNAL_D_AGENT = /\.(?:log|out|err|txt|patch|diff|png|jpe?g|gif|webp|bmp)$/i
+
+/** `…\.autowin-data\autowin-os\x.log` : le journal, correctif ou capture posé à la racine des données, sinon `undefined`. */
+export function journalALaRacineDesDonnees(chemin) {
+  const m = RACINE_DES_DONNEES.exec(String(chemin ?? ''))
+  return m && JOURNAL_D_AGENT.test(m[2]) ? join(m[1], m[2]) : undefined
+}
+
+/**
+ * NI JOURNAL, NI CORRECTIF, NI CAPTURE NEUFS À LA RACINE DES DONNÉES DE L'APP, pour tout agent. Relevé
+ * du 20/11 : vingt et un journaux de preuve de lots et un correctif mis de côté y traînaient depuis dix
+ * à douze jours, parmi les fichiers de l'app, que son ménage ne trie pas. L'app écrit les siens sans
+ * passer par cette garde (`crash.log` compris) ; un fichier qui existe reste ouvert, un sous-dossier
+ * aussi.
+ */
+export function refusALaRacineDesDonnees(entree, sonde) {
+  const trouve = entreeNeuve(entree, sonde, journalALaRacineDesDonnees)
+  if (!trouve) return undefined
+  const { neuve, appel } = trouve
+  return (
+    `Refusé : cet appel créerait ${neuve}, à la racine des données de l'app ${dirname(neuve)}. ` +
+    "L'app y range ses propres fichiers et son ménage ne trie pas ce qu'un agent pose à côté (vingt et un journaux de preuve et un correctif y sont restés douze jours). " +
+    'Journal, capture ou sortie de preuve : dans le dossier temporaire ($TEMP en Bash, $env:TEMP en PowerShell). ' +
+    `Correctif à garder : applique-le dans ton dossier de travail (${appel.cwd}), d'où l'app fait entrer ton travail dans main. ` +
     "Seulement si l'utilisateur a demandé lui-même cet emplacement dans son message : relance la commande précédée de AUTOWIN_DEMANDE_UTILISATEUR=1."
   )
 }
@@ -1256,7 +1307,8 @@ async function principal() {
     motif =
       refusEcritureHorsCopie(entree, sondeSysteme) ??
       refusALaRacineDuDisque(entree, sondeSysteme) ??
-      refusALaRacineDesCopies(entree, sondeSysteme)
+      refusALaRacineDesCopies(entree, sondeSysteme) ??
+      refusALaRacineDesDonnees(entree, sondeSysteme)
   } catch {
     // Une garde en panne ne refuse rien.
   }
