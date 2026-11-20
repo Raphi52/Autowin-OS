@@ -58,6 +58,9 @@ collègues. Chaque commande ci-dessous se lance donc avec le dépôt comme dossi
    **Lire `croissance` et `aVerifier`** : un tas lourd sans règle va au bilan « À vérifier », avec son
    poids et son type dominant. S'il revient deux passes de suite, la réponse est une RÈGLE dans
    `scripts/gc-disque.mjs`, avec son test — jamais un déplacement à la main.
+   Une place perdue hors des zones (`zone: 'disque'`) porte ses `suspects` : les gros fichiers écrits
+   depuis la passe d'avant, cherchés par le script lui-même — pas de fouille à la main. Ils restent
+   suivis ensuite : leur croissance revient dans `croissance` avec `zone: 'temoin'`.
 2. **Balayer le poste** : relancer avec `--balayer`. Chaque candidat part dans la corbeille de SON
    disque (`.autowin-data/gc-corbeille/AAAA-MM-JJ/` pour le disque des données,
    `%LOCALAPPDATA%/autowin-gc/gc-corbeille/AAAA-MM-JJ/` pour celui de `%TEMP%`) : un simple renommage,
