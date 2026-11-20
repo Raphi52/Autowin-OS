@@ -416,9 +416,16 @@ describe('la porte branchée dans le processus principal', () => {
     expect(garde).toBeLessThan(rappel.indexOf('closeGreenRunOnDisk('))
   })
 
+  // Depuis b239e04c7 (copie quittée par un fil), la porte est montée UNE fois avant l'appel, puis
+  // donnée à la fin de tour ET à la copie quittée : on lit de sa construction jusqu'à l'appel.
   it('la fin de tour du chat reçoit la porte, montée sur la publication d’une copie', () => {
-    const appel = source.slice(source.indexOf('await publierTourDeChat({')).slice(0, 1500)
-    expect(appel).toMatch(/porte: \{\s*depot,\s*publication: \{/u)
-    expect(appel).toContain('worktrees.endAsync(runId, { merge: publier })')
+    const debut = source.indexOf('const porte =')
+    const appel = source.indexOf('await publierTourDeChat({', debut)
+    expect(debut).toBeGreaterThan(-1)
+    expect(appel).toBeGreaterThan(debut)
+    const cablage = source.slice(debut, appel + 400)
+    expect(cablage).toMatch(/const porte =\s*worktrees && depot\s*\?\s*\{\s*depot,\s*publication: \{/u)
+    expect(cablage).toContain('worktrees.endAsync(runId, { merge: publier })')
+    expect(cablage).toMatch(/await publierTourDeChat\(\{[^}]*\.\.\.\(porte \? \{ porte \} : \{\}\)/u)
   })
 })
