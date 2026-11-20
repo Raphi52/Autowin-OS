@@ -12,12 +12,35 @@ import {
 } from '../chat/chat-turn-messages'
 import type { CommandResult } from '../commands/commands'
 import { fluxDuBloc, texteDuBlocDansLeFil } from '../commands/montrer-bloc-command'
+import { cleDeVideo } from '../media/videos-livrees'
 import { enregistrerMur } from '../runs/murs-store'
 import type { ExecutionDeCommande } from './commandes-du-tour'
 import type { EtatDuTour } from './etat-du-tour'
 import type { PilotEventVariant } from './evenements'
 import { commandResultSucceeded, motifDepotMemoireNonAbouti } from './issue-des-commandes'
 import { imageDOutilMontreeDansLeFil } from '../bureau/captures-de-bureau-cache'
+
+/**
+ * CARTES DU FIL RENDUES PAR UNE COMMANDE (`show_video`) — une seule pose pour `<cmd>` et l'appel
+ * direct. Champ distinct d'`attachments` : elles s'affichent dans le fil et ne partent JAMAIS au
+ * modèle IA (une vidéo dans `commandAttachments` serait envoyée au prochain appel). Seul le chemin
+ * `<cmd>` les publiait : un `show_video` appelé en direct répondait « montré » sans lecteur.
+ * La vidéo est notée montrée pour que la fin du tour (`videosLivreesDuTour`) ne la redouble pas.
+ */
+export function publierLesCartesDeCommande(
+  etat: EtatDuTour,
+  r: CommandResult,
+  iteration: number,
+  emit: (e: PilotEventVariant) => void
+): void {
+  for (const artifact of r.artifacts ?? []) {
+    if (etat.artefactsDejaEmis.has(artifact.id)) continue
+    etat.artefactsDejaEmis.add(artifact.id)
+    if (artifact.kind === 'video' && artifact.path)
+      etat.videosDejaMontrees.add(cleDeVideo(artifact.path))
+    emit({ kind: 'artifact', iteration, artifact })
+  }
+}
 
 export interface AppelsNatifsDuTour {
   comptabiliserCommande: (
@@ -115,7 +138,7 @@ export function appelsNatifsDuTour(entree: {
   }
   /**
    * UN APPEL DIRECT S'AFFICHE ET COMPTE EXACTEMENT COMME UN `<cmd>` : carte, progression, resultat,
-   * capture publiee dans le fil, drapeaux du tour (action, lecture, bureau) et comptabilite commune.
+   * capture et carte rendue (`show_video`) publiees dans le fil, drapeaux du tour (action, lecture, bureau) et comptabilite commune.
    * Sans eux, les gardes de cloture (« rien execute », « echec tu », « fais le geste ») mordaient a
    * tort ou se taisaient. Seule difference : la capture n'est pas rejointe au message suivant, le
    * modele l'a deja recue en bloc `image` dans le resultat de l'outil.
@@ -159,6 +182,7 @@ export function appelsNatifsDuTour(entree: {
         }
       })
     }
+    publierLesCartesDeCommande(etat, r, etat.iterationNatif, emit)
     const echecRattrape = commandResultSucceeded(r)
       ? etat.actionIdParEchec.get(cleDEchec(nom, args))
       : undefined

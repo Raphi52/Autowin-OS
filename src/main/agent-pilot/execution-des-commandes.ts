@@ -23,7 +23,7 @@ import {
 } from '../../shared/orchestration-outcome'
 import { bornerResultatDeCommande } from '../chat/resultat-de-commande-borne'
 import { cleAppelNatif } from '../chat/chat-mcp'
-import { cleDeVideo } from '../media/videos-livrees'
+import { publierLesCartesDeCommande } from './appels-natifs'
 import { fluxDuBloc, texteDuBlocDansLeFil } from '../commands/montrer-bloc-command'
 import { consumeStreamedPrefix, retirerConclusionBloquantePrematuree } from './collage-des-deltas'
 import type { ContexteDuTour } from './contexte-du-tour'
@@ -286,18 +286,7 @@ export async function executerLesCommandes(
         }
       })
     }
-    /*
-     * CARTES DU FIL RENDUES PAR UNE COMMANDE (`show_video`). Champ distinct
-     * d'`attachments` : elles s'affichent dans le fil et ne partent JAMAIS au modèle IA — une
-     * vidéo dans `commandAttachments` serait envoyée au prochain appel.
-     */
-    for (const artifact of r.artifacts ?? []) {
-      if (etat.artefactsDejaEmis.has(artifact.id)) continue
-      etat.artefactsDejaEmis.add(artifact.id)
-      if (artifact.kind === 'video' && artifact.path)
-        etat.videosDejaMontrees.add(cleDeVideo(artifact.path))
-      emit({ kind: 'artifact', iteration: i, artifact })
-    }
+    publierLesCartesDeCommande(etat, r, i, emit)
     // Meme clef que la comptabilite d'echec plus bas (nom + cible), calculee ici parce que le
     // resultat est emis AVANT le bloc qui la tient : c'est le seul endroit ou l'on sait encore
     // quel echec cette reussite repare.
