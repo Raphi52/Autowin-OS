@@ -83,7 +83,11 @@ import {
   type AutoCloseReport,
   type VerificationAvantPublication
 } from '../runs/run-autoclose'
-import { publierTourDeChat, type ChatTurnStart } from '../chat/chat-turn-publication'
+import {
+  publierLaCopieQuitteeDuFil,
+  publierTourDeChat,
+  type ChatTurnStart
+} from '../chat/chat-turn-publication'
 import { estUnPassageDePorte } from '../orchestration/garder-un-essai'
 import type { TypageAvantPublication } from '../verify/typage-avant-publication'
 import { sharedBrainRoot } from '../brain/brain-context'
@@ -1126,51 +1130,58 @@ export class AutowinOS {
       // Le dépôt de la porte est celui DU FIL, noté sur sa copie : un projet lié ou un autre dépôt git ne se devine
       // pas dans sa copie. Le dépôt d'Autowin ne sert que de repli, pour un fil qui n'a pas de copie notée.
       // fix-ok: sans le dépôt du fil, la porte viserait Autowin et le travail d'un projet lié n'entrerait pas dans sa branche.
-      const depot =
-        this.conversations.get(tour.conversationId)?.copieDuFil?.depot ??
-        this.worktreeManager?.baseRepo
+      const copieDuFil = this.conversations.get(tour.conversationId)?.copieDuFil
+      const depot = copieDuFil?.depot ?? this.worktreeManager?.baseRepo
+      // La porte d'un fil en copie : la publication d'une copie, la même que « Garder ».
+      const porte =
+        worktrees && depot
+          ? {
+              depot,
+              publication: {
+                ouvrir: (runId: string) =>
+                  worktrees.beginAsync(runId, 'Porte du fil', true, {
+                    task: `porte du fil ${tour.conversationId}`,
+                    role: 'command' as const,
+                    conversationId: tour.conversationId
+                  }),
+                fermer: (runId: string, publier: boolean) =>
+                  worktrees.endAsync(runId, { merge: publier })
+              },
+              // la porte reçoit le dossier de données, sans quoi la racine unique n'entre jamais par la primitive.
+              dossierDeDonnees: ensureAutowinAppData()
+            }
+          : undefined
       const report = await publierTourDeChat({
         ...tour,
         autresToursEnCours: enCours,
         traces: await readRecentConversationFileTraces(),
-        // La porte d'un fil en copie : la publication d'une copie, la même que « Garder ».
-        ...(worktrees && depot
-          ? {
-              porte: {
-                depot,
-                publication: {
-                  ouvrir: (runId: string) =>
-                    worktrees.beginAsync(runId, 'Porte du fil', true, {
-                      task: `porte du fil ${tour.conversationId}`,
-                      role: 'command',
-                      conversationId: tour.conversationId
-                    }),
-                  fermer: (runId: string, publier: boolean) =>
-                    worktrees.endAsync(runId, { merge: publier })
-                },
-                // la porte reçoit le dossier de données, sans quoi la racine unique n'entre jamais par la primitive.
-                dossierDeDonnees: ensureAutowinAppData()
-              }
-            }
-          : {})
+        ...(porte ? { porte } : {})
       })
-      if (report) {
-        this.lastAutoClose = report
+      // Le travail laissé dans la copie notée d'un fil qui n'y travaillait plus à ce tour (conv-2020, 20/11/2026) :
+      // sans ce passage, il ne serait jamais entré dans son dépôt (voir `publierLaCopieQuitteeDuFil`).
+      const rapportDeLaCopie =
+        porte && copieDuFil?.chemin
+          ? await publierLaCopieQuitteeDuFil({ ...tour, copie: copieDuFil.chemin, porte })
+          : undefined
+      for (const rendu of [report, rapportDeLaCopie]) {
+        if (!rendu) continue
+        this.lastAutoClose = rendu
         // fix-ok: seul le panneau Git recevait le refus d'un tour ; l'écriture dans le fil n'existait
         // qu'à la reprise au démarrage. Le refus d'un tour va désormais dans le fil de ce tour.
-        annonceRefusDuProjet(this.conversations, tour.conversationId, report.project)
+        annonceRefusDuProjet(this.conversations, tour.conversationId, rendu.project)
         // Le panneau ne garde que le DERNIER rapport : le journal garde chaque issue, motif compris.
-        const laisses = (report.exclus ?? []).map((e) => `${e.path} (${e.motif})`).join(', ')
+        const laisses = (rendu.exclus ?? []).map((e) => `${e.path} (${e.motif})`).join(', ')
         console.log(
           '[enchainement chat]',
-          report.runId,
+          rendu.runId,
+          rendu === rapportDeLaCopie ? '(copie quittée par le fil)' : '',
           '→',
-          JSON.stringify(report.project).slice(0, 400),
+          JSON.stringify(rendu.project).slice(0, 400),
           laisses ? `; laissés en attente : ${laisses}` : ''
         )
-        // Même signal que la fin d'une tâche d'agent : le panneau Git relit le dernier rapport.
-        this.worktreeActivityListener?.(this.getWorktreeActivity())
       }
+      // Même signal que la fin d'une tâche d'agent : le panneau Git relit le dernier rapport.
+      if (report || rapportDeLaCopie) this.worktreeActivityListener?.(this.getWorktreeActivity())
       return report
     })
     this.chatTurnPublications = next.catch(() => undefined)

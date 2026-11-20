@@ -327,6 +327,48 @@ export function titreDeLaReprise(tache: string, fichiers: readonly string[]): st
 }
 
 /**
+ * LA COPIE QUE LE FIL A QUITTÉE PASSE AUSSI LA PORTE. Un fil passé de sa copie à un autre dossier (bascule par
+ * chemin cité, autre projet) garde sa copie notée, et sa session connaît encore son chemin : il peut continuer d'y
+ * écrire. `publierTourDeChat` ne publie que le dossier DU TOUR ; sans ce passage, ce travail restait hors du dépôt,
+ * car le ménage horaire ne refait que les entrées déjà refusées (`menageDesCopiesDeTaches`).
+ * Vécu le 20/11/2026 : conv-2020, sorti de sa copie d'un dépôt de l'utilisateur pour corriger Autowin, y a écrit
+ * une fonctionnalité entière ; la fin de tour n'a commité qu'Autowin (85e47c405), et une mise en ligne faite
+ * depuis la copie d'un autre fil l'a fait disparaître de la version publiée.
+ *
+ * Même porte que celle d'un tour fait dans la copie (`passerLaPorte`) : rien sans écart depuis la base du fil, un
+ * refus garde la copie et le dit. Un tour qui travaillait DANS sa copie n'est pas repassé ici.
+ */
+export async function publierLaCopieQuitteeDuFil(input: {
+  conversationId: string
+  turnId: string
+  request: string
+  compteRendu?: string
+  langueDuCompteRendu?: Langue
+  debut: ChatTurnStart
+  /** La copie notée sur le fil (`copieDuFil.chemin`) ; absente = rien à faire. */
+  copie: string | undefined
+  runGit?: GitRunner
+  porte: { depot: string; publication: PublicationDUneCopie; dossierDeDonnees?: string }
+}): Promise<AutoCloseReport | undefined> {
+  const { copie, debut, porte } = input
+  if (!copie || !existsSync(copie)) return undefined
+  if (debut.repo) {
+    const reels = await cheminsReels([copie, debut.repo])
+    if (memeCheminSurDisque(reels.get(copie) ?? copie, reels.get(debut.repo) ?? debut.repo))
+      return undefined
+  }
+  const runGit = input.runGit ?? (await defaultGitRunner())
+  if (!(await estUneCopieDetacheeDuDepot(copie, porte.depot, runGit))) return undefined
+  const recalage = await recalerLaBaseSurLaCopie({
+    copie,
+    conversationId: input.conversationId,
+    depot: porte.depot,
+    runGit
+  })
+  return avecLaRaisonDuRecalage(await passerLaPorte(input, copie, porte, runGit), recalage)
+}
+
+/**
  * Publie les fichiers PROUVÉS d'un tour de chat terminé : commit de ces seuls fichiers, puis push
  * sur la branche courante ; si le dépôt refuse, branche dédiée + PR (même règle que les tâches
  * d'agent). Rend `undefined` quand le tour n'a laissé aucun fichier en attente : le dernier rapport
