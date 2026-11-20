@@ -54,6 +54,11 @@ export interface IoCibleDuDepot {
   windows: boolean
   /** Le découpage des heredocs, PASSÉ (jamais appelé par nom : voir `src/shared/heredocs.ts`). */
   decoupeHeredocs: typeof decouperHeredocs
+  /**
+   * Vrai si ce dossier existe sur le disque. Absent : tout `cd` est supposé réussir. Un `cd` vers un
+   * dossier absent échoue, et ce qui suit un `;` tourne là où l'on était (voir `analyser`).
+   */
+  existe?: (chemin: string) => boolean
 }
 
 /**
@@ -300,6 +305,13 @@ export function cibleDEcritureDansLeDepot(
     pousser()
 
     let cwd = depart
+    /** Dossiers que la commande crée elle-même avant d'y entrer (`mkdir -p x && cd x`). */
+    const crees: string[] = []
+    const creeIci = (dossier: string): boolean =>
+      crees.some((c) => {
+        const r = p.relative(dossier, c)
+        return r === '' || !(r === '..' || r.startsWith('..\\') || r.startsWith('../') || p.isAbsolute(r))
+      })
     const ECRIT_TOUT = new Set([
       'rm',
       'rmdir',
@@ -446,9 +458,20 @@ export function cibleDEcritureDansLeDepot(
       ) {
         // Cible illisible (variable, `cd -`, `cd` seul) : la suite tourne on ne sait où. Garder
         // l'ancien dossier ferait passer un `mkdir x` lancé ailleurs pour une écriture dans le code.
-        cwd = versChemin(remplacer(sansOptions[0] ?? '', cwd, variables), cwd)
+        const vers = versChemin(remplacer(sansOptions[0] ?? '', cwd, variables), cwd)
+        // UN `cd` VERS UN DOSSIER ABSENT ÉCHOUE : ce qui suit un `;` tourne là où l'on était. Mesuré
+        // le 2026-11-20 (conv-2041) : `cd <copie disparue> && … ; git checkout --detach 3ed38f4` a
+        // sorti le dossier partagé de main, le contrôle croyant le checkout dans la copie. Un dossier
+        // créé plus tôt dans la même commande (`mkdir -p x && cd x`) compte comme présent.
+        if (vers !== undefined && io.existe && !io.existe(vers) && !creeIci(vers)) continue
+        cwd = vers
         continue
       }
+      if (nom === 'mkdir' || nom === 'md' || nom === 'new-item' || nom === 'ni')
+        for (const a of sansOptions) {
+          const abs = versChemin(a, cwd)
+          if (abs) crees.push(abs)
+        }
       if (ECRIT_TOUT.has(nom)) cibles.push(...sansOptions)
       else if (ECRIT_LA_DESTINATION.has(nom)) {
         if (sansOptions.length) cibles.push(sansOptions[sansOptions.length - 1])
@@ -608,6 +631,8 @@ export interface ModulesDuControle {
     writeFileSync: (chemin: string, contenu: string) => void
     renameSync: (de: string, vers: string) => void
     unlinkSync: (chemin: string) => void
+    /** Le `cd` d'une commande vise-t-il un dossier présent ? (`IoCibleDuDepot.existe`). */
+    existsSync?: (chemin: string) => boolean
   }
   path: IoCibleDuDepot['path'] & IoCopieALaDemande['path']
   /** Le découpage des heredocs, passé au contrôle (voir `IoCibleDuDepot`). */
@@ -653,7 +678,17 @@ export function copieAvantLEcritureSurDisque(
         })
         return r.status === 0 ? true : r.status === 1 ? false : undefined
       },
-      decoupeHeredocs
+      decoupeHeredocs,
+      // Disque illisible : on suppose le `cd` réussi, comme avant cette vérification.
+      existe: fs.existsSync
+        ? (c: string): boolean => {
+            try {
+              return (fs.existsSync as (x: string) => boolean)(c)
+            } catch {
+              return true
+            }
+          }
+        : undefined
     }
     const sommeil = new Int32Array(new SharedArrayBuffer(4))
     const io = {

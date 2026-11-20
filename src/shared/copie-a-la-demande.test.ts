@@ -193,6 +193,49 @@ describe('cibleDEcritureDansLeDepot — le terminal', () => {
     ).toBe(path.join(depot, 'src/a.ts'))
   })
 
+  describe('un `cd` vers un dossier absent échoue : la suite tourne là où l’on était', () => {
+    // Mesuré le 2026-11-20 (conv-2041, séquence 1171) : la copie du fil chef avait disparu, son
+    // `cd` a échoué (« No such file or directory ») et le `;` a lancé le checkout dans le dossier
+    // partagé, sorti de main. Le contrôle croyait la commande dans la copie et l'a laissée passer ;
+    // le lot suivant (conv-2055) est mort au lancement sur `git rev-parse refs/heads/HEAD`.
+    const copieDisparue = path.resolve('/ailleurs/copies-de-taches/conv-2041')
+    const copieOuverte = path.resolve('/ailleurs/copies-de-taches/conv-9')
+    const existants = new Set([depot, path.join(depot, 'src'), copieOuverte])
+    const surDisque = (a: AppelVuParLeControle): string | undefined =>
+      cibleDEcritureDansLeDepot(a, depot, { ...io, existe: (c: string) => existants.has(c) })
+
+    it('le rejeu exact de conv-2041 : le checkout vise le dossier partagé', () => {
+      const shell =
+        `cd "${copieDisparue}" && git status --short | head -3; ` +
+        'git checkout --detach 3ed38f4 2>&1 | tail -1; ' +
+        'git diff 4db0ca7 3ed38f4 -- src/a.cs | head -60'
+      expect(surDisque(appel('Bash', { shell }))).toBe(depot)
+    })
+
+    it('PowerShell : un Set-Location raté laisse l’écriture dans le code', () => {
+      const shell = `Set-Location "${copieDisparue}"; Set-Content src/a.ts x`
+      expect(surDisque(appel('PowerShell', { shell }))).toBe(path.join(depot, 'src/a.ts'))
+    })
+
+    it('contrôle négatif : vers un dossier qui existe, la commande part bien ailleurs', () => {
+      const shell = `cd "${copieOuverte}" && git status; git checkout --detach 3ed38f4`
+      expect(surDisque(appel('Bash', { shell }))).toBeUndefined()
+      expect(surDisque(appel('Bash', { shell: 'cd src && touch neuf.ts' }))).toBe(
+        path.join(depot, 'src/neuf.ts')
+      )
+    })
+
+    it('un dossier créé plus tôt dans la même commande compte comme présent', () => {
+      const essai = path.resolve('/tmp/essai-autowin')
+      expect(
+        surDisque(appel('Bash', { shell: `mkdir -p "${essai}" && cd "${essai}" && touch a.txt` }))
+      ).toBeUndefined()
+      expect(
+        surDisque(appel('Bash', { shell: `mkdir -p "${essai}/x/y" && cd "${essai}/x"; touch b` }))
+      ).toBeUndefined()
+    })
+  })
+
   it('une commande enveloppée (`bash -lc`, `powershell -Command`, `cmd /c`) est lue de l’intérieur', () => {
     expect(cible(appel('Bash', { shell: 'bash -lc "echo x > src/b.ts"' }))).toBe(
       path.join(depot, 'src/b.ts')
@@ -325,5 +368,12 @@ describe('module Codex, Grok et agy — le même contrôle, généré pour être
     expect(motif('echo x > src/a.ts')).toContain(copie)
     // Les aides internes (variables, appels .NET) voyagent avec la fonction sérialisée.
     expect(motif("$f = 'src/a.ts'\n[IO.File]::WriteAllText($f, $c)")).toContain(copie)
+    // Rejeu de conv-2041 sur le VRAI disque : le `cd` vers une copie disparue échoue, le checkout
+    // qui suit le `;` vise le dossier partagé. Vers un dossier présent, il part ailleurs.
+    const disparue = path.join(dir, 'copies-de-taches', 'conv-2041')
+    expect(
+      motif(`cd "${disparue}" && git status --short; git checkout --detach 3ed38f4`)
+    ).toContain(copie)
+    expect(motif(`cd "${dir}" && git status --short; git checkout --detach 3ed38f4`)).toBeUndefined()
   })
 })
