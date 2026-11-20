@@ -18,8 +18,22 @@ import { estMurDeQuota } from './reprise-quota'
 
 /** Au-delà, le chef regroupe : 20 comptes rendus restent sous les 30 envois par heure du journal. */
 export const LOTS_MAX = 20
-/** Même plafond que « Essaie 3 façons » et que le découpage en fils : chaque fil est un tour payé. */
-export const PARALLELE_MAX = 3
+/**
+ * PAR DÉFAUT, TOUS LES LOTS PRÊTS PARTENT ENSEMBLE (2026-11-20, conv-2052).
+ *
+ * Avant : 3 à la fois, au motif que « chaque fil est un tour payé ». Le motif ne tenait pas : le coût
+ * se borne par `plafondTours`, et des lots lancés en série coûtent les mêmes tours, seulement plus tard.
+ * Mesuré sur plan-fa346ed4 : 13 lots n'attendaient que le lot 2 ; à sa validation, 3 sont partis et
+ * 10 sont restés en file, alors que rien ne les retenait.
+ *
+ * Les vraies bornes restent dans `lotsAPartir` : prérequis (« apres »), fichiers annoncés en commun,
+ * plafond de tours. Le chef baisse `parallele` seulement pour une ressource partagée qu'aucun fichier
+ * ne nomme (une base, un serveur). Prix accepté : une limite de quota coupe d'un coup tous les lots en
+ * vol ; « Reprendre » les relance chacun dans son fil.
+ */
+export const PARALLELE_MAX = LOTS_MAX
+/** Le défaut d'avant : il reste dans l'empreinte des plans au parallélisme par défaut (`empreintePlan`). */
+const PARALLELE_DEFAUT_AVANT = 3
 /** Même borne que le texte d'une tâche du découpage en fils (`lancer-en-fils`). */
 export const DEMANDE_MAX = 4_000
 export const FICHIERS_MAX = 40
@@ -536,7 +550,10 @@ export function empreintePlan(plan: PlanLu): string {
     if (l.critere) base.push(l.critere)
     return base
   })
-  const champs: unknown[] = [plan.titre, plan.parallele, plan.plafondTours, lots]
+  // Le parallélisme par défaut garde la clé d'avant le 2026-11-20 (défaut 3, aujourd'hui PARALLELE_MAX) :
+  // sans cela, un second clic sur un plan déposé avant ce changement le relancerait.
+  const parallele = plan.parallele === PARALLELE_MAX ? PARALLELE_DEFAUT_AVANT : plan.parallele
+  const champs: unknown[] = [plan.titre, parallele, plan.plafondTours, lots]
   if (plan.contexte) champs.push(plan.contexte)
   const texte = JSON.stringify(champs)
   let h = 0x811c9dc5

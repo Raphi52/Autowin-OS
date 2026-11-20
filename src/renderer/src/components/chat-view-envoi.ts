@@ -1590,7 +1590,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
    * UNE SÉLECTION EN PLUSIEURS LOTS PART EN SUPER CONVERSATION (2026-10-30). Depuis le
    * 22/10, 4 sélections ont prévu 12 lots dans la file du fil (`pickRef`) : 4 sont partis, jamais un
    * lot 2. Cette file vit dans la vue : Stop, un redémarrage ou un remontage l'effacent sans trace.
-   * Le plan, lui, est sur disque (`plans-de-lots-app.ts`), fait 3 lots à la fois et se reprend.
+   * Le plan, lui, est sur disque (`plans-de-lots-app.ts`), lance ensemble tous les lots prêts et se reprend.
    * `repli` : la file du fil reste la voie d'un fil qui ne peut pas mener de plan (le fil d'un lot).
    */
   const planSelectionRef = useRef<

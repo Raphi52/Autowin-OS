@@ -53,7 +53,7 @@ import {
  * Le fil chef dépose un plan (`plan_de_lots`), qui part aussitôt (plus de clic
  * d'accord ; « Lancer le plan » ne reste que pour un plan déposé avant ce changement). Ensuite
  * l'app, et non l'agent :
- *  - ouvre un fil par lot dans le dossier du chef et y lance la demande (au plus 3 à la fois) ;
+ *  - ouvre un fil par lot dans le dossier du chef et y lance la demande (tous les lots prêts ensemble) ;
  *  - à la fin du tour d'un fil enfant (`surFinDeTour`, branché dans index.ts AUTOUR du tour compté
  *    par `trackPreparation`, sinon le chef passerait pour occupé), note le lot, écrit au chef un
  *    compte rendu dans le journal des messages entre fils (expéditeur : le fil enfant), lance le
@@ -386,7 +386,7 @@ export class CoordinateurDesPlans {
    * lots vivait dans la file en mémoire de la vue : depuis le 22/10, sur 4 sélections et 12 lots
    * prévus, 4 sont partis et aucun lot 2 n'a jamais quitté cette file (Stop, redémarrage, ou verrou
    * d'envoi), sans une trace. Puis, : « tu aurais dû tout paralléliser avec
-   * une super conv ». Le clic dépose donc un plan et le lance : durable, 3 fils à la fois, repris
+   * une super conv ». Le clic dépose donc un plan et le lance : durable, tous les fils prêts ensemble, repris
    * après un redémarrage, suspendu par le quota, et les lots aux fichiers communs passent l'un après
    * l'autre.
    *

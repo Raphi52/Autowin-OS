@@ -212,9 +212,9 @@ describe('lirePlanDeLots — lecture stricte du plan déposé par le chef', () =
   })
 
   it(`ramène un parallélisme trop grand à ${PARALLELE_MAX}, et le dit`, () => {
-    const r = lu({ parallele: 8, lots: [lot(1), lot(2), lot(3), lot(4)] })
+    const r = lu({ parallele: PARALLELE_MAX + 1, lots: [lot(1), lot(2), lot(3), lot(4)] })
     expect(r.plan.parallele).toBe(PARALLELE_MAX)
-    expect(r.avertissements.join(' ')).toMatch(/ramené à 3/)
+    expect(r.avertissements.join(' ')).toMatch(new RegExp(`ramené à ${PARALLELE_MAX}`))
   })
 
   it(`refuse plus de ${LOTS_MAX} lots ; accepte exactement ${LOTS_MAX}`, () => {
@@ -346,10 +346,19 @@ describe('lotsAPartir — parallélisme, fichiers partagés et plafond', () => {
     expect(lotsAPartir(p)).toEqual([])
   })
 
-  it('jamais plus de 3 en cours, même avec 20 lots', () => {
-    const lots = Array.from({ length: 20 }, (_, i) => lot(i + 1))
-    const p = lancerCeQuiPart(planAccepte({ parallele: 9, lots }))
-    expect(p.lots.filter((l) => l.etat === 'en-cours')).toHaveLength(3)
+  it('par défaut, tous les lots prêts partent ensemble (plan-fa346ed4 : 13 lots après le lot 2)', () => {
+    // Le cas mesuré : 13 lots n'attendaient que le lot 2 ; à sa validation, 3 seulement partaient.
+    const lots = [lot(1), ...Array.from({ length: 13 }, (_, i) => ({ ...lot(i + 2), apres: [1] }))]
+    let p = lancerCeQuiPart(planAccepte({ lots }))
+    expect(p.lots.filter((l) => l.etat === 'en-cours').map((l) => l.rang)).toEqual([1])
+    p = recevoir(noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan, 1)
+    expect(lotsAPartir(p)).toEqual(Array.from({ length: 13 }, (_, i) => i + 2))
+  })
+
+  it(`jamais plus de ${PARALLELE_MAX} en cours, même si le chef en demande plus`, () => {
+    const lots = Array.from({ length: LOTS_MAX }, (_, i) => lot(i + 1))
+    const p = lancerCeQuiPart(planAccepte({ parallele: LOTS_MAX + 5, lots }))
+    expect(p.lots.filter((l) => l.etat === 'en-cours')).toHaveLength(PARALLELE_MAX)
   })
 
   it('deux lots qui partagent un fichier ne tournent pas ensemble ; le suivant libre passe devant', () => {
@@ -1432,7 +1441,12 @@ describe('contexte commun et modèle par lot (conv-1284)', () => {
       return h.toString(16).padStart(8, '0')
     }
     const simple = sansCritere(lu({ lots: [lot(1), { ...lot(2), apres: [1] }] }).plan)
-    expect(empreintePlan(simple)).toBe(avant(simple))
+    // Un plan sur disque d'avant le 2026-11-20 porte le défaut d'alors : 3 fils en parallèle.
+    const surDisque = { ...simple, parallele: 3 }
+    expect(empreintePlan(surDisque)).toBe(avant(surDisque))
+    // Relu aujourd'hui sans « parallele » (défaut PARALLELE_MAX), le même plan garde cette clé.
+    expect(simple.parallele).toBe(PARALLELE_MAX)
+    expect(empreintePlan(simple)).toBe(avant(surDisque))
     const avecModele = sansCritere(
       lu({ lots: [lot(1), { ...lot(2), apres: [1], modele: 'sonnet' }] }).plan
     )
