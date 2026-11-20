@@ -31,7 +31,8 @@ const echapper = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&l
 /** La page de relecture : une rangée par (état, proposition), libellée. */
 export function planche(spec, etats) {
   const vars = (spec.reglages ?? [])
-    .filter((r) => r.variable && r.valeur !== undefined)
+    // Un réglage de couleur ne porte que `couleur`, sans `valeur` (draft-reglages.mjs).
+    .filter((r) => r.variable && (r.couleur !== undefined || r.valeur !== undefined))
     .map((r) => `${r.variable}:${r.couleur ? r.couleur : r.valeur + (r.unite ?? '')}`)
     .join(';')
   let html = `<style>body{margin:0;padding:10px;box-sizing:border-box;color:#aaa;font:12px system-ui,sans-serif}
