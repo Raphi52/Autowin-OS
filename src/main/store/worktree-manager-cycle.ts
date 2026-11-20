@@ -404,9 +404,60 @@ export function etatDesDependances(this: WorktreeManager): string | undefined {
     : undefined
 }
 
+/**
+ * LA BRANCHE DU DOSSIER PARTAGÉ, MÊME QUAND IL A ÉTÉ SORTI DE SA BRANCHE.
+ *
+ * `rev-parse --abbrev-ref HEAD` rend « HEAD » sur une tête détachée : le lancement construisait alors
+ * `refs/heads/HEAD` et mourait sur un message illisible. Mesuré le 2026-11-20 : un `git checkout
+ * --detach` égaré (conv-2041) a fait tomber ainsi le lot suivant (conv-2055), et aucun agent ne pouvait
+ * réparer — le garde-fou des copies leur interdit d'écrire dans le dossier partagé. La publication,
+ * elle, exige une branche (`AUTOWIN_GUARD:detached-head`, worktree-manager-compensation.ts) : partir
+ * quand même ferait travailler un run pour rien.
+ *  - Tête détachée SUR la pointe de main (ou master) : le dossier est remis sur cette branche. Même
+ *    commit, donc aucun fichier ne bouge, et `git switch` refuse si la branche est prise ailleurs.
+ *  - Tête détachée ailleurs : refus en clair — où est le dossier, ce qui le sépare de main, quoi faire.
+ *    Rien n'est touché : ce que l'utilisateur y regarde, ou ce qui n'est sur aucune branche, lui revient.
+ */
+function brancheDuDossierPartage(this: WorktreeManager): string {
+  const symbolique = this.tryGitFn(this.baseRepo, ['symbolic-ref', '--quiet', '--short', 'HEAD'])
+  if (symbolique.code === 0 && symbolique.stdout.trim()) return symbolique.stdout.trim()
+  const tete = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', 'HEAD^{commit}'])
+  if (tete.code !== 0) return this.currentBaseBranch()
+  const sha = tete.stdout.trim()
+  const branches = ['main', 'master'].filter(
+    (b) => this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', '--quiet', `refs/heads/${b}`]).code === 0
+  )
+  for (const branche of branches) {
+    const pointe = this.tryGitFn(this.baseRepo, ['rev-parse', `refs/heads/${branche}`]).stdout.trim()
+    if (pointe !== sha) continue
+    const remis = this.tryGitFn(this.baseRepo, ['switch', '-q', branche])
+    if (remis.code === 0) return branche
+    throw new Error(
+      `Lancement bloqué : ${this.baseRepo} n'est sur aucune branche (tête détachée sur ${sha.slice(0, 7)}, ` +
+        `la pointe de ${branche}), et sa remise sur ${branche} a échoué : ${causeGit(remis) || 'git n’a rien dit'}.`
+    )
+  }
+  const reference = branches[0]
+  const ecart = reference
+    ? (() => {
+        const n = Number(
+          this.tryGitFn(this.baseRepo, ['rev-list', '--count', `refs/heads/${reference}..HEAD`]).stdout.trim()
+        )
+        return n > 0
+          ? `, ${n} commit${n > 1 ? 's' : ''} absent${n > 1 ? 's' : ''} de ${reference}`
+          : `, en retard sur ${reference}`
+      })()
+    : ''
+  throw new Error(
+    `Lancement bloqué : ${this.baseRepo} n'est sur aucune branche (tête détachée sur ${sha.slice(0, 7)}${ecart}). ` +
+      `Le travail se publie sur une branche : remets ce dossier sur la sienne — badge de branche du fil, ou ` +
+      `\`git -C "${this.baseRepo}" switch ${reference ?? 'main'}\` —, puis relance.`
+  )
+}
+
 /** Contexte figé au début d'un run ; le coordinateur le persiste avant toute publication. */
 export function describe(this: WorktreeManager, agentId: string): WorktreeRunContext {
-  const baseBranch = this.currentBaseBranch()
+  const baseBranch = this.configuredBaseBranch ?? brancheDuDossierPartage.call(this)
   return {
     workspacePath: this.baseRepo,
     worktreePath: this.pathFor(agentId),
