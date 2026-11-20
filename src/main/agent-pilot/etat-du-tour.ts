@@ -163,10 +163,17 @@ export interface EtatDuTour {
   /** La question posée est celle des deux lectures : aucune relance « question sans lecture ». */
   questionDesLecturesPosee: boolean
   /**
-   * La reponse que l'utilisateur a envoyee PENDANT que le tour posait sa question. Non vide = la
-   * question est deja repondue : on ne la repose pas et on ne clot pas le tour sur elle.
+   * La consigne que l'utilisateur a envoyee PENDANT une iteration qui porte des commandes. Elle ne
+   * vaut reponse a la question de cette iteration que si elle designe une de ses options
+   * (`consigne-repond-a-la-question.ts`) : alors on ne repose pas la question et on ne clot pas le
+   * tour sur elle.
    */
   reponseTardiveAUneQuestion: string | undefined
+  /**
+   * Une question est affichee alors qu'une consigne sans rapport attend d'etre traitee : le tour ne
+   * se clot pas sur elle, mais aucune seconde carte ne s'affiche.
+   */
+  questionAfficheeSansClore: boolean
   questionSansLectureRecoveryAvailable: boolean
   /** Dernier texte visible du tour, pour juger s'il avance un nombre non verifie. */
   visibleTextThisTurn: string
@@ -366,6 +373,7 @@ export function etatInitialDuTour(entree: {
     questionPoseeCeTour: false,
     questionDesLecturesPosee: false,
     reponseTardiveAUneQuestion: undefined,
+    questionAfficheeSansClore: false,
     questionSansLectureRecoveryAvailable: true,
     visibleTextThisTurn: '',
     consigneClotureInjectee: -1,

@@ -72,6 +72,7 @@ const attendu = {
   questionPoseeCeTour: false,
   questionDesLecturesPosee: false,
   reponseTardiveAUneQuestion: undefined,
+  questionAfficheeSansClore: false,
   questionSansLectureRecoveryAvailable: true,
   visibleTextThisTurn: '',
   consigneClotureInjectee: -1,

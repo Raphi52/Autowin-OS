@@ -24,6 +24,7 @@ import {
 import { bornerResultatDeCommande } from '../chat/resultat-de-commande-borne'
 import { cleAppelNatif } from '../chat/chat-mcp'
 import { publierLesCartesDeCommande } from './appels-natifs'
+import { consigneRepondALaQuestion } from './consigne-repond-a-la-question'
 import { fluxDuBloc, texteDuBlocDansLeFil } from '../commands/montrer-bloc-command'
 import { consumeStreamedPrefix, retirerConclusionBloquantePrematuree } from './collage-des-deltas'
 import type { ContexteDuTour } from './contexte-du-tour'
@@ -133,7 +134,17 @@ export async function executerLesCommandes(
     // l'apercu partiel dont l'agent tirait justement ses chiffres faux.
     if (token.name === 'list_files' || token.name === 'read_file' || token.name === 'find_in_files')
       etat.anyReadExecuted = true
-    if (token.name === 'ask' && etat.reponseTardiveAUneQuestion !== undefined) {
+    // Consigne arrivée pendant le tour qui ne désigne aucune option : un ajustement, pas la réponse.
+    // La question s'affiche quand même et le tour continue pour traiter la consigne.
+    const questionMalgreConsigne =
+      token.name === 'ask' &&
+      etat.reponseTardiveAUneQuestion !== undefined &&
+      !consigneRepondALaQuestion(etat.reponseTardiveAUneQuestion, token.args)
+    if (
+      token.name === 'ask' &&
+      etat.reponseTardiveAUneQuestion !== undefined &&
+      !questionMalgreConsigne
+    ) {
       // L'utilisateur a REPONDU avant que la question ne parte : la reposer afficherait des
       // boutons pour un choix deja fait.
       emit({ kind: 'command', actionId, name: token.name, args: token.args })
@@ -151,7 +162,7 @@ export async function executerLesCommandes(
       tokenIndex += 1
       continue
     }
-    if (token.name === 'ask' && etat.questionPoseeCeTour) {
+    if (token.name === 'ask' && (etat.questionPoseeCeTour || etat.questionAfficheeSansClore)) {
       // UNE SEULE QUESTION PAR TOUR. Turn 852bb2fd-25e4-40dd-a959-57d9337b084c : la
       // relance « question sans lecture » a fait reposer la meme question -> 2 cartes a l'ecran.
       // La premiere est deja affichee : la seconde n'est pas emise.
@@ -169,7 +180,9 @@ export async function executerLesCommandes(
       tokenIndex += 1
       continue
     }
-    if (token.name === 'ask') etat.questionPoseeCeTour = true
+    // Une question posée clôt le tour, sauf si une consigne attend encore d'être traitée.
+    if (questionMalgreConsigne) etat.questionAfficheeSansClore = true
+    else if (token.name === 'ask') etat.questionPoseeCeTour = true
     const settledAction = recoveredHere?.settledActions?.find(
       (action) => action.actionId === actionId && action.name === token.name
     )
@@ -304,6 +317,12 @@ export async function executerLesCommandes(
         ...(echecRattrape ? { retryOf: echecRattrape } : {}),
         ...(r.attachments?.length ? { attachments: r.attachments } : {})
       })
+    if (questionMalgreConsigne)
+      results.push(
+        `ask → question affichée à l’utilisateur. La consigne reçue pendant le tour (« ${etat.reponseTardiveAUneQuestion} ») ` +
+          'ne désigne aucune de ses options : traite-la maintenant. La question reste à l’écran et sa réponse ' +
+          'arrivera comme un message : ne la repose pas.'
+      )
     // `montrer_bloc` : même pose que par le canal direct, juste après le résultat.
     for (const [index, bloc] of (r.blocs ?? []).entries())
       emit({

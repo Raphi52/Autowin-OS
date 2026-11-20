@@ -113,4 +113,30 @@ describe('directive utilisateur arrivée en fin de tour', () => {
     expect(second).toContain('DÉJÀ répondu')
     expect(second).toContain('Les deux')
   })
+
+  it('un ajustement sans rapport ne répond pas à la question : elle s’affiche et le tour traite l’ajustement', async () => {
+    // Mesuré le 20/11 : « dans la vidéo elle doit prononcer … » envoyé pendant le tour a été pris
+    // pour le choix d'hébergement ; la question n'est jamais apparue et le choix est resté ouvert.
+    const queue: string[] = []
+    const reponses = [
+      '<cmd>{"name":"ask","args":{"question":"Comment donner accès à l’appli ?","options":' +
+        '["1. Réseau interne seulement","2. Internet depuis mon PC","3. Serveur à part",' +
+        '"4. Démo en visio"]}}</cmd>',
+      'Je corrige la prononciation dans la vidéo.'
+    ]
+    const { send, exec, lancer } = pilote(reponses, queue)
+    send.mockImplementationOnce(async () => {
+      queue.push('dans la video elle doit prononcer le nom du logiciel d’un seul mot')
+      return { text: reponses.shift()!, provider: 'codex' }
+    })
+    await lancer()
+    // La question reste à l'écran…
+    expect(nomsDesCommandes(exec).filter((nom) => nom === 'ask')).toHaveLength(1)
+    // …et le tour continue pour traiter l'ajustement, sans le faire passer pour la réponse.
+    expect(send).toHaveBeenCalledTimes(2)
+    const second = contenuDuSecondAppel(send)
+    expect(second).toContain('prononcer le nom du logiciel')
+    expect(second).not.toContain('DÉJÀ répondu')
+    expect(second).toContain('question affichée')
+  })
 })

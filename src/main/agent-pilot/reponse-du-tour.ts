@@ -36,8 +36,10 @@ export function reinjecterLesDirectivesTardives(tour: ContexteDuTour, res: SendR
    * 5ef60fbb-1b39-45c9-a173-418feb595345) : il reste affiche et il est rendu au modele ; la
    * reponse a la directive s'y AJOUTE, elle ne le remplace pas.
    *
-   * Et si l'iteration portait un `ask`, cette directive EST la reponse : on ne repose pas la
-   * question (elle attendrait un clic deja donne) et on ne clot pas le tour dessus.
+   * Et si l'iteration portait un `ask`, cette directive PEUT en etre la reponse : seulement si elle
+   * designe une de ses options (`consigne-repond-a-la-question.ts`, decide a l'execution). Sinon la
+   * question s'affiche et la directive est traitee comme un ajustement. Dans les deux cas, le tour
+   * ne se clot pas sur la question.
    */
   const directivePorteLaReponse =
     lateDirectives.length > 0 &&

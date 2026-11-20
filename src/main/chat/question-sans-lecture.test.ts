@@ -137,7 +137,7 @@ describe('une seule question affichee par tour (conv-844, turn 852bb2fd-25e4-40d
   it('agent-pilot ne remet pas une deuxieme carte ask dans le meme tour', async () => {
     const src = sourceDuPilote()
     expect(src).toMatch(
-      /token\.name === 'ask' && etat\.questionPoseeCeTour\)[\s\S]{0,400}tokenIndex \+= 1\s*continue/
+      /token\.name === 'ask' && \(etat\.questionPoseeCeTour \|\| etat\.questionAfficheeSansClore\)\)[\s\S]{0,400}tokenIndex \+= 1\s*continue/
     )
   })
 })
