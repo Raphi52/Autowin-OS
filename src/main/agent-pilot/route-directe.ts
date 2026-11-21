@@ -40,7 +40,7 @@ export interface RepriseApresArret {
  * été payé, et un second `orchestrate` dans le même tour échouerait sur la même cause, qui tient au
  * dépôt (pas de distant `origin`, `main` divergé, origin injoignable sans repli local).
  *
- * Cas réel (conv-1991, 18-19/11/2026, lot 4 du plan plan-4021ed92) : la demande du lot commençait
+ * Cas réel (18-19/11/2026, lot 4 du plan plan-4021ed92) : la demande du lot commençait
  * par « /build », partait droit en orchestration, et le dépôt visé n'a qu'un distant d'un autre nom. TROIS
  * tours de suite se sont clos sur « Lancement bloqué : le distant origin est absent. » sans
  * qu'aucun modèle ne lise la demande — même après que le chef eut écrit DANS la demande « n'appelle
@@ -107,7 +107,12 @@ export async function jouerLaRouteSansModele(
   const args = { task: tacheDeLaRoute }
   emit({ kind: 'command', actionId, name: 'orchestrate', args })
   signal?.throwIfAborted()
-  const result = await execCommand('orchestrate', args)
+  // Le battement du run (durée, phase, dernier geste) rejoint la carte posée juste au-dessus, comme
+  // dans un tour ordinaire (`execution-des-commandes.ts`) : sans lui, la carte d'un lot de plan
+  // restait des heures sur « Travail lancé : … », sans durée, alors que le run travaillait.
+  const result = await execCommand('orchestrate', args, (text) =>
+    emit({ kind: 'action-progress', actionId, text })
+  )
   emit({
     kind: 'result',
     actionId,

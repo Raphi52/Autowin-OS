@@ -105,7 +105,15 @@ describe('un tour exécuté sans le modèle est réinjecté au tour suivant', ()
       12,
       CONV
     )
-    expect(exec).toHaveBeenCalledWith('orchestrate', expect.anything(), CONV)
+    // L'appel porte en plus le relais de progression de la carte (`route-directe.ts`).
+    expect(exec).toHaveBeenCalledWith(
+      'orchestrate',
+      expect.anything(),
+      CONV,
+      undefined,
+      undefined,
+      expect.any(Function)
+    )
     // La prémisse du trou : ce tour n'a produit AUCUN appel au modèle.
     expect(envoyes.length).toBe(appelsAvant)
 

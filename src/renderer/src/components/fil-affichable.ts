@@ -58,19 +58,23 @@ export function filAffichable<M extends MessageAffichable>(
   if (debutVivant < 0) return duStore
   const queue = cache.slice(debutVivant)
   const tours = toursPeints(queue)
-  const tete = [...duStore]
   // Le tour en vol peut AUSSI avoir ete persiste — non clos, ou deja clos : ne pas le
-  // peindre deux fois.
-  while (tete.length > 0) {
-    const dernier = tete[tete.length - 1]
-    if (
-      (dernier.role === 'assistant' && dernier.done !== true) ||
-      copieDUnTourPeint(dernier, tours)
+  // peindre deux fois. On le cherche dans TOUT le tour courant du store (apres sa derniere
+  // demande), pas seulement en fin de fil : un avis de l'app pose pendant le tour (« ⛔ Envoi
+  // refusé ») est enregistre SOUS sa copie, et la recherche s'arretait sur lui — la carte du tour
+  // etait alors peinte deux fois, la copie figee au-dessus de l'avis, la vivante en dessous.
+  // L'avis, lui, reste : il passe au-dessus de la bulle vivante, qui garde la fin du fil, la ou
+  // ses evenements la cherchent (`indexDeLaBulleQuiPorte`).
+  let debutDuTour = duStore.length
+  while (debutDuTour > 0 && duStore[debutDuTour - 1].role !== 'user') debutDuTour--
+  const resteDuTour = duStore
+    .slice(debutDuTour)
+    .filter(
+      (message) =>
+        !(message.role === 'assistant' && message.done !== true) &&
+        !copieDUnTourPeint(message, tours)
     )
-      tete.pop()
-    else break
-  }
-  return [...tete, ...queue]
+  return [...duStore.slice(0, debutDuTour), ...resteDuTour, ...queue]
 }
 
 /**

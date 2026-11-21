@@ -133,6 +133,51 @@ describe('un même tour ne se peint jamais deux fois (conv-1118)', () => {
   }
 })
 
+/*
+ * 2026-11-21, « 2x le même bloc » sur un lot de plan : la carte « Orchestration » du tour en cours
+ * peinte deux fois, l'une figée sur « en cours », l'autre vivante, un avis de l'app entre les deux.
+ * La publication du run précédent avait posé « ⛔ Envoi refusé » dans le fil PENDANT le tour suivant :
+ * sur le disque, l'avis est donc SOUS la copie du tour en vol, et la recherche de cette copie, qui ne
+ * regardait que la fin du fil, s'arrêtait sur lui.
+ */
+describe('un avis de l’app posé sous le tour en vol', () => {
+  type Bulle = MessageAffichable & { content: string }
+  const demande = u('/build lot 9')
+  const copie: Bulle = {
+    role: 'assistant',
+    content: '[a exécuté orchestrate]',
+    done: false,
+    turnId: 'T9'
+  }
+  const avis = a('⛔ Envoi refusé : rien n’a été envoyé vers son serveur.')
+  const enDirect: Bulle = { role: 'assistant', content: 'carte vivante', done: false, turnId: 'T9' }
+
+  it('ne peint le tour en vol qu’une fois, et garde l’avis', () => {
+    const store = [u('q1'), a('r1'), demande, copie, avis]
+    const cache = [u('q1'), a('r1'), demande, enDirect]
+    const rendu = filAffichable(cache, store)
+    expect(rendu).toEqual([u('q1'), a('r1'), demande, avis, enDirect])
+  })
+
+  it('même quand la bulle en direct ne porte pas encore son tour', () => {
+    const sansTour: Bulle = { role: 'assistant', content: 'carte vivante', done: false }
+    const rendu = filAffichable([demande, sansTour], [u('q1'), demande, copie, avis])
+    expect(rendu).toEqual([u('q1'), demande, avis, sansTour])
+  })
+
+  it('la copie CLOSE du même tour, au-dessus de l’avis, n’est pas repeinte non plus', () => {
+    const close: Bulle = { ...copie, done: true }
+    const rendu = filAffichable([demande, enDirect], [u('q1'), demande, close, avis])
+    expect(rendu).toEqual([u('q1'), demande, avis, enDirect])
+  })
+
+  it('un tour d’AVANT la dernière demande reste à sa place', () => {
+    const ancien: Bulle = { role: 'assistant', content: 'ancien tour', done: true, turnId: 'T8' }
+    const rendu = filAffichable([enDirect], [u('q1'), ancien, demande, copie, avis])
+    expect(rendu).toEqual([u('q1'), ancien, demande, avis, enDirect])
+  })
+})
+
 // 2026-10-25 : la bulle vide d'une adoption prend pour base le tour persiste du MEME tour.
 describe('adopterLeTourPersiste', () => {
   type Bulle = MessageAffichable & { parts: string[]; providerStatus?: string }
