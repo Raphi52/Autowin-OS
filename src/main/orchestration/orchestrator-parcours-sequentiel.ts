@@ -2303,7 +2303,7 @@ export async function runInner(
     // rougir aucun test (mesure du 2026-08-18). Elle porte la regle du run en LECTURE SEULE : un
     // run qui n'a joue que scout/frame/terrain n'a aucune mutation a prouver, meme si la phrase de
     // l'utilisateur en annoncait une pour la suite.
-    const cloture = etatDeCloture(task, phaseOutputs, evidenceOk, isMutationTask(task))
+    const cloture = etatDeCloture(task, phaseOutputs, evidenceOk, isMutationTask(task), workCwd)
     /*
      * Le travail NON LIVRE compte a CHAQUE sortie de cloture, pas seulement a la derniere.
      * Un juge externe a compte le 2026-08-22 : six sites `evaluateClosure` dans ce fichier, DEUX

@@ -407,9 +407,32 @@ function relatifAuDepot(
   return chemin
 }
 
+/**
+ * Le chemin cité vit-il dans la copie du run ? Une ligne ancrée désigne un fichier EXISTANT : un
+ * chemin dont même le dossier manque dans la copie vise un autre dépôt (l'ancienne version d'une
+ * application qu'on refait, un outil voisin), cité comme preuve. Exiger sa modification refusait
+ * un travail juste à chaque passage. Le dossier seul suffit pour garder la cible : un fichier
+ * DÉPLACÉ dans un sous-dossier (`cibleDeplacee`) reste ainsi contrôlé.
+ */
+function citeeDansLaCopie(
+  racine: string,
+  chemin: string,
+  existe: (chemin: string) => boolean
+): boolean {
+  const base = racine.replace(/[\\/]+$/u, '')
+  if (existe(`${base}/${chemin}`)) return true
+  const coupure = chemin.lastIndexOf('/')
+  return coupure > 0 && existe(`${base}/${chemin.slice(0, coupure)}`)
+}
+
+/**
+ * `racine` : la copie où le run écrit. Absente (contrat d'une conversation, copie inconnue), aucun
+ * chemin n'est écarté pour son absence : le contrôle garde sa forme d'avant.
+ */
 export function ciblesNommees(
   task: string,
-  existe: (chemin: string) => boolean = existsSync
+  existe: (chemin: string) => boolean = existsSync,
+  racine?: string
 ): string[] {
   const texte = demandePropre(task).normalize('NFD').replace(/\p{Diacritic}/gu, '')
   const cibles: string[] = []
@@ -429,6 +452,7 @@ export function ciblesNommees(
     const chemin = lecteur
       ? relatifAuDepot(lecteur[1], normalized(match[1]), existe)
       : normalized(match[1])
+    if (racine && !citeeDansLaCopie(racine, chemin, existe)) continue
     if (!cibles.includes(chemin)) cibles.push(chemin)
   }
   return cibles
@@ -501,9 +525,10 @@ function ressembleAUnChemin(valeur: string): boolean {
 export function cibleNommeeTouchee(
   task: string,
   evidence: readonly ExecutionEvidence[],
-  existe: (chemin: string) => boolean = existsSync
+  existe: (chemin: string) => boolean = existsSync,
+  racine?: string
 ): 'sans-objet' | 'touchee' | 'manquee' {
-  const cibles = ciblesNommees(task, existe)
+  const cibles = ciblesNommees(task, existe, racine)
   if (cibles.length === 0) return 'sans-objet'
   const touches = evidence
     .filter((item) => item.kind === 'mutation' && successfulEvidence(item))
@@ -560,7 +585,9 @@ export function etatDeCloture(
   task: string,
   phases: readonly { phase: string; text?: string; executionEvidence?: ExecutionEvidence[] }[],
   evidenceOk: boolean,
-  mutationDemandee: boolean
+  mutationDemandee: boolean,
+  /** La copie où le run a écrit : un fichier cité qui n'y est pas n'est pas une cible. */
+  racine?: string
 ): { status: 'green' | 'red'; dod: Array<{ label: string; checked: boolean }> } {
   const lectureSeule = runEnLectureSeule(phases)
   const checks = rootRequirementChecks(task, { phases: [...phases] }).filter(
@@ -584,10 +611,15 @@ export function etatDeCloture(
     !lectureSeule &&
     cibleNommeeTouchee(
       task,
-      phases.flatMap((phase) => phase.executionEvidence ?? [])
+      phases.flatMap((phase) => phase.executionEvidence ?? []),
+      existsSync,
+      racine
     ) === 'manquee'
   if (cibleManquee) {
-    checks.push({ label: libelleCibleNommee(ciblesNommees(task)), checked: false })
+    checks.push({
+      label: libelleCibleNommee(ciblesNommees(task, existsSync, racine)),
+      checked: false
+    })
   }
   // Garde « cadrage refusé » (18/09) : si le DERNIER frame porte encore le refus des cas
   // limites, le run n'a pas de cadrage valide — il ne ferme pas vert. Un frame refait après passe.

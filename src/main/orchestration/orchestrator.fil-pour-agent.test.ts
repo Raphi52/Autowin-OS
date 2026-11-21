@@ -166,6 +166,8 @@ describe('le fil voyage aussi jusqu’à l’agent Codex', () => {
 describe.skipIf(process.platform !== 'win32')('hdesk-lancer lit le fil tout seul', () => {
   const sansFil = { ...process.env }
   delete sansFil.AUTOWIN_CONVERSATION_ID
+  // Le script retombe sur le fil du tour de chat : lancé par un agent du chat, ce test l'héritait.
+  delete sansFil.AUTOWIN_FIL_DU_CHAT
 
   it('sans -Conversation ni variable : refus nommé', () => {
     expect(lancer(sansFil)).toMatch(/AUTOWIN_CONVERSATION_ID/)
