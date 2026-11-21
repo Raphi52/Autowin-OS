@@ -6,12 +6,17 @@
  * d'une même lecture comptés pour un, un
  * bureau d'avant l'ouverture de l'app pris pour un lancement, une relance dans le même bureau ignorée,
  * une liste redemandée plus vite que 5 s (120,2 s figées), une liste en échec sans attente.
+ *
+ * FERMETURES (2026-11-21 : « quand le hdesk se ferme ça doit faire -1 a ce compteur ») : doivent
+ * aussi faire échouer ce fichier un bureau fermé jamais annoncé, annoncé deux fois, une fermeture
+ * survenue sur un autre fil perdue au retour, une liste en échec prise pour « tout est fermé ».
  */
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BureauTv } from '../../../main/bureau/hdesk-tv'
 import {
+  cleDuLancement,
   filsDuPanneau,
   useGuetBureauxDuFil,
   type GuetBureauxApi,
@@ -37,6 +42,7 @@ describe('useGuetBureauxDuFil', () => {
   let racine: Root | null = null
   let liste: BureauTv[] = []
   const rappel = vi.fn()
+  const fermeture = vi.fn()
   let api: GuetBureauxApi & { hdeskTvBureaux: ReturnType<typeof vi.fn> }
 
   beforeEach(() => {
@@ -44,6 +50,7 @@ describe('useGuetBureauxDuFil', () => {
     sessionStorage.clear()
     liste = []
     rappel.mockClear()
+    fermeture.mockClear()
     api = { hdeskTvBureaux: vi.fn(async () => liste) }
   })
 
@@ -61,6 +68,7 @@ describe('useGuetBureauxDuFil', () => {
           actif: true,
           fils: ['conv-1'],
           onBureauLance: rappel,
+          onBureauFerme: fermeture,
           api,
           depuis: DEPUIS,
           ...props
@@ -107,6 +115,44 @@ describe('useGuetBureauxDuFil', () => {
     liste = [lance('a', '09:30:00')]
     await attendre(5000)
     expect(rappel).toHaveBeenCalledTimes(2)
+    // Le lancement d'avant, lui, n'existe plus.
+    expect(fermeture).toHaveBeenCalledTimes(1)
+    expect(fermeture).toHaveBeenCalledWith(cleDuLancement(lance('a')), 'conv-1')
+  })
+
+  it('un bureau qui se ferme est annoncé, une seule fois, et pas ceux qui restent', async () => {
+    liste = [lance('b', '09:20:00'), lance('a')]
+    await rendre()
+    expect(fermeture).not.toHaveBeenCalled()
+    liste = [lance('b', '09:20:00')]
+    await attendre(5000)
+    expect(fermeture).toHaveBeenCalledTimes(1)
+    expect(fermeture).toHaveBeenCalledWith(cleDuLancement(lance('a')), 'conv-1')
+    await attendre(20000)
+    expect(fermeture).toHaveBeenCalledTimes(1)
+  })
+
+  it('fermé pendant qu’on regardait un autre fil : annoncé au retour', async () => {
+    liste = [lance('a')]
+    await rendre()
+    api.hdeskTvBureaux.mockImplementation(async () => [])
+    await rendre({ fils: ['conv-2'] })
+    expect(fermeture).not.toHaveBeenCalled()
+    await rendre({ fils: ['conv-1'] })
+    expect(fermeture).toHaveBeenCalledTimes(1)
+    expect(fermeture).toHaveBeenCalledWith(cleDuLancement(lance('a')), 'conv-1')
+  })
+
+  it('liste en échec : aucun bureau n’est pris pour fermé', async () => {
+    liste = [lance('a')]
+    await rendre()
+    api.hdeskTvBureaux.mockRejectedValue(new Error('capture morte'))
+    await attendre(5000)
+    // Une seule erreur : la lecture suivante attend 5 s, et retrouve le bureau.
+    api.hdeskTvBureaux.mockImplementation(async () => liste)
+    await attendre(5000)
+    expect(api.hdeskTvBureaux).toHaveBeenCalledTimes(3)
+    expect(fermeture).not.toHaveBeenCalled()
   })
 
   it('plusieurs lancements d’un coup : chacun compte, le plus récent en tête', async () => {

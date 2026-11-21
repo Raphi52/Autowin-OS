@@ -91,11 +91,15 @@ export function adopterLeFilNeuf(panneaux: PanneauxParFil, conversationId: strin
  * il ajoute 1 au compteur de l'icône du fil, que l'ouverture du panneau remet à zéro. Un panneau déjà
  * ouvert sur cet outil montre la nouveauté lui-même : rien à compter.
  * Le fil neuf n'a jamais de compteur : ni bureau guetté ni onglet sans fil créé.
+ *
+ * UN BUREAU FERMÉ SORT DU COMPTE (2026-11-21 : « ça laisse 9+ mais quand le hdesk se ferme ça doit
+ * faire -1 a ce compteur »). D'où des CLÉS plutôt qu'un nombre : seul un bureau encore compté retire
+ * 1 en se fermant ; un bureau déjà vu dans le panneau, ou d'avant l'ouverture de l'app, ne retire rien.
  */
 
-/** Nouveautés pas encore vues, par place puis par outil ; une place ou un outil absent vaut 0. */
+/** Nouveautés pas encore vues, par place puis par outil : la clé de chacune (bureau, onglet). */
 export type NouveautesParFil = Readonly<
-  Record<string, Readonly<Partial<Record<OutilDuPanneau, number>>>>
+  Record<string, Readonly<Partial<Record<OutilDuPanneau, readonly string[]>>>>
 >
 
 /**
@@ -114,7 +118,7 @@ export function nouveautesDans(
   place: string | null,
   outil: OutilDuPanneau
 ): number {
-  return place === null ? 0 : (outils.nouveautes[place]?.[outil] ?? 0)
+  return place === null ? 0 : (outils.nouveautes[place]?.[outil]?.length ?? 0)
 }
 
 /** Pose les panneaux suivants : chacun de ceux qui sont ouverts remet son compteur à zéro. */
@@ -123,22 +127,52 @@ export function poserLesPanneaux(outils: OutilsDuFil, panneaux: PanneauxParFil):
   return { panneaux, nouveautes: oublierLesOuverts(outils.nouveautes, panneaux) }
 }
 
-/** Ajoute `combien` à l'icône de l'outil, sauf si son panneau est déjà ouvert dans cette place. */
+/**
+ * Compte ces clés sur l'icône de l'outil, sauf si son panneau est déjà ouvert dans cette place.
+ * Une clé déjà comptée ne compte pas deux fois.
+ */
 export function signalerDans(
   outils: OutilsDuFil,
   place: string,
   outil: OutilDuPanneau,
-  combien = 1
+  cles: readonly string[]
 ): OutilsDuFil {
-  if (combien <= 0 || outils.panneaux[place] === outil) return outils
+  if (outils.panneaux[place] === outil) return outils
   const dejaLa = outils.nouveautes[place] ?? {}
+  const comptees = dejaLa[outil] ?? []
+  const neuves = [...new Set(cles)].filter((cle) => !comptees.includes(cle))
+  if (!neuves.length) return outils
   return {
     ...outils,
     nouveautes: {
       ...outils.nouveautes,
-      [place]: { ...dejaLa, [outil]: (dejaLa[outil] ?? 0) + combien }
+      [place]: { ...dejaLa, [outil]: [...comptees, ...neuves] }
     }
   }
+}
+
+/**
+ * Retire cette clé du compte de l'outil dans TOUTES les places : un bureau d'un lot a pu être compté
+ * sur le chef de sa super conv, et sa fermeture se voir depuis le lot. Absente partout : même objet.
+ */
+export function oublierPartout(
+  outils: OutilsDuFil,
+  outil: OutilDuPanneau,
+  cle: string
+): OutilsDuFil {
+  let suivantes: Record<string, Partial<Record<OutilDuPanneau, readonly string[]>>> | null = null
+  for (const [place, parOutil] of Object.entries(outils.nouveautes)) {
+    const comptees = parOutil[outil]
+    if (!comptees?.includes(cle)) continue
+    suivantes ??= { ...outils.nouveautes }
+    const reste = comptees.filter((c) => c !== cle)
+    const autres = { ...parOutil }
+    if (reste.length) autres[outil] = reste
+    else delete autres[outil]
+    if (Object.keys(autres).length) suivantes[place] = autres
+    else delete suivantes[place]
+  }
+  return suivantes ? { ...outils, nouveautes: suivantes } : outils
 }
 
 /** Rend le même objet quand rien n'est à effacer, pour ne rien redessiner. */
@@ -146,7 +180,7 @@ function oublierLesOuverts(
   nouveautes: NouveautesParFil,
   panneaux: PanneauxParFil
 ): NouveautesParFil {
-  let suivantes: Record<string, Partial<Record<OutilDuPanneau, number>>> | null = null
+  let suivantes: Record<string, Partial<Record<OutilDuPanneau, readonly string[]>>> | null = null
   for (const [place, outil] of Object.entries(panneaux)) {
     if (!nouveautes[place]?.[outil]) continue
     suivantes ??= { ...nouveautes }

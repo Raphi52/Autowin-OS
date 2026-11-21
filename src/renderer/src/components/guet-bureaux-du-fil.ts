@@ -2,6 +2,8 @@
  * LE FIL LANCE UN BUREAU CACHÉ (2026-10-31) : « ça remplace le bloc qui s'affichait dans le chat ».
  * Depuis le 2026-11-19, chaque lancement ajoute 1 au petit chiffre rouge de l'icône écran au lieu
  * d'ouvrir le panneau (« au lieu de m'ouvrir le panel, ça doit me mettre un petit 1 rouge »).
+ * Depuis le 2026-11-21, chaque fermeture est annoncée aussi (« quand le hdesk se ferme ça doit faire
+ * -1 a ce compteur ») : le chiffre restait à « 9+ » pour des bureaux qui n'existaient plus.
  *
  * Le guet de l'ancien bloc du fil, sans son image : la seule liste des bureaux de CE fil, et
  * de toute sa super conv : un lot ouvre son bureau dans son propre fil, pas dans celui qu'on regarde.
@@ -32,6 +34,8 @@ const OUVERTURE_APP = Date.now()
 /*
  * Dans sessionStorage et pas en mémoire du composant : ChatView se recharge à chaud, et un
  * bureau déjà compté ne doit pas rallumer le chiffre : seul un NOUVEAU lancement le fait.
+ * Par fil, les bureaux de la DERNIÈRE liste lue : celui qui n'y est plus s'est fermé, même pendant
+ * qu'on regardait un autre fil (au retour, la première lecture le voit manquer).
  */
 const CLE_STOCKAGE = 'autowin.bureaux-du-fil.vus'
 
@@ -53,30 +57,34 @@ function ecrireVus(vus: Record<string, string[]>): void {
   }
 }
 
-/** La date en plus de l'identifiant : un agent qui relance dans le même bureau lance à nouveau. */
-const cleDuLancement = (b: BureauTv): string => `${b.id}|${b.lanceLe ?? ''}`
-
 /**
- * Retient la liste lue et rend les lancements jamais encore vus, du plus récent au plus ancien
- * (l'ordre de fusionnerBureaux, hdesk-tv.ts) : chacun compte pour un dans le chiffre de l'icône.
+ * La date en plus de l'identifiant : un agent qui relance dans le même bureau lance à nouveau.
+ * Unique sur tout le poste : une fiche porte un seul fil, et deux lancements n'ont pas la même date.
  */
-function noterLecture(
-  conversationId: string,
-  liste: readonly BureauTv[],
-  depuis: number
-): BureauTv[] {
+export const cleDuLancement = (b: BureauTv): string => `${b.id}|${b.lanceLe ?? ''}`
+
+interface Lecture {
+  /** Lancements jamais encore vus, du plus récent au plus ancien (l'ordre de fusionnerBureaux). */
+  lances: BureauTv[]
+  /** Clés des bureaux de la lecture précédente absents de celle-ci : fermés depuis. */
+  fermes: string[]
+}
+
+/** Retient la liste lue et rend ce qui a changé depuis la précédente. */
+function noterLecture(conversationId: string, liste: readonly BureauTv[], depuis: number): Lecture {
   const vus = lireVus()
-  const connus = new Set(vus[conversationId] ?? [])
+  const avant = vus[conversationId] ?? []
+  const connus = new Set(avant)
+  const cles = liste.map(cleDuLancement)
+  const presents = new Set(cles)
   const lances = liste.filter(
     (b) => !connus.has(cleDuLancement(b)) && Date.parse(b.lanceLe ?? '') >= depuis
   )
-  if (liste.some((b) => !connus.has(cleDuLancement(b)))) {
-    ecrireVus({
-      ...vus,
-      [conversationId]: [...connus, ...liste.map(cleDuLancement)]
-    })
+  const fermes = avant.filter((cle) => !presents.has(cle))
+  if (fermes.length || cles.some((cle) => !connus.has(cle))) {
+    ecrireVus({ ...vus, [conversationId]: cles })
   }
-  return lances
+  return { lances, fermes }
 }
 
 /**
@@ -100,6 +108,8 @@ export interface OptionsGuet {
   /** Les fils à guetter (filsDuPanneau). */
   fils: readonly string[]
   onBureauLance: (bureau: BureauTv, conversationId: string) => void
+  /** Un bureau de la lecture précédente n'est plus dans la liste : il s'est fermé. */
+  onBureauFerme?: (cle: string, conversationId: string) => void
   api?: GuetBureauxApi
   /** Instant avant lequel un bureau n'est pas « lancé » : l'ouverture de l'app. */
   depuis?: number
@@ -109,12 +119,15 @@ export function useGuetBureauxDuFil({
   actif,
   fils,
   onBureauLance,
+  onBureauFerme,
   api,
   depuis = OUVERTURE_APP
 }: OptionsGuet): void {
   const rappelRef = useRef(onBureauLance)
+  const fermetureRef = useRef(onBureauFerme)
   useEffect(() => {
     rappelRef.current = onBureauLance
+    fermetureRef.current = onBureauFerme
   })
 
   // La clé et pas le tableau : ChatView peut rendre un tableau neuf aux mêmes fils.
@@ -136,7 +149,9 @@ export function useGuetBureauxDuFil({
           for (const fil of cleFils.split('\n')) {
             const liste = await lireListe(fil)
             if (!vivant) return
-            for (const lance of noterLecture(fil, liste, depuis)) rappelRef.current(lance, fil)
+            const { lances, fermes } = noterLecture(fil, liste, depuis)
+            for (const cle of fermes) fermetureRef.current?.(cle, fil)
+            for (const lance of lances) rappelRef.current(lance, fil)
           }
           echecs = 0
         } catch {

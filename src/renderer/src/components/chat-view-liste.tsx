@@ -17,7 +17,7 @@ import { lireDossiersRetires } from './dossiers-du-chat'
 import { fusionnerDossiersImportes } from './chat-dossiers-import'
 import { usePlanDuChef } from './lots-mesures'
 import { ongletDuFil } from './frise-des-lots'
-import { filsDuPanneau, useGuetBureauxDuFil } from './guet-bureaux-du-fil'
+import { cleDuLancement, filsDuPanneau, useGuetBureauxDuFil } from './guet-bureaux-du-fil'
 import { lotsSousOnglets, activiteDesLots } from './lots-dans-la-liste'
 import { signesDesSuperConvs } from './signe-super-conv'
 import {
@@ -94,6 +94,8 @@ export type ListeDesConversationsCtx = {
   messages: import('./chat-view-types').Msg[]
   mosaicIds: string[]
   onInspectTurn: ((target: import('../observatory-focus').InspectTurnTarget) => void) | undefined
+  /** Retire du compteur rouge, dans tous les fils, ce qui n'existe plus (voir `panneau-outil.ts`). */
+  oublierNouveaute: (outil: OutilDuPanneau, cle: string) => void
   ouvrirLogin: () => void
   pickSuggestion: (prompt: string, suite?: readonly string[] | undefined) => void
   planSelection: (
@@ -121,8 +123,8 @@ export type ListeDesConversationsCtx = {
   setDossierNouveauFil: React.Dispatch<React.SetStateAction<string | null>>
   setDossiersMemorises: React.Dispatch<React.SetStateAction<string[]>>
   setOpenImage: React.Dispatch<React.SetStateAction<{ src: string; name: string } | null>>
-  /** Ajoute au compteur rouge d'une icône de l'en-tête (voir `panneau-outil.ts`). */
-  signalerNouveaute: (place: string, outil: OutilDuPanneau, combien?: number) => void
+  /** Compte ces clés sur le chiffre rouge d'une icône de l'en-tête (voir `panneau-outil.ts`). */
+  signalerNouveaute: (place: string, outil: OutilDuPanneau, cles: readonly string[]) => void
   setSelectedConvIds: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>
   setSurvole: React.Dispatch<React.SetStateAction<string | null>>
   showRuns: boolean
@@ -180,6 +182,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     messages,
     mosaicIds,
     onInspectTurn,
+    oublierNouveaute,
     ouvrirLogin,
     pickSuggestion,
     planSelection,
@@ -512,9 +515,9 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     planDuFilOuvert && activeId ? ongletDuFil(planDuFilOuvert, activeId) : null
   /*
    * LES BUREAUX CACHÉS DU CHANTIER (2026-10-31) : un bureau lancé par le fil ajoute 1 au compteur
-   * rouge de l'icône écran (2026-11-19 : il n'ouvre plus le panneau tout seul). Toute la super conv
-   * compte : un lot ouvre son bureau dans son propre fil. Vide en mosaïque : plusieurs fils à l'écran,
-   * l'en-tête n'a pas d'icône où compter.
+   * rouge de l'icône écran (2026-11-19 : il n'ouvre plus le panneau tout seul), et le retire en se
+   * fermant (2026-11-21). Toute la super conv compte : un lot ouvre son bureau dans son propre fil.
+   * Vide en mosaïque : plusieurs fils à l'écran, l'en-tête n'a pas d'icône où compter.
    */
   const filsDesBureaux = useMemo(
     () => filsDuPanneau(convViewMode === 'mosaic' ? null : activeId, chefDuFilOuvert, liensDeLots),
@@ -525,9 +528,10 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     fils: filsDesBureaux,
     // Les fils guettés sont ceux du fil affiché (vide sans fil) : c'est son icône qui compte,
     // même quand le bureau vient d'un lot de sa super conv.
-    onBureauLance: () => {
-      if (activeId) signalerNouveaute(activeId, 'bureaux')
-    }
+    onBureauLance: (bureau) => {
+      if (activeId) signalerNouveaute(activeId, 'bureaux', [cleDuLancement(bureau)])
+    },
+    onBureauFerme: (cle) => oublierNouveaute('bureaux', cle)
   })
   /*
    * Les titres des onglets de la super conv. La signature garde la MÊME Map tant

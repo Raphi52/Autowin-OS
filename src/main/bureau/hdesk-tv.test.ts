@@ -271,7 +271,8 @@ describe.skipIf(process.platform !== 'win32')(
  */
 describe('processus de capture — lancement lent et fil sans bureau (conv-1077)', () => {
   const fauxLanceur = (
-    bureaux: string[],
+    /** Les bureaux vivants que rend `list`, ou l'erreur qu'il rend à la place. */
+    bureaux: string[] | { erreur: string },
     bloqueMs = 0,
     demarrageMs = 5
   ): { lancer: LanceurCapture; lancements: number[]; tues: number[] } => {
@@ -303,7 +304,8 @@ describe('processus de capture — lancement lent et fil sans bureau (conv-1077)
       stdin.on('data', (ligne: string) => {
         if (ligne.trim() === 'list')
           setTimeout(
-            () => stdout.write(`${JSON.stringify({ bureaux })}\n`),
+            () =>
+              stdout.write(`${JSON.stringify(Array.isArray(bureaux) ? { bureaux } : bureaux)}\n`),
             Math.max(0, pretA - Date.now()) + 10
           )
       })
@@ -393,6 +395,27 @@ describe('processus de capture — lancement lent et fil sans bureau (conv-1077)
         { id: 'vivant', travail: 'preuve', conversationId: 'conv-1' }
       ])
       expect(f.lancements).toHaveLength(1)
+    } finally {
+      c.detruire()
+      rmSync(reg, { recursive: true, force: true })
+    }
+  })
+
+  /*
+   * 2026-11-21 : le guet du fil retire 1 au chiffre rouge pour chaque bureau absent de la liste.
+   * Une liste en erreur rendue vide les aurait tous « fermés » d'un coup.
+   */
+  it('liste en erreur : la lecture échoue, elle ne rend pas « aucun bureau », la fiche reste', async () => {
+    const f = fauxLanceur({ erreur: 'capture indisponible' })
+    const reg = mkdtempSync(join(tmpdir(), 'tv-erreur-reg-'))
+    writeFileSync(
+      join(reg, 'vivant.json'),
+      JSON.stringify({ id: 'vivant', travail: 'preuve', conversationId: 'conv-1' })
+    )
+    const c = new CapteurHdesk(tmpdir(), reg, { lancer: f.lancer })
+    try {
+      await expect(c.bureaux('conv-1')).rejects.toThrow('capture indisponible')
+      expect(lireRegistre(reg).map((e) => e.id)).toEqual(['vivant'])
     } finally {
       c.detruire()
       rmSync(reg, { recursive: true, force: true })

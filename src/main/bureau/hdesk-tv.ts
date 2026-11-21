@@ -316,8 +316,13 @@ export class CapteurHdesk {
     )
       return []
     const r = await this.demander('list')
-    const vivants = Array.isArray(r.bureaux) ? (r.bureaux as string[]) : []
-    if (!r.erreur && Array.isArray(r.bureaux)) purgerBureauxFermes(this.registre, vivants)
+    // UNE ERREUR N'EST PAS UNE LISTE VIDE (2026-11-21) : le guet du fil lit une liste vide comme
+    // « tous ses bureaux fermés » et retire 1 au chiffre rouge par bureau. Il espace la lecture
+    // suivante sur une erreur, mais seulement si elle remonte.
+    if (typeof r.erreur === 'string') throw new Error(r.erreur)
+    if (!Array.isArray(r.bureaux)) throw new Error('Liste des bureaux illisible.')
+    const vivants = r.bureaux.map(String)
+    purgerBureauxFermes(this.registre, vivants)
     return fusionnerBureaux(vivants, lireRegistre(this.registre), conversationId)
   }
 

@@ -64,9 +64,9 @@ describe('ChatView — panneau des Bureaux cachés', () => {
   let demanderDepuisLApp: (() => void) | null = null
   let quitterPuisRevenir: (() => Promise<void>) | null = null
   let demonter: (() => Promise<void>) | null = null
-  /** Ce que le guet du fil lit. */
+  /** Les bureaux vivants ; le guet n'en lit que ceux du fil demandé, comme `fusionnerBureaux`. */
   let lances: BureauTv[] = []
-  const lectures = vi.fn(async (_fil?: string) => lances)
+  const lectures = vi.fn(async (fil?: string) => lances.filter((b) => b.conversationId === fil))
 
   beforeEach(() => {
     sessionStorage.clear()
@@ -276,6 +276,26 @@ describe('ChatView — panneau des Bureaux cachés', () => {
     expect(panneauBureaux(c)).toBeNull()
   })
 
+  /* « ça laisse 9+ mais quand le hdesk se ferme ça doit faire -1 a ce compteur » (2026-11-21). */
+  it('un bureau compté qui se ferme retire 1 sous l’icône ; le dernier fermé, plus de chiffre', async () => {
+    const c = await monter()
+    const second = {
+      ...lancement(),
+      id: 'chat-A-2',
+      lanceLe: new Date(Date.now() + 500).toISOString()
+    }
+    lances = [lancement(), second]
+    await quitterPuisRevenir?.()
+    expect(chiffreBureaux(c)).toBe('2')
+    lances = [second]
+    await quitterPuisRevenir?.()
+    expect(chiffreBureaux(c)).toBe('1')
+    lances = []
+    await quitterPuisRevenir?.()
+    expect(chiffreBureaux(c)).toBeNull()
+    expect(panneauBureaux(c)).toBeNull()
+  })
+
   it('deux lancements : 2 sous l’icône, et le navigateur ouvert reste à sa place', async () => {
     const c = await monter()
     await cliquer('[data-testid="chat-navigateur-toggle"]')
@@ -295,7 +315,6 @@ describe('ChatView — panneau des Bureaux cachés', () => {
     lances = [lancement()]
     await quitterPuisRevenir?.()
     expect(chiffreBureaux(c)).toBe('1')
-    lances = []
     await ouvrirLeFil('B')
     expect(chiffreBureaux(c)).toBeNull()
     await ouvrirLeFil('A')

@@ -218,6 +218,7 @@ import {
   fermerDans,
   navigateurOuvertDans,
   nouveautesDans,
+  oublierPartout,
   OUTILS_AU_REPOS,
   ouvrirDans,
   placeDuPanneau,
@@ -1231,8 +1232,13 @@ export function ChatView({
     []
   )
   const signalerNouveaute = useCallback(
-    (place: string, outil: OutilDuPanneau, combien = 1): void =>
-      setOutils((avant) => signalerDans(avant, place, outil, combien)),
+    (place: string, outil: OutilDuPanneau, cles: readonly string[]): void =>
+      setOutils((avant) => signalerDans(avant, place, outil, cles)),
+    []
+  )
+  const oublierNouveaute = useCallback(
+    (outil: OutilDuPanneau, cle: string): void =>
+      setOutils((avant) => oublierPartout(avant, outil, cle)),
     []
   )
   const placePanneau = placeDuPanneau(activeId, convViewMode === 'mosaic')
@@ -1276,8 +1282,8 @@ export function ChatView({
       ongletsConnusRef.current.set(etat.conversationId, new Set(ids))
       // Fil pas encore relu : on apprend ses onglets sans compter — ce n'est pas une ouverture vue.
       if (!connus || etat.conversationId !== activeRef.current) return
-      const neufs = ids.filter((id) => !connus.has(id)).length
-      if (neufs) signalerNouveaute(etat.conversationId, 'navigateur', neufs)
+      const neufs = ids.filter((id) => !connus.has(id))
+      if (neufs.length) signalerNouveaute(etat.conversationId, 'navigateur', neufs)
     })
   }, [signalerNouveaute])
   useEffect(() => {
@@ -4023,7 +4029,8 @@ export function ChatView({
     conversationHits, conversationsVues, convQuery, convs, convSelectionMode, convStatusFilter,
     convViewMode, correspondancesContenu, doitAutoLancerCandidats, dossierParDefaut,
     dossiersMemorises, groupesReplies, handleFork, handleModifier, handleRevenir, isActive, langue,
-    liveRuns, loadConv, memoriserDossier, messages, mosaicIds, onInspectTurn, ouvrirLogin,
+    liveRuns, loadConv, memoriserDossier, messages, mosaicIds, onInspectTurn, oublierNouveaute,
+    ouvrirLogin,
     pickSuggestion, planSelection, rangerDans, refineResumeDraft, refreshConvs, revealLiveAction,
     runs, selectedConvIds, setAppNotice, setConvMenu, setConvSelectionMode, setDossierNouveauFil,
     setDossiersMemorises, setOpenImage, setSelectedConvIds, setSurvole, showRuns, signalerNouveaute,
