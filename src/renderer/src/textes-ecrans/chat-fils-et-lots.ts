@@ -113,9 +113,13 @@ export const TEXTES_FR = {
   'superConv.relais.titre': 'Sans dépendance : parti quand le lot {rang} a fini',
   'superConv.libre': 'sans attente',
   'superConv.libre.titre': 'Sans dépendance : parti sans attendre la fin d’un autre lot',
+  'superConv.attendFichiers': 'attend le {rang}',
+  'superConv.attendFichiers.titre':
+    'Attend la fin du lot {rang} : ils modifient tous les deux {fichiers}, donc ils ne tournent pas en même temps',
+  'superConv.plafond': 'plafond atteint',
+  'superConv.plafond.titre': 'Le plan a lancé ses {n} tours : il ne lance plus de lot',
   'superConv.enFile': 'en file',
-  'superConv.enFile.titre':
-    'Sans dépendance : part dès qu’une place se libère ({n} lots à la fois)',
+  'superConv.enFile.titre': 'Part dès qu’une place se libère ({n} lots à la fois)',
   'superConv.piste.titre': 'Ouvrir le lot {rang}',
   'superConv.anciens': 'Plan précédent · {titre}',
   'superConv.anciens.ouvrir': 'Ouvrir le lot {rang} de « {titre} »',
@@ -370,9 +374,13 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'superConv.relais.titre': 'No dependency: started when batch {rang} finished',
   'superConv.libre': 'no wait',
   'superConv.libre.titre': 'No dependency: started without waiting for another batch',
+  'superConv.attendFichiers': 'waits for {rang}',
+  'superConv.attendFichiers.titre':
+    'Waits for batch {rang} to finish: both change {fichiers}, so they do not run at the same time',
+  'superConv.plafond': 'limit reached',
+  'superConv.plafond.titre': 'The plan has launched its {n} rounds: it starts no more batches',
   'superConv.enFile': 'queued',
-  'superConv.enFile.titre':
-    'No dependency: starts as soon as a slot frees up ({n} batches at a time)',
+  'superConv.enFile.titre': 'Starts as soon as a slot frees up ({n} batches at a time)',
   'superConv.piste.titre': 'Open batch {rang}',
   'superConv.anciens': 'Earlier plan · {titre}',
   'superConv.anciens.ouvrir': 'Open batch {rang} of “{titre}”',

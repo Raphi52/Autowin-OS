@@ -135,8 +135,24 @@ function texteDEnchainement(
       texte: t('superConv.relais', { rang: e.rang }),
       titre: t('superConv.relais.titre', { rang: e.rang })
     }
+  if (e.genre === 'fichiers')
+    return {
+      texte: t('superConv.attendFichiers', { rang: e.rang }),
+      titre: t('superConv.attendFichiers.titre', {
+        rang: e.rang,
+        fichiers: e.fichiers.map(cheminCourt).join(', ')
+      })
+    }
+  if (e.genre === 'plafond')
+    return { texte: t('superConv.plafond'), titre: t('superConv.plafond.titre', { n: plan.plafondTours }) }
   if (e.genre === 'libre') return { texte: t('superConv.libre'), titre: t('superConv.libre.titre') }
   return { texte: t('superConv.enFile'), titre: t('superConv.enFile.titre', { n: plan.parallele }) }
+}
+
+/** « D:\Projet\Serveur\Recopie » → « Serveur\Recopie » : la fin du chemin suffit à le reconnaître. */
+function cheminCourt(chemin: string): string {
+  const morceaux = chemin.split(/[\\/]+/u).filter(Boolean)
+  return morceaux.slice(-2).join(chemin.includes('\\') ? '\\' : '/')
 }
 
 /**
@@ -175,8 +191,11 @@ function LigneDeLot({
   const cout = coutDuFil(couts, lot.fil)
   const libelleCout = cout ? summarizeConversationCost(cout).label : ''
   const mot = t(CLE_ETAT[lot.etat])
-  const dit = lot.raison ?? phrase ?? ''
   const enchainement = texteDEnchainement(plan, lot, t)
+  // Un lot qui attend un autre lot pour un fichier commun le DIT en clair sur sa ligne : sinon
+  // « attend le 10 » laisse deviner pourquoi deux lots prêts ne tournent pas ensemble.
+  const attendFichiers = lot.etat === 'a-faire' && enchainementDuLot(plan, lot).genre === 'fichiers'
+  const dit = lot.raison ?? phrase ?? (attendFichiers ? enchainement.titre : '')
   const enCours = lot.etat === 'en-cours'
   const heures = lot.debut
     ? `${heure(lot.debut)} → ${lot.fin ? heure(lot.fin) : enCours ? '…' : INCONNU}`
@@ -219,7 +238,11 @@ function LigneDeLot({
         </span>
       )}
       <span className="scm-pastille">{mot}</span>
-      <span className="scm-enchainement" data-testid={`scm-piste-${lot.rang}-enchainement`}>
+      <span
+        className="scm-enchainement"
+        data-testid={`scm-piste-${lot.rang}-enchainement`}
+        title={enchainement.titre}
+      >
         {enchainement.texte}
       </span>
       <span className="scm-heures">{heures}</span>

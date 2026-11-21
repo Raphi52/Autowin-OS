@@ -57,6 +57,52 @@ describe('enchainementDuLot', () => {
   })
 })
 
+/*
+ * Le vrai cas du 2026-11-21 : lots 10 et 11 « après 9 », le 9 fait, 6 places, et seul le 10
+ * tournait. Le 11 attendait le 10, qui modifiait le même dossier ; l'écran disait « après 9 ».
+ */
+describe('enchainementDuLot — un lot pas parti dit ce qui le retient vraiment', () => {
+  const avec = (l: LotDuPlan, modif: Partial<LotDuPlan>): LotDuPlan => ({ ...l, ...modif })
+  const plan11 = (modif: Partial<PlanDeLots> = {}, etat9: LotDuPlan['etat'] = 'fait'): PlanDeLots =>
+    ({
+      statut: 'en-cours',
+      parallele: 6,
+      plafondTours: 36,
+      toursLances: 24,
+      lots: [
+        avec(lot(9), { etat: etat9, fichiers: ['D:\\P\\Serveur\\Recopie', 'D:\\P\\Base\\v2'] }),
+        avec(lot(10, H(18, 2), undefined, [9]), {
+          fichiers: ['D:\\P\\Serveur\\Recopie', 'D:\\P\\Base\\migrations']
+        }),
+        avec(lot(11, undefined, undefined, [9]), {
+          fichiers: ['d:/p/serveur/recopie', 'D:\\P\\Base\\v2']
+        }),
+        avec(lot(12), { fichiers: ['D:\\P\\Autre'] })
+      ],
+      ...modif
+    }) as unknown as PlanDeLots
+  const du = (p: PlanDeLots, rang: number): ReturnType<typeof enchainementDuLot> =>
+    enchainementDuLot(p, p.lots.find((l) => l.rang === rang)!)
+
+  it('prérequis fait, fichier tenu par un lot en cours : « attend le 10 », avec le chemin', () => {
+    expect(du(plan11(), 11)).toEqual({
+      genre: 'fichiers',
+      rang: 10,
+      fichiers: ['D:\\P\\Serveur\\Recopie']
+    })
+  })
+  it('prérequis pas fait : il reste « après 9 »', () => {
+    expect(du(plan11({}, 'en-cours'), 11)).toEqual({ genre: 'apres', rangs: [9] })
+  })
+  it('libre de fichiers mais toutes les places prises : en file ; plafond atteint : plafond', () => {
+    expect(du(plan11({ parallele: 1 }), 12)).toEqual({ genre: 'file' })
+    expect(du(plan11({ toursLances: 36 }), 12)).toEqual({ genre: 'plafond' })
+  })
+  it('un lot déjà parti garde son enchaînement d’origine', () => {
+    expect(du(plan11(), 10)).toEqual({ genre: 'apres', rangs: [9] })
+  })
+})
+
 describe('rangsLisibles', () => {
   it('resserre les suites de trois rangs et plus', () => {
     expect(rangsLisibles([6, 2, 3, 4, 5])).toBe('2–6')

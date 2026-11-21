@@ -1,4 +1,4 @@
-import type { LotDuPlan, PlanDeLots } from '../../../shared/plan-de-lots'
+import { attenteDuLot, type LotDuPlan, type PlanDeLots } from '../../../shared/plan-de-lots'
 
 /*
  * QUEL LOT PART APRÈS LEQUEL (2026-10-31 : « enlève le côté timeline, prends toute la
@@ -18,14 +18,28 @@ export const ECART_RELAIS_MS = 2 * 60_000
 export type Enchainement =
   /** Le plan le fait attendre ces lots (« après 2–6 »). */
   | { genre: 'apres'; rangs: number[] }
+  /** Prérequis faits, mais un lot en cours modifie les mêmes fichiers (« attend le 10 »). */
+  | { genre: 'fichiers'; rang: number; fichiers: string[] }
+  /** Le plan a lancé tous ses tours : il ne lance plus de lot. */
+  | { genre: 'plafond' }
   /** Sans dépendance, parti dès qu'un autre lot a fini. */
   | { genre: 'relais'; rang: number }
   /** Sans dépendance, parti sans attendre la fin d'un autre lot. */
   | { genre: 'libre' }
-  /** Sans dépendance, pas encore parti : il attend une place. */
+  /** Pas encore parti, rien d'autre ne le retient : il attend une place. */
   | { genre: 'file' }
 
+/**
+ * Un lot pas encore parti dit ce qui le retient VRAIMENT (`attenteDuLot`, la règle du
+ * coordinateur) : « après 9 » sur un lot dont le 9 est fait mentait. Un lot parti garde son
+ * enchaînement d'origine.
+ */
 export function enchainementDuLot(plan: PlanDeLots, lot: LotDuPlan): Enchainement {
+  const attente = attenteDuLot(plan, lot)
+  if (attente?.genre === 'fichiers') return attente
+  if (attente?.genre === 'plafond') return attente
+  if (attente?.genre === 'place') return { genre: 'file' }
+  if (attente?.genre === 'prerequis') return { genre: 'apres', rangs: attente.rangs }
   if (lot.apres?.length) return { genre: 'apres', rangs: [...lot.apres].sort((a, b) => a - b) }
   const debut = lot.debut
   if (debut === undefined) return { genre: 'file' }

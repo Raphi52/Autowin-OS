@@ -226,6 +226,26 @@ describe('le bloc du chef — un lot par ligne', () => {
     expect(hote.querySelector('[data-testid="scm-piste-3-duree"]')?.textContent).toBe('2 min')
   })
 
+  /*
+   * 2026-11-21 : deux lots « après 9 », le 9 fait, et un seul tournait. L'autre attendait le lot
+   * en cours qui modifiait le même dossier, mais sa ligne disait encore « après 9 ».
+   */
+  it('un lot prêt retenu par un fichier commun dit quel lot il attend, et pour quel fichier', async () => {
+    const [l1, l2, l3, l4] = PLAN.lots
+    const dossier = 'D:\\Projet\\Serveur\\Recopie'
+    const hote = await monter({
+      plan: {
+        ...PLAN,
+        lots: [l1, l2, { ...l3, fichiers: [dossier] }, { ...l4, apres: [2], fichiers: [dossier] }]
+      }
+    })
+    expect(enchainement(hote, 4)).toBe('attend le 3')
+    const raison =
+      'Attend la fin du lot 3 : ils modifient tous les deux Serveur\\Recopie, donc ils ne tournent pas en même temps'
+    expect(hote.querySelector('[data-testid="scm-piste-4-enchainement"]')?.getAttribute('title')).toBe(raison)
+    expect(hote.querySelector('[data-testid="scm-piste-4"] .scm-phrase')?.textContent).toBe(raison)
+  })
+
   it('les lignes suivent le numéro du lot, même parti après le suivant', async () => {
     const [l1, l2, l3, l4] = PLAN.lots
     const hote = await monter({

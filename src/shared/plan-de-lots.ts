@@ -814,22 +814,80 @@ export function lotsAPartir(plan: PlanDeLots, filOccupe?: (fil: string) => boole
   const enCours = plan.lots.filter((l) => l.etat === 'en-cours')
   let places = plan.parallele - enCours.length
   let budget = plan.plafondTours - plan.toursLances
-  const pris = new Set(enCours.flatMap((l) => l.fichiers.map(normaliserChemin)))
+  const pris = fichiersPris(enCours)
   const etats = new Map(plan.lots.map((l) => [l.rang, l.etat]))
   const partants: number[] = []
   for (const lot of plan.lots) {
     if (places <= 0 || budget <= 0) break
     if (lot.etat !== 'a-faire') continue
-    if (prerequisDe(lot).some((r) => etats.get(r) !== 'fait')) continue
+    if (prerequisRestants(lot, etats).length) continue
     if (lot.fil && filOccupe?.(lot.fil)) continue
-    const fichiers = lot.fichiers.map(normaliserChemin)
-    if (fichiers.some((f) => pris.has(f))) continue
-    for (const f of fichiers) pris.add(f)
+    if (conflitDeFichiers(lot, pris)) continue
+    for (const f of lot.fichiers) pris.set(normaliserChemin(f), { rang: lot.rang, chemin: f })
     partants.push(lot.rang)
     places--
     budget--
   }
   return partants
+}
+
+/** Chemin normalisé → le lot qui le modifie, et le chemin tel qu'il l'a annoncé (pour l'écran). */
+type FichiersPris = Map<string, { rang: number; chemin: string }>
+
+function fichiersPris(lots: readonly LotDuPlan[]): FichiersPris {
+  const pris: FichiersPris = new Map()
+  for (const l of lots)
+    for (const f of l.fichiers) pris.set(normaliserChemin(f), { rang: l.rang, chemin: f })
+  return pris
+}
+
+const prerequisRestants = (lot: LotDuPlan, etats: ReadonlyMap<number, EtatDuLot>): number[] =>
+  prerequisDe(lot).filter((r) => etats.get(r) !== 'fait')
+
+/** Le premier lot qui tient un fichier de `lot`, et les chemins qu'ils annoncent tous les deux. */
+function conflitDeFichiers(
+  lot: LotDuPlan,
+  pris: FichiersPris
+): { rang: number; fichiers: string[] } | undefined {
+  let conflit: { rang: number; fichiers: string[] } | undefined
+  for (const f of lot.fichiers) {
+    const tenu = pris.get(normaliserChemin(f))
+    if (!tenu) continue
+    if (!conflit) conflit = { rang: tenu.rang, fichiers: [] }
+    if (tenu.rang === conflit.rang) conflit.fichiers.push(tenu.chemin)
+  }
+  return conflit
+}
+
+/** Pourquoi un lot « à faire » d'un plan en cours ne part pas encore. */
+export type AttenteDuLot =
+  /** Ses prérequis (« apres ») qui ne sont pas encore faits. */
+  | { genre: 'prerequis'; rangs: number[] }
+  /** Un lot en cours modifie les mêmes fichiers : ils ne tournent pas en même temps. */
+  | { genre: 'fichiers'; rang: number; fichiers: string[] }
+  /** Toutes les places (`parallele`) sont prises. */
+  | { genre: 'place' }
+  /** Le plan a lancé tous les tours de son plafond. */
+  | { genre: 'plafond' }
+
+/**
+ * La raison d'attente d'un lot, tirée des MÊMES règles que `lotsAPartir` (2026-11-21 : le lot 11
+ * affichait « après 9 » alors que le 9 était fait ; il attendait en réalité le lot 10, qui modifiait
+ * le même dossier — « si on peut pas paralléliser, faut être cohérent sur pourquoi »).
+ * Ordre : prérequis, puis fichiers, puis place, puis plafond — la raison qui durera le plus
+ * longtemps d'abord. `undefined` : rien ne le retient, il part au prochain passage du coordinateur.
+ */
+export function attenteDuLot(plan: PlanDeLots, lot: LotDuPlan): AttenteDuLot | undefined {
+  if (plan.statut !== 'en-cours' || lot.etat !== 'a-faire') return undefined
+  const etats = new Map(plan.lots.map((l) => [l.rang, l.etat]))
+  const restants = prerequisRestants(lot, etats)
+  if (restants.length) return { genre: 'prerequis', rangs: restants }
+  const enCours = plan.lots.filter((l) => l.etat === 'en-cours')
+  const conflit = conflitDeFichiers(lot, fichiersPris(enCours))
+  if (conflit) return { genre: 'fichiers', ...conflit }
+  if (enCours.length >= plan.parallele) return { genre: 'place' }
+  if (plan.toursLances >= plan.plafondTours) return { genre: 'plafond' }
+  return undefined
 }
 
 const avecLot = (plan: PlanDeLots, rang: number, modif: Partial<LotDuPlan>): PlanDeLots => ({
