@@ -883,16 +883,17 @@ describe('enchaînement générique : push direct si le dépôt l’accepte, sin
 })
 
 /*
- * GARDE D'ENVOI (2026-11-08). Une fin de tour ou de run ne part JAMAIS vers le serveur d'un dépôt autre
- * qu'Autowin : NéoRIG a son origin sur Azure, et l'enchaînement auto y pousserait sinon. Le commit local,
- * lui, reste. ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un push direct, un repli sur branche dédiée, une PR.
- * Le jumeau (même dépôt avec le package.json d'Autowin) doit, lui, partir comme avant.
+ * TOUT DÉPÔT PART (2026-11-21, conv-2108). La garde du 2026-11-08 gardait en local le travail de tout
+ * dépôt autre qu'Autowin : conv-2106 (un dépôt de l'utilisateur, origin sur GitHub) a fini son lot avec
+ * « Envoi refusé : ce dépôt n'est pas celui d'Autowin », 85 commits restés sur le poste. Choix de
+ * l'utilisateur : l'envoi marche sur tous les dépôts. ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un dépôt sans le
+ * package.json d'Autowin qui ne pousse pas, ou qui ne se replie pas sur la branche dédiée + PR.
  */
-describe("garde d'envoi : un dépôt autre qu'Autowin ne part jamais vers son serveur", () => {
-  it('mode direct : rien n’arrive sur le distant, aucune PR, le commit reste local', async () => {
+describe("tout dépôt part vers son serveur, pas seulement celui d'Autowin", () => {
+  it('mode direct : le commit arrive sur la branche courante du distant, sans PR', async () => {
     const { repo, remote } = await repoWithRemote({ autowin: false })
     writeFileSync(join(repo, 'tiers.ts'), 'tiers\n')
-    const openPr = vi.fn(async () => 'PR interdite')
+    const openPr = vi.fn(async () => 'PR inutile')
     const res = await autoCloseRun({
       repo,
       branch: 'auto/tiers-direct',
@@ -901,22 +902,21 @@ describe("garde d'envoi : un dépôt autre qu'Autowin ne part jamais vers son se
       direct: true,
       openPr
     })
-    expect(res).toMatchObject({ status: 'skipped', reason: 'depot-tiers' })
-    expect((await realGit(['ls-remote', remote], repo)).trim()).toBe('')
+    expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
     expect(openPr).not.toHaveBeenCalled()
-    expect((await realGit(['log', '-1', '--format=%s'], repo)).trim()).toBe('travail tiers')
+    const local = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+    expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(local)
   })
 
-  it('mode direct refusé par le distant : ni rejeu, ni branche dédiée, ni PR', async () => {
+  it('mode direct refusé par le distant : repli sur la branche dédiée et sa PR, comme pour Autowin', async () => {
     const { repo, remote } = await repoWithRemote({ autowin: false })
-    // Le distant refuse le push direct : sans la garde, le repli sur la branche dédiée + PR aurait lieu.
     writeFileSync(
       join(remote, 'hooks', 'pre-receive'),
       '#!/bin/sh\nwhile read o n r; do [ "$r" = refs/heads/travail ] && { echo "PR requise"; exit 1; }; done\nexit 0\n',
       { mode: 0o755 }
     )
     writeFileSync(join(repo, 'repli.ts'), 'repli\n')
-    const openPr = vi.fn(async () => 'PR interdite')
+    const openPr = vi.fn(async () => 'PR tierce')
     const res = await autoCloseRun({
       repo,
       branch: 'auto/tiers-repli',
@@ -925,12 +925,19 @@ describe("garde d'envoi : un dépôt autre qu'Autowin ne part jamais vers son se
       direct: true,
       openPr
     })
-    expect(res).toMatchObject({ status: 'skipped', reason: 'depot-tiers' })
-    expect((await realGit(['ls-remote', remote], repo)).trim()).toBe('')
-    expect(openPr).not.toHaveBeenCalled()
+    expect(res).toMatchObject({
+      status: 'pushed',
+      branch: 'auto/tiers-repli',
+      mode: 'pr',
+      pr: 'PR tierce'
+    })
+    expect(openPr).toHaveBeenCalledWith(
+      expect.objectContaining({ head: 'auto/tiers-repli', base: 'travail' })
+    )
+    expect(await realGit(['branch', '--list'], remote)).toContain('auto/tiers-repli')
   })
 
-  it('mode branche : la branche dédiée n’est pas poussée non plus', async () => {
+  it('mode branche : la branche dédiée est poussée', async () => {
     const { repo, remote } = await repoWithRemote({ autowin: false })
     writeFileSync(join(repo, 'branche.ts'), 'branche\n')
     const res = await autoCloseRun({
@@ -939,11 +946,13 @@ describe("garde d'envoi : un dépôt autre qu'Autowin ne part jamais vers son se
       message: 'branche tiers',
       runGit: realGit
     })
-    expect(res).toMatchObject({ status: 'skipped', reason: 'depot-tiers' })
-    expect((await realGit(['ls-remote', remote], repo)).trim()).toBe('')
+    expect(res).toMatchObject({ status: 'pushed', branch: 'auto/tiers-branche' })
+    expect((await realGit(['ls-remote', remote], repo)).trim()).toContain(
+      'refs/heads/auto/tiers-branche'
+    )
   })
 
-  it('jumeau : le même dépôt avec le package.json d’Autowin part comme avant', async () => {
+  it('jumeau : le dépôt d’Autowin part comme avant', async () => {
     const { repo, remote } = await repoWithRemote()
     writeFileSync(join(repo, 'jumeau.ts'), 'jumeau\n')
     const openPr = vi.fn(async () => 'PR jumelle')
@@ -1348,14 +1357,14 @@ describe('les commits restés sur la branche locale (passage de porte jamais pou
     expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(distant)
   })
 
-  it('un dépôt tiers garde ses commits : la garde d’envoi vaut ici aussi', async () => {
+  it('un dépôt autre qu’Autowin pousse aussi ses commits locaux', async () => {
     const { repo, remote } = await repoWithRemote({ autowin: false })
     await realGit(['push', '-u', 'origin', 'travail'], repo)
-    const distant = (await realGit(['rev-parse', 'travail'], remote)).trim()
     await commiter(repo, 'a.ts')
     const plage = (await plageDesCommitsLocaux(repo, realGit))!
     const res = await publierLesCommitsLocaux({ repo, plage, runGit: realGit })
-    expect(res).toEqual({ status: 'skipped', reason: 'depot-tiers' })
-    expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(distant)
+    expect(res).toMatchObject({ status: 'pushed', branch: 'travail' })
+    const local = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+    expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(local)
   })
 })

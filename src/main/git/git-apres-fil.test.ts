@@ -40,7 +40,6 @@ import { viderFichiersEnAttente } from '../gel/ecriture-hors-fil'
 function tourPublie(partiel: Partial<TourFini> = {}): TourFini {
   return {
     accord: true,
-    dossierAutowin: true,
     deFond: false,
     demande: 'Corrige le bouton du chat',
     demandesDuFil: ['Regarde le bouton du chat', 'Corrige le bouton du chat'],
@@ -154,11 +153,10 @@ describe('decisionGitApresFil — quand /git part tout seul', () => {
       })
   })
 
-  it('hors du dépôt Autowin, jamais : les autres projets ne se publient pas d’eux-mêmes', () => {
-    expect(decisionGitApresFil(tourPublie({ dossierAutowin: false }))).toEqual({
-      lancer: false,
-      raison: 'hors-autowin'
-    })
+  it('tout dépôt déclenche, pas seulement celui d’Autowin : la décision ne lit plus le dossier', () => {
+    // 2026-11-21 (conv-2108) : un autre projet du poste se publie comme Autowin.
+    expect(decisionGitApresFil(tourPublie())).toMatchObject({ lancer: true })
+    expect(Object.keys(tourPublie())).not.toContain('dossierAutowin')
   })
 
   it('un tour de fond ne déclenche pas : sa fin a son propre suivi', () => {

@@ -64,8 +64,6 @@ const PUBLICATION_INTERDITE =
 export interface TourFini {
   /** L'interrupteur « Publier les fils finis ». */
   accord: boolean
-  /** Le fil travaille dans le dépôt d'Autowin : les autres projets ne se publient pas seuls. */
-  dossierAutowin: boolean
   deFond: boolean
   /** Le dernier message de l'utilisateur. */
   demande: string
@@ -88,7 +86,6 @@ export type DecisionGitApresFil =
       lancer: false
       raison:
         | 'accord-absent'
-        | 'hors-autowin'
         | 'tour-de-fond'
         | 'deja-une-publication'
         | 'publication-interdite'
@@ -106,9 +103,9 @@ function refusDeQualite(rapport: AutoCloseReport): boolean {
 
 /**
  * Le dossier est-il le dépôt d'Autowin ? Lu dans son `package.json` : `executionWorkspace` ne le dit
- * pas, c'est un dossier que l'utilisateur peut choisir. Sur tout autre projet, l'accord ne vaut pas :
- * Raphaël refuse toute publication qu'il n'a pas demandée sur un projet piloté à distance (Brain,
- * « ne jamais proposer de publier ce qui n'a pas été demandé »).
+ * pas, c'est un dossier que l'utilisateur peut choisir. Ne sert plus à la publication : depuis le
+ * 2026-11-21, tout dépôt part vers son serveur (choix de l'utilisateur, conv-2108). Reste pour ce qui
+ * n'existe que sur ce dépôt-ci (les copies de fil d'avant la racine unique).
  */
 export function estDepotAutowin(dossier: string): boolean {
   try {
@@ -124,7 +121,7 @@ export function estDepotAutowin(dossier: string): boolean {
 /**
  * Le dossier est-il un dépôt git à sa racine ? Un `.git` s'y trouve : un dossier, ou un fichier pour une copie
  * liée (son propre arbre de travail). Un sous-dossier de dépôt n'en est pas un. Ce tri ouvre une copie de travail
- * pour n'importe quel dépôt ; l'envoi vers un serveur reste réservé à `estDepotAutowin`.
+ * pour n'importe quel dépôt, et l'envoi vers un serveur vaut lui aussi pour tout dépôt.
  */
 // fix-ok: l'ouverture se trie sur ce test et non sur estDepotAutowin, sinon aucun autre dépôt git n'aurait de copie.
 export function estUnDepotGit(dossier: string): boolean {
@@ -267,7 +264,6 @@ export function filDesCommitsLocaux(
  */
 export function decisionGitApresFil(tour: TourFini): DecisionGitApresFil {
   if (!tour.accord) return { lancer: false, raison: 'accord-absent' }
-  if (!tour.dossierAutowin) return { lancer: false, raison: 'hors-autowin' }
   if (tour.deFond) return { lancer: false, raison: 'tour-de-fond' }
   if (DEJA_UNE_PUBLICATION.test(tour.demande))
     return { lancer: false, raison: 'deja-une-publication' }

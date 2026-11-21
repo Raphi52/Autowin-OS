@@ -2760,7 +2760,6 @@ Le fil reprend ensuite normalement.`
             .then((rapport) => {
               const decision = decisionGitApresFil({
                 accord: os.gitApresFilActif(),
-                dossierAutowin: estDepotAutowin(dossierDuTour(conversationId)),
                 deFond: args[5]?.background === true,
                 demande,
                 demandesDuFil: (os.conversations.get(conversationId)?.messages ?? [])
@@ -3580,7 +3579,8 @@ Le fil reprend ensuite normalement.`
    * LES TRAVAUX D'AGENTS RESTÉS HORS DE LA BRANCHE — le bandeau « 1 travail terminé n'a
    * jamais été publié ». Relus à chaque fin de run et une fois après le démarrage, rangés par fil qui
    * a lancé le run, puis confiés à la même file : un /git par fil, après son calme. Même accord que
-   * le reste de « Publication auto », mêmes refus (autre dépôt, publication interdite dans le fil).
+   * le reste de « Publication auto », même refus (publication interdite dans le fil). Tout dépôt
+   * part, pas seulement celui d'Autowin (2026-11-21).
    */
   const balayerLesTravauxDAgents = async (): Promise<void> => {
     if (!os.autoCloseEnabled() || !os.gitApresFilActif()) return
@@ -3597,7 +3597,6 @@ Le fil reprend ensuite normalement.`
       dejaTentes: travauxTentes.lire(),
       publiable: (fil) =>
         Boolean(os.conversations.get(fil)) &&
-        estDepotAutowin(dossierDuTour(fil)) &&
         !publicationInterditeDans(
           (os.conversations.get(fil)?.messages ?? [])
             .filter((message) => message.role === 'user')
@@ -3628,7 +3627,8 @@ Le fil reprend ensuite normalement.`
    */
   const rattraperLesCommitsLocaux = async (): Promise<void> => {
     if (!os.autoCloseEnabled() || !os.gitApresFilActif()) return
-    if (!estDepotAutowin(os.executionWorkspace)) return
+    // Tout dépôt git (2026-11-21) : le dossier de travail de l'app peut être un autre projet.
+    if (!estUnDepotGit(os.executionWorkspace)) return
     const plage = await plageDesCommitsLocaux(os.executionWorkspace, await defaultGitRunner())
     if (!plage) return
     const filDuRun = new Map(

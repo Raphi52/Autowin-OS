@@ -1,4 +1,3 @@
-import { estDepotAutowin } from '../git/git-apres-fil'
 import { controleDeSeparation, texteReserve } from '../git/controle-de-separation'
 import { titreDeCommitAuto } from '../git/titre-de-commit'
 import type { TypageAvantPublication } from '../verify/typage-avant-publication'
@@ -14,8 +13,9 @@ import type { TypageAvantPublication } from '../verify/typage-avant-publication'
  *     `HEAD:refs/heads/<branche auto>` et sa PR ne sont que le repli quand un dépôt refuse ce push.
  *  2. **On ne déplace jamais le HEAD local** — pas de `checkout -b` : l'utilisateur travaille peut-être
  *     dans ce dépôt. Le commit va sur la branche courante, la publication sur une branche distante.
- *  3. **Un dépôt qui n'est pas Autowin ne part jamais** (`estDepotAutowin`, avant tout push et toute
- *     PR) : un tour dans un autre projet ne pousse pas vers son serveur. Le commit local reste.
+ *  Ces règles valent pour TOUT dépôt, pas seulement celui d'Autowin (2026-11-21) : un tour dans un
+ *  autre projet pousse vers son serveur comme ici. Seuls le crochet `ALLOW_MAIN_PUSH` et le contrôle des
+ *  noms d'entreprise sont propres au dépôt d'Autowin, et ils s'éteignent seuls ailleurs.
  *
  * Le périmètre est explicite : les dépôts sont PARTAGÉS entre conversations, donc on ne commite QUE ce
  * qu'une preuve rattache au run — jamais `add -A`, ni « tout ce qui a changé pendant le run », qui
@@ -136,11 +136,6 @@ export type AutoCloseResult =
         | 'porte-refusee'
         /** Tour d'un fil en copie : la porte attend (fichier non commité dans le dossier partagé…). */
         | 'porte-en-attente'
-        /**
-         * Dépôt qui n'est pas celui d'Autowin : aucun envoi (ni push, ni branche dédiée, ni PR). Le
-         * commit local, lui, reste ; l'annonce du fil le dit.
-         */
-        | 'depot-tiers'
         /**
          * Un élément réservé à l'entreprise (nom, terme, fichier privé) était dans un commit à créer : ce
          * commit n'a pas été fait, rien n'est parti. `detail` vaut « commit » pour un commit du rejeu (déjà
@@ -552,11 +547,8 @@ async function publishRunCommits(input: {
 
     const remotes = (await runGit(['remote'], repo)).trim()
     if (!remotes) return { status: 'skipped', reason: 'no-remote' }
-    // GARDE D'ENVOI : seul le dépôt d'Autowin part vers son serveur. Un autre dépôt (NéoRIG : origin
-    // sur Azure) garde son commit local, sans push direct, sans branche dédiée, sans PR.
-    // fix-ok: cause mesurée — publishRunCommits n'avait aucune garde de dépôt : sur un témoin sans
-    // package.json Autowin, les 3 tests « garde d'envoi » rendaient status « pushed » (run-autoclose.test.ts).
-    if (!estDepotAutowin(repo)) return { status: 'skipped', reason: 'depot-tiers' }
+    // Tout dépôt part vers son serveur, pas seulement celui d'Autowin (2026-11-21, choix de l'utilisateur :
+    // la garde « dépôt tiers » du 08/11 gardait en local tout le travail d'un dépôt de l'utilisateur, conv-2106).
     let base: string | undefined
     let directRefused: string | undefined
     if (input.direct) {
