@@ -14,20 +14,23 @@
  *
  * Ne comptent pas : ce que le `.gitignore` de la copie ignore, les fichiers vides, `.git`, et tout lien
  * ou jonction (jamais suivi : le `node_modules` des copies vise celui du dépôt).
+ * Une copie qui a perdu son `.gitignore` racine (reste d'un retrait coupé) se juge AUSSI avec les règles
+ * d'ignorance du dossier de travail du dépôt (`reglesDuDepot: true`) : sans elles, ses sorties de
+ * construction passaient pour du travail inédit (21/11 : 33 restes de copies NéoRIG, 166 716 « inédits »,
+ * tous sous `bin`, `obj`, `web/node_modules` ou `wwwroot/app`, que le `.gitignore` du dépôt ignore).
  * Limites : un fichier seulement indexé (`git add` sans commit) a son objet dans le dépôt ; il passe
- * pour connu alors qu'aucun commit ne le porte. Une copie qui a perdu son `.gitignore` voit ses
- * sorties de construction (`out/`…) comptées comme inédites : l'erreur va du côté prudent (19/11 :
- * `run-a11c09dae62e-1`, 346 inédits, tous sous `out/` et `Audit/`).
+ * pour connu alors qu'aucun commit ne le porte. Ce sont les règles ACTUELLES du dépôt qui jugent la copie.
  *
  * Usage, lecture seule :
  *   node --no-warnings scripts/gc-copie-sans-git.mjs [--depot <dépôt ou son .git>] <copie>...
  * Sans `--depot`, le dépôt se lit dans le fichier `.git` de la copie (`gitdir: <dépôt>/.git/worktrees/…`).
- * Sortie : JSON `{ copies: [{ copie, depot, connus, ignores, liens, inedits, tailleInedite, erreur }] }`.
+ * Sortie : JSON `{ copies: [{ copie, depot, connus, ignores, reglesDuDepot, liens, inedits,
+ * tailleInedite, erreur }] }`.
  * Code 0 = toutes jugées, 1 = au moins une copie sans dépôt lisible (dit dans `erreur`), 2 = refusé.
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const TAMPON = 512 * 1024 * 1024
@@ -81,6 +84,26 @@ function git(gitdir, copie, args, entree, codesAdmis = [0]) {
   return r.stdout
 }
 
+/**
+ * Les chemins (relatifs, en `/`) que les `.gitignore` de `dossier` ignorent. `--no-index` : la règle
+ * seule, sans l'index du dépôt (qui ne connaît pas la copie) ; les chemins n'ont pas à exister dans
+ * `dossier`, ce qui permet de juger ceux d'une copie avec les règles du dossier de travail du dépôt.
+ */
+function ignoresParLesRegles(gitdir, dossier, fichiers) {
+  if (!fichiers.length) return new Set()
+  return new Set(
+    git(
+      gitdir,
+      dossier,
+      ['check-ignore', '--no-index', '--stdin', '-z'],
+      fichiers.map((f) => f.chemin).join('\0'),
+      [0, 1]
+    )
+      .split('\0')
+      .filter(Boolean)
+  )
+}
+
 /** Juge une copie : ce qu'elle porte que le dépôt n'a pas. */
 export function inedits({ copie, depot }) {
   copie = resolve(copie)
@@ -90,6 +113,7 @@ export function inedits({ copie, depot }) {
     depot: gitdir,
     connus: 0,
     ignores: 0,
+    reglesDuDepot: false,
     liens: 0,
     inedits: [],
     tailleInedite: 0
@@ -102,18 +126,19 @@ export function inedits({ copie, depot }) {
   bilan.liens = liens
   if (!fichiers.length) return bilan
 
-  // `--no-index` : la règle d'ignorance seule, sans l'index du dépôt (qui ne connaît pas la copie).
-  const ignores = new Set(
-    git(
-      gitdir,
-      copie,
-      ['check-ignore', '--no-index', '--stdin', '-z'],
-      fichiers.map((f) => f.chemin).join('\0'),
-      [0, 1]
-    )
-      .split('\0')
-      .filter(Boolean)
-  )
+  const ignores = ignoresParLesRegles(gitdir, copie, fichiers)
+  // Sans `.gitignore` racine, la copie a perdu ses règles : le dossier de travail du dépôt les donne.
+  // Un dépôt nu (`<nom>.git`) n'a pas de dossier de travail : son parent n'a rien à dire.
+  const travailDuDepot = basename(gitdir) === '.git' ? dirname(gitdir) : null
+  if (
+    travailDuDepot &&
+    !existsSync(join(copie, '.gitignore')) &&
+    existsSync(join(travailDuDepot, '.gitignore'))
+  ) {
+    bilan.reglesDuDepot = true
+    const restants = fichiers.filter((f) => !ignores.has(f.chemin))
+    for (const chemin of ignoresParLesRegles(gitdir, travailDuDepot, restants)) ignores.add(chemin)
+  }
   const suivis = fichiers.filter((f) => !ignores.has(f.chemin))
   bilan.ignores = fichiers.length - suivis.length
   if (!suivis.length) return bilan

@@ -83,6 +83,18 @@ describe('inedits', () => {
     expect(r.ignores).toBe(1)
     expect(r.liens).toBe(1)
     expect(r.tailleInedite).toBeGreaterThan(0)
+    expect(r.reglesDuDepot).toBe(false)
+  })
+
+  // Cas réel du 21/11 : 33 restes de copies NéoRIG réduits à leurs sorties de construction (bin, obj,
+  // web/node_modules), sans `.gitignore` : 166 716 « inédits », dont aucun n'était du travail.
+  it('une copie qui a perdu son .gitignore se juge avec les règles du dépôt : ses sorties de construction ne sont pas des inédits', () => {
+    rmSync(join(copie, '.gitignore'))
+    const r = inedits({ copie })
+    expect(r.inedits.map((f) => f.chemin)).toEqual(['src/nouveau.luau'])
+    expect(r.ignores).toBe(1)
+    expect(r.connus).toBe(1)
+    expect(r.reglesDuDepot).toBe(true)
   })
 
   it('rend une copie sans inédit quand tout son contenu est dans le dépôt', () => {
