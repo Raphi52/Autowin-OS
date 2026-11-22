@@ -168,8 +168,10 @@ collègues. Chaque commande ci-dessous se lance donc avec le dépôt comme dossi
      dernière ») s'abstient.
    - **Corbeille `gardees`** (sauvegarde `conversations.json*` ou `*.pre-remake`, manifeste manquant,
      dossier illisible) : jamais purgée d'office, ni par `--cette-fois` ni à la main. Elle repart à la
-     question habituelle, avec son motif. Le bon geste : mettre la sauvegarde dans
-     `.autowin-data/sauvegardes/`, vérifier qu'elle y est, puis demander et relancer le script.
+     question habituelle, avec son motif. Le bon geste, pour une sauvegarde : la mettre à l'abri avec
+     `node --no-warnings scripts/gc-abriter-sauvegardes.mjs --corbeille <racine>/<AAAA-MM-JJ> --vers
+     <dépôt>/.autowin-data/sauvegardes` (copie comparée octet par octet, `ORIGINE.txt`, puis retrait de
+     la corbeille ; le reste ne bouge pas), puis relancer le script et poser la question.
    - **Retirer l'accord** : supprimer les fichiers `accord` dès que l'utilisateur le demande, et le dire.
    Une passe qui pose une question de purge finit par `AUTOWIN_FIN_V1` et ne met NI la purge dans sa
    rubrique Recommandé NI dans une ligne de suite : elle s'afficherait comme un bouton de suite, et un
