@@ -40,6 +40,46 @@ describe('depotCiteDansLeMessage', () => {
     expect(depotCiteDansLeMessage(`lis ${ACTIF}`, ACTIF, existe)).toBeNull()
   })
 
+  /*
+   * LE DOSSIER CHOISI, CITÉ EN PREMIER (2026-11-23, conv-2118, 2119, 2122). Fils ouverts dans un
+   * dépôt de l'utilisateur, premier message « Le dépôt est <ce dépôt>… » puis, en fin de liste, un
+   * fichier de D:\AutoWinOS : les trois fils sont partis dans D:\AutoWinOS. Le dépôt actif était
+   * SAUTÉ au lieu de compter comme le premier dépôt nommé.
+   * Entrée qui doit faire échouer : l'autre dépôt, cité APRÈS le dossier actif, rendu comme cible.
+   */
+  it('ne bascule pas quand le dossier actif est le PREMIER depot cite', () => {
+    const PROJET = 'D:\\Projets\\Contoso'
+    const existe = disque(
+      PROJET,
+      `${PROJET}\\.git`,
+      `${PROJET}\\docker-compose.yml`,
+      ACTIF,
+      `${ACTIF}\\.git`,
+      `${ACTIF}\\src\\main\\gardes\\root-execution-contract.ts`
+    )
+    const message =
+      `Le dépôt est ${PROJET}. Ajoute TZ dans ${PROJET}\\docker-compose.yml.\n` +
+      `Côté Autowin : la règle de ${ACTIF}\\src\\main\\gardes\\root-execution-contract.ts.`
+    expect(depotCiteDansLeMessage(message, PROJET, existe)).toBeNull()
+    // Le même autre dépôt, cité AVANT le dossier actif, reste ce que l'utilisateur a nommé d'abord.
+    expect(depotCiteDansLeMessage(`va dans ${ACTIF}, pas dans ${PROJET}`, PROJET, existe)).toBe(
+      ACTIF
+    )
+  })
+
+  it('compte un fichier du dossier actif comme le dossier actif cite en premier', () => {
+    const existe = disque(
+      ACTIF,
+      `${ACTIF}\\.git`,
+      `${ACTIF}\\src`,
+      'D:\\Projets\\Contoso',
+      'D:\\Projets\\Contoso\\.git'
+    )
+    expect(
+      depotCiteDansLeMessage(`corrige ${ACTIF}\\src, comme D:\\Projets\\Contoso`, ACTIF, existe)
+    ).toBeNull()
+  })
+
   it('ne bascule pas sur un chemin qui n existe pas sur ce poste', () => {
     expect(depotCiteDansLeMessage('ouvre D:\\Nimporte\\Quoi', ACTIF, disque())).toBeNull()
   })

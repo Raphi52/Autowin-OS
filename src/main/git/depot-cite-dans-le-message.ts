@@ -68,6 +68,9 @@ function estDedans(enfant: string, parent: string): boolean {
  *
  * Le premier candidat gagne : un message qui cite deux depots differents est ambigu, et prendre le
  * premier reste le comportement le plus previsible (c'est celui que l'utilisateur a nomme d'abord).
+ * Le depot ACTIF est un candidat comme les autres : nomme en premier, il gagne et rien ne bascule.
+ * Il etait SAUTE (2026-11-23, conv-2118) : « Le depot est <dossier choisi>… » suivi, plus bas, d'un
+ * fichier de D:\AutoWinOS faisait partir le fil dans D:\AutoWinOS, contre le dossier choisi.
  */
 export function depotCiteDansLeMessage(
   message: string,
@@ -91,7 +94,9 @@ export function depotCiteDansLeMessage(
     if (!chemin || !existe(chemin)) continue
     const racine = racineDepot(chemin, existe)
     if (!racine) continue
-    if (dossierActif.trim() && memeCheminSurDisque(racine, dossierActif)) continue
+    // Le depot actif (ou un fichier qu'il contient) nomme AVANT tout autre : le dossier choisi tient.
+    if (dossierActif.trim() && memeCheminSurDisque(racine, dossierActif)) return null
+    if (depotActif && memeCheminSurDisque(racine, depotActif)) return null
     // Un depot IMBRIQUE dans le depot de travail (depot jetable, copie de travail d'un agent sous
     // .autowin-data) fait partie de CE depot : ce n'est pas l'autre projet que l'utilisateur aurait
     // oublie de ranger. Un dossier parent SANS depot (D:\GIT) continue, lui, de basculer vers ses projets.
