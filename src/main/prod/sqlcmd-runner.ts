@@ -369,8 +369,26 @@ export async function runSqlcmdJson(
         })
         return
       }
-      if (!rows && candidats === 0) {
+      // AUCUNE LIGNE = sortie VIDE, et seulement elle (`FOR JSON` n'écrit rien sur zéro ligne). Sur un
+      // délai dépassé, sqlcmd écrit « Timeout expired » et sort en code 0 même avec `-b` (mesuré le
+      // 2026-11-23) : ce texte sans crochet passait pour un résultat vide, et une base de 551
+      // documents était annoncée sans aucun.
+      if (!rows && candidats === 0 && colle.trim() === '') {
         finish({ ok: true, rows: [] })
+        return
+      }
+      if (!rows && /timeout expired/i.test(colle)) {
+        finish({
+          ok: false,
+          reason: `Requête abandonnée : délai de ${QUERY_TIMEOUT_SEC} s dépassé sur le serveur (aucun résultat lu, ce n'est PAS « aucune ligne »). Restreins-la (TOP, filtre sur une colonne indexée, pas de calcul sur de gros binaires).`
+        })
+        return
+      }
+      if (!rows && candidats === 0) {
+        finish({
+          ok: false,
+          reason: `Réponse de sqlcmd sans résultat lisible (ce n'est PAS « aucune ligne ») : ${colle.slice(0, 200)}`
+        })
         return
       }
       if (!rows) {

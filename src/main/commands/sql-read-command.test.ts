@@ -340,6 +340,24 @@ describe('runSqlRead — erreurs et plafonds', () => {
   })
 
   /**
+   * Régression : sur un délai de requête dépassé (`-t`), sqlcmd écrit « Timeout expired » et sort en
+   * code 0, MÊME avec `-b` (mesuré le 2026-11-23 sur 127.0.0.1,14330 : `WAITFOR DELAY` de 5 s sous
+   * `-t 2`). Le texte n'ayant ni `[` ni `{`, la commande rendait « la requête est valide et ne ramène
+   * rien » : 551 documents d'une base ont été annoncés absents. Seule une sortie VIDE est « aucune ligne ».
+   */
+  it('un délai dépassé en code 0 n’est PAS « aucune ligne »', async () => {
+    const out = await lancer('Timeout expired\r\n', 0).resultat
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.reason).toMatch(/délai/i)
+  })
+
+  it('une sortie non JSON en code 0 n’est PAS « aucune ligne »', async () => {
+    const out = await lancer('Sqlcmd: Warning: connexion interrompue.', 0).resultat
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.reason).toContain('connexion interrompue')
+  })
+
+  /**
    * Régression (4ᵉ audit) : une erreur d'EXÉCUTION survient après que SQL Server a déjà écrit une
    * partie du JSON, donc le message est à la FIN. `slice(0, 6)` ne regardait que le DÉBUT : l'agent
    * recevait « Requête refusée par SQL Server : [{"v":"AAAA… » — un refus sans motif, plus 12 ko de
