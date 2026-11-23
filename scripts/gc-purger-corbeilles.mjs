@@ -31,7 +31,7 @@
  * Sortie : le bilan en JSON. Code 0 = passe faite, 1 = purge échouée ou corbeille générale illisible,
  * 2 = commande refusée.
  */
-import { appendFileSync, lstatSync, readFileSync, readdirSync } from 'node:fs'
+import { appendFileSync, lstatSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
@@ -210,6 +210,9 @@ export function purgerLesCorbeilles({
       fichiers: vue.fichiers
     }
     try {
+      // La corbeille de `%TEMP%` (`%LOCALAPPDATA%/autowin-gc/`) n'a pas d'app qui crée `autowin-os`
+      // à côté d'elle : sa première purge s'arrêtait sur ENOENT (conv-1798, 23/11).
+      mkdirSync(donnees, { recursive: true })
       appendFileSync(journal, `${JSON.stringify({ ...ligne, geste: 'purge' })}\n`)
     } catch (erreur) {
       bilan.echecs.push({ nom, erreur: `journal impossible à écrire : ${erreur.message}` })

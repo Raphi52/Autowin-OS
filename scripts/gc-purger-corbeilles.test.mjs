@@ -224,6 +224,19 @@ describe('gc-purger-corbeilles — une seule fois', () => {
   it('une racine refusée reste refusée, avec ou sans l’option', () => {
     expect(lancer('--racine', 'gc-corbeille', '--cette-fois').code).toBe(2)
   })
+
+  // 23/11 (conv-1798) : première purge de `%LOCALAPPDATA%/autowin-gc/gc-corbeille`, dont le dossier
+  // `autowin-os` voisin n'avait jamais été créé. Le journal ne s'écrivait pas, et rien ne partait.
+  it('le dossier du journal absent est créé : la purge a lieu, avec sa ligne', () => {
+    rmdirSync(dirname(journal))
+    corbeille(ANCIENNE)
+    const r = lancer('--racine', racine, '--cette-fois')
+    expect(r.code, r.sortie).toBe(0)
+    expect(JSON.parse(r.sortie)).toMatchObject({ purgees: [{ nom: ANCIENNE }], echecs: [] })
+    expect(existsSync(join(racine, ANCIENNE))).toBe(false)
+    expect(lignesDuJournal()).toMatchObject([{ corbeille: ANCIENNE, geste: 'purge' }])
+    expect(existsSync(accord)).toBe(false)
+  })
 })
 
 describe('gc-purger-corbeilles — âge', () => {
