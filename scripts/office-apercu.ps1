@@ -5,7 +5,8 @@
 
 .DESCRIPTION
   Excel et PowerPoint tournent en instances invisibles, le fichier est ouvert en lecture seule et refermé sans
-  enregistrer : un classeur déjà ouvert par l'utilisateur n'est ni modifié ni fermé. Un graphique n'est exporté
+  enregistrer : un classeur déjà ouvert par l'utilisateur n'est ni modifié ni fermé, et un PowerPoint qu'il
+  a déjà ouvert reste ouvert (seule la présentation exportée y est refermée). Un graphique n'est exporté
   qu'une fois sa feuille et lui-même activés : sans cela Excel rend une image vide (constaté sur un graphique
   placé sous l'écran visible).
 
@@ -54,6 +55,9 @@ if ($Xlsx) {
 }
 
 if ($Pptx) {
+  # PowerPoint n'a qu'une instance : si l'utilisateur l'a déjà ouvert, New-Object rend SON PowerPoint, et
+  # Quit() le fermerait avec ses présentations. On ne quitte donc que l'instance que ce script a lancée.
+  $ppTournaitDeja = @(Get-Process POWERPNT -ErrorAction SilentlyContinue).Count -gt 0
   $pp = New-Object -ComObject PowerPoint.Application
   try {
     # ReadOnly = -1, Untitled = 0, WithWindow = 0 : aucune fenêtre.
@@ -65,7 +69,7 @@ if ($Pptx) {
     }
     $pr.Close()
   } finally {
-    $pp.Quit()
+    if (-not $ppTournaitDeja) { $pp.Quit() }
     [void][Runtime.InteropServices.Marshal]::ReleaseComObject($pp)
   }
 }
