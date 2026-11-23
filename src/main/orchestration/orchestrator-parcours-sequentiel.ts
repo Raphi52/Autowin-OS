@@ -1063,10 +1063,12 @@ export async function runInner(
               )
             }
             if (res.usage) {
+              // Le modèle qui a RÉPONDU, comme la trace de cet appel plus bas : le coût dit ce qui a
+              // tourné, pas ce qui était réglé (un alias comme « opus »).
               cost.add({
                 provider: res.provider ?? member.provider,
                 role: 'subagent',
-                model: member.model,
+                model: res.model ?? member.model,
                 inputTokens: res.usage.inputTokens,
                 outputTokens: res.usage.outputTokens,
                 cacheReadTokens: res.usage.cacheReadTokens,

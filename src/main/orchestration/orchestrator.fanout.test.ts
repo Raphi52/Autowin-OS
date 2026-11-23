@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CostAggregator } from '../dashboards/cost'
 import { lireVerdictJuge, Orchestrator, type OrchestrationPhase } from './orchestrator'
 import { objectionsDuJuge, verdictAvecObjectionsPortees } from '../juge/objections-juge'
@@ -27,7 +27,14 @@ class RecordingProvider implements ProviderAdapter {
   /** Appelé juste avant la panne d'un modèle `crash` : sert à annuler le run à cet instant. */
   avantUnePanne?: () => void
 
-  constructor(readonly id = 'capture') {}
+  /**
+   * `modelesServis` : le modèle que le provider RAPPORTE pour un modèle demandé (un alias servi sous
+   * son identifiant réel, comme sur un reroute). Absent de la table : aucun modèle n'est rapporté.
+   */
+  constructor(
+    readonly id = 'capture',
+    private readonly modelesServis: Record<string, string> = {}
+  ) {}
 
   async auth(): Promise<boolean> {
     return true
@@ -58,6 +65,7 @@ class RecordingProvider implements ProviderAdapter {
       provider: this.id,
       systemInjected: Boolean(options.system),
       usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.001 },
+      ...(this.modelesServis[model] ? { model: this.modelesServis[model] } : {}),
       executionEvidence:
         options.execution?.sandbox === 'danger-full-access'
           ? [
@@ -78,7 +86,11 @@ class RecordingProvider implements ProviderAdapter {
 function makeOrchestrator(
   provider: RecordingProvider,
   cost: CostAggregator,
-  phase: 'frame' | 'terrain' | 'scout' = 'frame'
+  phase: 'frame' | 'terrain' | 'scout' = 'frame',
+  membres: Array<{ provider: string; model: string }> = [
+    { provider: provider.id, model: 'm1' },
+    { provider: provider.id, model: 'm2' }
+  ]
 ): Orchestrator {
   const registry = new ProviderRegistry().register(provider)
   const roles = new RoleModelConfig({
@@ -94,13 +106,7 @@ function makeOrchestrator(
     executionWorkspace: 'C:\\ws',
     worktrees: makeTestWorktrees('C:\\ws'),
     execPhases: [phase],
-    phaseFanOut: (requestedPhase) =>
-      requestedPhase === phase
-        ? [
-            { provider: provider.id, model: 'm1' },
-            { provider: provider.id, model: 'm2' }
-          ]
-        : []
+    phaseFanOut: (requestedPhase) => (requestedPhase === phase ? membres : [])
   })
 }
 
@@ -503,6 +509,25 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(new Set(panelSteps.map((step) => step.execution?.agentId))).toEqual(
       new Set(['frame:m1', 'frame:m2'])
     )
+  })
+
+  it('le coût d’un membre de fan-out porte le modèle SERVI, pas l’alias demandé', async () => {
+    // Un membre configuré avec l'alias « opus » répond sous son identifiant réel : sa ligne de coût
+    // doit garder celui-ci, comme la trace du même appel. Le second membre ne rapporte aucun modèle :
+    // son coût garde le modèle demandé, sans rien inventer.
+    const provider = new RecordingProvider('capture', { opus: 'claude-opus-5' })
+    const cost = new CostAggregator()
+    const ecritures = vi.spyOn(cost, 'add')
+    await makeOrchestrator(provider, cost, 'frame', [
+      { provider: provider.id, model: 'opus' },
+      { provider: provider.id, model: 'm2' }
+    ]).run('cadre les pistes du projet')
+
+    const modelesDuCout = ecritures.mock.calls
+      .map(([tour]) => tour)
+      .filter((tour) => tour.role === 'subagent')
+      .map((tour) => tour.model)
+    expect([...modelesDuCout].sort()).toEqual(['claude-opus-5', 'm2'])
   })
 
   it('mono-modèle (aucun phaseFanOut) : comportement inchangé, 1 exec + 1 juge', async () => {
