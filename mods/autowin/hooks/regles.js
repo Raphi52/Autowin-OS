@@ -252,7 +252,12 @@ const PROMESSES_TACHE_DE_FOND = [
     ': it keeps running across turns and re-invokes you when it exits.',
     ': in Autowin OS it is STOPPED when the current turn ends (each turn is a separate session). ' +
       'In a chat turn, Autowin then re-runs the shell command from the start outside the turn and brings its result back in an automatic follow-up turn; ' +
-      'in a run step, its result is lost. For work longer than the turn, wait for it in the foreground.'
+      'in a run step, its result is lost. For work longer than the turn, wait for it in the foreground. ' +
+      // conv-2123 : Docker Desktop relancé par `docker desktop start` depuis le tour est mort à la fin du tour (Job
+      // KILL_ON_JOB_CLOSE, src/main/runs/survivable-spawn.ts), et la page de connexion d'une appli en ligne avec lui.
+      'Anything the turn starts, even in the foreground (Start-Process, an app, `docker desktop start`), is in the turn\'s Windows job ' +
+      'and is killed when the turn ends: a program that must outlive the turn (a service such as Docker Desktop) is started with ' +
+      'scripts/lancer-detache.ps1, which checks it runs outside the job.'
   ],
   ['at that limit it is stopped and you are re-invoked.', 'at that limit it is stopped.']
 ]

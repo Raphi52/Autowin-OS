@@ -102,6 +102,11 @@ describe('mod Autowin — description de l’outil shell (tool.describe du modul
     // Les deux suites réelles : relance hors du tour en chat (relance-taches-de-fond.ts), perte en run.
     expect(d).toContain('In a chat turn, Autowin then re-runs the shell command from the start')
     expect(d).toContain('in a run step, its result is lost')
+    // Tout processus lancé par le tour, même au premier plan, meurt avec le Job du tour (conv-2123 : Docker Desktop
+    // relancé par `docker desktop start` est mort à la fin du tour, et la connexion du client avec lui) ; le moyen
+    // de le faire survivre est nommé.
+    expect(d).toContain('killed when the turn ends')
+    expect(d).toContain('scripts/lancer-detache.ps1')
     // Le reste du texte du CLI est gardé, et la règle du bureau caché est ajoutée.
     expect(d).toContain('Executes a given bash command and returns its output.')
     expect(d).toContain('No `&` needed.')
