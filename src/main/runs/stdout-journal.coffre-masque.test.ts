@@ -10,7 +10,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
  * Ce test joue le vrai suivi du journal (`tailJsonLines`) avec un vrai coffre qui contient une
  * fausse clé.
  */
-const { VALEUR } = vi.hoisted(() => ({ VALEUR: 'sk-coffre-disque-0123456789abcdef' }))
+const { VALEUR, MOT_DE_PASSE } = vi.hoisted(() => ({
+  VALEUR: 'sk-coffre-disque-0123456789abcdef',
+  MOT_DE_PASSE: 'Zx9!Qw8#Er7-Ty6%Ui5*Op4'
+}))
 vi.mock('../app/coffre-cles', async (importOriginal) => {
   const vrai = await importOriginal<typeof import('../app/coffre-cles')>()
   const { mkdtempSync: dossierTemporaire } = await import('node:fs')
@@ -28,10 +31,13 @@ vi.mock('../app/coffre-cles', async (importOriginal) => {
     env: {}
   })
   coffre.ajouterCle('MISTRAL_API_KEY', VALEUR)
+  // Lié à un site : jamais posé chez les agents, mais une page relue peut encore le citer.
+  coffre.ajouterCle('PORTAIL_PASSWORD', MOT_DE_PASSE, 'https://portail.exemple.fr')
   return {
     ...vrai,
     masquerValeurs: (texte: string) => coffre.masquerValeurs(texte),
-    valeursPourAgent: (exclusions: readonly string[]) => coffre.valeursPourAgent(exclusions)
+    valeursPourAgent: (exclusions: readonly string[]) => coffre.valeursPourAgent(exclusions),
+    valeursAMasquer: () => coffre.valeursAMasquer()
   }
 })
 
@@ -84,6 +90,21 @@ describe('run-stdout — une valeur du coffre ne reste pas en clair sur le disqu
     expect(relues).toHaveLength(lignes.length)
     for (const ligne of relues) expect(() => JSON.parse(ligne)).not.toThrow()
     expect(lues).toHaveLength(lignes.length)
+  })
+
+  it('un mot de passe lié à un site, absent de l’environnement des agents, est masqué aussi', async () => {
+    dossier = mkdtempSync(join(tmpdir(), 'run-stdout-coffre-site-'))
+    const chemin = join(dossier, 'jeton.stdout.jsonl')
+    writeFileSync(
+      chemin,
+      `${sortieOutil(`champ relu : ${MOT_DE_PASSE}`)}
+`
+    )
+    await tailJsonLines(chemin, () => undefined, { pollMs: 20, isComplete: () => true })
+    const apres = readFileSync(chemin, 'utf8')
+    expect(apres).not.toContain(MOT_DE_PASSE)
+    // L'étiquette [secret:NOM] est plus longue que la valeur : même taille, en astérisques.
+    expect(apres).toContain(`champ relu : ${'*'.repeat(MOT_DE_PASSE.length)}`)
   })
 
   it('pendant l’appel : la ligne ajoutée par le CLI est masquée sans attendre la fin', async () => {

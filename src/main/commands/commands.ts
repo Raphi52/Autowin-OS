@@ -935,6 +935,7 @@ export class AppCommandBus {
       case 'bureau_cache_fermer':
       case 'reload_env':
       case 'coffre_ranger_presse_papier':
+      case 'coffre_generer_mot_de_passe':
         return executerApplication(this, name, a, conversationId, onProgress)
       case 'verify':
       case 'brain_query':

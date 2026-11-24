@@ -11,7 +11,11 @@
  *   « Copier » a échoué et le presse-papier porte autre chose, peut-être un texte de l'utilisateur ;
  * - valeur trop courte pour être masquée dans les sorties ;
  * - nom déjà au coffre : remplacer une clé reste un geste de l'utilisateur (Réglages > Clés), pour
- *   qu'une page piégée ne puisse pas substituer sa propre clé à celle qu'il a rangée.
+ *   qu'une page piégée ne puisse pas substituer sa propre clé à celle qu'il a rangée ;
+ * - `site` donné mais pas en https:// : vérifié AVANT de lire le presse-papier, qui reste intact.
+ *
+ * Avec `site`, la valeur est un mot de passe lié à cette origine : seul le navigateur intégré la
+ * tape, sur ce site-là, et elle n'est jamais posée chez les agents (`coffre-cles.ts`).
  *
  * Après le rangement, les fichiers déjà écrits pendant ce tour (une page relue où la clé
  * s'affichait encore, avant qu'elle soit au coffre) sont repassés et masqués sur place.
@@ -26,6 +30,7 @@ import {
   LONGUEUR_MIN_MASQUAGE,
   listerCles as listerLeCoffre,
   memeNom,
+  normaliserSite,
   type CleListee
 } from './coffre-cles'
 import { masquerFichierSansEchec, motifsDeMasquage } from '../runs/masquage-sur-disque'
@@ -41,6 +46,8 @@ export interface RangementDepuisPressePapier {
   nom: string
   /** Jamais la valeur : sa longueur suffit à voir qu'une clé entière a été copiée. */
   longueur?: number
+  /** L'origine à laquelle la valeur est liée, quand `site` a été donné. */
+  site?: string
   /** Occurrences déjà écrites sur disque pendant ce tour, masquées après coup. */
   masqueesApresCoup?: number
   detail: string
@@ -78,11 +85,13 @@ async function journalDuTourEnCours(conversationId: string | undefined): Promise
 
 export async function rangerDepuisPressePapier(entree: {
   nom: string
+  /** Facultatif : adresse https:// du site où ce mot de passe sera tapé. */
+  site?: string
   conversationId?: string
   pressePapier?: PressePapier
   coffre?: {
     listerCles(): CleListee[]
-    ajouterCle(nom: string, valeur: string): void
+    ajouterCle(nom: string, valeur: string, site?: string): void
   }
   fichiersARepasser?: () => Promise<string[]>
 }): Promise<RangementDepuisPressePapier> {
@@ -91,6 +100,13 @@ export async function rangerDepuisPressePapier(entree: {
   const coffre = entree.coffre ?? { listerCles: listerLeCoffre, ajouterCle: ajouterAuCoffre }
   const pressePapier = entree.pressePapier ?? pressePapierElectron()
   if (!pressePapier) return refus('Presse-papier indisponible hors de l’app : rien n’est rangé.')
+  const avecSite = entree.site !== undefined && entree.site !== ''
+  const site = avecSite ? normaliserSite(entree.site) : undefined
+  if (site === null)
+    return refus(
+      'Site invalide : donne l’adresse https:// de la page du site (ex. https://exemple.fr/connexion). ' +
+        'Rien n’est rangé, le presse-papier est intact.'
+    )
   if (coffre.listerCles().some((c) => memeNom(c.nom, nom)))
     return refus(
       `${nom} est déjà au coffre : rien n’est remplacé. L’utilisateur la remplace lui-même dans ` +
@@ -111,7 +127,7 @@ export async function rangerDepuisPressePapier(entree: {
       `Le presse-papier contient moins de ${LONGUEUR_MIN_MASQUAGE} caractères : ce n’est pas une clé, rien n’est rangé.`
     )
   try {
-    coffre.ajouterCle(nom, valeur)
+    coffre.ajouterCle(nom, valeur, site)
   } catch (erreur) {
     // Les refus du coffre ne citent jamais la valeur : leur message part tel quel.
     return refus(erreur instanceof Error ? erreur.message : String(erreur))
@@ -128,6 +144,18 @@ export async function rangerDepuisPressePapier(entree: {
   let masqueesApresCoup = 0
   for (const fichier of fichiers)
     masqueesApresCoup += (await masquerFichierSansEchec(fichier, motifs)).remplacements
+  if (site)
+    return {
+      ok: true,
+      nom,
+      longueur: valeur.length,
+      site,
+      masqueesApresCoup,
+      detail:
+        `${nom} est au coffre (${valeur.length} caractères), lié à ${site} ; le presse-papier est ` +
+        'vidé. Seul le navigateur intégré le tape, sur ce site : navigateur_agir, action `saisir`, ' +
+        `\`depuisCoffre: ${nom}\`. Il n’est pas servi aux agents. Sa valeur est masquée partout.`
+    }
   return {
     ok: true,
     nom,

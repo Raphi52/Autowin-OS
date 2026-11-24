@@ -88,9 +88,31 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
      * par l'outil lui-même avec ce qu'il faut faire (`app/coffre-presse-papier.ts`).
      */
     description:
-      'Ranger au coffre la clé API que tu viens de COPIER (bouton « Copier » d’un site), sans la voir : appelle-le juste après, sans relire la page. Rend le nom et la longueur. La clé sert aux agents lancés ENSUITE, pas à ce tour',
+      'Ranger au coffre la clé API ou le mot de passe que tu viens de COPIER (bouton « Copier » d’un site, ou copié par l’utilisateur), sans le voir : appelle-le juste après, sans relire la page. Rend le nom et la longueur. Sans `site`, la clé sert aux agents lancés ENSUITE, pas à ce tour. Avec `site`, c’est un mot de passe lié à ce site : jamais servi aux agents, seul navigateur_agir le tape sur ce site (`depuisCoffre`)',
     args: {
-      nom: 'nom de variable de la clé (ex. `MISTRAL_API_KEY`)'
+      nom: 'nom de variable de la clé (ex. `MISTRAL_API_KEY`, `PORTAIL_PASSWORD`)',
+      site: 'facultatif — adresse https:// de la page du site où ce mot de passe sera tapé ; seule son origine est gardée'
+    },
+    argsFacultatifs: ['site'],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'coffre_generer_mot_de_passe',
+    /*
+     * Changer un mot de passe sans que le modèle le voie : la valeur est tirée et rangée DANS le
+     * processus principal (`genererMotDePasse`, app/coffre-cles.ts), liée à un site ; seul le
+     * navigateur intégré la tape ensuite, sur ce site exact (`depuisCoffre` de navigateur_agir).
+     */
+    description:
+      'Générer au coffre un mot de passe fort (24 caractères : majuscule, minuscule, chiffre, symbole), lié à un site, SANS jamais le voir. Rend seulement le nom, la longueur et le site. Nom NEUF obligatoire (refus s’il existe) qui finit par `_PASSWORD` (ex. `PORTAIL_PASSWORD`). Ensuite, tape-le sur ce site avec navigateur_agir, action `saisir`, `depuisCoffre`. Jamais servi aux agents',
+    args: {
+      nom: 'nom neuf de la clé, finissant par `_PASSWORD` (ex. `PORTAIL_PASSWORD`)',
+      site: 'adresse https:// de la page du site où le mot de passe sera tapé ; seule son origine est gardée, comparée à l’identique'
     },
     annotations: {
       readOnlyHint: false,

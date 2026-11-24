@@ -527,6 +527,86 @@ describe('navigateur_agir — arguments et refus des garde-fous', () => {
     expect(String(data(r).detail)).toContain('navigateur_capture')
   })
 
+  it('`depuisCoffre` part au moteur en NOM seul ; une valeur collée, un doublon ou un autre type sont refusés avant', async () => {
+    const moteur = moteurFactice({})
+    const bus = busAvec(moteur)
+    await bus.exec(
+      'navigateur_agir',
+      { action: 'saisir', ref: 3, depuisCoffre: ' PORTAIL_PASSWORD ' },
+      'conv-a'
+    )
+    await bus.exec(
+      'navigateur_agir',
+      { action: 'saisir', depuisCoffre: 'PORTAIL_PASSWORD', texte: '' },
+      'conv-a'
+    )
+    expect(moteur.appels.map((a) => a.detail)).toEqual([
+      { type: 'saisir', depuisCoffre: 'PORTAIL_PASSWORD', cible: { ref: 3 } },
+      { type: 'saisir', depuisCoffre: 'PORTAIL_PASSWORD' }
+    ])
+    const refus = [
+      await bus.exec(
+        'navigateur_agir',
+        { action: 'saisir', depuisCoffre: 'Zx9!Qw8#Er7$Ty6%' },
+        'conv-a'
+      ),
+      await bus.exec(
+        'navigateur_agir',
+        { action: 'saisir', depuisCoffre: 'PORTAIL_PASSWORD', texte: 'hunter2' },
+        'conv-a'
+      ),
+      await bus.exec('navigateur_agir', { action: 'saisir', depuisCoffre: 42 }, 'conv-a')
+    ]
+    expect(refus.map((r) => String(data(r).detail))).toEqual([
+      expect.stringMatching(/^Refusé : `depuisCoffre` est le NOM/),
+      expect.stringMatching(/^Refusé : passe `texte` OU `depuisCoffre`/),
+      expect.stringMatching(/^Refusé : `depuisCoffre` est le NOM/)
+    ])
+    expect(moteur.appels).toHaveLength(2)
+  })
+
+  it('le refus « secret-coffre » dit de ne jamais retaper le secret en texte', async () => {
+    const moteur = moteurFactice({
+      agir: {
+        ok: false,
+        refus: 'secret-coffre',
+        message:
+          "Secret PORTAIL_PASSWORD non tapé : il n'est lié qu'à https://portail.exemple.fr, et la page est sur https://autre.fr. Rien n'est tapé."
+      }
+    })
+    const r = await busAvec(moteur).exec(
+      'navigateur_agir',
+      { action: 'saisir', ref: 2, depuisCoffre: 'PORTAIL_PASSWORD' },
+      'conv-a'
+    )
+    expect(data(r)).toMatchObject({ ok: false, refus: 'secret-coffre' })
+    expect(String(data(r).detail)).toContain('Ne retape jamais ce secret en `texte`')
+  })
+
+  it('descriptions : navigateur_agir nomme `depuisCoffre` et son site ; les outils du coffre disent qu’ils ne rendent pas la valeur', () => {
+    const spec = (nom: string) => CATALOG.find((c) => c.name === nom)
+    const agir = spec('navigateur_agir')
+    expect(agir?.description).toMatch(/jamais de `texte` dans un mot de passe/)
+    expect(agir?.description).toMatch(
+      /`depuisCoffre`.*SEULEMENT si la page est exactement sur ce site/
+    )
+    expect(Object.keys(agir?.args ?? {})).toContain('depuisCoffre')
+    expect(agir?.argsFacultatifs).toContain('depuisCoffre')
+    const ranger = spec('coffre_ranger_presse_papier')
+    expect(ranger?.description).toMatch(/Avec `site`.*jamais servi aux agents/)
+    expect(ranger?.argsFacultatifs).toEqual(['site'])
+    const generer = spec('coffre_generer_mot_de_passe')
+    expect(generer?.description).toMatch(/SANS jamais le voir/)
+    expect(generer?.description).toMatch(/Rend seulement le nom, la longueur et le site/)
+    expect(generer?.description).toMatch(/_PASSWORD/)
+    expect(Object.keys(generer?.args ?? {})).toEqual(['nom', 'site'])
+    expect(generer?.argsFacultatifs ?? []).toEqual([])
+    // Servis en outils directs du chat, comme les autres outils du coffre.
+    expect(outilsDuChat(CATALOG)).toEqual(
+      expect.arrayContaining(['coffre_generer_mot_de_passe', 'coffre_ranger_presse_papier'])
+    )
+  })
+
   it('le texte saisi ne passe jamais en clair dans la trace', async () => {
     const bus = busAvec(moteurFactice({}))
     const traces: Record<string, unknown>[] = []

@@ -8,6 +8,7 @@ import { ELEMENT_MAX, VALEUR_MAX } from '../bureau/hdesk-tv'
 import { identifiantBureauCacheChat } from '../consignes/consigne-bureau-cache'
 import type { ActionAgentNavigateur, CibleAgentNavigateur } from '../../shared/navigateur'
 import { argumentAbsent, booleenEnvoye } from './arguments'
+import { masquerValeurs } from '../app/coffre-cles'
 import type { OutilNavigateur } from './navigateur-terminal'
 import {
   TERMINAL_LIGNES_DEFAUT,
@@ -296,7 +297,9 @@ export async function outilNavigateur(
     }
     case 'navigateur_lire': {
       if (sansOnglet()) return refus(AUCUN_ONGLET)
-      return { data: { ok: true, page: await nav.lire(fil, arret) } }
+      // Un mot de passe tapé depuis le coffre puis rendu visible par la page (bouton « afficher ») n'est
+      // plus un champ secret pour elle : la lecture le citerait. Il repart masqué, comme partout.
+      return { data: { ok: true, page: masquerValeurs(await nav.lire(fil, arret)) } }
     }
     case 'navigateur_capture': {
       if (sansOnglet()) return refus(AUCUN_ONGLET)
@@ -443,7 +446,17 @@ export function actionNavigateur(a: Record<string, unknown>): ActionAgentNavigat
       return { type: 'clic', cible }
     case 'saisir': {
       const texte = texteDe('texte')
-      if (!texte) return 'Refusé : passe `texte`, le texte à taper.'
+      const brut = a.depuisCoffre
+      if (brut !== undefined && brut !== null && brut !== '') {
+        // Un NOM, jamais une valeur : la forme d'un nom de variable suffit à écarter une valeur collée.
+        const depuisCoffre = typeof brut === 'string' ? brut.trim() : ''
+        if (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(depuisCoffre))
+          return 'Refusé : `depuisCoffre` est le NOM d’un mot de passe du coffre (ex. `PORTAIL_PASSWORD`), jamais sa valeur.'
+        if (texte) return 'Refusé : passe `texte` OU `depuisCoffre`, pas les deux.'
+        return { type: 'saisir', depuisCoffre, ...(cible ? { cible } : {}) }
+      }
+      if (!texte)
+        return 'Refusé : passe `texte`, le texte à taper, ou `depuisCoffre`, le nom d’un mot de passe du coffre.'
       return { type: 'saisir', texte, ...(cible ? { cible } : {}) }
     }
     case 'touche': {

@@ -22,7 +22,7 @@ import { createHash } from 'node:crypto'
 import { open, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { LONGUEUR_MIN_MASQUAGE, valeursPourAgent } from '../app/coffre-cles'
+import { LONGUEUR_MIN_MASQUAGE, valeursAMasquer } from '../app/coffre-cles'
 import { encoderCheminCli } from '../store/historique-cli-copie'
 
 export interface MotifDeMasquage {
@@ -71,10 +71,14 @@ export function motifsDeMasquage(valeurs: Record<string, string>): MotifsDeMasqu
   return liste.length ? { liste, empreinte: empreinte.digest('hex') } : AUCUN
 }
 
-/** Les valeurs du coffre du processus ; coffre fermé ou illisible → rien à masquer. */
+/**
+ * Les valeurs du coffre du processus, mots de passe liés à un site compris (`valeursAMasquer`) :
+ * ceux-là ne sont pas posés chez les agents, mais une page relue peut encore en citer un. Coffre
+ * fermé ou illisible → rien à masquer.
+ */
 export function motifsDuCoffre(): MotifsDeMasquage {
   try {
-    return motifsDeMasquage(valeursPourAgent([]))
+    return motifsDeMasquage(valeursAMasquer())
   } catch {
     return AUCUN
   }

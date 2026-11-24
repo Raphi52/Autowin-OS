@@ -11,11 +11,19 @@
  *  - `creerFabriqueElectron` : la vraie fabrique, une `WebContentsView` par onglet.
  *
  * LES DEUX GARDES SONT DANS LE CODE, pas dans une consigne au modèle :
- *  (a) l'agent ne tape JAMAIS dans un champ de mot de passe ou de code à usage unique
- *      (vérifié sur la cible, puis re-vérifié juste avant de taper) — l'utilisateur se connecte
- *      lui-même ;
+ *  (a) l'agent ne tape JAMAIS de TEXTE dans un champ de mot de passe ou de code à usage unique, ni
+ *      dans un cadre intégré (vérifié sur la cible, puis re-vérifié juste avant de taper) —
+ *      l'utilisateur se connecte lui-même. UNE exception : `saisir` avec `depuisCoffre`, le NOM d'un
+ *      mot de passe du coffre lié à un site (`secretPourSaisie`, app/coffre-cles.ts). Le processus
+ *      principal lit la valeur et la tape, SEULEMENT dans un champ secret (que la page ne relit
+ *      jamais, navigateur-page-script.ts) et SEULEMENT si l'origine de la page, relue sans attente
+ *      juste avant de taper, est exactement le site lié. La valeur ne revient jamais à l'agent :
+ *      résultat, frise et surbrillance ne disent que « saisir le secret NOM ». Entrée sans site,
+ *      autre site, champ ordinaire, `texte` donné en plus : refus `secret-coffre` ; cadre intégré :
+ *      refus `cadre-integre` ;
  *  (b) hors poste local (localhost, 127.0.0.1, ::1, file:), la première action d'écriture de l'agent
- *      sur un site attend l'accord de l'utilisateur ; 120 s sans réponse valent un refus.
+ *      sur un site attend l'accord de l'utilisateur ; 120 s sans réponse valent un refus. Un secret
+ *      du coffre y passe comme toute écriture.
  *
  * Ce lot ne pose ni canal IPC, ni interface, ni commande d'agent : les lots suivants branchent les
  * méthodes publiques listées sur la classe.
@@ -41,6 +49,7 @@ import {
   type WebContents
 } from 'electron'
 import { autowinAppDataRoot } from '../app/app-data'
+import type { SecretPourSaisie } from '../app/coffre-cles'
 import {
   appelPage,
   MONDE_ISOLE_NAVIGATEUR,
@@ -304,13 +313,24 @@ export function analyserTouche(saisie: string): { keyCode: string; modifiers: st
   return null
 }
 
+/** Le NOM du secret du coffre que cette action tape, ou `undefined` : texte libre ou autre geste. */
+function secretDuCoffre(action: ActionAgentNavigateur): string | undefined {
+  return action.type === 'saisir' && 'depuisCoffre' in action
+    ? String(action.depuisCoffre).trim()
+    : undefined
+}
+
 function decrireAction(action: ActionAgentNavigateur, cible: string | undefined): string {
   const sur = cible ? ` ${cible}` : ''
   switch (action.type) {
     case 'clic':
       return `${action.double ? 'double-cliquer' : 'cliquer'} sur${sur || ' la page'}`
-    case 'saisir':
+    case 'saisir': {
+      // Le nom seul : la frise, la question d'accord et la surbrillance ne voient jamais la valeur.
+      const secret = secretDuCoffre(action)
+      if (secret !== undefined) return `saisir le secret ${secret}${sur ? ` dans${sur}` : ''}`
       return `taper du texte dans${sur || ' le champ actif'}`
+    }
     case 'touche':
       return `appuyer sur « ${action.touche} »${sur ? ` dans${sur}` : ''}`
     case 'defiler':
@@ -322,10 +342,33 @@ function refus(code: RefusActionNavigateur, message: string): ResultatActionNavi
   return { ok: false, refus: code, message }
 }
 
-/** Garde (a), sur ce qu'on sait de la cible et du champ actif : mot de passe ou cadre opaque. */
+/**
+ * Garde (a), sur ce qu'on sait de la cible et du champ actif : mot de passe ou cadre opaque. Pour un
+ * secret du coffre (`secret` = son nom), c'est l'inverse : le champ DOIT être secret, car la page
+ * relit la valeur d'un champ ordinaire (`navigateur_lire`) et la rendrait à l'agent.
+ */
 function refusSaisieSensible(
-  vus: ReadonlyArray<{ secret?: boolean; cadreIntegre?: boolean } | null | undefined>
+  vus: ReadonlyArray<
+    { secret?: boolean; cadreIntegre?: boolean; aucun?: boolean } | null | undefined
+  >,
+  secret?: string
 ): ResultatActionNavigateur | null {
+  if (secret !== undefined) {
+    if (vus.some((v) => v?.cadreIntegre === true)) {
+      return refus(
+        'cadre-integre',
+        `Secret ${secret} non tapé : la cible est dans un cadre intégré, impossible de vérifier ce champ.`
+      )
+    }
+    // Un champ actif « aucun » n'est pas un champ ordinaire : `gardeSaisie` le refuse pour ce qu'il est.
+    if (vus.some((v) => !!v && v.aucun !== true && v.secret !== true)) {
+      return refus(
+        'secret-coffre',
+        `Secret ${secret} non tapé : la cible n'est pas un champ de mot de passe, et la page pourrait relire la valeur. Vise le champ de mot de passe.`
+      )
+    }
+    return null
+  }
   if (vus.some((v) => v?.secret === true)) {
     return refus(
       'mot-de-passe',
@@ -444,6 +487,11 @@ export interface OptionsGestionnaireNavigateur {
   delaiSurbrillanceMs?: number
   delaiAccordMs?: number
   delaiPauseMs?: number
+  /**
+   * Lecture d'un mot de passe du coffre lié à un site (`secretPourSaisie`), pour `depuisCoffre`.
+   * Absente : toute saisie depuis le coffre est refusée. Branchée par `ipc/navigateur.ts`.
+   */
+  lireSecret?: (nom: string) => SecretPourSaisie
 }
 
 /**
@@ -461,6 +509,7 @@ export class GestionnaireNavigateur {
   private readonly delaiSurbrillanceMs: number
   private readonly delaiAccordMs: number
   private readonly delaiPauseMs: number
+  private readonly lireSecret: ((nom: string) => SecretPourSaisie) | undefined
   private readonly onglets = new Map<string, OngletInterne>()
   private readonly fils = new Map<string, FilInterne>()
   private readonly abonnes = new Set<(etat: EtatNavigateur) => void>()
@@ -484,6 +533,7 @@ export class GestionnaireNavigateur {
     this.delaiSurbrillanceMs = options.delaiSurbrillanceMs ?? DELAI_SURBRILLANCE_MS
     this.delaiAccordMs = options.delaiAccordMs ?? DELAI_ACCORD_MS
     this.delaiPauseMs = options.delaiPauseMs ?? DELAI_PAUSE_MS
+    this.lireSecret = options.lireSecret
   }
 
   // ── État ──────────────────────────────────────────────────────────────────────────────────────
@@ -984,6 +1034,13 @@ export class GestionnaireNavigateur {
   ): Promise<ResultatActionNavigateur> {
     const onglet = this.ongletActif(conversationId)
     if (!onglet) return refus('aucun-onglet', 'Aucun onglet ouvert dans ce fil : ouvre une page.')
+    const secret = secretDuCoffre(action)
+    // Secret du coffre sur le mauvais site : refusé AVANT de viser, qui donnerait le focus au champ,
+    // et avant toute question d'accord. Rejoué au dernier moment (`relire`, puis `jouerAction`).
+    if (secret !== undefined) {
+      const lecture = this.secretPourCettePage(onglet, action)
+      if (typeof lecture !== 'string') return lecture
+    }
     const tape = action.type === 'saisir' || action.type === 'touche'
     const optionsCible = {
       focaliser: tape,
@@ -1023,7 +1080,7 @@ export class GestionnaireNavigateur {
         if (!tape) return null
         // La cible n'a pas le focus : le champ actif, celui de l'utilisateur, ne dit rien d'elle.
         return !entrer && cible
-          ? refusSaisieSensible([cible])
+          ? refusSaisieSensible([cible], secret)
           : await this.gardeSaisie(onglet, action, cible)
       } catch (erreur) {
         return refus('page-indisponible', `La page ne répond pas : ${messageErreur(erreur)}`)
@@ -1127,7 +1184,13 @@ export class GestionnaireNavigateur {
       const arrete = this.refusImmediat(conversationId, arret)
       if (arrete || action.type === 'defiler') return arrete
       const origineActuelle = origineSoumiseAAccord(onglet.vue.url())
-      if (origineActuelle === origineAutorisee) return null
+      if (origineActuelle === origineAutorisee) {
+        if (secret === undefined) return null
+        // L'origine d'accord vaut `null` pour tout le poste local : un secret compare l'origine
+        // exacte à son site.
+        const lecture = this.secretPourCettePage(onglet, action)
+        return typeof lecture === 'string' ? null : lecture
+      }
       return refus(
         'page-changee',
         `La page a changé de site pendant l'attente (${origineAutorisee ?? 'poste local'} → ${origineActuelle ?? 'poste local'}) : rien n'a été envoyé. Relis la page avant d'agir.`
@@ -1536,12 +1599,64 @@ export class GestionnaireNavigateur {
     cible: LocalisationPage | null
   ): Promise<ResultatActionNavigateur | null> {
     const focus = (await this.jouer(onglet, 'focus', [])) as FocusPage | null
-    const sensible = refusSaisieSensible([cible, focus])
+    const sensible = refusSaisieSensible([cible, focus], secretDuCoffre(action))
     if (sensible) return sensible
     if (action.type === 'saisir' && (!focus || focus.aucun)) {
       return refus('cible-introuvable', "Aucun champ n'a le focus : donne une cible à la saisie.")
     }
     return null
+  }
+
+  /**
+   * Garde (a), cas du secret du coffre : sa valeur, ou le refus nommé. SYNCHRONE : appelée juste avant
+   * `insererTexte`, sans `await` entre les deux, la page ne peut pas changer de site entre la
+   * vérification et la frappe. Aucun message ne cite la valeur ; une erreur du coffre n'est pas
+   * recopiée (elle pourrait citer du contenu).
+   */
+  private secretPourCettePage(
+    onglet: OngletInterne,
+    action: ActionAgentNavigateur
+  ): string | ResultatActionNavigateur {
+    const nom = secretDuCoffre(action) ?? ''
+    if ('texte' in action) {
+      return refus(
+        'secret-coffre',
+        'Passe `texte` OU `depuisCoffre`, pas les deux : rien n’est tapé.'
+      )
+    }
+    if (!this.lireSecret) {
+      return refus(
+        'secret-coffre',
+        `Secret ${nom} non tapé : le coffre n'est pas branché sur ce navigateur.`
+      )
+    }
+    let lecture: SecretPourSaisie
+    try {
+      lecture = this.lireSecret(nom)
+    } catch {
+      return refus('secret-coffre', `Secret ${nom} non tapé : le coffre n'a pas pu être lu.`)
+    }
+    if (!lecture.ok) return refus('secret-coffre', `Secret non tapé : ${lecture.detail}`)
+    let origine: string | null
+    try {
+      const adresse = new URL(onglet.vue.url())
+      origine = adresse.origin !== 'null' ? adresse.origin : null
+    } catch {
+      origine = null
+    }
+    if (origine !== lecture.site) {
+      return refus(
+        'secret-coffre',
+        `Secret ${lecture.nom} non tapé : il n'est lié qu'à ${lecture.site}, et la page est sur ${origine ?? 'une adresse sans origine'}. Rien n'est tapé.`
+      )
+    }
+    if (lecture.valeur.length > MAX_TEXTE_SAISI) {
+      return refus(
+        'secret-coffre',
+        `Secret ${lecture.nom} non tapé : plus de ${MAX_TEXTE_SAISI} caractères, il ne serait pas tapé en entier.`
+      )
+    }
+    return lecture.valeur
   }
 
   private siteAccepte(origine: string): boolean {
@@ -1910,6 +2025,21 @@ export class GestionnaireNavigateur {
         return { ok: true, message: `${action.double ? 'Double-clic' : 'Clic'}${sur}.` }
       }
       case 'saisir': {
+        if ('depuisCoffre' in action) {
+          // Relu ICI, sans attente jusqu'à la frappe : c'est cette lecture qui vaut, pas les précédentes.
+          const valeur = this.secretPourCettePage(onglet, action)
+          if (typeof valeur !== 'string') return valeur
+          try {
+            await vue.insererTexte(valeur)
+          } catch {
+            // Pas le message de l'erreur : il n'a pas à risquer de citer ce qui était tapé.
+            return refus(
+              'page-indisponible',
+              `La page a changé pendant la saisie du secret ${secretDuCoffre(action)} : relis-la avant de continuer.`
+            )
+          }
+          return { ok: true, message: `Secret ${secretDuCoffre(action)} saisi${sur}.` }
+        }
         const texte = action.texte.slice(0, MAX_TEXTE_SAISI)
         await vue.insererTexte(texte)
         const coupe =

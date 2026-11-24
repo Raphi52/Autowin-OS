@@ -26,6 +26,7 @@ import {
   GestionnaireNavigateur,
   type FabriqueVueNavigateur
 } from '../bureau/navigateur-integre'
+import { secretPourSaisie } from '../app/coffre-cles'
 import {
   CANAUX_NAVIGATEUR,
   type ModeNavigateur,
@@ -69,6 +70,8 @@ export function gestionnaireNavigateur(): GestionnaireNavigateur | null {
 
   const gestionnaire = new GestionnaireNavigateur({
     fabrique: (dependances.creerFabrique ?? creerFabriqueElectron)(fenetre),
+    // Seule voie par laquelle un mot de passe lié à un site sort du coffre : la frappe `depuisCoffre`.
+    lireSecret: secretPourSaisie,
     ...(dependances.racine ? { racine: dependances.racine } : {})
   })
   gestionnaire.surEtat((etat) => {

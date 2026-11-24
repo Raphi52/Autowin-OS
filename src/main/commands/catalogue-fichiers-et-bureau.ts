@@ -389,7 +389,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   {
     name: 'navigateur_agir',
     description:
-      'Agir dans la page de l’onglet actif du navigateur intégré, sous les yeux de l’utilisateur (cible surlignée) : `clic`, `saisir`, `touche` ou `defiler`. Cible : `ref` (numéro de navigateur_lire, à préférer), `selecteur` CSS, ou `x` et `y` ; sans cible, saisir et touche vont au champ actif. Garde-fous du code : jamais de saisie dans un mot de passe ou un code (l’utilisateur se connecte lui-même) ; hors poste local, la première action d’écriture sur un site attend SON accord (120 s sans réponse = refus). Relis ou capture ensuite pour vérifier' +
+      'Agir dans la page de l’onglet actif du navigateur intégré, sous les yeux de l’utilisateur (cible surlignée) : `clic`, `saisir`, `touche` ou `defiler`. Cible : `ref` (numéro de navigateur_lire, à préférer), `selecteur` CSS, ou `x` et `y` ; sans cible, saisir et touche vont au champ actif. Garde-fous du code : jamais de `texte` dans un mot de passe ou un code (l’utilisateur se connecte lui-même), sauf `depuisCoffre` : le NOM d’un mot de passe du coffre lié à un site, que l’app tape dans un champ de mot de passe SEULEMENT si la page est exactement sur ce site, sans que tu voies la valeur ; hors poste local, la première action d’écriture sur un site attend SON accord (120 s sans réponse = refus). Relis ou capture ensuite pour vérifier' +
       PHRASE_PAS_A_PAS_NAVIGATEUR,
     args: {
       action: 'clic|saisir|touche|defiler',
@@ -398,6 +398,8 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
       x: 'facultatif — avec y, pixels CSS depuis le bord gauche de la zone visible de la page',
       y: 'facultatif — avec x, pixels CSS depuis le haut de la zone visible de la page',
       texte: 'pour saisir — le texte à taper (10 000 caractères au plus)',
+      depuisCoffre:
+        'pour saisir, à la place de `texte` — NOM d’un mot de passe du coffre lié au site de la page (ex. `PORTAIL_PASSWORD`), jamais sa valeur',
       touche: 'pour touche — « Enter », « Tab », « Escape », « ArrowDown », « Control+A »…',
       crans:
         'pour defiler — crans de molette, entier de -20 à 20 (positif = vers le bas ; défaut 3)'
@@ -408,9 +410,10 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
       x: { type: 'number' },
       y: { type: 'number' },
       texte: { type: 'string', maxLength: 10_000 },
+      depuisCoffre: { type: 'string', maxLength: 128 },
       crans: { type: 'integer', minimum: -20, maximum: 20 }
     },
-    argsFacultatifs: ['ref', 'selecteur', 'x', 'y', 'texte', 'touche', 'crans'],
+    argsFacultatifs: ['ref', 'selecteur', 'x', 'y', 'texte', 'depuisCoffre', 'touche', 'crans'],
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,

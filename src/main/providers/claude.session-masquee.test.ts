@@ -36,7 +36,8 @@ vi.mock('../app/coffre-cles', async (importOriginal) => {
   return {
     ...vrai,
     masquerValeurs: (texte: string) => coffre.masquerValeurs(texte),
-    valeursPourAgent: (exclusions: readonly string[]) => coffre.valeursPourAgent(exclusions)
+    valeursPourAgent: (exclusions: readonly string[]) => coffre.valeursPourAgent(exclusions),
+    valeursAMasquer: () => coffre.valeursAMasquer()
   }
 })
 

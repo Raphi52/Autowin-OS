@@ -157,8 +157,9 @@ import {
   type FocusPage,
   type MethodePage
 } from './navigateur-page-script'
-import { normaliserUrlNavigateur } from '../../shared/navigateur'
+import { normaliserUrlNavigateur, type ActionAgentNavigateur } from '../../shared/navigateur'
 import { envDelaiOutilsMcp } from '../providers/claude'
+import { creerCoffre, type Coffre } from '../app/coffre-cles'
 
 type Reponse = (args: unknown[]) => unknown
 
@@ -492,6 +493,331 @@ describe('garde (a) : jamais de saisie de l’agent dans un mot de passe', () =>
     expect((await nav.agir('conv-a', { type: 'saisir', texte: 'x' })).refus).toBe(
       'cible-introuvable'
     )
+    expect(vue.textes).toEqual([])
+  })
+})
+
+/*
+ * La seule exception à la garde (a) : un mot de passe du coffre (`depuisCoffre`), tapé par le
+ * processus principal dans un champ secret de SON site. Le coffre est le vrai (`creerCoffre`, fichier
+ * temporaire, chiffrement factice) : c'est sa lecture qui décide du site. Chaque refus laisse
+ * `vue.textes` vide, et la valeur ne paraît ni dans le résultat, ni dans l'état poussé au panneau
+ * (frise, question d'accord), ni dans aucun appel à la page (surbrillance comprise).
+ */
+describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => {
+  const SITE = 'https://portail.exemple.fr'
+  const PAGE = `${SITE}/Identity/Account/Manage/ChangePassword`
+  let coffre: Coffre
+  let valeur: string
+
+  beforeEach(() => {
+    const dossier = mkdtempSync(join(tmpdir(), 'autowin-navigateur-coffre-'))
+    coffre = creerCoffre({
+      chemin: () => join(dossier, 'coffre.bin'),
+      chiffrement: () => ({
+        isEncryptionAvailable: () => true,
+        encryptString: (texte) => Buffer.from(texte, 'utf8'),
+        decryptString: (donnees) => donnees.toString('utf8')
+      }),
+      lireRegistre: () => new Map(),
+      env: {}
+    })
+    coffre.genererMotDePasse('PORTAIL_PASSWORD', PAGE)
+    coffre.ajouterCle('MISTRAL_API_KEY', 'mst-cle-sans-site-0123456789')
+    const lu = coffre.secretPourSaisie('PORTAIL_PASSWORD')
+    if (!lu.ok) throw new Error(lu.detail)
+    valeur = lu.valeur
+    nav.detruire()
+    nav = new GestionnaireNavigateur({
+      fabrique,
+      racine,
+      delaiSurbrillanceMs: 0,
+      lireSecret: (nom) => coffre.secretPourSaisie(nom)
+    })
+  })
+
+  /** Ni le résultat, ni l'état du panneau, ni un appel à la page ne citent la valeur. */
+  function sansLaValeur(vue: FausseVue, resultat: unknown): void {
+    expect(JSON.stringify(resultat)).not.toContain(valeur)
+    expect(JSON.stringify(nav.etat('conv-a'))).not.toContain(valeur)
+    expect(JSON.stringify(vue.appels)).not.toContain(valeur)
+  }
+
+  it('bon site, champ de mot de passe : la valeur est tapée une fois, et ne revient nulle part', async () => {
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true, description: 'textbox « Nouveau »' })
+    vue.focus = { ...vue.focus, secret: true }
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'PORTAIL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r).toEqual({
+      ok: true,
+      message: 'Secret PORTAIL_PASSWORD saisi sur textbox « Nouveau ».'
+    })
+    expect(vue.textes).toEqual([valeur])
+    expect(vue.appels.find((a) => a.methode === 'surligner')?.args[1]).toBe(
+      'saisir le secret PORTAIL_PASSWORD'
+    )
+    expect(nav.etat('conv-a').gestes.at(-1)).toMatchObject({
+      description: 'saisir le secret PORTAIL_PASSWORD dans textbox « Nouveau »',
+      etat: 'fait'
+    })
+    sansLaValeur(vue, r)
+  })
+
+  it('sans cible, le champ actif secret le reçoit ; la question d’accord ne nomme que le secret', async () => {
+    nav.ouvrir('conv-a', PAGE)
+    const vue = fabrique.vues[0]
+    vue.focus = { ...vue.focus, secret: true, description: 'textbox « Confirmez »' }
+    const action = nav.agir('conv-a', { type: 'saisir', depuisCoffre: 'portail_password' })
+    await laisserFiler()
+    expect(nav.etat('conv-a').demandeAccord).toEqual({
+      origine: SITE,
+      action: 'saisir le secret portail_password'
+    })
+    sansLaValeur(vue, null)
+    nav.repondreAccord(SITE, 'une-fois')
+    const r = await action
+    expect(r).toMatchObject({ ok: true })
+    expect(vue.textes).toEqual([valeur])
+    sansLaValeur(vue, r)
+  })
+
+  it.each([
+    'https://autre.portail.exemple.fr/x',
+    'https://portail.exemple.fr.evil.fr/',
+    'http://portail.exemple.fr/Identity',
+    'https://portail.exemple.fr:8443/',
+    'about:blank'
+  ])('page sur %s : refus avant de viser le champ, rien n’est tapé', async (adresse) => {
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    vue.adresse = adresse
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    vue.focus = { ...vue.focus, secret: true }
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'PORTAIL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r).toMatchObject({ ok: false, refus: 'secret-coffre' })
+    expect(r.message).toMatch(/n'est lié qu'à https:\/\/portail\.exemple\.fr/)
+    expect(vue.textes).toEqual([])
+    expect(vue.methodes()).not.toContain('localiser')
+    expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
+    sansLaValeur(vue, r)
+  })
+
+  it('la page change de site PENDANT la question d’accord : refus, rien n’est tapé', async () => {
+    nav.ouvrir('conv-a', PAGE)
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    vue.focus = { ...vue.focus, secret: true }
+    const action = nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'PORTAIL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    await laisserFiler()
+    vue.adresse = 'https://piege.fr/connexion'
+    nav.repondreAccord(SITE, 'une-fois')
+    const r = await action
+    expect(r).toMatchObject({ ok: false, refus: 'page-changee' })
+    expect(vue.textes).toEqual([])
+    sansLaValeur(vue, r)
+  })
+
+  it('poste local : une redirection vers un autre port PENDANT la surbrillance est vue au dernier moment', async () => {
+    // L'accord ne distingue pas les pages du poste local (origine `null`) : seule la comparaison de
+    // l'origine exacte au site lié refuse ici.
+    coffre.genererMotDePasse('LOCAL_PASSWORD', 'https://localhost:8443/connexion')
+    nav.ouvrir('conv-a', 'https://localhost:8443/connexion')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    vue.focus = { ...vue.focus, secret: true }
+    vue.reponses.surligner = (): boolean => {
+      vue.adresse = 'http://localhost:5173/piege'
+      return true
+    }
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'LOCAL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r).toMatchObject({ ok: false, refus: 'secret-coffre' })
+    expect(r.message).toMatch(/localhost:5173/)
+    expect(vue.textes).toEqual([])
+  })
+
+  it('jumeau accepté : la même page du poste local, restée sur son site, reçoit la valeur', async () => {
+    coffre.genererMotDePasse('LOCAL_PASSWORD', 'https://localhost:8443')
+    const local = coffre.secretPourSaisie('LOCAL_PASSWORD')
+    nav.ouvrir('conv-a', 'https://localhost:8443/connexion')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    vue.focus = { ...vue.focus, secret: true }
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'LOCAL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r).toMatchObject({ ok: true })
+    expect(vue.textes).toEqual([(local as { valeur: string }).valeur])
+  })
+
+  it.each([
+    ['MISTRAL_API_KEY', /n’est lié à aucun site/],
+    ['INCONNU_PASSWORD', /n’est pas au coffre/],
+    ['pas un nom', /Nom de secret invalide/]
+  ])('%s : refus nommé, rien n’est tapé ni visé', async (nom, motif) => {
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    vue.focus = { ...vue.focus, secret: true }
+    const r = await nav.agir('conv-a', { type: 'saisir', depuisCoffre: nom, cible: { ref: 4 } })
+    expect(r).toMatchObject({ ok: false, refus: 'secret-coffre' })
+    expect(r.message).toMatch(motif)
+    expect(r.message).not.toContain('mst-cle-sans-site')
+    expect(vue.textes).toEqual([])
+    expect(vue.methodes()).not.toContain('localiser')
+  })
+
+  it('un champ qui n’est pas un mot de passe : refus (la page pourrait relire la valeur)', async () => {
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ description: 'textbox « Recherche »' })
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'PORTAIL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r).toMatchObject({ ok: false, refus: 'secret-coffre' })
+    expect(r.message).toMatch(/pas un champ de mot de passe/)
+    expect(vue.textes).toEqual([])
+    // Sans cible, même règle sur le champ actif.
+    expect(
+      await nav.agir('conv-a', { type: 'saisir', depuisCoffre: 'PORTAIL_PASSWORD' })
+    ).toMatchObject({ ok: false, refus: 'secret-coffre' })
+    expect(vue.textes).toEqual([])
+  })
+
+  it('le focus quitte le champ secret PENDANT la surbrillance : refus, rien n’est tapé', async () => {
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    vue.focus = { ...vue.focus, secret: true }
+    vue.reponses.surligner = (): boolean => {
+      vue.focus = { ...vue.focus, secret: false }
+      return true
+    }
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'PORTAIL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r.refus).toBe('secret-coffre')
+    expect(vue.textes).toEqual([])
+  })
+
+  it('cadre intégré : refusé comme avant', async () => {
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true, cadreIntegre: true })
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'PORTAIL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r.refus).toBe('cadre-integre')
+    expect(vue.textes).toEqual([])
+  })
+
+  it('texte libre dans un champ secret : toujours refusé, même sur le site lié', async () => {
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    const r = await nav.agir('conv-a', { type: 'saisir', texte: 'hunter2', cible: { ref: 4 } })
+    expect(r).toMatchObject({ ok: false, refus: 'mot-de-passe' })
+    expect(vue.textes).toEqual([])
+  })
+
+  it('`texte` ET `depuisCoffre` : refus, rien n’est tapé', async () => {
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    // fix-ok: défaut réinjecté (contrôle du doublon retiré) resté vert — le champ actif par défaut
+    // n'est pas secret et refusait à sa place. Champ secret et bon site : seul le doublon refuse ici.
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    vue.focus = { ...vue.focus, secret: true }
+    const action = {
+      type: 'saisir',
+      texte: 'hunter2',
+      depuisCoffre: 'PORTAIL_PASSWORD',
+      cible: { ref: 4 }
+    } as unknown as ActionAgentNavigateur
+    const r = await nav.agir('conv-a', action)
+    expect(r).toMatchObject({ ok: false, refus: 'secret-coffre' })
+    expect(r.message).toMatch(/pas les deux/)
+    expect(vue.textes).toEqual([])
+  })
+
+  it('valeur de plus de 10 000 caractères : refus, jamais coupée', async () => {
+    coffre.ajouterCle('LONG_PASSWORD', 'L'.repeat(10_001), SITE)
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    vue.focus = { ...vue.focus, secret: true }
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'LONG_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r).toMatchObject({ ok: false, refus: 'secret-coffre' })
+    expect(r.message).toMatch(/10000 caractères/)
+    expect(vue.textes).toEqual([])
+  })
+
+  it('l’insertion échoue en citant le texte : le refus ne recopie pas l’erreur', async () => {
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    vue.focus = { ...vue.focus, secret: true }
+    vue.insererTexte = (texte: string): Promise<void> =>
+      Promise.reject(new Error(`insertText a échoué sur « ${texte} »`))
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'PORTAIL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r).toMatchObject({ ok: false, refus: 'page-indisponible' })
+    sansLaValeur(vue, r)
+  })
+
+  it('navigateur sans coffre branché : refus, rien n’est tapé', async () => {
+    nav.detruire()
+    nav = new GestionnaireNavigateur({ fabrique, racine, delaiSurbrillanceMs: 0 })
+    nav.ouvrir('conv-a', PAGE)
+    nav.repondreAccord(SITE, 'une-fois')
+    const vue = fabrique.vues.at(-1) as FausseVue
+    vue.reponses.localiser = cibleTrouvee({ secret: true })
+    const r = await nav.agir('conv-a', {
+      type: 'saisir',
+      depuisCoffre: 'PORTAIL_PASSWORD',
+      cible: { ref: 4 }
+    })
+    expect(r).toMatchObject({ ok: false, refus: 'secret-coffre' })
     expect(vue.textes).toEqual([])
   })
 })

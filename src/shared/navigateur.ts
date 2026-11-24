@@ -178,10 +178,15 @@ export type CibleAgentNavigateur =
  * hors poste local) ; `defiler` ne fait que lire. `saisir` sans cible tape dans le champ actif ;
  * `remplacer` sélectionne d'abord le contenu existant. `touche` accepte « Enter », « Tab »,
  * « ArrowDown », « Control+A »…
+ *
+ * `saisir` avec `depuisCoffre` (le NOM d'un mot de passe du coffre lié à un site) au lieu de `texte` :
+ * le processus principal lit la valeur et la tape, dans un champ secret de ce site seulement ; elle
+ * ne revient jamais dans un résultat, la frise ni la surbrillance.
  */
 export type ActionAgentNavigateur =
   | { type: 'clic'; cible: CibleAgentNavigateur; double?: boolean }
   | { type: 'saisir'; texte: string; cible?: CibleAgentNavigateur; remplacer?: boolean }
+  | { type: 'saisir'; depuisCoffre: string; cible?: CibleAgentNavigateur; remplacer?: boolean }
   | { type: 'touche'; touche: string; cible?: CibleAgentNavigateur }
   | { type: 'defiler'; dy: number; dx?: number; cible?: CibleAgentNavigateur }
 
@@ -198,6 +203,11 @@ export type RefusActionNavigateur =
   | 'main-reprise'
   /** Fil en pause : l'utilisateur n'a libéré ce geste ni par « Pas suivant » ni par « Reprendre ». */
   | 'pause-expiree'
+  /**
+   * Secret du coffre non tapé : nom inconnu, aucun site lié, page sur un autre site, champ qui n'est
+   * pas un mot de passe, ou `texte` donné avec `depuisCoffre`. Rien n'est tapé.
+   */
+  | 'secret-coffre'
 
 /** Le compte rendu d'une action, prêt à être rendu à l'agent. */
 export interface ResultatActionNavigateur {

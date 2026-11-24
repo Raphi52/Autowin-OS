@@ -139,6 +139,57 @@ describe('ranger au coffre la clé copiée sur un site', () => {
     expect(r.detail).not.toContain(CLE)
   })
 
+  it('avec `site` : un mot de passe lié à ce site, jamais servi aux agents, jamais rendu', async () => {
+    const copie = pressePapier(CLE)
+    const r = await rangerDepuisPressePapier({
+      nom: 'PORTAIL_PASSWORD',
+      site: 'https://portail.exemple.fr/Identity/Account/Manage/ChangePassword',
+      pressePapier: copie,
+      coffre,
+      fichiersARepasser: async () => []
+    })
+    expect(r).toMatchObject({
+      ok: true,
+      nom: 'PORTAIL_PASSWORD',
+      longueur: CLE.length,
+      site: 'https://portail.exemple.fr'
+    })
+    expect(r.detail).toMatch(/depuisCoffre/)
+    expect(JSON.stringify(r)).not.toContain(CLE)
+    expect(coffre.valeursPourAgent([])).toEqual({})
+    expect(coffre.secretPourSaisie('PORTAIL_PASSWORD')).toMatchObject({
+      ok: true,
+      valeur: CLE,
+      site: 'https://portail.exemple.fr'
+    })
+    expect(copie.contenu).toBe('')
+  })
+
+  it('site invalide : refus AVANT de lire le presse-papier, rien n’est rangé ni vidé', async () => {
+    for (const site of ['http://portail.exemple.fr', 'portail.exemple.fr', 'about:blank']) {
+      let lu = false
+      const copie = pressePapier(CLE)
+      const r = await rangerDepuisPressePapier({
+        nom: 'PORTAIL_PASSWORD',
+        site,
+        pressePapier: {
+          ...copie,
+          readText: async () => {
+            lu = true
+            return copie.contenu
+          }
+        },
+        coffre,
+        fichiersARepasser: async () => []
+      })
+      expect(r.ok, site).toBe(false)
+      expect(r.detail).toMatch(/Site invalide/)
+      expect(lu).toBe(false)
+      expect(copie.contenu).toBe(CLE)
+    }
+    expect(coffre.listerCles()).toEqual([])
+  })
+
   it('hors de l’app (aucun presse-papier) : refus lisible', async () => {
     const r = await rangerDepuisPressePapier({ nom: 'OPENAI_API_KEY', coffre })
     expect(r.ok).toBe(false)

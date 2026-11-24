@@ -15,10 +15,16 @@
  * - l'import du poste n'écrase jamais une clé saisie par l'utilisateur, ni ne ramène une clé qu'il a
  *   retirée (`ecartees`) : sinon « retirer » serait défait au démarrage suivant.
  *
+ * MOT DE PASSE LIÉ À UN SITE (`site`, origine `https://hôte`) : il ne sert qu'à être TAPÉ par le
+ * navigateur intégré sur ce site exact (`secretPourSaisie`), jamais posé dans l'environnement d'un
+ * agent — une commande `echo $NOM` le rendrait au modèle. Il reste masqué partout comme les autres.
+ * `genererMotDePasse` en tire un au coffre sans que personne ne le voie, sous un nom NEUF.
+ *
  * Les dépendances système (chiffrement, registre, environnement) sont injectables : les tests
  * tournent sans Electron réel.
  */
 import { createRequire } from 'node:module'
+import { randomInt } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { autowinAppDataRoot } from './app-data'
@@ -31,6 +37,11 @@ export interface EntreeCoffre {
   valeur: string
   origine: OrigineCle
   ajouteLe: string
+  /**
+   * Origine `https://hôte[:port]` où seul le navigateur intégré peut taper cette valeur. Présent,
+   * même illisible (fichier abîmé), il retire l'entrée de l'environnement des agents.
+   */
+  site?: string
 }
 
 /** Ce que l'interface a le droit de savoir d'une clé : tout sauf sa valeur. */
@@ -39,7 +50,22 @@ export interface CleListee {
   origine: OrigineCle
   ajouteLe: string
   longueur: number
+  site?: string
 }
+
+/** Ce que rend la génération : jamais la valeur. */
+export interface MotDePasseGenere {
+  nom: string
+  longueur: number
+  site: string
+}
+
+/**
+ * Ce que le navigateur intégré reçoit pour taper un secret : la valeur et son site, ou le refus
+ * nommé. Réservé au processus principal : aucune commande ni aucun canal ne le rend.
+ */
+export type SecretPourSaisie =
+  { ok: true; nom: string; valeur: string; site: string } | { ok: false; detail: string }
 
 export interface EtatCoffre {
   disponible: boolean
@@ -108,7 +134,19 @@ const PREFIXE_RESERVE = /^AUTOWIN_/i
  */
 const JETON_DE_SESSION = /^CLAUDE_CODE_MESSAGING_TOKEN$/i
 const LONGUEUR_MAX_VALEUR = 16_384
+/** Au-delà des 20 caractères demandés : de la marge pour un site qui en exige plus. */
+export const LONGUEUR_MOT_DE_PASSE = 24
+const MAJUSCULES = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const MINUSCULES = 'abcdefghijklmnopqrstuvwxyz'
+const CHIFFRES = '0123456789'
+/**
+ * Symboles qu'un formulaire accepte sans les échapper : ni guillemet, ni antislash, ni chevron, ni
+ * espace, ni accent grave.
+ */
+export const SYMBOLES_MOT_DE_PASSE = '!#$%*+-=?@_~'
 
+const MESSAGE_SITE_INVALIDE =
+  'Site invalide : donne l’adresse https:// de la page du site (ex. https://exemple.fr/connexion).'
 const RAISON_SANS_CHIFFREMENT =
   "Le chiffrement du système n'est pas disponible : le coffre reste vide et rien n'est écrit en clair."
 const RAISON_ILLISIBLE =
@@ -117,6 +155,55 @@ const RAISON_ILLISIBLE =
 
 const vide = (): ContenuCoffre => ({ version: 1, entrees: [], ecartees: [] })
 export const memeNom = (a: string, b: string): boolean => a.toUpperCase() === b.toUpperCase()
+
+/**
+ * Le site d'un mot de passe ramené à son origine (`https://hôte`, port gardé s'il n'est pas 443), ou
+ * `null` : seul `https:` est admis, une page en clair laisserait passer le mot de passe sur le réseau.
+ * Le navigateur compare cette origine À L'IDENTIQUE : un sous-domaine ou un autre port ne passe pas.
+ */
+export function normaliserSite(brut: unknown): string | null {
+  if (typeof brut !== 'string' || !brut.trim()) return null
+  try {
+    const adresse = new URL(brut.trim())
+    if (adresse.protocol !== 'https:' || !adresse.hostname) return null
+    return adresse.origin
+  } catch {
+    return null
+  }
+}
+
+/** Mot de passe tiré par `crypto` (`randomInt`, sans biais), une classe de chaque au moins. */
+export function tirerMotDePasse(longueur = LONGUEUR_MOT_DE_PASSE): string {
+  const classes = [MAJUSCULES, MINUSCULES, CHIFFRES, SYMBOLES_MOT_DE_PASSE]
+  const tous = classes.join('')
+  const lettres = classes.map((c) => c[randomInt(c.length)])
+  while (lettres.length < longueur) lettres.push(tous[randomInt(tous.length)])
+  // Fisher-Yates : sans mélange, les quatre premiers caractères trahiraient leur classe.
+  for (let i = lettres.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1)
+    ;[lettres[i], lettres[j]] = [lettres[j], lettres[i]]
+  }
+  return lettres.join('')
+}
+
+/** Refus d'un nom qui ne peut pas entrer au coffre : même règle pour la saisie et la génération. */
+function verifierNomDeCle(nom: string): void {
+  if (!NOM_VALIDE.test(nom))
+    throw new Error(
+      'Nom de clé invalide : lettres, chiffres et « _ », sans commencer par un chiffre.'
+    )
+  if (PREFIXE_RESERVE.test(nom))
+    throw new Error('Les noms AUTOWIN_… sont réservés aux réglages d’Autowin.')
+  if (JETON_DE_SESSION.test(nom))
+    throw new Error(
+      `${nom} est le jeton de session de Claude Code, pas une clé : il ne va pas au coffre.`
+    )
+  if (!estNomDeCle(nom))
+    throw new Error(
+      `${nom} ne désigne pas une clé : le nom doit finir par _API_KEY, _APIKEY, _KEY, _TOKEN, ` +
+        '_SECRET, _PAT ou _PASSWORD. Une variable comme PATH changerait le fonctionnement des agents.'
+    )
+}
 
 /**
  * Un nom de variable qui DÉSIGNE une clé, hors réglages d'Autowin et jeton de session. La même règle
@@ -163,10 +250,21 @@ function safeStorageElectron(): ChiffrementCoffre | undefined {
 export interface Coffre {
   etat(): EtatCoffre
   listerCles(): CleListee[]
-  ajouterCle(nom: string, valeur: string): void
+  /**
+   * Remplace en silence une clé de même nom (geste de l'utilisateur) en GARDANT son site : sans lui,
+   * le mot de passe repartirait vers les agents. `site` lie la valeur à une origine.
+   */
+  ajouterCle(nom: string, valeur: string, site?: string): void
+  /** Tire un mot de passe et le range sous un nom NEUF, lié à `site` ; ne rend jamais la valeur. */
+  genererMotDePasse(nom: string, site: string): MotDePasseGenere
+  /** La valeur d'un mot de passe lié à un site, pour le seul navigateur intégré. */
+  secretPourSaisie(nom: string): SecretPourSaisie
   retirerCle(nom: string): boolean
   importerDuPoste(): BilanImport
+  /** Les clés posées dans l'environnement d'un agent : jamais un mot de passe lié à un site. */
   valeursPourAgent(exclusions: readonly string[]): Record<string, string>
+  /** Les clés à masquer dans les fichiers, mots de passe liés à un site compris. */
+  valeursAMasquer(): Record<string, string>
   masquerValeurs(texte: string): string
 }
 
@@ -239,11 +337,12 @@ export function creerCoffre(options: OptionsCoffre = {}): Coffre {
 
   function lister(contenu: ContenuCoffre): CleListee[] {
     return contenu.entrees
-      .map(({ nom, origine, ajouteLe, valeur }) => ({
+      .map(({ nom, origine, ajouteLe, valeur, site }) => ({
         nom,
         origine,
         ajouteLe,
-        longueur: valeur.length
+        longueur: valeur.length,
+        ...(typeof site === 'string' ? { site } : {})
       }))
       .sort((a, b) => a.nom.localeCompare(b.nom))
   }
@@ -260,36 +359,80 @@ export function creerCoffre(options: OptionsCoffre = {}): Coffre {
       return lister(charger().contenu)
     },
 
-    ajouterCle(nomBrut, valeurBrute) {
+    ajouterCle(nomBrut, valeurBrute, siteBrut) {
       const nom = typeof nomBrut === 'string' ? nomBrut.trim() : ''
       const valeur = typeof valeurBrute === 'string' ? valeurBrute.trim() : ''
-      if (!NOM_VALIDE.test(nom))
-        throw new Error(
-          'Nom de clé invalide : lettres, chiffres et « _ », sans commencer par un chiffre.'
-        )
-      if (PREFIXE_RESERVE.test(nom))
-        throw new Error('Les noms AUTOWIN_… sont réservés aux réglages d’Autowin.')
-      if (JETON_DE_SESSION.test(nom))
-        throw new Error(
-          `${nom} est le jeton de session de Claude Code, pas une clé : il ne va pas au coffre.`
-        )
-      if (!estNomDeCle(nom))
-        throw new Error(
-          `${nom} ne désigne pas une clé : le nom doit finir par _API_KEY, _APIKEY, _KEY, _TOKEN, ` +
-            '_SECRET, _PAT ou _PASSWORD. Une variable comme PATH changerait le fonctionnement des agents.'
-        )
+      verifierNomDeCle(nom)
       if (!valeur) throw new Error('La valeur de la clé est vide.')
       if (valeur.length > LONGUEUR_MAX_VALEUR)
         throw new Error(`Valeur trop longue (plus de ${LONGUEUR_MAX_VALEUR} caractères).`)
+      const site = siteBrut === undefined ? undefined : normaliserSite(siteBrut)
+      if (site === null) throw new Error(MESSAGE_SITE_INVALIDE)
       const actuel = charger(true)
       if (!actuel.ok) throw new Error(actuel.raison)
+      // fix-ok: l'entrée était refabriquée sans ses autres champs (lu : filtre puis push nom/valeur) —
+      // un remplacement dans Réglages > Clés effaçait le site et rendait le mot de passe aux agents.
+      const siteGarde = site ?? actuel.contenu.entrees.find((e) => memeNom(e.nom, nom))?.site
       const entrees = actuel.contenu.entrees.filter((e) => !memeNom(e.nom, nom))
-      entrees.push({ nom, valeur, origine: 'utilisateur', ajouteLe: maintenant().toISOString() })
+      entrees.push({
+        nom,
+        valeur,
+        origine: 'utilisateur',
+        ajouteLe: maintenant().toISOString(),
+        ...(siteGarde !== undefined ? { site: siteGarde } : {})
+      })
       enregistrer({
         version: 1,
         entrees,
         ecartees: actuel.contenu.ecartees.filter((n) => !memeNom(n, nom))
       })
+    },
+
+    genererMotDePasse(nomBrut, siteBrut) {
+      const nom = typeof nomBrut === 'string' ? nomBrut.trim() : ''
+      verifierNomDeCle(nom)
+      const site = normaliserSite(siteBrut)
+      if (!site) throw new Error(MESSAGE_SITE_INVALIDE)
+      // Le refus du nom pris et l'écriture partent de la MÊME lecture du disque : vérifier puis
+      // passer par `ajouterCle` laisserait une écriture voisine glisser une clé que celle-ci écraserait.
+      const actuel = charger(true)
+      if (!actuel.ok) throw new Error(actuel.raison)
+      if (actuel.contenu.entrees.some((e) => memeNom(e.nom, nom)))
+        throw new Error(
+          `${nom} est déjà au coffre : rien n’est remplacé ni généré. Choisis un nom neuf ; ` +
+            'l’utilisateur retire l’ancienne clé dans Réglages > Clés.'
+        )
+      const valeur = tirerMotDePasse()
+      enregistrer({
+        version: 1,
+        entrees: [
+          ...actuel.contenu.entrees,
+          { nom, valeur, origine: 'utilisateur', ajouteLe: maintenant().toISOString(), site }
+        ],
+        ecartees: actuel.contenu.ecartees.filter((n) => !memeNom(n, nom))
+      })
+      return { nom, longueur: valeur.length, site }
+    },
+
+    secretPourSaisie(nomBrut) {
+      const nom = typeof nomBrut === 'string' ? nomBrut.trim() : ''
+      if (!NOM_VALIDE.test(nom))
+        return { ok: false, detail: 'Nom de secret invalide : donne le NOM d’une clé du coffre.' }
+      const lecture = charger()
+      if (!lecture.ok) return { ok: false, detail: lecture.raison }
+      const entree = lecture.contenu.entrees.find((e) => memeNom(e.nom, nom))
+      if (!entree) return { ok: false, detail: `${nom} n’est pas au coffre.` }
+      // Un site enregistré mais déformé ne vaut pas « n'importe quel site » : pas d'origine sûre,
+      // pas de frappe.
+      const site = normaliserSite(entree.site)
+      if (!site || site !== entree.site)
+        return {
+          ok: false,
+          detail:
+            `${entree.nom} n’est lié à aucun site : le navigateur ne tape un secret que sur le site ` +
+            'auquel il est lié (coffre_generer_mot_de_passe, ou coffre_ranger_presse_papier avec `site`).'
+        }
+      return { ok: true, nom: entree.nom, valeur: entree.valeur, site }
     },
 
     retirerCle(nomBrut) {
@@ -358,8 +501,16 @@ export function creerCoffre(options: OptionsCoffre = {}): Coffre {
       for (const e of charger().contenu.entrees) {
         // Un coffre rempli avant la règle de saisie peut contenir PATH : listé et masqué, jamais posé.
         if (!estNomDeCle(e.nom)) continue
+        // Un mot de passe lié à un site ne sert qu'au navigateur : posé ici, `echo $NOM` le lirait.
+        if (e.site !== undefined) continue
         if (!exclusions.some((x) => memeNom(x, e.nom))) valeurs[e.nom] = e.valeur
       }
+      return valeurs
+    },
+
+    valeursAMasquer() {
+      const valeurs: Record<string, string> = {}
+      for (const e of charger().contenu.entrees) if (estNomDeCle(e.nom)) valeurs[e.nom] = e.valeur
       return valeurs
     },
 
@@ -388,9 +539,14 @@ const coffre = (): Coffre => (coffreDuProcessus ??= creerCoffre())
 
 export const etatCoffre = (): EtatCoffre => coffre().etat()
 export const listerCles = (): CleListee[] => coffre().listerCles()
-export const ajouterCle = (nom: string, valeur: string): void => coffre().ajouterCle(nom, valeur)
+export const ajouterCle = (nom: string, valeur: string, site?: string): void =>
+  coffre().ajouterCle(nom, valeur, site)
+export const genererMotDePasse = (nom: string, site: string): MotDePasseGenere =>
+  coffre().genererMotDePasse(nom, site)
+export const secretPourSaisie = (nom: string): SecretPourSaisie => coffre().secretPourSaisie(nom)
 export const retirerCle = (nom: string): boolean => coffre().retirerCle(nom)
 export const importerDuPoste = (): BilanImport => coffre().importerDuPoste()
 export const valeursPourAgent = (exclusions: readonly string[]): Record<string, string> =>
   coffre().valeursPourAgent(exclusions)
+export const valeursAMasquer = (): Record<string, string> => coffre().valeursAMasquer()
 export const masquerValeurs = (texte: string): string => coffre().masquerValeurs(texte)

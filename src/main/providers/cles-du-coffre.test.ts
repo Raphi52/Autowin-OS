@@ -134,6 +134,17 @@ describe('les quatre moteurs — envDuCoffre', () => {
       expect(nomsInjectes(env), moteur).not.toContain('CLAUDE_CODE_MESSAGING_TOKEN')
     }
   })
+
+  it('un mot de passe lié à un site n’est posé chez aucun agent, ni nommé : seul le navigateur le tape', () => {
+    coffreDeTest.courant = coffreAvec({ MISTRAL_API_KEY: MISTRAL })
+    coffreDeTest.courant.genererMotDePasse('PORTAIL_PASSWORD', 'https://portail.exemple.fr')
+    for (const moteur of ['claude', 'codex', 'agy', 'grok', 'direct'] as const) {
+      const env = envDuCoffre(moteur)
+      expect(env.MISTRAL_API_KEY, moteur).toBe(MISTRAL)
+      expect(env.PORTAIL_PASSWORD, moteur).toBeUndefined()
+      expect(nomsInjectes(env), moteur).toEqual(['MISTRAL_API_KEY'])
+    }
+  })
 })
 
 describe('Claude (tour, run, nœud) — environnementAgent', () => {

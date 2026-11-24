@@ -17,6 +17,7 @@ import { annoncerFermeture } from '../app/journal-arrets'
 import { identifiantBureauCacheChat } from '../consignes/consigne-bureau-cache'
 import { rechargerEnv } from '../app/env-reload'
 import { rangerDepuisPressePapier } from '../app/coffre-presse-papier'
+import { genererMotDePasse } from '../app/coffre-cles'
 
 /** Cas de `AppCommandBus.run` : état, run, redémarrage, bureau caché, environnement. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerApplication(
@@ -263,7 +264,31 @@ export async function executerApplication(
       // reglage prend effet au prochain appel qui le lit, sans redemarrage.
       return rechargerEnv(a.nom)
     case 'coffre_ranger_presse_papier':
-      return rangerDepuisPressePapier({ nom: s('nom'), conversationId })
+      return rangerDepuisPressePapier({
+        nom: s('nom'),
+        ...(argumentAbsent(a.site) ? {} : { site: s('site') }),
+        conversationId
+      })
+    case 'coffre_generer_mot_de_passe': {
+      // Le refus (nom pris ou invalide, site non https, coffre fermé) part tel quel : les messages
+      // du coffre ne citent jamais une valeur.
+      try {
+        const r = genererMotDePasse(s('nom'), s('site'))
+        return {
+          ok: true,
+          ...r,
+          detail:
+            `${r.nom} est au coffre (${r.longueur} caractères), lié à ${r.site}. Tape-le sur ce site ` +
+            `avec navigateur_agir, action \`saisir\`, \`depuisCoffre: ${r.nom}\` ; tu ne le verras jamais.`
+        }
+      } catch (erreur) {
+        return {
+          ok: false,
+          nom: s('nom'),
+          detail: erreur instanceof Error ? erreur.message : String(erreur)
+        }
+      }
+    }
     default:
       throw new Error(`commande inconnue: ${name}`)
   }

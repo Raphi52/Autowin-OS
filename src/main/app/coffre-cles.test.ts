@@ -7,7 +7,11 @@ import { CLE_ENV_SYSTEME, CLE_ENV_UTILISATEUR } from './env-reload'
 import {
   creerCoffre,
   estNomDeCle,
+  LONGUEUR_MOT_DE_PASSE,
   NOM_FICHIER_COFFRE,
+  normaliserSite,
+  SYMBOLES_MOT_DE_PASSE,
+  tirerMotDePasse,
   type ChiffrementCoffre,
   type OptionsCoffre
 } from './coffre-cles'
@@ -381,5 +385,200 @@ describe('coffre à clés — injection et masquage', () => {
   it('masquer sans chiffrement rend le texte intact, sans exception', () => {
     const coffre = coffreDeTest({ chiffrement: () => undefined })
     expect(coffre.masquerValeurs(`clé ${VALEUR_MISTRAL}`)).toBe(`clé ${VALEUR_MISTRAL}`)
+  })
+})
+
+/**
+ * Mot de passe lié à un site : tiré au coffre sans que personne le voie, tapé par le seul navigateur
+ * intégré sur son site exact, jamais posé chez les agents, toujours masqué.
+ */
+describe('coffre à clés — mot de passe lié à un site', () => {
+  const SITE = 'https://portail.exemple.fr'
+  const PAGE = `${SITE}/Identity/Account/Manage/ChangePassword`
+  const valeurDe = (coffre: ReturnType<typeof coffreDeTest>, nom: string): string => {
+    const secret = coffre.secretPourSaisie(nom)
+    if (!secret.ok) throw new Error(secret.detail)
+    return secret.valeur
+  }
+
+  it('génère un mot de passe fort : 20 caractères au moins, les quatre classes, symboles sûrs', () => {
+    const tirages = Array.from({ length: 200 }, () => tirerMotDePasse())
+    for (const mdp of tirages) {
+      expect(mdp.length).toBeGreaterThanOrEqual(20)
+      expect(mdp).toMatch(/[A-Z]/)
+      expect(mdp).toMatch(/[a-z]/)
+      expect(mdp).toMatch(/[0-9]/)
+      expect([...mdp].some((c) => SYMBOLES_MOT_DE_PASSE.includes(c))).toBe(true)
+      expect(mdp).not.toMatch(/[\s"'`\\<>]/)
+    }
+    expect(new Set(tirages).size).toBe(tirages.length)
+    expect(LONGUEUR_MOT_DE_PASSE).toBeGreaterThanOrEqual(20)
+  })
+
+  it('range le mot de passe sous un nom neuf, lié à l’origine du site, sans jamais rendre la valeur', () => {
+    const chiffreur = chiffreurAes()
+    const coffre = coffreDeTest({ chiffreur })
+    const r = coffre.genererMotDePasse('PORTAIL_PASSWORD', PAGE)
+    expect(r).toEqual({ nom: 'PORTAIL_PASSWORD', longueur: LONGUEUR_MOT_DE_PASSE, site: SITE })
+    const valeur = valeurDe(coffre, 'PORTAIL_PASSWORD')
+    expect(valeur).toHaveLength(LONGUEUR_MOT_DE_PASSE)
+    expect(JSON.stringify(r)).not.toContain(valeur)
+    // Relu par un coffre neuf : le site survit au fichier chiffré, la valeur n'y est pas en clair.
+    const relu = coffreDeTest({ chiffreur })
+    expect(relu.listerCles()).toEqual([
+      {
+        nom: 'PORTAIL_PASSWORD',
+        origine: 'utilisateur',
+        ajouteLe: '2026-11-06T10:00:00.000Z',
+        longueur: LONGUEUR_MOT_DE_PASSE,
+        site: SITE
+      }
+    ])
+    expect(relu.secretPourSaisie('portail_password')).toMatchObject({
+      ok: true,
+      site: SITE,
+      valeur
+    })
+    expect(readFileSync(fichier).includes(Buffer.from(valeur, 'utf8'))).toBe(false)
+  })
+
+  it('refuse un nom déjà au coffre (casse ignorée) : rien n’est généré ni remplacé', () => {
+    const coffre = coffreDeTest()
+    coffre.ajouterCle('PORTAIL_PASSWORD', 'ancien-mot-de-passe-123')
+    expect(() => coffre.genererMotDePasse('portail_password', SITE)).toThrow(/déjà au coffre/)
+    expect(coffre.valeursAMasquer()).toEqual({ PORTAIL_PASSWORD: 'ancien-mot-de-passe-123' })
+    coffre.genererMotDePasse('NOUVEAU_PASSWORD', SITE)
+    const valeur = valeurDe(coffre, 'NOUVEAU_PASSWORD')
+    // Appel répété : refusé, la première valeur reste.
+    expect(() => coffre.genererMotDePasse('NOUVEAU_PASSWORD', SITE)).toThrow(/déjà au coffre/)
+    expect(valeurDe(coffre, 'NOUVEAU_PASSWORD')).toBe(valeur)
+  })
+
+  it.each([
+    ['', /Nom de clé invalide/],
+    ['   ', /Nom de clé invalide/],
+    ['1PORTAIL_PASSWORD', /Nom de clé invalide/],
+    ['PORTAIL-PASSWORD', /Nom de clé invalide/],
+    ['PORTAIL', /ne désigne pas une clé/],
+    ['AUTOWIN_PASSWORD', /réservés/]
+  ])('refuse le nom « %s » sans rien écrire', (nom, motif) => {
+    const coffre = coffreDeTest()
+    expect(() => coffre.genererMotDePasse(nom, SITE)).toThrow(motif)
+    expect(existsSync(fichier)).toBe(false)
+  })
+
+  it.each([
+    [undefined],
+    [''],
+    [42],
+    ['portail.exemple.fr'],
+    ['http://portail.exemple.fr'],
+    ['file:///C:/page.html'],
+    ['about:blank'],
+    ['javascript:alert(1)'],
+    ['https://']
+  ])('refuse le site %j sans rien écrire (sans site, il partirait chez les agents)', (site) => {
+    const coffre = coffreDeTest()
+    expect(() => coffre.genererMotDePasse('PORTAIL_PASSWORD', site as string)).toThrow(
+      /Site invalide/
+    )
+    expect(existsSync(fichier)).toBe(false)
+  })
+
+  it('ramène le site à son origine : chemin et majuscules retirés, :443 omis, autre port gardé', () => {
+    expect(normaliserSite('https://Portail.Exemple.FR:443/a/b?c#d')).toBe(SITE)
+    expect(normaliserSite('  https://portail.exemple.fr:8443/x ')).toBe(
+      'https://portail.exemple.fr:8443'
+    )
+    expect(normaliserSite('http://portail.exemple.fr')).toBeNull()
+  })
+
+  it('coffre indisponible : refus lisible, rien d’écrit, aucune valeur rendue', () => {
+    const coffre = coffreDeTest({ chiffrement: () => undefined })
+    expect(() => coffre.genererMotDePasse('PORTAIL_PASSWORD', SITE)).toThrow(
+      /chiffrement du système/
+    )
+    expect(existsSync(fichier)).toBe(false)
+    expect(coffre.secretPourSaisie('PORTAIL_PASSWORD')).toMatchObject({ ok: false })
+  })
+
+  it('jamais posé chez les agents ; masqué comme les autres (texte et fichiers)', () => {
+    const coffre = coffreDeTest()
+    coffre.ajouterCle('MISTRAL_API_KEY', VALEUR_MISTRAL)
+    coffre.genererMotDePasse('PORTAIL_PASSWORD', SITE)
+    const valeur = valeurDe(coffre, 'PORTAIL_PASSWORD')
+    expect(coffre.valeursPourAgent([])).toEqual({ MISTRAL_API_KEY: VALEUR_MISTRAL })
+    expect(coffre.valeursAMasquer()).toEqual({
+      MISTRAL_API_KEY: VALEUR_MISTRAL,
+      PORTAIL_PASSWORD: valeur
+    })
+    expect(coffre.masquerValeurs(`mdp=${valeur}`)).toBe('mdp=[secret:PORTAIL_PASSWORD]')
+  })
+
+  it('remplacée dans Réglages > Clés, l’entrée garde son site : elle ne repart pas chez les agents', () => {
+    const coffre = coffreDeTest()
+    coffre.genererMotDePasse('PORTAIL_PASSWORD', SITE)
+    coffre.ajouterCle('portail_password', 'saisi-par-l-utilisateur-99')
+    expect(coffre.valeursPourAgent([])).toEqual({})
+    expect(coffre.secretPourSaisie('PORTAIL_PASSWORD')).toMatchObject({
+      ok: true,
+      valeur: 'saisi-par-l-utilisateur-99',
+      site: SITE
+    })
+  })
+
+  it('ajouterCle avec un site le lie ; un site invalide est refusé sans rien écrire', () => {
+    const coffre = coffreDeTest()
+    coffre.ajouterCle('ANCIEN_PASSWORD', 'ancien-mot-de-passe-123', PAGE)
+    expect(coffre.listerCles()[0]).toMatchObject({ nom: 'ANCIEN_PASSWORD', site: SITE })
+    expect(() =>
+      coffre.ajouterCle('AUTRE_PASSWORD', 'autre-mot-de-passe-456', 'http://x.fr')
+    ).toThrow(/Site invalide/)
+    expect(coffre.listerCles().map((c) => c.nom)).toEqual(['ANCIEN_PASSWORD'])
+  })
+
+  it('l’import du poste n’écrase pas un mot de passe lié (origine utilisateur)', () => {
+    const coffre = coffreDeTest({ env: { PORTAIL_PASSWORD: 'valeur-du-poste-0123' } })
+    coffre.genererMotDePasse('PORTAIL_PASSWORD', SITE)
+    const avant = valeurDe(coffre, 'PORTAIL_PASSWORD')
+    expect(coffre.importerDuPoste()).toMatchObject({ ajoutees: 0, misesAJour: 0, ignorees: 1 })
+    expect(valeurDe(coffre, 'PORTAIL_PASSWORD')).toBe(avant)
+  })
+
+  it('secretPourSaisie : nom inconnu ou invalide, clé sans site, site enregistré illisible → refus nommé, sans valeur', () => {
+    const chiffreur = chiffreurAes()
+    const ajouteLe = '2026-11-06T10:00:00.000Z'
+    const entree = (nom: string, valeur: string, site?: unknown): Record<string, unknown> => ({
+      nom,
+      valeur,
+      origine: 'utilisateur',
+      ajouteLe,
+      ...(site === undefined ? {} : { site })
+    })
+    const contenu = {
+      version: 1,
+      entrees: [
+        entree('MISTRAL_API_KEY', VALEUR_MISTRAL),
+        entree('ABIME_PASSWORD', 'valeur-abimee-0123', 42),
+        entree('CHEMIN_PASSWORD', 'valeur-chemin-0123', `${SITE}/x`)
+      ],
+      ecartees: []
+    }
+    writeFileSync(fichier, chiffreur.encryptString(JSON.stringify(contenu)))
+    const coffre = coffreDeTest({ chiffreur })
+    const refus = [
+      coffre.secretPourSaisie('INCONNU_PASSWORD'),
+      coffre.secretPourSaisie('MISTRAL_API_KEY'),
+      coffre.secretPourSaisie('ABIME_PASSWORD'),
+      coffre.secretPourSaisie('CHEMIN_PASSWORD'),
+      coffre.secretPourSaisie('pas un nom')
+    ]
+    expect(refus.map((r) => r.ok)).toEqual([false, false, false, false, false])
+    expect(refus[0]).toMatchObject({ detail: expect.stringMatching(/n’est pas au coffre/) })
+    expect(refus[1]).toMatchObject({ detail: expect.stringMatching(/n’est lié à aucun site/) })
+    expect(refus[4]).toMatchObject({ detail: expect.stringMatching(/Nom de secret invalide/) })
+    expect(JSON.stringify(refus)).not.toMatch(/mst-|valeur-abimee|valeur-chemin/)
+    // Un champ `site` présent, même illisible, retire l'entrée de l'environnement des agents.
+    expect(coffre.valeursPourAgent([])).toEqual({ MISTRAL_API_KEY: VALEUR_MISTRAL })
   })
 })
