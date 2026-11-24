@@ -181,8 +181,8 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   `que si l'utilisateur demande explicitement son ecran, ou si le bureau cache ne PEUT PAS montrer ` +
   `ce qu'il faut (capture unie d'un rendu GPU, besoin de clics) — dis-le alors en une ligne AVANT de toucher a son ecran.\n` +
   // NAVIGATEUR INTEGRE (lot 4/5, 2026-10-29) : le panneau navigateur du fil, visible par
-  // l'utilisateur, passe AVANT le bureau cache pour le web ; ses garde-fous (mot de passe, accord par
-  // site) sont dans le code (navigateur-integre.ts), cette ligne dit seulement quand s'en servir.
+  // l'utilisateur, passe AVANT le bureau cache pour le web ; ses garde-fous (mot de passe, site
+  // changé) sont dans le code (navigateur-integre.ts), cette ligne dit seulement quand s'en servir.
   `PAGE WEB OU SERVEUR DE DEV LOCAL : le NAVIGATEUR INTEGRE de ce fil d'abord, AVANT le bureau cache — ` +
   `l'utilisateur l'ouvre a cote du fil (chaque page que tu ouvres met un chiffre rouge sur son globe). \`navigateur_ouvrir\`, \`navigateur_lire\` (elements numerotes), ` +
   `\`navigateur_agir\`, \`navigateur_capture\`, \`navigateur_console\`. ` +

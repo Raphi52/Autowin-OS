@@ -24,14 +24,6 @@ export interface OngletNavigateur {
 /** Mode de la page active : choisir un élément (un clic), ou aucun. */
 export type ModeNavigateur = 'choisir' | null
 
-/** Une action d'écriture de l'agent attend l'accord de l'utilisateur pour ce site. */
-export interface DemandeAccordNavigateur {
-  /** Origine du site (`https://exemple.fr`), ou le protocole quand la page n'a pas d'origine. */
-  origine: string
-  /** Ce que l'agent veut faire, en mots courants (« cliquer sur bouton « Envoyer » »). */
-  action: string
-}
-
 /**
  * PAS-À-PAS (maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30) : chaque
  * geste de l'agent est noté dans un journal PAR FIL, que le panneau montre en frise de jalons ; le
@@ -75,7 +67,6 @@ export interface EtatNavigateur {
   ongletActif: string | null
   /** Vrai pendant qu'une action de l'agent se joue : l'interface montre le bandeau « l'agent pilote ». */
   agentPilote: boolean
-  demandeAccord?: DemandeAccordNavigateur
   /** Mode de la page active, si ce fil est celui affiché ; `null` sinon. */
   mode: ModeNavigateur
   /** Éléments choisis dans la page que le panneau n'a pas encore repris : il les prend, la file se vide. */
@@ -167,15 +158,13 @@ export const REGLAGES_NAVIGATEUR_PAR_DEFAUT: ReglagesNavigateur = {
   ouvrirLiensDuChatIci: true
 }
 
-export type ReponseAccordNavigateur = 'une-fois' | 'toujours' | 'refuser'
-
 /** Ce que l'agent vise : un élément numéroté par l'instantané, un sélecteur CSS, ou un point. */
 export type CibleAgentNavigateur =
   { ref: number } | { selecteur: string } | { x: number; y: number }
 
 /**
- * Une action de l'agent dans la page. `clic`, `saisir` et `touche` ÉCRIVENT (accord du site requis
- * hors poste local) ; `defiler` ne fait que lire. `saisir` sans cible tape dans le champ actif ;
+ * Une action de l'agent dans la page. `clic`, `saisir` et `touche` ÉCRIVENT ; `defiler` ne fait que
+ * lire. `saisir` sans cible tape dans le champ actif ;
  * `remplacer` sélectionne d'abord le contenu existant. `touche` accepte « Enter », « Tab »,
  * « ArrowDown », « Control+A »…
  *
@@ -195,9 +184,8 @@ export type RefusActionNavigateur =
   | 'cible-introuvable'
   | 'mot-de-passe'
   | 'cadre-integre'
-  | 'accord-refuse'
   | 'page-indisponible'
-  /** La page a changé de site entre l'accord et l'action : rien n'est envoyé, l'agent relit. */
+  /** La page a changé de site entre le repérage et l'envoi : rien n'est envoyé, l'agent relit. */
   | 'page-changee'
   /** L'utilisateur a repris la main : plus aucun geste de l'agent jusqu'à ce qu'il la rende. */
   | 'main-reprise'
@@ -234,7 +222,6 @@ export const CANAUX_NAVIGATEUR = {
   poserCadre: 'navigateur:poser-cadre',
   basculerMode: 'navigateur:basculer-mode',
   prendreElementsChoisis: 'navigateur:prendre-elements-choisis',
-  repondreAccord: 'navigateur:repondre-accord',
   reglagesLire: 'navigateur:reglages-lire',
   reglagesEcrire: 'navigateur:reglages-ecrire',
   effacerDonnees: 'navigateur:effacer-donnees',
@@ -270,7 +257,6 @@ export interface ApiNavigateur {
   basculerMode(mode: ModeNavigateur): Promise<void>
   /** Rend les éléments choisis du fil et vide la file : un élément n'est livré qu'une fois. */
   prendreElementsChoisis(conversationId: string): Promise<ElementChoisiNavigateur[]>
-  repondreAccord(origine: string, reponse: ReponseAccordNavigateur): Promise<void>
   reglages: {
     lire(): Promise<ReglagesNavigateur>
     ecrire(reglages: Partial<ReglagesNavigateur>): Promise<ReglagesNavigateur>

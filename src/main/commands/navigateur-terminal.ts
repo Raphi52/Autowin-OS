@@ -59,8 +59,6 @@ export const SUITE_REFUS_NAVIGATEUR: Partial<Record<RefusActionNavigateur, strin
     "Ne contourne pas ce refus : demande à l'utilisateur de se connecter lui-même dans le panneau, puis reprends.",
   'cadre-integre':
     "Ne contourne pas ce refus : demande à l'utilisateur de remplir ce champ lui-même, puis reprends.",
-  'accord-refuse':
-    'Sans son accord pour ce site, ne réessaie pas : dis-lui ce que tu voulais faire ; il autorise le site dans le bandeau du panneau.',
   'secret-coffre':
     "Ne retape jamais ce secret en `texte` et ne demande pas sa valeur : ouvre la page du site lié, vise un champ de mot de passe, ou dis à l'utilisateur ce qui manque (clé absente ou sans site)."
 }

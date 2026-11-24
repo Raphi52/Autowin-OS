@@ -769,9 +769,7 @@
 
 /* components/NavigateurIntegre.css — tailles */
 :root[data-theme^='malvoyant-'] .navigateur-mode,
-:root[data-theme^='malvoyant-'] .navigateur-cadre-tete,
-:root[data-theme^='malvoyant-'] .navigateur-accord-texte span,
-:root[data-theme^='malvoyant-'] .navigateur-pilule {
+:root[data-theme^='malvoyant-'] .navigateur-cadre-tete {
   font-size: 13px;
 }
 

@@ -170,8 +170,6 @@ const navigateur: ApiNavigateur = {
   basculerMode: (mode) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.basculerMode, mode),
   prendreElementsChoisis: (conversationId) =>
     ipcRenderer.invoke(CANAUX_NAVIGATEUR.prendreElementsChoisis, conversationId),
-  repondreAccord: (origine, reponse) =>
-    ipcRenderer.invoke(CANAUX_NAVIGATEUR.repondreAccord, origine, reponse),
   reglages: {
     lire: () => ipcRenderer.invoke(CANAUX_NAVIGATEUR.reglagesLire),
     ecrire: (reglages) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.reglagesEcrire, reglages)

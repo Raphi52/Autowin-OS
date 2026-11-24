@@ -32,8 +32,7 @@ import {
   type ModeNavigateur,
   type OrdrePilotageNavigateur,
   type RectNavigateur,
-  type ReglagesNavigateur,
-  type ReponseAccordNavigateur
+  type ReglagesNavigateur
 } from '../../shared/navigateur'
 
 /** Ce que le module prend de l'extérieur. */
@@ -50,8 +49,6 @@ export type NavigateurIpcDeps = {
 const PORTEE = 'Navigateur intégré du chat'
 /** Un identifiant de fil ou d'onglet : court, jamais vide. */
 const MAX_IDENTIFIANT = 200
-/** Une origine (`https://exemple.fr`) : une adresse sans chemin. */
-const MAX_ORIGINE = 2_048
 
 let dependances: NavigateurIpcDeps | null = null
 let liaison: { fenetre: BrowserWindow; gestionnaire: GestionnaireNavigateur } | null = null
@@ -155,13 +152,6 @@ function guardZoom(valeur: unknown): number {
 function guardMode(valeur: unknown): ModeNavigateur {
   if (valeur === null || valeur === 'choisir') return valeur
   throw new Error('IPC navigateur.basculerMode: « choisir » ou null attendu')
-}
-
-function guardReponseAccord(valeur: unknown): ReponseAccordNavigateur {
-  if (valeur === 'une-fois' || valeur === 'toujours' || valeur === 'refuser') return valeur
-  throw new Error(
-    'IPC navigateur.repondreAccord: « une-fois », « toujours » ou « refuser » attendu'
-  )
 }
 
 const ORDRES_PILOTAGE: ReadonlySet<unknown> = new Set<OrdrePilotageNavigateur>([
@@ -272,12 +262,6 @@ export function registerNavigateurIpc(deps: NavigateurIpcDeps): void {
     assertTrustedRendererSender(event, PORTEE)
     const fil = guardIdentifiant(conversationId, 'navigateur.prendreElementsChoisis')
     return exiger().prendreElementsChoisis(fil)
-  })
-  ipcMain.handle('navigateur:repondre-accord', (event, origine: unknown, reponse: unknown) => {
-    assertTrustedRendererSender(event, PORTEE)
-    const site = guardTexteNonVide(origine, 'navigateur.repondreAccord.origine', MAX_ORIGINE)
-    const choix = guardReponseAccord(reponse)
-    exiger().repondreAccord(site, choix)
   })
   ipcMain.handle('navigateur:reglages-lire', (event) => {
     assertTrustedRendererSender(event, PORTEE)

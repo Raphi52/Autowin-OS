@@ -3,7 +3,7 @@
  * pages en mémoire, et les scripts de page sont relus par `decoderAppelPage` pour répondre comme la
  * vraie page. La vraie fabrique est vérifiée en fin de fichier sur un Electron simulé.
  */
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -131,18 +131,16 @@ vi.mock('electron', () => {
 import {
   analyserTouche,
   creerFabriqueElectron,
-  DELAI_ACCORD_MS,
   DELAI_PAUSE_MS,
   DELAI_SURBRILLANCE_MS,
-  FICHIER_SITES_NAVIGATEUR,
   GestionnaireNavigateur,
   MAX_CARACTERES_LECTURE,
   MAX_FENETRES_DE_CONNEXION,
   MAX_ONGLETS_PAR_FIL,
-  origineSoumiseAAccord,
   PARTITION_EPHEMERE,
   PARTITION_PERSISTANTE,
   PREFIXE_LECTURE,
+  siteDeLaPage,
   TAILLE_ANNEAU,
   TAILLE_JOURNAL_GESTES,
   type CadreFenetre,
@@ -199,7 +197,7 @@ class FausseVue implements VueNavigateur {
   }
   url(): string {
     // Comme `contenu.getURL()` sur une page fermée (objection du juge, run-adc12547df2d-1). Fausse page
-    // qui répondait encore une fois fermée : le recul de la question d'accord passait inaperçu.
+    // qui répondait encore une fois fermée : un onglet fermé pendant une attente passait inaperçu.
     if (this.ferme) throw new TypeError('Object has been destroyed')
     return this.adresse
   }
@@ -436,7 +434,7 @@ describe('garde (a) : jamais de saisie de l’agent dans un mot de passe', () =>
     nav.ouvrir('conv-a', 'http://localhost:3000')
   })
 
-  it('cible secrète : refus AVANT tout accord, rien n’est tapé', async () => {
+  it('cible secrète : refus AVANT la surbrillance, rien n’est tapé', async () => {
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ secret: true })
     const r = await nav.agir('conv-a', { type: 'saisir', texte: 'hunter2', cible: { ref: 3 } })
@@ -502,7 +500,7 @@ describe('garde (a) : jamais de saisie de l’agent dans un mot de passe', () =>
  * processus principal dans un champ secret de SON site. Le coffre est le vrai (`creerCoffre`, fichier
  * temporaire, chiffrement factice) : c'est sa lecture qui décide du site. Chaque refus laisse
  * `vue.textes` vide, et la valeur ne paraît ni dans le résultat, ni dans l'état poussé au panneau
- * (frise, question d'accord), ni dans aucun appel à la page (surbrillance comprise).
+ * (frise), ni dans aucun appel à la page (surbrillance comprise).
  */
 describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => {
   const SITE = 'https://portail.exemple.fr'
@@ -545,7 +543,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
 
   it('bon site, champ de mot de passe : la valeur est tapée une fois, et ne revient nulle part', async () => {
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ secret: true, description: 'textbox « Nouveau »' })
     vue.focus = { ...vue.focus, secret: true }
@@ -569,21 +566,14 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
     sansLaValeur(vue, r)
   })
 
-  it('sans cible, le champ actif secret le reçoit ; la question d’accord ne nomme que le secret', async () => {
+  it('sans cible, le champ actif secret le reçoit ; la frise ne nomme que le secret', async () => {
     nav.ouvrir('conv-a', PAGE)
     const vue = fabrique.vues[0]
     vue.focus = { ...vue.focus, secret: true, description: 'textbox « Confirmez »' }
-    const action = nav.agir('conv-a', { type: 'saisir', depuisCoffre: 'portail_password' })
-    await laisserFiler()
-    expect(nav.etat('conv-a').demandeAccord).toEqual({
-      origine: SITE,
-      action: 'saisir le secret portail_password'
-    })
-    sansLaValeur(vue, null)
-    nav.repondreAccord(SITE, 'une-fois')
-    const r = await action
+    const r = await nav.agir('conv-a', { type: 'saisir', depuisCoffre: 'portail_password' })
     expect(r).toMatchObject({ ok: true })
     expect(vue.textes).toEqual([valeur])
+    expect(nav.etat('conv-a').gestes.at(-1)?.description).toBe('saisir le secret portail_password')
     sansLaValeur(vue, r)
   })
 
@@ -595,7 +585,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
     'about:blank'
   ])('page sur %s : refus avant de viser le champ, rien n’est tapé', async (adresse) => {
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     vue.adresse = adresse
     vue.reponses.localiser = cibleTrouvee({ secret: true })
@@ -609,31 +598,30 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
     expect(r.message).toMatch(/n'est lié qu'à https:\/\/portail\.exemple\.fr/)
     expect(vue.textes).toEqual([])
     expect(vue.methodes()).not.toContain('localiser')
-    expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
     sansLaValeur(vue, r)
   })
 
-  it('la page change de site PENDANT la question d’accord : refus, rien n’est tapé', async () => {
+  it('la page change de site PENDANT la surbrillance : refus, rien n’est tapé', async () => {
     nav.ouvrir('conv-a', PAGE)
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ secret: true })
     vue.focus = { ...vue.focus, secret: true }
-    const action = nav.agir('conv-a', {
+    vue.reponses.surligner = (): boolean => {
+      vue.adresse = 'https://piege.fr/connexion'
+      return true
+    }
+    const r = await nav.agir('conv-a', {
       type: 'saisir',
       depuisCoffre: 'PORTAIL_PASSWORD',
       cible: { ref: 4 }
     })
-    await laisserFiler()
-    vue.adresse = 'https://piege.fr/connexion'
-    nav.repondreAccord(SITE, 'une-fois')
-    const r = await action
     expect(r).toMatchObject({ ok: false, refus: 'page-changee' })
     expect(vue.textes).toEqual([])
     sansLaValeur(vue, r)
   })
 
   it('poste local : une redirection vers un autre port PENDANT la surbrillance est vue au dernier moment', async () => {
-    // L'accord ne distingue pas les pages du poste local (origine `null`) : seule la comparaison de
+    // La garde (b) compte tout le poste local pour un seul site (`null`) : seule la comparaison de
     // l'origine exacte au site lié refuse ici.
     coffre.genererMotDePasse('LOCAL_PASSWORD', 'https://localhost:8443/connexion')
     nav.ouvrir('conv-a', 'https://localhost:8443/connexion')
@@ -676,7 +664,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
     ['pas un nom', /Nom de secret invalide/]
   ])('%s : refus nommé, rien n’est tapé ni visé', async (nom, motif) => {
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ secret: true })
     vue.focus = { ...vue.focus, secret: true }
@@ -690,7 +677,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
 
   it('un champ qui n’est pas un mot de passe : refus (la page pourrait relire la valeur)', async () => {
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ description: 'textbox « Recherche »' })
     const r = await nav.agir('conv-a', {
@@ -710,7 +696,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
 
   it('le focus quitte le champ secret PENDANT la surbrillance : refus, rien n’est tapé', async () => {
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ secret: true })
     vue.focus = { ...vue.focus, secret: true }
@@ -729,7 +714,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
 
   it('cadre intégré : refusé comme avant', async () => {
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ secret: true, cadreIntegre: true })
     const r = await nav.agir('conv-a', {
@@ -743,7 +727,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
 
   it('texte libre dans un champ secret : toujours refusé, même sur le site lié', async () => {
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ secret: true })
     const r = await nav.agir('conv-a', { type: 'saisir', texte: 'hunter2', cible: { ref: 4 } })
@@ -753,7 +736,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
 
   it('`texte` ET `depuisCoffre` : refus, rien n’est tapé', async () => {
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     // fix-ok: défaut réinjecté (contrôle du doublon retiré) resté vert — le champ actif par défaut
     // n'est pas secret et refusait à sa place. Champ secret et bon site : seul le doublon refuse ici.
@@ -774,7 +756,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
   it('valeur de plus de 10 000 caractères : refus, jamais coupée', async () => {
     coffre.ajouterCle('LONG_PASSWORD', 'L'.repeat(10_001), SITE)
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ secret: true })
     vue.focus = { ...vue.focus, secret: true }
@@ -790,7 +771,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
 
   it('l’insertion échoue en citant le texte : le refus ne recopie pas l’erreur', async () => {
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee({ secret: true })
     vue.focus = { ...vue.focus, secret: true }
@@ -809,7 +789,6 @@ describe('garde (a) : un secret du coffre, tapé seulement sur son site', () => 
     nav.detruire()
     nav = new GestionnaireNavigateur({ fabrique, racine, delaiSurbrillanceMs: 0 })
     nav.ouvrir('conv-a', PAGE)
-    nav.repondreAccord(SITE, 'une-fois')
     const vue = fabrique.vues.at(-1) as FausseVue
     vue.reponses.localiser = cibleTrouvee({ secret: true })
     const r = await nav.agir('conv-a', {
@@ -926,110 +905,49 @@ describe('une page sans image reçoit quand même l’action de l’agent', () =
   })
 })
 
-describe('garde (b) : accord par site', () => {
-  it('poste local et file: sont libres ; le reste est soumis par origine', () => {
-    expect(origineSoumiseAAccord('http://localhost:5173/x')).toBeNull()
-    expect(origineSoumiseAAccord('http://127.0.0.1/')).toBeNull()
-    expect(origineSoumiseAAccord('http://[::1]:3000/')).toBeNull()
-    expect(origineSoumiseAAccord('file:///C:/page.html')).toBeNull()
-    expect(origineSoumiseAAccord('https://exemple.fr/a?b')).toBe('https://exemple.fr')
-    expect(origineSoumiseAAccord('http://localhost.evil.fr/')).toBe('http://localhost.evil.fr')
-    expect(origineSoumiseAAccord('about:blank')).toBe('about:')
+describe('garde (b) : le geste part sur le site visé, sans question à l’utilisateur', () => {
+  it('le site d’une page : tout le poste local compte pour un seul site, ailleurs l’origine', () => {
+    expect(siteDeLaPage('http://localhost:5173/x')).toBeNull()
+    expect(siteDeLaPage('http://127.0.0.1/')).toBeNull()
+    expect(siteDeLaPage('http://[::1]:3000/')).toBeNull()
+    expect(siteDeLaPage('file:///C:/page.html')).toBeNull()
+    expect(siteDeLaPage('https://exemple.fr/a?b')).toBe('https://exemple.fr')
+    expect(siteDeLaPage('http://localhost.evil.fr/')).toBe('http://localhost.evil.fr')
+    expect(siteDeLaPage('about:blank')).toBe('about:')
   })
 
-  it('la 1re écriture attend ; « une fois » la libère et vaut pour la suite de la session', async () => {
-    nav.ouvrir('conv-a', 'https://exemple.fr/page')
-    const vue = fabrique.vues[0]
-    vue.reponses.localiser = cibleTrouvee()
-    const action = nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
-    await laisserFiler()
-    expect(nav.etat('conv-a').demandeAccord).toEqual({
-      origine: 'https://exemple.fr',
-      action: 'cliquer sur button « Envoyer »'
-    })
-    expect(nav.etat('conv-a').agentPilote).toBe(false)
-    expect(vue.evenements).toEqual([])
+  // L'utilisateur autorise l'agent partout : aucune question, aucune attente, aucun réglage écrit.
+  it.each([
+    ['clic', { type: 'clic', cible: { ref: 1 } }],
+    ['saisir', { type: 'saisir', texte: 'bonjour', cible: { ref: 1 } }],
+    ['touche', { type: 'touche', touche: 'Enter', cible: { ref: 1 } }],
+    ['defiler', { type: 'defiler', dy: 300 }]
+  ] as Array<[string, ActionAgentNavigateur]>)(
+    'hors poste local, %s part du premier coup : aucune question, rien sur disque',
+    async (_nom, action) => {
+      nav.ouvrir('conv-a', 'https://exemple.fr/page')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      expect(await issueSansAttendre(nav.agir('conv-a', action))).toMatchObject({ ok: true })
+      expect(vue.evenements.length + vue.textes.length).toBeGreaterThan(0)
+      expect(nav.etat('conv-a')).not.toHaveProperty('demandeAccord')
+      expect(readdirSync(racine)).toEqual([])
+    }
+  )
 
-    nav.repondreAccord('https://exemple.fr', 'une-fois')
-    expect(await action).toMatchObject({ ok: true })
-    expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
-
-    expect(await nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })).toMatchObject({
-      ok: true
-    })
-    expect(readFileSafe(join(racine, FICHIER_SITES_NAVIGATEUR))).toBeNull()
-  })
-
-  it('« toujours » est écrit sur disque et vaut pour un gestionnaire neuf', async () => {
-    nav.ouvrir('conv-a', 'https://exemple.fr')
-    fabrique.vues[0].reponses.localiser = cibleTrouvee()
-    const action = nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
-    await laisserFiler()
-    nav.repondreAccord('https://exemple.fr', 'toujours')
-    expect((await action).ok).toBe(true)
-    expect(JSON.parse(readFileSafe(join(racine, FICHIER_SITES_NAVIGATEUR)) ?? '{}')).toEqual({
-      toujours: ['https://exemple.fr']
-    })
-
-    const autreFabrique = fausseFabrique()
-    const neuf = new GestionnaireNavigateur({
-      fabrique: autreFabrique,
-      racine,
-      delaiSurbrillanceMs: 0
-    })
-    neuf.ouvrir('conv-z', 'https://exemple.fr/autre')
-    autreFabrique.vues[0].reponses.localiser = cibleTrouvee()
-    expect(await neuf.agir('conv-z', { type: 'clic', cible: { ref: 1 } })).toMatchObject({
-      ok: true
-    })
-    expect(neuf.etat('conv-z').demandeAccord).toBeUndefined()
-    neuf.detruire()
-  })
-
-  it('« refuser » : action refusée, rien n’est envoyé, et la suivante redemande', async () => {
-    nav.ouvrir('conv-a', 'https://exemple.fr')
-    const vue = fabrique.vues[0]
-    vue.reponses.localiser = cibleTrouvee()
-    const action = nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
-    await laisserFiler()
-    nav.repondreAccord('https://exemple.fr', 'refuser')
-    expect(await action).toMatchObject({ ok: false, refus: 'accord-refuse' })
-    expect(vue.evenements).toEqual([])
-    void nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
-    await laisserFiler()
-    expect(nav.etat('conv-a').demandeAccord?.origine).toBe('https://exemple.fr')
-  })
-
-  it('120 s sans réponse = refus, et la demande disparaît de l’état', async () => {
-    vi.useFakeTimers()
-    nav = new GestionnaireNavigateur({ fabrique, racine, delaiSurbrillanceMs: 0 })
-    nav.ouvrir('conv-a', 'https://exemple.fr')
-    fabrique.vues[0].reponses.localiser = cibleTrouvee()
-    const action = nav.agir('conv-a', { type: 'saisir', texte: 'x', cible: { ref: 1 } })
-    await vi.advanceTimersByTimeAsync(DELAI_ACCORD_MS - 1)
-    expect(nav.etat('conv-a').demandeAccord).toBeDefined()
-    await vi.advanceTimersByTimeAsync(1)
-    const r = await action
-    expect(r).toMatchObject({ ok: false, refus: 'accord-refuse' })
-    expect(r.message).toMatch(/120 s/)
-    expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
-    expect(fabrique.vues[0].textes).toEqual([])
-  })
-
-  // Objection du juge (réparation 1) : l'origine n'était lue qu'AVANT l'attente ; une
-  // redirection pendant les 120 s envoyait le clic sur un site jamais autorisé.
-  it('la page change de site PENDANT l’attente : l’accord de l’ancien site ne vaut pas, rien n’est envoyé', async () => {
+  // Objection du juge (réparation 1) : l'origine n'était lue qu'au repérage ; une redirection avant
+  // l'envoi faisait partir le clic sur un site que l'agent n'avait jamais vu.
+  it('la page change de site PENDANT la surbrillance : rien n’est envoyé, le refus nomme les sites', async () => {
     nav.ouvrir('conv-a', 'https://site-a.fr/connexion')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee()
-    const action = nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
-    await laisserFiler()
-    expect(nav.etat('conv-a').demandeAccord?.origine).toBe('https://site-a.fr')
-    vue.adresse = 'https://site-b.fr/'
-    nav.repondreAccord('https://site-a.fr', 'une-fois')
-    const r = await action
+    vue.reponses.surligner = (): boolean => {
+      vue.adresse = 'https://site-b.fr/'
+      return true
+    }
+    const r = await nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
     expect(r).toMatchObject({ ok: false, refus: 'page-changee' })
-    expect(r.message).toMatch(/site-b\.fr/)
+    expect(r.message).toContain('https://site-a.fr → https://site-b.fr')
     expect(vue.evenements).toEqual([])
     expect(nav.etat('conv-a').agentPilote).toBe(false)
   })
@@ -1037,7 +955,6 @@ describe('garde (b) : accord par site', () => {
   it('la page change de site PENDANT la surbrillance : refus, rien n’est tapé', async () => {
     nav.ouvrir('conv-a', 'https://site-a.fr')
     const vue = fabrique.vues[0]
-    nav.repondreAccord('https://site-a.fr', 'une-fois')
     vue.reponses.localiser = cibleTrouvee()
     vue.reponses.surligner = (): boolean => {
       vue.adresse = 'https://site-b.fr/'
@@ -1048,25 +965,18 @@ describe('garde (b) : accord par site', () => {
     expect(vue.textes).toEqual([])
   })
 
-  it('jumeau accepté : la page change de chemin sur le MÊME site pendant l’attente, l’action part', async () => {
+  it('jumeau accepté : la page change de chemin sur le MÊME site pendant la surbrillance, l’action part', async () => {
     nav.ouvrir('conv-a', 'https://site-a.fr/connexion')
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee()
-    const action = nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
-    await laisserFiler()
-    vue.adresse = 'https://site-a.fr/accueil'
-    nav.repondreAccord('https://site-a.fr', 'une-fois')
-    expect(await action).toMatchObject({ ok: true })
+    vue.reponses.surligner = (): boolean => {
+      vue.adresse = 'https://site-a.fr/accueil'
+      return true
+    }
+    expect(await nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })).toMatchObject({
+      ok: true
+    })
     expect(vue.evenements.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
-  })
-
-  it('défiler ne fait que lire : aucun accord demandé, même hors poste local', async () => {
-    nav.ouvrir('conv-a', 'https://exemple.fr')
-    const r = await nav.agir('conv-a', { type: 'defiler', dy: 300 })
-    expect(r.ok).toBe(true)
-    expect(fabrique.vues[0].evenements).toEqual([
-      { type: 'mouseWheel', x: 400, y: 300, deltaX: -0, deltaY: -300 }
-    ])
   })
 })
 
@@ -1271,15 +1181,6 @@ describe('réglages, données, navigateur du système', () => {
     ])
     const neuf = new GestionnaireNavigateur({ fabrique: fausseFabrique(), racine })
     expect(neuf.lireReglages().garderCookies).toBe(false)
-  })
-
-  it('un fichier de sites abîmé vaut « aucun site » : l’accord est redemandé', async () => {
-    writeFileSync(join(racine, FICHIER_SITES_NAVIGATEUR), '{abîmé')
-    nav.ouvrir('conv-a', 'https://exemple.fr')
-    fabrique.vues[0].reponses.localiser = cibleTrouvee()
-    void nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
-    await laisserFiler()
-    expect(nav.etat('conv-a').demandeAccord).toBeDefined()
   })
 
   it('seuls http et https partent vers le navigateur du système', async () => {
@@ -1836,7 +1737,7 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     })
   })
 
-  it('pause : la garde mot de passe passe AVANT l’attente, l’accord du site APRÈS', async () => {
+  it('pause : la garde mot de passe passe AVANT l’attente ; libéré, le geste part sans question', async () => {
     nav.ouvrir('conv-a', 'https://exemple.fr')
     const vue = fabrique.vues[0]
     nav.piloter('conv-a', 'pause')
@@ -1847,12 +1748,10 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     vue.reponses.localiser = cibleTrouvee()
     const action = nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
     await laisserFiler()
-    expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
+    expect(vue.evenements).toEqual([])
     nav.piloter('conv-a', 'pas-suivant')
-    await laisserFiler()
-    expect(nav.etat('conv-a').demandeAccord?.origine).toBe('https://exemple.fr')
-    nav.repondreAccord('https://exemple.fr', 'une-fois')
-    expect(await action).toMatchObject({ ok: true })
+    expect(await issueSansAttendre(action)).toMatchObject({ ok: true })
+    expect(vue.evenements.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
   })
 
   it('« Pas suivant » joue UN seul geste, à la cible relocalisée, et la pause reste', async () => {
@@ -2182,20 +2081,6 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       expect(vue.adresse).toBe('http://localhost:5173/')
     })
 
-    it('pendant l’accord du site : ni bandeau ni surbrillance, rien n’est envoyé', async () => {
-      const vue = preparer('https://exemple.fr')
-      const arret = new AbortController()
-      const action = nav.agir('conv-a', CLIC, arret.signal)
-      await laisserFiler()
-      expect(nav.etat('conv-a').demandeAccord?.origine).toBe('https://exemple.fr')
-      arret.abort('user')
-      nav.repondreAccord('https://exemple.fr', 'une-fois')
-      expect(await action).toMatchObject({ ok: false, message: expect.stringMatching(/arrêté/) })
-      expect(vue.methodes()).not.toContain('surligner')
-      expect(vue.evenements).toEqual([])
-      expect(nav.etat('conv-a').agentPilote).toBe(false)
-    })
-
     it('pendant la surbrillance : le geste pas encore parti ne part pas', async () => {
       const vue = preparer()
       const arret = new AbortController()
@@ -2396,10 +2281,9 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     })
   })
 
-  // fix-ok: run-adc12547df2d-1 (objection du juge) — `agir` attendait la promesse de la question
-  // d'accord sans rien d'autre : « Reprendre la main » et le Stop laissaient le geste `en-cours` et la
-  // question à l'écran jusqu'à la réponse ou 120 s, le champ déjà pris (focus et texte sélectionné).
-  describe('question d’accord du site : la main reprise et le Stop n’attendent pas la réponse', () => {
+  // Hors poste local, rien ne retient plus l'entrée dans la cible hors pause : un geste libre y entre
+  // du premier coup. Ce qui l'arrête pendant la relecture qui suit la pause le refuse AVANT le bandeau.
+  describe('hors poste local : entrée dans la cible et arrêts après la pause', () => {
     const SITE = 'https://exemple.fr'
     const CLIC = { type: 'clic', cible: { ref: 1 } } as const
     const SAISIE = {
@@ -2408,112 +2292,35 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       remplacer: true,
       cible: { ref: 1 }
     } as const
-    const SANS_TOUCHER = { focaliser: false, selectionner: false }
     const EN_ENTRANT = { focaliser: true, selectionner: true }
-    const ARRETS: Array<[string, (arret: AbortController) => void, string, RegExp]> = [
-      [
-        'Reprendre la main',
-        () => nav.piloter('conv-a', 'reprendre-la-main'),
-        'main-reprise',
-        /repris la main/
-      ],
-      ['Stop', (arret) => arret.abort('user'), 'page-indisponible', /arrêté/]
+    const ARRETS: Array<[string, (arret: AbortController) => void, string]> = [
+      ['Reprendre la main', () => nav.piloter('conv-a', 'reprendre-la-main'), 'main-reprise'],
+      ['Stop', (arret) => arret.abort('user'), 'page-indisponible']
     ]
     const regards = (vue: FausseVue): unknown[] =>
       vue.appels.filter((a) => a.methode === 'localiser').map((a) => a.args[1])
 
-    function preparer(conversationId = 'conv-a'): FausseVue {
-      nav.ouvrir(conversationId, `${SITE}/page`)
+    function preparer(): FausseVue {
+      nav.ouvrir('conv-a', `${SITE}/page`)
       const vue = fabrique.vues.at(-1) as FausseVue
       vue.reponses.localiser = cibleTrouvee()
       return vue
     }
 
-    it.each(ARRETS)(
-      '%s : refus sans réponse, et la question tombe',
-      async (_n, arreter, code, m) => {
-        const vue = preparer()
-        const arret = new AbortController()
-        const action = nav.agir('conv-a', CLIC, arret.signal)
-        await laisserFiler()
-        expect(nav.etat('conv-a').demandeAccord?.origine).toBe(SITE)
-
-        arreter(arret)
-
-        expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
-        expect(await issueSansAttendre(action)).toMatchObject({
-          ok: false,
-          refus: code,
-          message: expect.stringMatching(m)
-        })
-        expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse'])
-        expect(vue.evenements).toEqual([])
-        expect(vue.methodes()).not.toContain('surligner')
-      }
-    )
-
-    it.each(ARRETS)(
-      '%s après « Pas suivant » : le champ n’a jamais été pris',
-      async (_n, arreter, code) => {
-        const vue = preparer()
-        const arret = new AbortController()
-        nav.piloter('conv-a', 'pause')
-        const action = nav.agir('conv-a', SAISIE, arret.signal)
-        await laisserFiler()
-        nav.piloter('conv-a', 'pas-suivant')
-        await laisserFiler()
-        expect(nav.etat('conv-a').demandeAccord?.origine).toBe(SITE)
-
-        arreter(arret)
-
-        // Lu avant tout `await` : c'est ce qui prouve « tout de suite », le cas exact de l'objection.
-        expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
-        expect(await issueSansAttendre(action)).toMatchObject({ ok: false, refus: code })
-        expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse'])
-        expect(regards(vue)).toEqual([SANS_TOUCHER, SANS_TOUCHER])
-        expect(vue.textes).toEqual([])
-      }
-    )
-
-    it('fil libre : la saisie ne prend le champ qu’une fois l’accord donné', async () => {
+    it('fil libre : la saisie prend le champ du premier coup, en un seul regard', async () => {
       const vue = preparer()
-      const action = nav.agir('conv-a', SAISIE)
-      await laisserFiler()
-      expect(regards(vue)).toEqual([SANS_TOUCHER])
-
-      nav.repondreAccord(SITE, 'une-fois')
-
-      expect(await action).toMatchObject({ ok: true })
-      expect(regards(vue)).toEqual([SANS_TOUCHER, EN_ENTRANT])
-      expect(vue.textes).toEqual(['Bonjour'])
-    })
-
-    it('jumeau : sur un site déjà accepté, aucune question, le champ est pris du premier coup', async () => {
-      const vue = preparer()
-      nav.repondreAccord(SITE, 'une-fois')
-      expect(await nav.agir('conv-a', SAISIE)).toMatchObject({ ok: true })
+      expect(await issueSansAttendre(nav.agir('conv-a', SAISIE))).toMatchObject({ ok: true })
       expect(regards(vue)).toEqual([EN_ENTRANT])
       expect(vue.textes).toEqual(['Bonjour'])
     })
 
-    it('la page change de site pendant la question : le nouveau site n’a pas le champ pris', async () => {
-      const vue = preparer()
-      const action = nav.agir('conv-a', SAISIE)
-      await laisserFiler()
-      vue.adresse = 'https://site-b.fr/'
-
-      nav.repondreAccord(SITE, 'une-fois')
-
-      expect(await action).toMatchObject({ ok: false, refus: 'page-changee' })
-      expect(regards(vue)).toEqual([SANS_TOUCHER])
-      expect(vue.textes).toEqual([])
-    })
-
     it.each(ARRETS)(
-      '%s pendant la relecture : aucune question n’est posée',
+      '%s pendant la relecture de la cible : refus, ni bandeau ni surbrillance',
       async (_n, arreter, code) => {
         const vue = preparer()
         const arret = new AbortController()
+        const bandeaux: boolean[] = []
+        nav.surEtat((etat) => bandeaux.push(etat.agentPilote))
         nav.piloter('conv-a', 'pause')
         const action = nav.agir('conv-a', CLIC, arret.signal)
         await laisserFiler()
@@ -2526,100 +2333,15 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
         nav.piloter('conv-a', 'pas-suivant')
 
         expect(await issueSansAttendre(action)).toMatchObject({ ok: false, refus: code })
-        expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
-      }
-    )
-
-    it('un autre fil sur le même site garde sa question et son geste', async () => {
-      preparer('conv-a')
-      const autre = preparer('conv-b')
-      const abandonne = nav.agir('conv-a', CLIC)
-      const garde = nav.agir('conv-b', CLIC)
-      await laisserFiler()
-
-      nav.piloter('conv-a', 'reprendre-la-main')
-
-      expect(await issueSansAttendre(abandonne)).toMatchObject({ refus: 'main-reprise' })
-      expect(nav.etat('conv-b').demandeAccord?.origine).toBe(SITE)
-      expect(autre.evenements).toEqual([])
-      nav.repondreAccord(SITE, 'une-fois')
-      expect(await garde).toMatchObject({ ok: true })
-      expect(autre.evenements.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
-    })
-
-    it('un geste du même fil encore en attente garde la question', async () => {
-      const vue = preparer()
-      const arret = new AbortController()
-      const arrete = nav.agir('conv-a', CLIC, arret.signal)
-      const suivant = nav.agir('conv-a', CLIC)
-      await laisserFiler()
-
-      arret.abort('user')
-
-      expect(await issueSansAttendre(arrete)).toMatchObject({ ok: false })
-      expect(nav.etat('conv-a').demandeAccord?.origine).toBe(SITE)
-      nav.repondreAccord(SITE, 'une-fois')
-      expect(await suivant).toMatchObject({ ok: true })
-      expect(vue.evenements.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
-    })
-
-    it('main reprise puis rendue aussitôt : le geste abandonné ne repart pas', async () => {
-      const vue = preparer()
-      const action = nav.agir('conv-a', CLIC)
-      await laisserFiler()
-
-      nav.piloter('conv-a', 'reprendre-la-main')
-      nav.piloter('conv-a', 'rendre-la-main')
-
-      expect(await issueSansAttendre(action)).toMatchObject({ ok: false, refus: 'main-reprise' })
-      expect(vue.evenements).toEqual([])
-    })
-
-    it('la question abandonnée n’écourte pas la suivante : elle a ses 120 s', async () => {
-      vi.useFakeTimers()
-      nav = new GestionnaireNavigateur({ fabrique, racine, delaiSurbrillanceMs: 0 })
-      preparer()
-      const abandonne = nav.agir('conv-a', CLIC)
-      await vi.advanceTimersByTimeAsync(60_000)
-      nav.piloter('conv-a', 'reprendre-la-main')
-      await abandonne
-      nav.piloter('conv-a', 'rendre-la-main')
-
-      const suivant = nav.agir('conv-a', CLIC)
-      await vi.advanceTimersByTimeAsync(DELAI_ACCORD_MS - 1)
-      expect(nav.etat('conv-a').demandeAccord?.origine).toBe(SITE)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(await suivant).toMatchObject({ ok: false, refus: 'accord-refuse' })
-    })
-
-    // Objection du juge (run-adc12547df2d-1) : après la question, la relecture du site lisait l'adresse
-    // d'une page fermée, hors du `try` : `agir` se rejetait et l'agent recevait une phrase technique.
-    it.each([
-      ['une saisie', SAISIE],
-      ['un clic', CLIC]
-    ] as const)(
-      '%s dont l’onglet est fermé pendant la question : refus clair, rien ne part',
-      async (_n, action) => {
-        const vue = preparer()
-        const enCours = nav.agir('conv-a', action)
-        await laisserFiler()
-        nav.fermerOnglet(nav.etat('conv-a').ongletActif as string)
-
-        nav.repondreAccord(SITE, 'une-fois')
-
-        expect(await enCours).toMatchObject({
-          ok: false,
-          refus: 'aucun-onglet',
-          message: expect.stringMatching(/onglet a été fermé/)
-        })
-        expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse'])
-        expect(vue.textes).toEqual([])
+        // Un seul tracé : les pointillés de la pause. Le geste n'a été ni surligné ni annoncé.
+        expect(vue.methodes().filter((m) => m === 'surligner')).toHaveLength(1)
+        expect(bandeaux).not.toContain(true)
         expect(vue.evenements).toEqual([])
       }
     )
 
-    it('jumeau : l’onglet fermé pendant la pause donne le même refus', async () => {
-      preparer()
+    it('l’onglet fermé pendant la pause : refus clair, rien ne part', async () => {
+      const vue = preparer()
       nav.piloter('conv-a', 'pause')
       const enCours = nav.agir('conv-a', CLIC)
       await laisserFiler()
@@ -2627,64 +2349,12 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
 
       nav.piloter('conv-a', 'pas-suivant')
 
-      expect(await enCours).toMatchObject({ ok: false, refus: 'aucun-onglet' })
-    })
-
-    // Objection du juge (run-adc12547df2d-1) : `oublierFil` laissait les gestes dans la question. Seul
-    // sur le site, le geste attendait les 120 s ; un autre fil présent, sa réponse relançait le geste
-    // du fil supprimé et `this.fil()` recréait ce fil.
-    const filConnu = (id: string): boolean =>
-      (nav as unknown as { fils: Map<string, unknown> }).fils.has(id)
-
-    it('fil supprimé pendant la question : son geste tombe tout de suite', async () => {
-      const vue = preparer()
-      const enCours = nav.agir('conv-a', SAISIE)
-      await laisserFiler()
-
-      nav.oublierFil('conv-a')
-
-      expect(await issueSansAttendre(enCours)).toMatchObject({
+      expect(await enCours).toMatchObject({
         ok: false,
         refus: 'aucun-onglet',
         message: expect.stringMatching(/onglet a été fermé/)
       })
-      expect(vue.textes).toEqual([])
-      expect(filConnu('conv-a')).toBe(false)
-    })
-
-    it('fil supprimé : la réponse de l’autre fil sur le même site ne relance pas son geste', async () => {
-      const supprimee = preparer('conv-a')
-      const autre = preparer('conv-b')
-      const perdu = nav.agir('conv-a', CLIC)
-      const garde = nav.agir('conv-b', CLIC)
-      await laisserFiler()
-
-      nav.oublierFil('conv-a')
-
-      expect(await issueSansAttendre(perdu)).toMatchObject({ ok: false, refus: 'aucun-onglet' })
-      expect(nav.etat('conv-b').demandeAccord?.origine).toBe(SITE)
-      nav.repondreAccord(SITE, 'une-fois')
-      expect(await garde).toMatchObject({ ok: true })
-      expect(autre.evenements.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
-      expect(supprimee.evenements).toEqual([])
-      expect(filConnu('conv-a')).toBe(false)
-    })
-
-    it('la question du fil supprimé n’écourte pas celle d’un autre fil : elle a ses 120 s', async () => {
-      vi.useFakeTimers()
-      nav = new GestionnaireNavigateur({ fabrique, racine, delaiSurbrillanceMs: 0 })
-      preparer('conv-a')
-      const perdu = nav.agir('conv-a', CLIC)
-      await vi.advanceTimersByTimeAsync(60_000)
-      nav.oublierFil('conv-a')
-
-      preparer('conv-b')
-      const suivant = nav.agir('conv-b', CLIC)
-      await vi.advanceTimersByTimeAsync(DELAI_ACCORD_MS - 1)
-      expect(nav.etat('conv-b').demandeAccord?.origine).toBe(SITE)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(await suivant).toMatchObject({ ok: false, refus: 'accord-refuse' })
-      expect(await perdu).toMatchObject({ ok: false })
+      expect(vue.evenements).toEqual([])
     })
   })
 
@@ -2994,11 +2664,11 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
   })
 
   // Le CLI coupe un appel d'outil direct à `verify` + 2 min (12 min par défaut, `envDelaiOutilsMcp`).
-  // Un geste libéré à la dernière seconde de pause peut encore attendre l'accord du site (120 s) et
-  // la surbrillance : la somme doit rester sous ce plafond, sinon l'agent reçoit une coupure muette.
-  it('la pause la plus longue, accord et surbrillance compris, tient sous le délai des outils directs', () => {
+  // Un geste libéré à la dernière seconde de pause passe encore la surbrillance : la somme doit rester
+  // sous ce plafond, sinon l'agent reçoit une coupure muette.
+  it('la pause la plus longue, surbrillance comprise, tient sous le délai des outils directs', () => {
     const plafond = Number(envDelaiOutilsMcp(true, {}).MCP_TOOL_TIMEOUT)
-    expect(DELAI_PAUSE_MS + DELAI_ACCORD_MS + DELAI_SURBRILLANCE_MS).toBeLessThan(plafond)
+    expect(DELAI_PAUSE_MS + DELAI_SURBRILLANCE_MS).toBeLessThan(plafond)
   })
 
   it('oublierFil et detruire libèrent les gestes en attente', async () => {
@@ -3530,14 +3200,6 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
     expect(fenetre.webContents.focus).not.toHaveBeenCalled()
   })
 })
-
-function readFileSafe(chemin: string): string | null {
-  try {
-    return readFileSync(chemin, 'utf8')
-  } catch {
-    return null
-  }
-}
 
 describe('agentChrome (conv-1569)', () => {
   it('retire Electron et la marque de l’app de l’agent', async () => {

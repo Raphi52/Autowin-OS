@@ -29,8 +29,7 @@ import {
  *
  * Entrées qui doivent faire échouer ce fichier : la page native laissée posée alors que le panneau
  * est caché (autre écran, menu ⋮, aperçu, démontage) — elle flotterait au-dessus du DOM ; un
- * raccourci qui ne fait rien ; la carte d'accord absente ou muette ; un élément choisi qui n'arrive
- * pas dans la saisie ; un lien localhost qui part dans le navigateur du système.
+ * raccourci qui ne fait rien ; un élément choisi qui n'arrive pas dans la saisie ; un lien localhost qui part dans le navigateur du système.
  */
 
 // L'encodage réel passe par un <canvas> (miniature) : hors sujet ici, on rend la pièce déjà encodée.
@@ -127,7 +126,6 @@ function simulerNavigateur(initial: Partial<EtatNavigateur> = {}) {
       elementsChoisis = []
       return pris
     }),
-    repondreAccord: vi.fn(async () => undefined),
     reglages: {
       lire: vi.fn(async () => ({ ...reglages })),
       ecrire: vi.fn(async (partiel: Partial<ReglagesNavigateur>) => {
@@ -500,10 +498,17 @@ describe('NavigateurIntegre — le panneau', () => {
 
   it('la zone déplacée sans changer de taille : la page suit (l’observateur de taille ne le voit pas)', async () => {
     await monter()
+    await nav.pousser({ agentPilote: true })
     const appels = nav.api.poserCadre.mock.calls.length
     ZONE.top = 118
     try {
-      await nav.pousser({ demandeAccord: { origine: 'https://exemple.fr', action: 'cliquer' } })
+      // Le message d'erreur s'ouvre au-dessus du cadre : il le déplace.
+      nav.api.piloter.mockRejectedValueOnce(new Error('canal coupé'))
+      await act(async () => {
+        bouton(conteneur!, 'Pause').click()
+        await vider()
+      })
+      expect(conteneur!.querySelector('[role="alert"]')?.textContent).toBe('canal coupé')
       expect(nav.api.poserCadre.mock.calls.length).toBe(appels + 1)
       expect(nav.api.poserCadre).toHaveBeenLastCalledWith({ ...RECT_ZONE, y: 118 }, 1.25)
     } finally {
@@ -591,8 +596,7 @@ describe('NavigateurIntegre — le panneau', () => {
       onglets: [onglet('onglet-1')],
       ongletActif: 'onglet-1',
       agentPilote: true,
-      gestes: [geste('g1')],
-      demandeAccord: { origine: 'https://exemple.fr', action: 'cliquer' }
+      gestes: [geste('g1')]
     })
     const barreOnglets = conteneur!.querySelector('.navigateur-onglets')!
     const cadre = conteneur!.querySelector('.navigateur-cadre')!
@@ -603,7 +607,6 @@ describe('NavigateurIntegre — le panneau', () => {
       true
     )
     expect(apres(cadre, conteneur!.querySelector('[data-testid="navigateur-frise"]')!)).toBe(true)
-    expect(cadre.lastElementChild?.classList.contains('navigateur-accord')).toBe(true)
   })
 
   it('cadre de page : allumé avec l’agent, éteint sans lui, bande toujours là (la page ne saute pas)', async () => {
@@ -620,40 +623,6 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(tete()).toBe('')
     // Le cadre reste le même nœud : il ne se remonte pas, donc la zone mesurée non plus.
     expect(conteneur!.querySelector('.navigateur-cadre')).toBe(cadre)
-  })
-
-  it('demande d’accord sans pilotage (l’ordre réel du principal) : cadre allumé, bande honnête', async () => {
-    await monter()
-    await nav.pousser({
-      agentPilote: false,
-      demandeAccord: { origine: 'https://exemple.fr', action: 'cliquer' }
-    })
-    expect(conteneur!.querySelector('.navigateur-cadre')!.classList.contains('is-agent')).toBe(true)
-    expect(conteneur!.querySelector('.navigateur-cadre-tete')?.textContent).toBe(
-      'L’agent attend votre accord'
-    )
-    expect(conteneur!.querySelector('[data-testid="navigateur-pilotage"]')).toBeNull()
-    // L'accord se donne DANS le cadre, au pied de la page.
-    const cadre = conteneur!.querySelector('.navigateur-cadre')!
-    expect(cadre.lastElementChild?.classList.contains('navigateur-accord')).toBe(true)
-  })
-
-  it('carte d’accord : site et action lisibles, chaque réponse part au principal', async () => {
-    await monter()
-    expect(conteneur!.textContent).not.toContain('L’agent veut agir sur')
-    const demandeAccord = {
-      origine: 'https://exemple.fr',
-      action: 'cliquer sur bouton « Envoyer »'
-    }
-    await nav.pousser({ demandeAccord })
-    expect(conteneur!.textContent).toContain('L’agent veut agir sur https://exemple.fr')
-    expect(conteneur!.textContent).toContain('cliquer sur bouton « Envoyer »')
-    await act(async () => bouton(conteneur!, 'Autoriser une fois').click())
-    expect(nav.api.repondreAccord).toHaveBeenLastCalledWith('https://exemple.fr', 'une-fois')
-    await act(async () => bouton(conteneur!, 'Toujours').click())
-    expect(nav.api.repondreAccord).toHaveBeenLastCalledWith('https://exemple.fr', 'toujours')
-    await act(async () => bouton(conteneur!, 'Refuser').click())
-    expect(nav.api.repondreAccord).toHaveBeenLastCalledWith('https://exemple.fr', 'refuser')
   })
 
   // « enleve le bouton annoter » puis « supprime complètement Annoter » (2026-10-30).
@@ -863,7 +832,7 @@ describe('NavigateurIntegre — le panneau', () => {
       expect(bandeau()).toBeTruthy()
     })
 
-    it('un geste pas fini (question d’accord de 120 s) le garde : on peut reprendre la main', async () => {
+    it('un geste pas fini le garde : on peut reprendre la main', async () => {
       await monter()
       const debut = Date.now()
       await nav.pousser({ gestes: [geste('g1', { debut, etat: 'en-cours' })] })

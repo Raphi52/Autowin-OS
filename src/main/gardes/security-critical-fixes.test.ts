@@ -884,7 +884,11 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   sa PREMIERE ligne : `os:profiles:delete` — retire UN profil enregistre d'Agent Studio, id
     //   valide par `guardString` ; le profil « Défaut », porte par le code, est refuse. Il ne
     //   touche pas la topologie en place. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(306)
+    // MISE A JOUR 2026-11-24 — 306 -> 305, MESURE par ce test (rouge a 305) : un seul retrait, aucun
+    //   ajout, dans `ipc/navigateur.ts` : `navigateur:repondre-accord`. L'accord par site du navigateur
+    //   integre est retire (l'utilisateur autorise l'agent partout) ; le moteur ne pose plus de
+    //   question et n'ecrit plus `navigateur-sites.json`. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(305)
     expect(unguarded).toEqual([])
   })
 

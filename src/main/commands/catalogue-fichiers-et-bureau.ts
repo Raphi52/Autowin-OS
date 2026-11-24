@@ -338,8 +338,8 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   /**
    * NAVIGATEUR INTÉGRÉ DU CHAT (lot 4/5, 2026-10-29) : le panneau navigateur à côté du
    * fil, que l'utilisateur voit pendant que l'agent lit, capture et agit. Même contrat que
-   * `bureau_cache_*` : le fil est celui de l'APPEL, jamais un argument ; les deux garde-fous (pas de
-   * saisie dans un mot de passe, accord par site hors poste local) vivent dans le moteur
+   * `bureau_cache_*` : le fil est celui de l'APPEL, jamais un argument ; les garde-fous (pas de saisie
+   * dans un mot de passe, page qui change de site avant l'envoi) vivent dans le moteur
    * (`navigateur-integre.ts`), l'outil ne fait que rendre leur refus lisible. Aucun ne porte
    * `horsCanalNatif` : ils passent en outils directs (`chat-mcp.ts`).
    */
@@ -389,7 +389,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   {
     name: 'navigateur_agir',
     description:
-      'Agir dans la page de l’onglet actif du navigateur intégré, sous les yeux de l’utilisateur (cible surlignée) : `clic`, `saisir`, `touche` ou `defiler`. Cible : `ref` (numéro de navigateur_lire, à préférer), `selecteur` CSS, ou `x` et `y` ; sans cible, saisir et touche vont au champ actif. Garde-fous du code : jamais de `texte` dans un mot de passe ou un code (l’utilisateur se connecte lui-même), sauf `depuisCoffre` : le NOM d’un mot de passe du coffre lié à un site, que l’app tape dans un champ de mot de passe SEULEMENT si la page est exactement sur ce site, sans que tu voies la valeur ; hors poste local, la première action d’écriture sur un site attend SON accord (120 s sans réponse = refus). Relis ou capture ensuite pour vérifier' +
+      'Agir dans la page de l’onglet actif du navigateur intégré, sous les yeux de l’utilisateur (cible surlignée) : `clic`, `saisir`, `touche` ou `defiler`. Cible : `ref` (numéro de navigateur_lire, à préférer), `selecteur` CSS, ou `x` et `y` ; sans cible, saisir et touche vont au champ actif. Garde-fous du code : jamais de `texte` dans un mot de passe ou un code (l’utilisateur se connecte lui-même), sauf `depuisCoffre` : le NOM d’un mot de passe du coffre lié à un site, que l’app tape dans un champ de mot de passe SEULEMENT si la page est exactement sur ce site, sans que tu voies la valeur. Relis ou capture ensuite pour vérifier' +
       PHRASE_PAS_A_PAS_NAVIGATEUR,
     args: {
       action: 'clic|saisir|touche|defiler',

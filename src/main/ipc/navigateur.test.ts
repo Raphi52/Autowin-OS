@@ -275,8 +275,6 @@ describe('canaux navigateur:*', () => {
     ['navigateur:basculer-mode', ['detruire']],
     ['navigateur:basculer-mode', [undefined]],
     ['navigateur:prendre-elements-choisis', [5]],
-    ['navigateur:repondre-accord', ['https://exemple.fr', 'peut-etre']],
-    ['navigateur:repondre-accord', ['', 'une-fois']],
     ['navigateur:reglages-ecrire', [null]],
     ['navigateur:reglages-ecrire', [[true]]],
     ['navigateur:reglages-ecrire', [{ garderCookies: 'oui' }]],
@@ -301,9 +299,6 @@ describe('canaux navigateur:*', () => {
     await expect(appeler('navigateur:basculer-mode', 'choisir')).resolves.toBeUndefined()
     // Annoter retiré (2026-10-30) : son ancien nom est refusé comme n'importe quel inconnu.
     await expect(appeler('navigateur:basculer-mode', 'annoter')).rejects.toThrow(/choisir/)
-    await expect(
-      appeler('navigateur:repondre-accord', 'https://exemple.fr', 'refuser')
-    ).resolves.toBeUndefined()
     await expect(appeler('navigateur:reglages-ecrire', {})).resolves.toEqual({
       garderCookies: true,
       ouvrirLiensDuChatIci: true
@@ -492,7 +487,6 @@ describe('pont window.api.navigateur (preload)', () => {
     await pont.poserCadre(rect, 1.25)
     await pont.basculerMode('choisir')
     await pont.prendreElementsChoisis('conv-a')
-    await pont.repondreAccord('https://exemple.fr', 'une-fois')
     await pont.reglages.lire()
     await pont.reglages.ecrire({ garderCookies: false })
     await pont.effacerDonnees()
@@ -512,7 +506,6 @@ describe('pont window.api.navigateur (preload)', () => {
       [CANAUX_NAVIGATEUR.poserCadre, rect, 1.25],
       [CANAUX_NAVIGATEUR.basculerMode, 'choisir'],
       [CANAUX_NAVIGATEUR.prendreElementsChoisis, 'conv-a'],
-      [CANAUX_NAVIGATEUR.repondreAccord, 'https://exemple.fr', 'une-fois'],
       [CANAUX_NAVIGATEUR.reglagesLire],
       [CANAUX_NAVIGATEUR.reglagesEcrire, { garderCookies: false }],
       [CANAUX_NAVIGATEUR.effacerDonnees],

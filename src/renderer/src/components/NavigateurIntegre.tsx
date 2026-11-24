@@ -2,16 +2,14 @@
  * NAVIGATEUR INTÉGRÉ DU CHAT — le panneau (lot 3/5, 2026-10-29).
  *
  * Un navigateur posé à côté du fil : la barre d'adresse, les onglets toujours visibles juste dessous,
- * Choisir un élément (un clic, inséré tout de suite dans la saisie), barre d'accord par site quand
- * l'agent veut écrire dans une page.
+ * Choisir un élément (un clic, inséré tout de suite dans la saisie).
  *
- * LE CADRE DE PAGE (« Cadre de page ») : la page prend un cadre ambre quand
- * l'agent pilote OU attend un accord, avec sa bande en haut et la barre d'accord au pied. La bande
- * est RÉSERVÉE en permanence et vide au repos : elle ne dit que l'état de l'agent, le titre se lit déjà
- * sur l'onglet (2026-10-30).
+ * LE CADRE DE PAGE (« Cadre de page ») : la page prend un cadre ambre quand l'agent pilote, avec sa
+ * bande en haut. La bande est RÉSERVÉE en permanence et vide au repos : elle ne dit que l'état de
+ * l'agent, le titre se lit déjà sur l'onglet (2026-10-30).
  *
- * LE HAUT DE LA PAGE NE BOUGE JAMAIS : tout ce qui apparaît avec l'agent (accord, boutons du
- * pas-à-pas, frise) vit SOUS la page. Mesuré au-dessus (2026-10-30, 520 px) : la page
+ * LE HAUT DE LA PAGE NE BOUGE JAMAIS : tout ce qui apparaît avec l'agent (boutons du pas-à-pas,
+ * frise) vit SOUS la page. Mesuré au-dessus (2026-10-30, 520 px) : la page
  * descendait de 115 px à l'arrivée de l'agent et remontait de 44 px quand le bandeau partait.
  *
  * LA PAGE N'EST PAS DANS LE DOM : c'est une vue Electron posée PAR-DESSUS la fenêtre, au cadre que
@@ -156,7 +154,7 @@ export function NavigateurIntegre({
   const ongletActif = etat?.onglets.find((onglet) => onglet.id === etat.ongletActif) ?? null
   const cadreVisible = visible && !menuOuvert && !redimensionnement
   // Tout ce qui, en s'ouvrant, peut DÉPLACER la page sans changer sa taille : voir le cadre plus bas.
-  const disposition = [Boolean(erreur), Boolean(etat?.demandeAccord)].join()
+  const disposition = Boolean(erreur)
 
   function agir(promesse: Promise<unknown> | undefined): void {
     setErreur(null)
@@ -410,8 +408,8 @@ export function NavigateurIntegre({
 
   const pilotage = etat?.pilotage ?? 'libre'
   const rang = rangDuGeste(gestesOnglet)
-  // Un geste pas fini garde le bandeau au-delà des 20 s : une question d'accord dure jusqu'à 120 s, et
-  // « Reprendre la main » doit rester à portée pendant qu'elle attend.
+  // Un geste pas fini garde le bandeau au-delà des 20 s : « Reprendre la main » doit rester à portée
+  // tant qu'il n'est pas parti.
   const gesteEnCours = dernierGeste?.etat === 'en-cours' || dernierGeste?.etat === 'prochain'
   const bandeauVisible =
     Boolean(etat?.agentPilote) ||
@@ -421,18 +419,12 @@ export function NavigateurIntegre({
 
   const mode = etat?.mode ?? null
   const onglets = etat?.onglets ?? []
-  const demande = etat?.demandeAccord
   const adresseLue = decouperAdresse(saisie)
   const chiffre = decouperAdresse(urlActive)?.chiffre ?? false
   const pause = pilotage === 'pause' ? ` ${rang ? t('enPauseGeste', rang) : t('enPause')}` : ''
   // Une seule phrase pour l'état de l'agent, ici : au repos, la bande reste vide.
-  const statut = demande
-    ? t('agentAttend')
-    : pilotage === 'main'
-      ? t('tuAsLaMain')
-      : bandeauVisible
-        ? `${t('agentPilote')}${pause}`
-        : ''
+  const statut =
+    pilotage === 'main' ? t('tuAsLaMain') : bandeauVisible ? `${t('agentPilote')}${pause}` : ''
 
   return (
     <>
@@ -681,7 +673,7 @@ export function NavigateurIntegre({
             {erreur}
           </div>
         )}
-        <div className={`navigateur-cadre${etat?.agentPilote || demande ? ' is-agent' : ''}`}>
+        <div className={`navigateur-cadre${etat?.agentPilote ? ' is-agent' : ''}`}>
           <div className="navigateur-cadre-tete">
             <span role="status">{statut}</span>
           </div>
@@ -692,41 +684,6 @@ export function NavigateurIntegre({
               <p className="navigateur-vide">{t('pageMasquee')}</p>
             ) : null}
           </div>
-          {demande && (
-            <div
-              className="navigateur-accord"
-              role="group"
-              aria-label={t('accordTitre', { origine: demande.origine })}
-            >
-              <div className="navigateur-accord-texte">
-                <strong>{t('accordTitre', { origine: demande.origine })}</strong>
-                <span>{demande.action}</span>
-              </div>
-              <div className="navigateur-accord-boutons">
-                <button
-                  type="button"
-                  className="navigateur-pilule navigateur-pilule-gel"
-                  onClick={() => agir(apiNavigateur()?.repondreAccord(demande.origine, 'une-fois'))}
-                >
-                  {t('accordUneFois')}
-                </button>
-                <button
-                  type="button"
-                  className="navigateur-pilule"
-                  onClick={() => agir(apiNavigateur()?.repondreAccord(demande.origine, 'toujours'))}
-                >
-                  {t('accordToujours')}
-                </button>
-                <button
-                  type="button"
-                  className="navigateur-pilule navigateur-accord-refuser"
-                  onClick={() => agir(apiNavigateur()?.repondreAccord(demande.origine, 'refuser'))}
-                >
-                  {t('accordRefuser')}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {bandeauVisible && (

@@ -427,18 +427,12 @@
   background: var(--bg-inset);
 }
 /* La page native garde ses coins arrondis (`setBorderRadius`, côté principal) : ce qui se voit dans
-   ses coins, c'est CE fond. Le dégradé du cadre y continue en haut, la barre d'accord en bas ; le
-   milieu reste sobre pour le temps où la page est retirée (menu ⋮). */
+   ses coins, c'est CE fond. Le dégradé du cadre y continue en haut ; le milieu reste sobre pour le
+   temps où la page est retirée (menu ⋮). */
 .navigateur-cadre.is-agent .navigateur-zone {
   border-color: transparent;
   border-radius: 0;
   background:
-    linear-gradient(var(--bg-0), var(--bg-0)) center / 100% calc(100% - 20px) no-repeat,
-    var(--nav-ambre);
-}
-.navigateur-cadre.is-agent:has(> .navigateur-accord) .navigateur-zone {
-  background:
-    linear-gradient(var(--nav-surface), var(--nav-surface)) bottom / 100% 10px no-repeat,
     linear-gradient(var(--bg-0), var(--bg-0)) center / 100% calc(100% - 20px) no-repeat,
     var(--nav-ambre);
 }
@@ -448,63 +442,4 @@
   color: var(--text-faint);
   font-size: 13px;
   text-align: center;
-}
-
-/* ── Accord au pied de la page ── */
-.navigateur-accord {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 6px 6px 10px;
-  border-radius: 0 0 10px 10px;
-  background: var(--nav-surface);
-}
-.navigateur-accord-texte {
-  flex: 1;
-  min-width: 150px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  color: var(--text);
-  font-size: 12px;
-}
-.navigateur-accord-texte span {
-  color: var(--text-dim);
-  font-size: 10.5px;
-}
-.navigateur-accord-boutons {
-  display: flex;
-  flex: none;
-  gap: 6px;
-}
-.navigateur-pilule {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  height: 24px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 99px;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line);
-  color: var(--text);
-  font: inherit;
-  font-size: 11px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.navigateur-pilule:hover {
-  background: var(--surface-hover);
-}
-.navigateur-pilule-gel,
-.navigateur-pilule-gel:hover {
-  background: var(--nav-gel);
-  box-shadow: none;
-  color: var(--on-accent);
-}
-.navigateur-accord-refuser {
-  box-shadow: none;
-  color: var(--err);
 }

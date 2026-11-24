@@ -33,7 +33,7 @@ vi.mock('electron', () => ({
  * Trois promesses, sur le modèle de `bureau_cache_*` :
  *  - le fil est celui de l'APPEL : un `conversationId` glissé dans les arguments ne mène jamais au
  *    panneau d'un autre fil ;
- *  - les refus des garde-fous du moteur (mot de passe, accord par site refusé ou expiré) arrivent à
+ *  - les refus des garde-fous du moteur (mot de passe, secret du coffre) arrivent à
  *    l'agent en phrase lisible, avec ce qu'il doit faire, et le texte tapé ne fuit pas dans la trace ;
  *  - les six commandes sont servies en outils directs (aucune ne porte `horsCanalNatif`).
  */
@@ -501,19 +501,6 @@ describe('navigateur_agir — arguments et refus des garde-fous', () => {
     expect(data(r)).toMatchObject({ ok: false, refus: 'mot-de-passe' })
     expect(String(data(r).detail)).toContain('Action refusée : Saisie refusée')
     expect(String(data(r).detail)).toContain('Ne contourne pas ce refus')
-  })
-
-  it('le refus d’accord (refusé ou délai écoulé) dit de ne pas réessayer sans lui', async () => {
-    for (const message of [
-      "L'utilisateur a refusé que l'agent agisse sur ce site.",
-      "Pas de réponse de l'utilisateur en 120 s : action refusée sur ce site."
-    ]) {
-      const moteur = moteurFactice({ agir: { ok: false, refus: 'accord-refuse', message } })
-      const r = await busAvec(moteur).exec('navigateur_agir', { action: 'clic', ref: 1 }, 'conv-a')
-      expect(data(r)).toMatchObject({ ok: false, refus: 'accord-refuse' })
-      expect(String(data(r).detail)).toContain(message)
-      expect(String(data(r).detail)).toContain('ne réessaie pas')
-    }
   })
 
   it('jumeau : une action acceptée rend le compte rendu du moteur et dit de vérifier', async () => {
