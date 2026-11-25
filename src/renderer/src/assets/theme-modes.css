@@ -586,6 +586,10 @@
 :root[data-base='clair'] .cosmic-outline .chat-runtime-state.is-busy {
   color: var(--text-dim);
 }
+/* Identifiant copié par un clic (ChatView) : la couleur « réussi » passe devant le gris ci-dessus. */
+:root[data-base='clair'] .cosmic-outline .chat-runtime-state.is-copie {
+  color: var(--ok);
+}
 :root[data-base='clair'] .cosmic-outline .chat-conv-title {
   color: var(--text);
 }

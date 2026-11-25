@@ -511,7 +511,8 @@ export const TEXTES_FR = {
   'entete.connexion': 'connexion…',
   'entete.modeleApplication': 'modèle de l’application',
   'entete.identifiant':
-    "Identifiant de cette conversation : {id}. C'est ce nom que l'agent emploie quand il parle d'une conversation.",
+    "Identifiant de cette conversation : {id}. C'est ce nom que l'agent emploie quand il parle d'une conversation. Clic : le copier.",
+  'entete.identifiantCopie': '{id} copié dans le presse-papiers',
   'entete.aucuneOuverte': 'Aucune conversation ouverte',
   'entete.aucune': 'aucune conversation',
   'entete.dossierAssigne': 'Dossier de travail assigné à cette conversation : {chemin}',
@@ -1089,7 +1090,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'entete.connexion': 'connecting…',
   'entete.modeleApplication': 'app model',
   'entete.identifiant':
-    'Identifier of this conversation: {id}. This is the name the agent uses when it talks about a conversation.',
+    'Identifier of this conversation: {id}. This is the name the agent uses when it talks about a conversation. Click to copy it.',
+  'entete.identifiantCopie': '{id} copied to the clipboard',
   'entete.aucuneOuverte': 'No conversation open',
   'entete.aucune': 'no conversation',
   'entete.dossierAssigne': 'Working folder assigned to this conversation: {chemin}',

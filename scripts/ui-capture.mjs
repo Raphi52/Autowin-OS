@@ -1542,6 +1542,11 @@ const main = async () => {
     // photo, qui force une image, montrait l'Observatory. Avec le flux, on attend en plus la fin du
     // fondu apres CHAQUE etape : l'etape suivante vise un element de la vue qui vient de s'ouvrir.
     await ouvrirFlux()
+    // UN CLIC DE L'UTILISATEUR PART D'UNE FENETRE QUI A LE FOCUS (2026-11-25, conv-2163). La fenetre
+    // cachee, elle, ne l'a jamais : `document.hasFocus()` y vaut false, et ce qui l'exige echoue en
+    // silence — mesure : clic sur l'identifiant `conv-XXX` de l'en-tete, `navigator.clipboard.writeText`
+    // refuse, presse-papiers vide, `clic-sans-effet` (code 5). Meme emulation que pour --taper.
+    await envoyer('Emulation.setFocusEmulationEnabled', { enabled: true })
     declencheurTrouve = true
     for (const etape of etapes) {
       const geste = gesteDeLEtape(etape)

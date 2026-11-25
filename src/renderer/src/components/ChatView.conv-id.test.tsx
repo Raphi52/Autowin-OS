@@ -39,6 +39,29 @@ describe('ChatView — l’en-tête nomme la conversation qu’on regarde', () =
     expect(pastille?.getAttribute('title')).toContain('conversation')
   })
 
+  // « quand je click sur conv-XXX j'aimerais que ca me mette le nom dans le clipboard comme
+  // ctrl+c » (2026-11-25) : l'identifiant se recopie dans un message ou un ticket, le
+  // sélectionner à la souris dans un texte de 8 px était la seule voie.
+  it('un clic sur l’identifiant le copie dans le presse-papiers, et le dit', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([conversation('conv-42')]),
+        conversation: vi.fn().mockResolvedValue({ id: 'conv-42', messages: [] })
+      })
+    )
+
+    await harness.click('[data-testid="chat-runtime-conv"]')
+
+    expect(writeText).toHaveBeenCalledWith('conv-42')
+    const pastille = harness.container.querySelector('[data-testid="chat-runtime-conv"]')
+    // Le texte ne change pas (rien ne bouge dans la ligne) : la couleur et l'infobulle le disent.
+    expect(pastille?.textContent).toBe('conv-42')
+    expect(pastille?.classList.contains('is-copie')).toBe(true)
+    expect(pastille?.getAttribute('title')).toContain('copié')
+  })
+
   // « enleve en cours ca prend de la place pour rien » (2026-10-11) : pendant un tour, l'en-tete
   // affichait « conv-237 · en cours ». L'etat occupe reste porte par la classe, pas par du texte.
   it('pendant un tour, l’en-tête n’ajoute pas « en cours » après l’identifiant', async () => {

@@ -460,6 +460,19 @@
   color: #ffffff;
 }
 
+/* Un clic copie l'identifiant (ChatView) : la main le dit, la couleur « réussi » confirme 1,5 s. */
+.cosmic-outline .chat-runtime-state.is-copiable {
+  cursor: pointer;
+}
+
+.cosmic-outline .chat-runtime-state.is-copiable:hover {
+  text-decoration: underline;
+}
+
+.cosmic-outline .chat-runtime-state.is-copie {
+  color: var(--ok);
+}
+
 /*
   L'ICONE DE BRANCHE ET SON NOM SUR LA MEME LIGNE.
 

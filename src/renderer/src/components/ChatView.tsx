@@ -266,6 +266,13 @@ export function ChatView({
   const [convQuery, setConvQuery] = useState('')
   const conversationDateOrder: 'desc' | 'asc' = 'desc'
   const [activeId, setActiveId] = useState<string | null>(null)
+  // L'identifiant que le clic sur « conv-XXX » de l'en-tête vient de copier ; null après 1,5 s.
+  const [identifiantCopie, setIdentifiantCopie] = useState<string | null>(null)
+  useEffect(() => {
+    if (!identifiantCopie) return
+    const minuteur = window.setTimeout(() => setIdentifiantCopie(null), 1500)
+    return () => window.clearTimeout(minuteur)
+  }, [identifiantCopie])
   // VERSION TÉLÉPHONE : la liste des conversations devient un tiroir par-dessus le fil,
   // ouvert par le bouton ☰ de l'en-tête (affichage-session.css) ; choisir un fil le referme.
   const [listeTelOuverte, setListeTelOuverte] = useState(false)
@@ -4987,15 +4994,39 @@ export function ChatView({
                   L'etat occupe reste porte par la classe `is-busy`. La mention « · en cours »
                   qui suivait l'id a ete retiree (2026-10-11, « ca prend de la place pour rien ») :
                   le fil en cours se voit deja dans la conversation elle-meme.
+
+                  UN CLIC LE COPIE (2026-11-25, « que ca me mette le nom dans le clipboard comme
+                  ctrl+c ») : on le recolle dans un message ou un ticket. Reste un <span> et non un
+                  <button> : la ligne pose ses separateurs « · » par `span + span`. Le retour
+                  passe par la couleur et l'infobulle, pas par le texte : la ligne ne bouge pas.
                 */}
                   <span
-                    className={`chat-runtime-state${busy ? ' is-busy' : ''}`}
+                    className={`chat-runtime-state${busy ? ' is-busy' : ''}${
+                      activeId && identifiantCopie === activeId ? ' is-copie' : ''
+                    }${activeId ? ' is-copiable' : ''}`}
                     data-testid="chat-runtime-conv"
+                    role={activeId ? 'button' : undefined}
+                    tabIndex={activeId ? 0 : undefined}
                     title={
                       activeId
-                        ? texteFil('entete.identifiant', { id: activeId })
+                        ? identifiantCopie === activeId
+                          ? texteFil('entete.identifiantCopie', { id: activeId })
+                          : texteFil('entete.identifiant', { id: activeId })
                         : texteFil('entete.aucuneOuverte')
                     }
+                    onClick={() => {
+                      if (!activeId) return
+                      const id = activeId
+                      void navigator.clipboard
+                        ?.writeText(id)
+                        .then(() => setIdentifiantCopie(id))
+                        .catch(() => undefined)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return
+                      event.preventDefault()
+                      event.currentTarget.click()
+                    }}
                   >
                     {activeId ?? texteFil('entete.aucune')}
                   </span>
