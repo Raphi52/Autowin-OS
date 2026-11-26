@@ -717,8 +717,10 @@ export function argumentsElement(racine: string, g: GesteElement, registre?: str
     join(racine, 'scripts', 'hdesk-act.ps1'),
     '-InstanceId',
     g.id,
-    '-Element',
-    element
+    // Valeur COLLÉE au paramètre : séparée, un nom qui commence par un tiret (« — », « -x ») est lu par
+    // PowerShell comme un nom de paramètre — « — » seul sortait en code 2, sans message (mesure du
+    // 2026-11-26, sur un écran qui compte 19 éléments nommés « — »).
+    `-Element:${element}`
   ]
   const o = g.origine
   if (o && Number.isInteger(o.x) && Number.isInteger(o.y) && o.x >= 0 && o.y >= 0)

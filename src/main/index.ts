@@ -1691,7 +1691,8 @@ bus.lancerBureauCache = (demande) =>
 // mesurée sur la Table des caractères) ; `element` appuie par nom.
 const outilsHdeskDuChat = outilsBureauCacheDuChat({
   capteur: () => (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath()))),
-  lireArbre: (id) => lireArbreHdesk(racineScriptsHorsArchive(app.getAppPath()), id),
+  lireArbre: (id, options) =>
+    lireArbreHdesk(racineScriptsHorsArchive(app.getAppPath()), id, options),
   agir: (geste) => agirHdesk(racineScriptsHorsArchive(app.getAppPath()), geste)
 })
 bus.observerBureauCache = outilsHdeskDuChat.observer

@@ -5,6 +5,7 @@ import {
   interpreterArbre,
   outilsBureauCacheDuChat,
   texteArbre,
+  zonesARelire,
   type ElementArbre,
   type LectureArbre
 } from './hdesk-arbre'
@@ -54,21 +55,25 @@ describe('arguments des scripts', () => {
     )
     expect(() => argumentsArbre('R', 'a;b')).toThrow(/Identifiant/)
   })
+  it('arbre d’une zone : -Racine COLLÉE à sa valeur, origine de l’image en option', () => {
+    const a = argumentsArbre('R', 'b1', 500, { racine: ' @k3f9a2:e57 ', origine: { x: 7, y: 57 } })
+    expect(a.slice(-5)).toEqual(['-Racine:@k3f9a2:e57', '-OrigineX', '7', '-OrigineY', '57'])
+    // Séparée, « — » serait lu par PowerShell comme un nom de paramètre (code 2, sans message).
+    expect(argumentsArbre('R', 'b1', 500, { racine: '— Total' })).toContain('-Racine:— Total')
+    expect(argumentsArbre('R', 'b1', 500, { racine: '  ' }).join(' ')).not.toContain('-Racine')
+    expect(argumentsArbre('R', 'b1', 500, { racine: 'Liste' })).not.toContain('-OrigineX')
+    expect(() => argumentsArbre('R', 'b1', 500, { racine: 'x'.repeat(201) })).toThrow(/200/)
+  })
   it('appui par nom : -Element, origine en option, jamais -X/-Y', () => {
     const a = argumentsElement('R', {
       id: 'b1',
       element: '  Valider la saisie ',
       origine: { x: 7, y: 57 }
     })
-    expect(a.slice(-6)).toEqual([
-      '-Element',
-      'Valider la saisie',
-      '-OrigineX',
-      '7',
-      '-OrigineY',
-      '57'
-    ])
+    expect(a.slice(-5)).toEqual(['-Element:Valider la saisie', '-OrigineX', '7', '-OrigineY', '57'])
     expect(a).not.toContain('-X')
+    // Séparé, « — » serait lu par PowerShell comme un nom de paramètre (code 2, sans message).
+    expect(argumentsElement('R', { id: 'b1', element: '—' })).toContain('-Element:—')
     expect(argumentsElement('R', { id: 'b1', element: '103' })).not.toContain('-OrigineX')
   })
   it('appui par nom : vide, blanc ou trop long → refus', () => {
@@ -107,6 +112,17 @@ describe('lecture de la sortie de hdesk-arbre.ps1', () => {
     )
     expect(l.ok && l.arbre.lecture).toBe('k3f9a2')
     expect(l.ok && l.arbre.elements[0].ref).toBe('@k3f9a2:e1')
+  })
+  it('lecture d’une zone : l’élément racine est gardé', () => {
+    const l = interpreterArbre(
+      '{"bureau":"b","lecture":"m2","racine":{"ref":"@k3f9a2:e57","type":"List","actif":true,"fenetre":0},"fenetres":["F"],"total":0,"omis":0,"elements":[]}'
+    )
+    expect(l.ok && l.arbre.racine).toEqual({
+      ref: '@k3f9a2:e57',
+      type: 'List',
+      actif: true,
+      fenetre: 0
+    })
   })
   it('sortie vide ou cassée → lecture ratée, jamais un arbre vide', () => {
     for (const out of ['', 'texte', '{pas du json', '{"elements":"x","fenetres":[]}'])
@@ -239,6 +255,114 @@ describe('texte de l’arbre joint à l’observation', () => {
     const montres = t.split('\n').filter((l) => l.startsWith('DataItem')).length
     expect(Number(/… (\d+) élément/.exec(t)![1])).toBe(600 + 1 + 40 - montres - 1)
   })
+  /*
+   * Écran WPF mesuré le 2026-11-26 (pilote de tests, module Global) : 95 éléments, 0 hors écran ; le
+   * texte s'arrêtait au 4e des 9 scénarios, et la liste qui les porte, sans nom, était tue. Même forme
+   * ici : des boutons en tête, puis une liste SANS NOM dont les lignes ne tiennent plus.
+   */
+  const ecranCharge = (): ElementArbre[] => {
+    const boutons = Array.from({ length: 30 }, (_, i): ElementArbre => ({
+      ref: `@l1:e${i + 1}`,
+      type: 'Button',
+      nom: `Bouton de la barre ${i}`,
+      actif: true,
+      x: 10 + i * 40,
+      y: 10,
+      largeur: 30,
+      hauteur: 20,
+      fenetre: 0
+    }))
+    const liste: ElementArbre = {
+      ref: '@l1:e31',
+      type: 'List',
+      actif: true,
+      x: 0,
+      y: 100,
+      largeur: 600,
+      hauteur: 800,
+      fenetre: 0
+    }
+    const lignes = Array.from({ length: 60 }, (_, i): ElementArbre => ({
+      ref: `@l1:e${32 + i}`,
+      type: 'Text',
+      nom: `Scénario ${i} : ouvrir la procédure et vérifier son état`,
+      actif: true,
+      x: 10,
+      y: 110 + i * 12,
+      largeur: 500,
+      hauteur: 10,
+      fenetre: 0
+    }))
+    return [...boutons, liste, ...lignes]
+  }
+  it('écran chargé : le texte cite la zone où lire le reste, avec son repère, et tient la limite', () => {
+    const t = texteArbre(
+      {
+        ok: true,
+        arbre: { lecture: 'l1', fenetres: ['Pilote'], total: 91, omis: 0, elements: ecranCharge() }
+      },
+      { x: 0, y: 0 }
+    )
+    expect(t.length).toBeLessThanOrEqual(ARBRE_TEXTE_MAX)
+    expect(t).toContain('Zones où lire le reste — bureau_cache_observer avec `racine`')
+    const zone = /^List @l1:e31 \(300,500\) : (\d+) non montré\(s\) sur 60$/m.exec(t)
+    expect(zone).not.toBeNull()
+    const fin =
+      /… (\d+) élément\(s\) non montré\(s\) : (\d+) au-delà de la limite de ce texte\. Lis une zone ci-dessus\./.exec(
+        t
+      )
+    expect(fin).not.toBeNull()
+    expect(fin![1]).toBe(fin![2])
+    expect(Number(zone![1])).toBe(Number(fin![1]))
+    // La liste sans nom n'a pas sa propre ligne : seule, elle ne dit rien.
+    expect(t).not.toMatch(/^List @l1:e31 \(300,500\)$/m)
+  })
+  it('zones : la plus petite à compte égal, une zone qui ne cache rien de plus est tue', () => {
+    const els = ecranCharge()
+    const page: ElementArbre = {
+      ref: '@l1:e99',
+      type: 'Pane',
+      nom: 'Page',
+      actif: true,
+      x: 0,
+      y: 0,
+      largeur: 1400,
+      hauteur: 1000,
+      fenetre: 0
+    }
+    const caches = els.filter((e) => e.type === 'Text').slice(20)
+    const z = zonesARelire([page, ...els], caches)
+    expect(z.map((x) => x.zone.ref)).toEqual(['@l1:e31'])
+    expect(z[0]).toMatchObject({ caches: 40, total: 60 })
+    // Un bouton caché en plus, hors de la liste : la page cache davantage, elle passe en tête.
+    const plus = zonesARelire([page, ...els], [...caches, els[0]])
+    expect(plus.map((x) => x.zone.ref)).toEqual(['@l1:e99', '@l1:e31'])
+  })
+  it('lecture d’une zone : l’en-tête la nomme ; zone vide = la phrase le dit', () => {
+    const racine: ElementArbre = { ref: '@l1:e31', type: 'List', actif: true, fenetre: 0 }
+    const t = texteArbre(
+      {
+        ok: true,
+        arbre: {
+          lecture: 'm2',
+          racine,
+          fenetres: ['Pilote'],
+          total: 1,
+          omis: 0,
+          elements: [{ ...ecranCharge()[31], ref: '@m2:e1' }]
+        }
+      },
+      undefined
+    )
+    expect(t.split('\n')[0]).toMatch(/^Zone List @l1:e31 lue seule : .*lecture m2/)
+    expect(t).toContain('Text « Scénario 0 : ouvrir la procédure et vérifier son état » @m2:e1')
+    expect(
+      texteArbre(
+        { ok: true, arbre: { racine, fenetres: [], total: 0, omis: 0, elements: [] } },
+        undefined
+      )
+    ).toMatch(/^Zone List @l1:e31 : aucun élément lisible dedans/)
+  })
   it('P2-12 : arbre vide → la phrase le dit ; lecture ratée → la raison, et vise x/y', () => {
     expect(texteArbre(arbre([]), undefined)).toMatch(/Aucun élément lisible.*vise x\/y/)
     expect(texteArbre({ ok: false, message: 'délai dépassé' }, undefined)).toMatch(
@@ -299,6 +423,27 @@ describe('outils du chat : observation et geste', () => {
     }).observer('b1')
     expect(r).toEqual({ statut: 'ferme', id: 'b1' })
     expect(lu).toBe(0)
+  })
+  it('zone demandée : racine et origine partent à la lecture ; refus rendu avec son code', async () => {
+    const recues: unknown[] = []
+    const outils = (rendu: LectureArbre): ReturnType<typeof outilsBureauCacheDuChat> =>
+      outilsBureauCacheDuChat({
+        capteur: () => capteurFixe({ x: 7, y: 57 }),
+        lireArbre: async (_id, options) => (recues.push(options), rendu),
+        agir: async () => ({ ok: true })
+      })
+    await outils(arbre([SELECTIONNER])).observer('b1', ' @k3f9a2:e57 ')
+    await outils(arbre([SELECTIONNER])).observer('b1')
+    expect(recues).toEqual([{ racine: '@k3f9a2:e57', origine: { x: 7, y: 57 } }, undefined])
+    const r = await outils({
+      ok: false,
+      code: 'PERIME',
+      message: "Repere @k3f9a2:e57 : lecture 'k3f9a2' inconnue."
+    }).observer('b1', '@k3f9a2:e57')
+    expect(r).toMatchObject({ statut: 'ok', dataUrl: IMAGE.dataUrl })
+    expect(r.arbre).toBe(
+      "Zone « @k3f9a2:e57 » non lue [PERIME] : Repere @k3f9a2:e57 : lecture 'k3f9a2' inconnue."
+    )
   })
   it('appui par nom : l’origine de l’image part avec, sans x/y', async () => {
     const recus: Array<GesteTv | GesteElement> = []

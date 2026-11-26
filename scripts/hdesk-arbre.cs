@@ -96,6 +96,16 @@ public class AutowinHdeskArbre {
     "ComboBox", "SplitButton", "Edit", "DataItem", "HeaderItem", "Spinner", "Slider"
   });
 
+  // Conteneurs ou un agent peut DESCENDRE (LireZone) : gardes meme sans nom quand ils sont a l'ecran, pour
+  // porter un repere. Mesure du 2026-11-26 (ecran WPF d'un pilote de tests de l'utilisateur) : 95 elements,
+  // le texte rendu a l'agent coupe a 4 000 caracteres apres le 4e des 9 scenarios ; la liste qui les porte
+  // n'a ni nom ni identifiant, elle etait tue et rien ne permettait de lire seulement elle.
+  static readonly HashSet<string> Zones = new HashSet<string>(new string[] {
+    "List", "Tree", "Table", "DataGrid", "Tab", "Group", "Pane", "Document", "ToolBar", "Custom"
+  });
+  /** Plus petit cote d'une zone sans nom gardee : en dessous, c'est un decor, pas une region a lire. */
+  const int ZONE_COTE_MIN = 24;
+
   static string Propre(string s) {
     if (s == null) return "";
     var sb = new StringBuilder(s.Length);
@@ -141,9 +151,7 @@ public class AutowinHdeskArbre {
     return res;
   }
 
-  static List<Element> Collecter(IntPtr d, List<string> titres) {
-    var fenetres = new List<IntPtr>();
-    EnumDesktopWindows(d, (h, l) => { if (IsWindowVisible(h)) fenetres.Add(h); return true; }, IntPtr.Zero);
+  static CacheRequest DemandeLecture() {
     var cr = new CacheRequest();
     cr.Add(AutomationElement.NameProperty);
     cr.Add(AutomationElement.AutomationIdProperty);
@@ -161,6 +169,13 @@ public class AutowinHdeskArbre {
     cr.Add(AutomationElement.IsValuePatternAvailableProperty);
     cr.Add(AutomationElement.IsScrollItemPatternAvailableProperty);
     cr.AutomationElementMode = AutomationElementMode.Full;
+    return cr;
+  }
+
+  static List<Element> Collecter(IntPtr d, List<string> titres) {
+    var fenetres = new List<IntPtr>();
+    EnumDesktopWindows(d, (h, l) => { if (IsWindowVisible(h)) fenetres.Add(h); return true; }, IntPtr.Zero);
+    var cr = DemandeLecture();
     var res = new List<Element>();
     foreach (var h in fenetres) {
       AutomationElementCollection tous;
@@ -240,9 +255,14 @@ public class AutowinHdeskArbre {
         if (texte != null) el.Libelle = Propre(texte.Current.Name);
       } catch { }
     }
-    // Un element sans nom, sans identifiant ni libelle ne peut etre ni lu ni vise : on le tait.
-    if (el.Nom == "" && el.Id == "" && el.Libelle == "") return null;
+    // Un element sans nom, sans identifiant ni libelle ne peut etre ni lu ni vise : on le tait. Sauf une
+    // zone a l'ecran (Zones) : son repere permet de lire seulement elle.
+    if (el.Nom == "" && el.Id == "" && el.Libelle == "" && !EstZoneVisible(el)) return null;
     return el;
+  }
+
+  static bool EstZoneVisible(Element el) {
+    return Zones.Contains(el.Type) && el.AvecRect && !el.HorsEcran && el.L >= ZONE_COTE_MIN && el.H >= ZONE_COTE_MIN;
   }
 
   static string JsonElement(Element el, int ox, int oy) {
@@ -347,20 +367,62 @@ public class AutowinHdeskArbre {
   public static string Lire(string bureau, int plafond, string fichier) {
     return SurLeBureau(bureau, d => {
       var titres = new List<string>();
+      return JsonLecture(bureau, plafond, fichier, titres, Collecter(d, titres), null);
+    });
+  }
+
+  // Numerote et garde la lecture (si `fichier`), puis la rend en JSON ; `racine` = la zone lue, s'il y en a une.
+  static string JsonLecture(string bureau, int plafond, string fichier, List<string> titres, List<Element> els, Element racine) {
+    int n = Math.Min(els.Count, Math.Max(0, plafond));
+    string lecture = string.IsNullOrEmpty(fichier) ? "" : NouvelleLecture();
+    if (lecture != "") {
+      for (int i = 0; i < n; i++) els[i].Ref = "@" + lecture + ":e" + (i + 1);
+      GarderLecture(fichier, lecture, els, n);
+    }
+    var sb = new StringBuilder("{\"bureau\":").Append(Js(bureau));
+    if (lecture != "") sb.Append(",\"lecture\":").Append(Js(lecture));
+    if (racine != null) sb.Append(",\"racine\":").Append(JsonElement(racine, 0, 0));
+    sb.Append(",\"fenetres\":[");
+    for (int i = 0; i < titres.Count; i++) sb.Append(i > 0 ? "," : "").Append(Js(titres[i]));
+    sb.Append("],\"total\":").Append(els.Count).Append(",\"omis\":").Append(els.Count - n).Append(",\"elements\":[");
+    for (int i = 0; i < n; i++) sb.Append(i > 0 ? "," : "").Append(JsonElement(els[i], 0, 0));
+    return sb.Append("]}").ToString();
+  }
+
+  /** Lecture d'une zone : Json, ou refus (Code + Erreur) quand la racine ne se resout pas. */
+  public class LectureZone { public string Json = "", Code, Erreur; }
+
+  /**
+   * LECTURE PAR ZONE (idee reprise de la lecture par racine de vercel-labs/agent-desktop) : au-dela de la
+   * limite de texte, l'agent perdait le reste d'un ecran charge sans moyen de le demander. `racine` =
+   * repere (@lecture:eN), identifiant, nom ou libelle d'un element, resolu comme un appui (memes refus :
+   * PERIME, INVALIDE, INTROUVABLE, AMBIGU, SANS_ARBRE) mais en preferant une zone (Zones) a son
+   * etiquette. Seuls ses DESCENDANTS sont rendus, numerotes dans une nouvelle lecture gardee comme les
+   * autres ; `racine` du JSON = l'element lui-meme. Meme forme de JSON que Lire.
+   * ox/oy : origine de la capture recadree, pour citer des positions en pixels de l'IMAGE dans les refus.
+   */
+  public static LectureZone LireZone(string bureau, int plafond, string fichier, string racine, int ox, int oy) {
+    racine = (racine ?? "").Trim();
+    return SurLeBureau(bureau, d => {
+      var res = new LectureZone();
+      var titres = new List<string>();
       var els = Collecter(d, titres);
-      int n = Math.Min(els.Count, Math.Max(0, plafond));
-      string lecture = string.IsNullOrEmpty(fichier) ? "" : NouvelleLecture();
-      if (lecture != "") {
-        for (int i = 0; i < n; i++) els[i].Ref = "@" + lecture + ":e" + (i + 1);
-        GarderLecture(fichier, lecture, els, n);
+      var r = new Resultat();
+      var el = Resoudre(els, racine, fichier, r, ox, oy, Zones, "");
+      if (el == null) { res.Code = r.Code; res.Erreur = r.Erreur; return res; }
+      AutomationElementCollection tous;
+      using (DemandeLecture().Activate()) { tous = el.Ae.FindAll(TreeScope.Descendants, Condition.TrueCondition); }
+      var titre = el.Fenetre >= 0 && el.Fenetre < titres.Count ? titres[el.Fenetre] : "";
+      var dedans = new List<Element>();
+      foreach (AutomationElement e in tous) {
+        var x = Decrire(e, 0);
+        if (x == null) continue;
+        x.Hwnd = el.Hwnd;
+        dedans.Add(x);
       }
-      var sb = new StringBuilder("{\"bureau\":").Append(Js(bureau));
-      if (lecture != "") sb.Append(",\"lecture\":").Append(Js(lecture));
-      sb.Append(",\"fenetres\":[");
-      for (int i = 0; i < titres.Count; i++) sb.Append(i > 0 ? "," : "").Append(Js(titres[i]));
-      sb.Append("],\"total\":").Append(els.Count).Append(",\"omis\":").Append(els.Count - n).Append(",\"elements\":[");
-      for (int i = 0; i < n; i++) sb.Append(i > 0 ? "," : "").Append(JsonElement(els[i], 0, 0));
-      return sb.Append("]}").ToString();
+      el.Fenetre = 0;
+      res.Json = JsonLecture(bureau, plafond, fichier, new List<string> { titre }, dedans, el);
+      return res;
     });
   }
 
@@ -373,13 +435,13 @@ public class AutowinHdeskArbre {
     return r;
   }
 
-  // Plusieurs correspondances : si UNE seule est d'un type agissable, c'est elle (le bouton plutot que
-  // son etiquette Text qui porte le meme nom). Sinon : ambigu (null).
-  static Element Departager(List<Element> t) {
+  // Plusieurs correspondances : si UNE seule est d'un type prefere, c'est elle (le bouton plutot que
+  // son etiquette Text qui porte le meme nom ; la liste plutot que son titre). Sinon : ambigu (null).
+  static Element Departager(List<Element> t, HashSet<string> preferes) {
     if (t.Count == 1) return t[0];
     Element seul = null;
     foreach (var e in t) {
-      if (!Agissables.Contains(e.Type)) continue;
+      if (!preferes.Contains(e.Type)) continue;
       if (seul != null) return null;
       seul = e;
     }
@@ -401,7 +463,7 @@ public class AutowinHdeskArbre {
     return p[b.Length];
   }
 
-  static string Introuvable(List<Element> els, string cible, int ox, int oy) {
+  static string Introuvable(List<Element> els, string cible, int ox, int oy, HashSet<string> preferes) {
     string bas = cible.ToLowerInvariant();
     int seuil = Math.Max(3, cible.Length * 6 / 10);
     // Proche = peu de lettres a changer, OU un mot de 4 lettres au moins en commun (« Valider tout »
@@ -426,7 +488,7 @@ public class AutowinHdeskArbre {
       // Rien de proche : l'element n'est pas a l'ecran (page pas encore ouverte, appli tout juste
       // relancee). Mesure du 19/11/2026 : 6 refus de ce genre sur 4 fils, chacun suivi d'une relecture
       // de l'arbre pour savoir quoi viser. On cite donc ce qui EST a l'ecran et se laisse appuyer.
-      var aViser = Filtrer(els, e => Agissables.Contains(e.Type) && e.Actif && e.AvecRect && !e.HorsEcran && e.Montre() != "");
+      var aViser = Filtrer(els, e => preferes.Contains(e.Type) && e.Actif && e.AvecRect && !e.HorsEcran && e.Montre() != "");
       if (aViser.Count == 0)
         return sb.Append(", ni aucun element proche. Lis l'arbre (bureau_cache_observer) pour voir les noms disponibles.").ToString();
       sb.Append(", ni aucun element proche : il n'est pas a l'ecran en ce moment. A viser maintenant (").Append(aViser.Count).Append(") :");
@@ -439,13 +501,14 @@ public class AutowinHdeskArbre {
     return sb.ToString();
   }
 
-  static string Ambigu(List<Element> tous, string cible, int ox, int oy) {
+  // `autreMoyen` : la fin de la consigne, apres « son identifiant (id) » (« , ou x/y sur l'image » pour un appui).
+  static string Ambigu(List<Element> tous, string cible, int ox, int oy, HashSet<string> preferes, string autreMoyen) {
     // Mesure WPF du 2026-11-03 : chaque bouton « Doublon » a aussi son etiquette Text du meme nom ; on ne
-    // cite que les elements agissables quand il y en a au moins deux.
-    var agissables = Filtrer(tous, e => Agissables.Contains(e.Type));
+    // cite que les elements preferes quand il y en a au moins deux.
+    var agissables = Filtrer(tous, e => preferes.Contains(e.Type));
     var t = agissables.Count >= 2 ? agissables : tous;
     var sb = new StringBuilder("Plusieurs elements '").Append(cible).Append("' (").Append(t.Count)
-      .Append(") : vise le repere (@...) de l'un d'eux, son identifiant (id), ou x/y sur l'image.");
+      .Append(") : vise le repere (@...) de l'un d'eux, son identifiant (id)").Append(autreMoyen).Append(".");
     for (int i = 0; i < t.Count && i < CANDIDATS_MAX; i++) sb.Append("\n").Append(Decrit(t[i], ox, oy));
     if (t.Count > CANDIDATS_MAX) sb.Append("\n... et ").Append(t.Count - CANDIDATS_MAX).Append(" autres.");
     return sb.ToString();
@@ -466,6 +529,34 @@ public class AutowinHdeskArbre {
   }
 
   static readonly Regex Repere = new Regex("^@([a-z0-9]{4,16}):e([0-9]{1,5})$");
+
+  // Cible -> element VIVANT, ou null avec r.Code/r.Erreur. Repere (@lecture:eN), puis identifiant exact, nom
+  // ou libelle exact, la meme chose sans la casse, puis « contient » (sans la casse). Plusieurs : celui
+  // d'un type `preferes` s'il est seul. Commun a l'appui (Agissables) et a la lecture par zone (Zones).
+  static Element Resoudre(List<Element> els, string cible, string fichier, Resultat r, int ox, int oy, HashSet<string> preferes, string autreMoyen) {
+    if (els.Count == 0) {
+      r.Code = "SANS_ARBRE";
+      r.Erreur = "Aucun element lisible dans ce bureau (page web, rendu GPU ou fenetre sans arbre d'accessibilite) : vise x/y sur l'image de bureau_cache_observer.";
+      return null;
+    }
+    if (cible == "") { r.Code = "INVALIDE"; r.Erreur = "Cible vide : passe un repere (@lecture:eN), un id ou un nom de l'arbre."; return null; }
+    if (cible.StartsWith("@")) return ParRepere(els, cible, fichier, r, ox, oy);
+    PoserReperes(els, fichier);
+    var t = Filtrer(els, e => e.Id == cible);
+    if (t.Count == 0) t = Filtrer(els, e => e.Nom == cible || e.Libelle == cible);
+    if (t.Count == 0) t = Filtrer(els, e => string.Equals(e.Nom, cible, StringComparison.OrdinalIgnoreCase) || string.Equals(e.Libelle, cible, StringComparison.OrdinalIgnoreCase));
+    if (t.Count == 0) {
+      string bas = cible.ToLowerInvariant();
+      t = Filtrer(els, e => e.Nom.ToLowerInvariant().Contains(bas) || e.Libelle.ToLowerInvariant().Contains(bas) || e.Id.ToLowerInvariant().Contains(bas));
+    }
+    if (t.Count == 0) { r.Code = "INTROUVABLE"; r.Erreur = Introuvable(els, cible, ox, oy, preferes); return null; }
+    var el = Departager(t, preferes);
+    // Zone sans conteneur parmi les candidats : un onglet (TabItem) porte aussi son contenu, et son
+    // etiquette Text du meme nom ne doit pas le rendre ambigu.
+    if (el == null && preferes != Agissables) el = Departager(t, Agissables);
+    if (el == null) { r.Code = "AMBIGU"; r.Erreur = Ambigu(t, cible, ox, oy, preferes, autreMoyen); }
+    return el;
+  }
 
   // Repere -> element VIVANT, ou refus (code + message). Meme element = meme RuntimeId dans la meme
   // fenetre, meme type et meme nom ; a defaut de RuntimeId stable, un seul element de memes type, nom,
@@ -695,29 +786,8 @@ public class AutowinHdeskArbre {
     cible = (cible ?? "").Trim();
     return SurLeBureau(bureau, d => {
       var r = new Resultat();
-      var els = Collecter(d, new List<string>());
-      if (els.Count == 0) {
-        r.Code = "SANS_ARBRE";
-        r.Erreur = "Aucun element lisible dans ce bureau (page web, rendu GPU ou fenetre sans arbre d'accessibilite) : vise x/y sur l'image de bureau_cache_observer.";
-        return r;
-      }
-      Element el;
-      if (cible.StartsWith("@")) {
-        el = ParRepere(els, cible, fichier, r, ox, oy);
-        if (el == null) return r;
-      } else {
-        PoserReperes(els, fichier);
-        var t = Filtrer(els, e => e.Id == cible);
-        if (t.Count == 0) t = Filtrer(els, e => e.Nom == cible || e.Libelle == cible);
-        if (t.Count == 0) t = Filtrer(els, e => string.Equals(e.Nom, cible, StringComparison.OrdinalIgnoreCase) || string.Equals(e.Libelle, cible, StringComparison.OrdinalIgnoreCase));
-        if (t.Count == 0) {
-          string bas = cible.ToLowerInvariant();
-          t = Filtrer(els, e => e.Nom.ToLowerInvariant().Contains(bas) || e.Libelle.ToLowerInvariant().Contains(bas) || e.Id.ToLowerInvariant().Contains(bas));
-        }
-        if (t.Count == 0) { r.Code = "INTROUVABLE"; r.Erreur = Introuvable(els, cible, ox, oy); return r; }
-        el = Departager(t);
-        if (el == null) { r.Code = "AMBIGU"; r.Erreur = Ambigu(t, cible, ox, oy); return r; }
-      }
+      var el = Resoudre(Collecter(d, new List<string>()), cible, fichier, r, ox, oy, Agissables, ", ou x/y sur l'image");
+      if (el == null) return r;
       if (!el.Actif) { r.Code = "INACTIF"; r.Erreur = "Element inactif, rien n'a ete appuye :\n" + Decrit(el, ox, oy); return r; }
       r.Json = JsonElement(el, ox, oy);
       r.Rid = el.Rid;

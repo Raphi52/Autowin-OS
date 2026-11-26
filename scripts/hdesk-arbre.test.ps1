@@ -9,6 +9,9 @@
   l'element lu, et il est REFUSE (code PERIME) quand l'element a disparu ou change de nom depuis la
   lecture ; la sortie d'un appui porte `apres` (ce qui a change dans la fenetre) ; -Remplir remplit un
   champ, texte lu sur l'entree standard.
+  Depuis le 2026-11-26 (lecture par zone) : une liste WPF SANS NOM est gardee comme zone, avec un repere ;
+  hdesk-arbre.ps1 -Racine:<repere> ne rend que ses elements, et une racine inconnue, ambigue ou qui
+  commence par un tiret long est refusee avec son code, jamais par une sortie muette.
 
   Trois cibles (la troisieme : une liste WinForms de 100 lignes, dont « Ligne 90 » hors ecran) :
    - Table des caracteres (Win32) : l'arbre porte le bouton d'identifiant 103 (« Selectionner ») ; l'appui
@@ -39,7 +42,7 @@ Set-Content -LiteralPath $app -Encoding UTF8 -Value @'
 param([string]$Temoin, [string]$Pret)
 Add-Type -AssemblyName PresentationFramework
 $w = New-Object System.Windows.Window
-$w.Title = 'Banc arbre WPF'; $w.Width = 420; $w.Height = 380; $w.Left = 200; $w.Top = 150
+$w.Title = 'Banc arbre WPF'; $w.Width = 420; $w.Height = 520; $w.Left = 200; $w.Top = 150
 $p = New-Object System.Windows.Controls.StackPanel
 $b = New-Object System.Windows.Controls.Button
 $sp = New-Object System.Windows.Controls.StackPanel
@@ -55,7 +58,11 @@ $ret.Add_Click({ [void]$p.Children.Remove($eph) })
 $bas = New-Object System.Windows.Controls.Button; $bas.Content = 'Bascule A'
 $bas.Add_Click({ $bas.Content = 'Bascule B' })
 $tx = New-Object System.Windows.Controls.TextBox; $tx.Name = 'champ'
-foreach ($x in @($b, $c, $i, $d1, $d2, $eph, $ret, $bas, $tx)) { [void]$p.Children.Add($x) }
+# Liste sans nom ni identifiant : la zone que -Racine lit seule. Assez haute pour ses 5 lignes (une ligne
+# hors de la vue d'une liste WPF virtualisee n'existe pas dans l'arbre).
+$lb = New-Object System.Windows.Controls.ListBox; $lb.Height = 120
+foreach ($n in 1..5) { [void]$lb.Items.Add("Element de zone $n") }
+foreach ($x in @($b, $c, $i, $d1, $d2, $eph, $ret, $bas, $tx, $lb)) { [void]$p.Children.Add($x) }
 $w.Content = $p
 $w.Add_ContentRendered({ Set-Content -LiteralPath $Pret -Value 'pret' })
 [void]$w.ShowDialog()
@@ -87,6 +94,17 @@ function Arbre([string]$id) {
   $o = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Dossier 'hdesk-arbre.ps1') -InstanceId $id -Registre $registre 2>&1
   if ($LASTEXITCODE -ne 0) { Write-Output "arbre illisible : $o"; return $null }
   return (($o | Out-String) | ConvertFrom-Json)
+}
+function ArbreZone([string]$id, [string]$racine) {
+  # Valeur COLLEE a -Racine, comme depuis l'app (argumentsArbre) : separee, une racine qui commence par
+  # un tiret est lue comme un nom de parametre.
+  $ErrorActionPreference = 'Continue'
+  $o = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Dossier 'hdesk-arbre.ps1') -InstanceId $id -Registre $registre "-Racine:$racine" 2>&1
+  $code = $LASTEXITCODE
+  $sortie = (($o | ForEach-Object { "$_" }) -join "`n")
+  $json = $null
+  if ($code -eq 0) { try { $json = ($sortie | ConvertFrom-Json) } catch { } }
+  return [pscustomobject]@{ code = $code; sortie = $sortie; json = $json }
 }
 function Appuyer([string]$id, [string]$element) {
   # Un refus du script sort sur stderr : avec 'Stop', PowerShell 5.1 en ferait une exception du banc.
@@ -228,6 +246,24 @@ try {
   $j = Json $r.sortie
   Verifier ($r.code -eq 0 -and $j.apres.element.valeur -ceq $bonjour) "remplissage WPF du champ 'champ' (lu apres : '$($j.apres.element.valeur)')"
 
+  # --- Lecture par zone (-Racine) ------------------------------------------------------------------
+  $w5 = Arbre $idWpf
+  $liste = @($w5.elements | Where-Object { $_.type -eq 'List' -and -not $_.nom -and -not $_.id }) | Select-Object -First 1
+  Verifier ($liste -and "$($liste.ref)" -match '^@') "liste WPF sans nom gardee comme zone, avec un repere ($($liste.ref))"
+  $z = ArbreZone $idWpf $liste.ref
+  $noms = @($z.json.elements | ForEach-Object { "$($_.nom)" })
+  Verifier ($z.code -eq 0 -and $z.json.racine.ref -eq $liste.ref -and $z.json.lecture -and $z.json.lecture -ne $w5.lecture -and ($noms -contains 'Element de zone 5') -and -not ($noms -contains 'Retirer')) "zone lue par son repere : ses seuls elements, dans une nouvelle lecture ($($noms -join ', '))"
+  $refZone = Repere $z.json { $_.nom -eq 'Element de zone 2' }
+  $r = Appuyer $idWpf $refZone
+  $j = Json $r.sortie
+  Verifier ($r.code -eq 0 -and $j.apres.element.selectionne -eq $true) "appui par un repere de la lecture de zone $refZone -> ligne selectionnee ($($r.sortie))"
+  $z = ArbreZone $idWpf '@zzzzzz:e1'
+  Verifier ($z.code -eq 1 -and $z.sortie -match '^\[PERIME\]') "zone d'une lecture inconnue refusee ($($z.sortie))"
+  $z = ArbreZone $idWpf 'Doublon'
+  Verifier ($z.code -eq 1 -and $z.sortie -match '^\[AMBIGU\]') "zone ambigue refusee ($($z.sortie))"
+  $z = ArbreZone $idWpf ([string][char]0x2014 + ' Total')
+  Verifier ($z.code -eq 1 -and $z.sortie -match '^\[INTROUVABLE\]') "racine qui commence par un tiret long : refus lisible, pas une sortie muette ($($z.sortie))"
+
   # --- WinForms : element hors ecran d'une liste -------------------------------------------------
   $l = Lancer $idListe $ps "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$appListe`" `"$pretListe`"" 'banc hdesk-arbre (liste)'
   if (-not $l.pid) { Write-Output "BANC IMPOSSIBLE : liste WinForms non lancee ($($l.erreur))"; exit 2 }
@@ -248,6 +284,6 @@ try {
 }
 $apres = (Get-ItemProperty -LiteralPath $cle -ErrorAction SilentlyContinue).Advanced
 Verifier ("$avance" -eq "$apres") "reglage de l'utilisateur CharMap\Advanced inchange ($avance -> $apres)"
-if ($echecs.Count -eq 0) { Write-Output 'VERT : arbre lu, reperes verifies, appui et remplissage en Win32, WPF et WinForms'; $code = 0 }
+if ($echecs.Count -eq 0) { Write-Output 'VERT : arbre lu, reperes verifies, zone lue seule, appui et remplissage en Win32, WPF et WinForms'; $code = 0 }
 else { Write-Output "ROUGE : $($echecs.Count) verification(s) en echec" }
 exit $code

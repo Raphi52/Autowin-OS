@@ -79,16 +79,36 @@ export function redactedArgs(name: string, args: Record<string, unknown>): Recor
   // Même règle pour la saisie dans le navigateur intégré (lot 4/5), et pour le remplissage d'un
   // champ du bureau caché (`valeur`).
   if (name === 'bureau_cache_agir' || name === 'navigateur_agir') {
-    const masque = { ...args }
-    let masquer = false
-    for (const cle of ['texte', 'valeur'] as const) {
-      const v = args[cle]
-      if (typeof v === 'string') {
-        masque[cle] = `[${v.length} caractères]`
-        masquer = true
-      }
+    const masque = masquerFrappe(args)
+    // Enchaînement (`gestes` de bureau_cache_agir) : même règle pour chaque geste. Une liste arrivée en
+    // texte (voie `<cmd>`) qui ne se relit pas est masquée entière.
+    if (args.gestes !== undefined && args.gestes !== null) {
+      const liste = typeof args.gestes === 'string' ? jsonOuTexte(args.gestes) : args.gestes
+      masque.gestes = Array.isArray(liste)
+        ? liste.map((g) =>
+            g && typeof g === 'object' ? masquerFrappe(g as Record<string, unknown>) : g
+          )
+        : `[${String(args.gestes).length} caractères]`
     }
-    if (masquer) return redactTrace(masque) as Record<string, unknown>
+    return redactTrace(masque) as Record<string, unknown>
   }
   return redactTrace(args) as Record<string, unknown>
+}
+
+/** `texte` et `valeur` d'un geste : seul leur nombre de caractères est gardé. */
+function masquerFrappe(g: Record<string, unknown>): Record<string, unknown> {
+  const m = { ...g }
+  for (const cle of ['texte', 'valeur'] as const) {
+    const v = g[cle]
+    if (typeof v === 'string') m[cle] = `[${v.length} caractères]`
+  }
+  return m
+}
+
+function jsonOuTexte(texte: string): unknown {
+  try {
+    return JSON.parse(texte)
+  } catch {
+    return texte
+  }
 }

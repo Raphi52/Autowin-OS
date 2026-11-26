@@ -3,11 +3,11 @@
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import type { Message } from '../providers/types'
-import type { ActionHdesk, GesteTv } from '../bureau/hdesk-tv'
+import type { ActionHdesk, GesteElement, GesteTv, ResultatGeste } from '../bureau/hdesk-tv'
 import { ELEMENT_MAX, VALEUR_MAX } from '../bureau/hdesk-tv'
 import { identifiantBureauCacheChat } from '../consignes/consigne-bureau-cache'
 import type { ActionAgentNavigateur, CibleAgentNavigateur } from '../../shared/navigateur'
-import { argumentAbsent, booleenEnvoye } from './arguments'
+import { argumentAbsent, booleenEnvoye, listeEnvoyee } from './arguments'
 import { masquerValeurs } from '../app/coffre-cles'
 import type { OutilNavigateur } from './navigateur-terminal'
 import {
@@ -92,7 +92,19 @@ export async function outilBureauCache(
     )
 
   if (name === 'bureau_cache_observer') {
-    const img = await bus.observerBureauCache!(id)
+    const brutRacine = a.racine
+    if (
+      !argumentAbsent(brutRacine) &&
+      typeof brutRacine !== 'string' &&
+      typeof brutRacine !== 'number'
+    )
+      return refus(
+        'Refusé : `racine` doit être un texte (repère @lecture:eN, id, nom ou libellé d’une zone de l’arbre).'
+      )
+    const racine = argumentAbsent(brutRacine) ? '' : String(brutRacine).trim()
+    if (racine.length > ELEMENT_MAX)
+      return refus(`Refusé : \`racine\` trop longue (${ELEMENT_MAX} caractères au plus).`)
+    const img = await bus.observerBureauCache!(id, racine || undefined)
     if (img.statut === 'ok' || img.statut === 'uni') {
       const content = img.dataUrl.slice(img.dataUrl.indexOf(',') + 1)
       return {
@@ -101,6 +113,7 @@ export async function outilBureauCache(
           id,
           statut: img.statut,
           ...(img.statut === 'ok' ? { width: img.width, height: img.height } : {}),
+          ...(racine ? { racine } : {}),
           ...(typeof img.arbre === 'string' ? { arbre: img.arbre } : {}),
           detail:
             img.statut === 'uni'
@@ -125,6 +138,125 @@ export async function outilBureauCache(
     )
   }
 
+  // ENCHAÎNEMENT : `gestes` joue plusieurs gestes en un appel (remplir un formulaire coûtait un
+  // aller-retour avec le modèle par champ). Tous sont contrôlés AVANT le premier : un geste mal formé
+  // ne laisse pas un formulaire à moitié rempli. Puis dans l'ordre, arrêt au premier refus.
+  if (!argumentAbsent(a.gestes)) {
+    // `false` ne demande rien (un `entree: false` posé par habitude n'est pas un second geste).
+    const seul = CHAMPS_DU_GESTE.filter(
+      (k) => !argumentAbsent(a[k]) && a[k] !== false && a[k] !== 'false'
+    )
+    if (seul.length > 0)
+      return refus(
+        `Refusé : passe \`gestes\` OU un geste seul, pas les deux (reçu aussi : ${seul.join(', ')}).`
+      )
+    const forme =
+      'Refusé : `gestes` doit être une liste d’objets, un par geste, avec les champs d’un geste seul (element, valeur, x, y, texte, entree, touche, molette, sansClic).'
+    let liste: unknown[]
+    try {
+      liste = listeEnvoyee(a.gestes, forme)
+    } catch {
+      return refus(forme)
+    }
+    if (liste.length === 0) return refus('Refusé : `gestes` est vide.')
+    if (liste.length > GESTES_MAX)
+      return refus(
+        `Refusé : ${liste.length} gestes, ${GESTES_MAX} au plus par appel — coupe la liste en plusieurs appels.`
+      )
+    const lus: GesteLu[] = []
+    for (const [i, brut] of liste.entries()) {
+      const rang = `geste n°${i + 1} sur ${liste.length}`
+      if (!brut || typeof brut !== 'object' || Array.isArray(brut))
+        return refus(`Refusé : ${rang} : un objet est attendu. Aucun geste joué.`)
+      const g = brut as Record<string, unknown>
+      const inconnus = Object.keys(g).filter(
+        (k) => !(CHAMPS_DU_GESTE as readonly string[]).includes(k)
+      )
+      if (inconnus.length > 0)
+        return refus(
+          `Refusé : ${rang} : champ(s) inconnu(s) ${inconnus.join(', ')} — le bureau (\`id\`) se passe une fois, hors de \`gestes\`. Aucun geste joué.`
+        )
+      let lu: GesteLu | { refus: string }
+      try {
+        lu = lireGeste(g, id)
+      } catch (e) {
+        lu = { refus: e instanceof Error ? e.message : String(e) }
+      }
+      if ('refus' in lu)
+        return refus(`Refusé : ${rang} : ${lu.refus.replace(/^Refusé : /, '')} Aucun geste joué.`)
+      lus.push(lu)
+    }
+    const resultats: Array<Record<string, unknown> & { ok: boolean; detail: string }> = []
+    for (const [i, lu] of lus.entries()) {
+      const r = await bus.agirBureauCache!(lu.geste)
+      const { action, ...rendu } = resultatDuGeste(r, lu, false)
+      const avertissement = (action as { avertissement?: unknown } | undefined)?.avertissement
+      resultats.push({
+        n: i + 1,
+        ...rendu,
+        ...(typeof avertissement === 'string' ? { avertissement } : {})
+      })
+      if (!r.ok) break
+    }
+    const dernier = resultats[resultats.length - 1]
+    const tousOk = resultats.every((r) => r.ok)
+    const reste = lus.length - resultats.length
+    return {
+      data: {
+        ok: tousOk,
+        id,
+        joues: resultats.length,
+        total: lus.length,
+        resultats,
+        detail: tousOk
+          ? `${lus.length} geste(s) joué(s) dans l'ordre — détail de chacun dans \`resultats\`.`
+          : `Arrêt au geste n°${dernier.n} sur ${lus.length} : ${dernier.detail}` +
+            (reste > 0 ? ` Les ${reste} geste(s) suivant(s) n'ont pas été joués.` : '')
+      }
+    }
+  }
+
+  const lu = lireGeste(a, id)
+  if ('refus' in lu) return refus(lu.refus)
+  const r = await bus.agirBureauCache!(lu.geste)
+  const { action, ...rendu } = resultatDuGeste(r, lu, true)
+  return { data: { ...rendu, id, ...(action ? { action } : {}) } }
+}
+
+/** Champs d'un geste : ceux de `bureau_cache_agir` hors `id`, et ceux de chaque entrée de `gestes`. */
+const CHAMPS_DU_GESTE = [
+  'element',
+  'valeur',
+  'x',
+  'y',
+  'texte',
+  'entree',
+  'touche',
+  'molette',
+  'sansClic'
+] as const
+/**
+ * Gestes au plus par appel. Mesure du 2026-11-26 : un appui par élément sur une fenêtre WPF de 99
+ * éléments coûte environ 5,6 s (PowerShell, lecture de l'arbre, relecture de la fenêtre après le geste).
+ * 10 gestes tiennent sous 60 s, la coupure d'un appel d'outil mesurée quand son délai n'est pas réglé
+ * (src/main/providers/claude.ts, `envDelaiOutilsMcp`). Le catalogue cite cette borne (test).
+ */
+export const GESTES_MAX = 10
+
+interface GesteLu {
+  geste: GesteTv | GesteElement
+  /** Ce que le geste fait, pour la phrase rendue à l'agent. */
+  quoi: 'appui' | 'remplissage' | 'point'
+}
+
+/**
+ * Un geste tel que l'envoient les deux voies d'appel (vrais types ou texte). Mêmes règles pour le geste
+ * seul et pour chaque entrée de `gestes`. Lève sur un booléen illisible (`booleenEnvoye`).
+ */
+function lireGeste(a: Record<string, unknown>, id: string): GesteLu | { refus: string } {
+  const refus = (detail: string): { refus: string } => ({ refus: detail })
+  const s = (k: string): string =>
+    a[k] === undefined || a[k] === null ? '' : typeof a[k] === 'string' ? a[k] : String(a[k])
   const nombre = (k: string): number | undefined =>
     a[k] === undefined || a[k] === null || a[k] === '' ? undefined : Number(a[k])
   const vrai = (k: string): boolean => booleenEnvoye(a[k], k)
@@ -169,25 +301,9 @@ export async function outilBureauCache(
     const valeur = avecValeur ? String(brutValeur) : undefined
     if (valeur !== undefined && valeur.length > VALEUR_MAX)
       return refus(`Refusé : \`valeur\` trop longue (${VALEUR_MAX} caractères au plus).`)
-    const r = await bus.agirBureauCache!({
-      id,
-      element,
-      ...(valeur !== undefined ? { valeur } : {})
-    })
     return {
-      data: r.ok
-        ? {
-            ok: true,
-            id,
-            ...(r.action ? { action: r.action } : {}),
-            detail: detailApres(valeur !== undefined ? 'Champ rempli' : 'Élément appuyé', r.action)
-          }
-        : {
-            ok: false,
-            id,
-            ...(r.code ? { code: r.code } : {}),
-            detail: `Geste refusé : ${r.message}`
-          }
+      geste: { id, element, ...(valeur !== undefined ? { valeur } : {}) },
+      quoi: valeur !== undefined ? 'remplissage' : 'appui'
     }
   }
   // FRAPPE VERS LE FOCUS : le refus d'un appui conseille « tape avec `sansClic: true` » ; sans x/y,
@@ -212,21 +328,33 @@ export async function outilBureauCache(
   const crans = nombre('molette')
   if (crans !== undefined) geste.molette = crans
   if (vrai('sansClic')) geste.sansClic = true
-  const r = await bus.agirBureauCache!(geste)
+  return { geste, quoi: 'point' }
+}
+
+/**
+ * Ce que l'agent lit d'un geste joué. `seul` : geste d'un appel à lui seul, dont la phrase rappelle de
+ * re-observer ; dans un enchaînement, la même phrase à chaque geste ne ferait que répéter.
+ */
+function resultatDuGeste(
+  r: ResultatGeste,
+  lu: GesteLu,
+  seul: boolean
+): { ok: boolean; detail: string; code?: string; action?: ActionHdesk } {
+  if (!r.ok)
+    return { ok: false, ...(r.code ? { code: r.code } : {}), detail: `Geste refusé : ${r.message}` }
+  const action = r.action ? { action: r.action } : {}
+  if (lu.quoi === 'point')
+    return {
+      ok: true,
+      ...action,
+      detail: seul
+        ? 'Geste envoyé : re-observe (bureau_cache_observer) pour vérifier son effet.'
+        : 'Geste envoyé (sans relecture de la fenêtre).'
+    }
   return {
-    data: r.ok
-      ? {
-          ok: true,
-          id,
-          ...(r.action ? { action: r.action } : {}),
-          detail: 'Geste envoyé : re-observe (bureau_cache_observer) pour vérifier son effet.'
-        }
-      : {
-          ok: false,
-          id,
-          ...(r.code ? { code: r.code } : {}),
-          detail: `Geste refusé : ${r.message}`
-        }
+    ok: true,
+    ...action,
+    detail: detailApres(lu.quoi === 'remplissage' ? 'Champ rempli' : 'Élément appuyé', r.action)
   }
 }
 

@@ -345,8 +345,11 @@ export class AppCommandBus {
    * annonce l'indisponibilité.
    */
   lancerBureauCache?: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
-  /** L'image, et l'arbre d'accessibilité en texte quand il a pu être lu (hdesk-arbre.ts). */
-  observerBureauCache?: (id: string) => Promise<ImageTv & { arbre?: string }>
+  /**
+   * L'image, et l'arbre d'accessibilité en texte quand il a pu être lu (hdesk-arbre.ts) ; `racine` = ne
+   * lire qu'une zone de l'arbre.
+   */
+  observerBureauCache?: (id: string, racine?: string) => Promise<ImageTv & { arbre?: string }>
   agirBureauCache?: (geste: GesteTv | GesteElement) => Promise<ResultatGeste>
   ficheBureauCache?: (id: string) => EntreeRegistre | undefined
 

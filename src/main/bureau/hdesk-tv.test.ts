@@ -787,9 +787,7 @@ describe('remplir un champ — valeur sur l’entrée standard', () => {
   it('-Remplir -TexteEntree, la valeur jamais dans la ligne de commande ; vide = vider', () => {
     const g = { id: 'b1', element: '@k3f9a2:e4', valeur: 'mot-a-garder' }
     const a = argumentsElement('R', g)
-    expect(a).toEqual(
-      expect.arrayContaining(['-Element', '@k3f9a2:e4', '-Remplir', '-TexteEntree'])
-    )
+    expect(a).toEqual(expect.arrayContaining(['-Element:@k3f9a2:e4', '-Remplir', '-TexteEntree']))
     expect(a.join(' ')).not.toContain('mot-a-garder')
     expect(texteDuGeste(g)).toBe('mot-a-garder')
     expect(texteDuGeste({ id: 'b1', element: 'x', valeur: '' })).toBe('')
