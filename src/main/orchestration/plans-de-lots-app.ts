@@ -17,6 +17,7 @@ import {
   finDeLaPause,
   interrompreAuDemarrage,
   libelleEtat,
+  libererFichiersDuLot,
   lirePlanDeLots,
   lotsAPartir,
   marquerEchec,
@@ -772,6 +773,27 @@ export class CoordinateurDesPlans {
       }
     }
     return prevenus
+  }
+
+  /**
+   * LE JUGE D'UN LOT DÉMARRE (2026-11-26, « les lots devraient s'enchaîner pendant que les juges
+   * corrigent ») : la construction du lot est finie, il rend ses fichiers et les lots qui les
+   * attendaient partent tout de suite, sans attendre que le juge ait fini de relire et de faire
+   * corriger. Appelé par le signal « étape démarrée » des runs (`commands/orchestration.ts`) ;
+   * un fil qui ne fait aucun lot en cours ne change rien.
+   */
+  async jugeDemarre(fil: string): Promise<void> {
+    for (const plan of this.#plans) {
+      if (plan.statut !== 'en-cours') continue
+      const libere = libererFichiersDuLot(plan, fil, this.#maintenant())
+      if (libere === plan) continue
+      const rang = libere.lots.find((l) => l.fil === fil)?.rang
+      this.#journal(
+        `plan ${plan.id} : le juge du lot ${rang} démarre, ses fichiers passent aux lots suivants`
+      )
+      this.#poser(libere)
+      await this.#lancerLesSuivants(plan.id)
+    }
   }
 
   /**

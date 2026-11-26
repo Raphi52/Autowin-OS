@@ -1205,3 +1205,41 @@ describe('CoordinateurDesPlans — le bouton du workflow intelligent', () => {
     }
   })
 })
+
+/*
+ * « Les lots devraient s'enchaîner pendant que les juges corrigent » (2026-11-26, plan-676a4b19 :
+ * le lot 5 attendait 13 minutes le juge du lot 4, dont le travail était déjà sur main).
+ */
+describe('CoordinateurDesPlans — le juge d’un lot démarre', () => {
+  const memeDossier = {
+    titre: 'Familles d’écrans',
+    lots: [1, 2].map((n) => ({
+      titre: `Famille ${n}`,
+      demande: `/build branche la famille ${n}`,
+      critere: 'les écrans de la famille lisent la base et leurs gestes sont relus',
+      fichiers: ['Serveur/Socle/EcransGeneres/']
+    }))
+  }
+
+  it('le lot suivant, au même dossier, part dès le démarrage du juge, une seule fois', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: memeDossier })
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100'])
+
+    await b.coord.jugeDemarre('conv-100')
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101'])
+    const lots = b.coord.plans()[0].lots
+    expect(lots.map((l) => l.etat)).toEqual(['en-cours', 'en-cours'])
+
+    // Le juge redémarre après une correction : rien ne repart en double.
+    await b.coord.jugeDemarre('conv-100')
+    expect(b.lancements).toHaveLength(2)
+  })
+
+  it('un fil qui ne fait aucun lot ne lance rien', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: memeDossier })
+    await b.coord.jugeDemarre('conv-999')
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100'])
+  })
+})

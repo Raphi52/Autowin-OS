@@ -174,6 +174,12 @@ export interface LotDuPlan {
    */
   repriseEnFile?: { depuis: number; tour?: string }
   /**
+   * Heure où le juge de ce lot a démarré : sa construction est finie, ses fichiers sont RENDUS aux
+   * lots suivants pendant que le juge relit et fait corriger (`libererFichiersDuLot`). Effacée quand
+   * le lot repart de zéro (`marquerLance`).
+   */
+  fichiersLiberes?: number
+  /**
    * Tours dont la reprise en file a été remplacée par une relance : quand leur tour de file arrive,
    * ils ne repartent pas (`repriseAbandonnee`), sinon deux agents travailleraient dans le même fil.
    */
@@ -834,11 +840,29 @@ export function lotsAPartir(plan: PlanDeLots, filOccupe?: (fil: string) => boole
 /** Chemin normalisé → le lot qui le modifie, et le chemin tel qu'il l'a annoncé (pour l'écran). */
 type FichiersPris = Map<string, { rang: number; chemin: string }>
 
+/** Un lot dont le juge a démarré ne tient plus ses fichiers (`libererFichiersDuLot`). */
 function fichiersPris(lots: readonly LotDuPlan[]): FichiersPris {
   const pris: FichiersPris = new Map()
-  for (const l of lots)
+  for (const l of lots) {
+    if (l.fichiersLiberes !== undefined) continue
     for (const f of l.fichiers) pris.set(normaliserChemin(f), { rang: l.rang, chemin: f })
+  }
   return pris
+}
+
+/**
+ * Le juge du lot en cours dans `fil` a démarré : sa construction est finie, il rend ses fichiers.
+ * « Les lots devraient s'enchaîner pendant que les juges corrigent » (Raphaël, 26/11/2026) : le
+ * lot 4 de plan-676a4b19 avait réuni son travail sur main à 11:28, son juge a tourné jusqu'à
+ * 11:41, et le lot suivant, au même dossier, attendait. Le prix accepté : une correction demandée
+ * par le juge peut toucher un fichier que le lot suivant modifie aussi ; la réunion sur main les
+ * fusionne, et un vrai conflit reste un échec à arbitrer. Rend `plan` tel quel s'il n'y a rien à
+ * rendre (aucun lot en cours dans ce fil, ou déjà rendu).
+ */
+export function libererFichiersDuLot(plan: PlanDeLots, fil: string, maintenant: number): PlanDeLots {
+  const lot = plan.lots.find((l) => l.fil === fil && l.etat === 'en-cours')
+  if (!lot || lot.fichiersLiberes !== undefined) return plan
+  return avecLot(plan, lot.rang, { fichiersLiberes: maintenant })
 }
 
 const prerequisRestants = (lot: LotDuPlan, etats: ReadonlyMap<number, EtatDuLot>): number[] =>
@@ -911,7 +935,9 @@ export function marquerLance(
     tour: undefined,
     raison: undefined,
     debut: premierDebut ?? maintenant,
-    fin: undefined
+    fin: undefined,
+    // Il reconstruit : il reprend ses fichiers jusqu'au démarrage de son prochain juge.
+    fichiersLiberes: undefined
   })
   return { ...p, toursLances: plan.toursLances + 1 }
 }

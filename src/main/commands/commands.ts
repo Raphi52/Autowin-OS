@@ -394,7 +394,7 @@ export class AppCommandBus {
    * `lancerParOrdre` : l'ordre d'un chef vers un lot bloqué vaut relance du lot.
    */
   plansDeLots?: Pick<CoordinateurDesPlans, 'outil' | 'lancerParOrdre'> &
-    Partial<Pick<CoordinateurDesPlans, 'planDuFil' | 'lancerApresDemarrage'>>
+    Partial<Pick<CoordinateurDesPlans, 'planDuFil' | 'lancerApresDemarrage' | 'jugeDemarre'>>
 
   /**
    * Le Task Manager (stockage, minuteur, rafraîchissement de l'écran), câblé TARDIVEMENT depuis

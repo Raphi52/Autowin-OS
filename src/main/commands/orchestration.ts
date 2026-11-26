@@ -406,6 +406,14 @@ export async function executerOrchestration(
               )
             }
             bus.broadcast({ type: 'orchestrate-phase', convId, runPath, phase })
+            // Le juge démarre : la construction est finie. Si ce fil fait un lot de plan, il rend
+            // ses fichiers et les lots suivants partent pendant que le juge relit (`jugeDemarre`).
+            if (phase.step === 'judge' && convId)
+              void bus.plansDeLots
+                ?.jugeDemarre?.(convId)
+                ?.catch((erreur: unknown) =>
+                  console.warn(`[plans de lots] juge de ${convId} : lancement des suivants`, erreur)
+                )
           },
           (step, delta, note, raisonnement) => {
             // Une NOTE (« Bash en cours — 2 min 30 s ») voyage sur le meme evenement mais dans
