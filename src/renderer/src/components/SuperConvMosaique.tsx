@@ -144,7 +144,10 @@ function texteDEnchainement(
       })
     }
   if (e.genre === 'plafond')
-    return { texte: t('superConv.plafond'), titre: t('superConv.plafond.titre', { n: plan.plafondTours }) }
+    return {
+      texte: t('superConv.plafond'),
+      titre: t('superConv.plafond.titre', { n: plan.plafondTours })
+    }
   if (e.genre === 'libre') return { texte: t('superConv.libre'), titre: t('superConv.libre.titre') }
   return { texte: t('superConv.enFile'), titre: t('superConv.enFile.titre', { n: plan.parallele }) }
 }
@@ -518,10 +521,13 @@ export function BandeauSuperConv({
             className="scm-reduire"
             data-testid="scm-reduire"
             aria-expanded={!reduit}
+            aria-label={reduit ? t('lots.agrandir') : t('lots.reduire')}
             title={reduit ? t('lots.agrandir.titre') : t('lots.reduire.titre')}
             onClick={basculer}
           >
-            {reduit ? t('lots.agrandir') : t('lots.reduire')}
+            {/* Une flèche plutôt que le mot (2026-11-26) : bas = déplié, haut = réduit, comme les
+                chevrons du fil (CadrageHypotheses.css). Le mot reste dans aria-label et l'infobulle. */}
+            <span className="scm-reduire-fleche" aria-hidden="true" />
           </button>
         </span>
       </div>

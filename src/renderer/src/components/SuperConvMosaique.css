@@ -42,7 +42,10 @@
   vertical-align: -3px;
 }
 
-/* — Le bandeau, entre l'en-tête et le fil. Il défile seul s'il dépasse : le fil garde sa place. */
+/* — Le bandeau, entre l'en-tête et le fil. Sa hauteur est bornée : le fil garde sa place.
+   SEULE LA LISTE DES LOTS DÉFILE (2026-11-26 : « rend scrollable uniquement la liste de lots ») :
+   le bandeau entier défilait, et la ligne des chiffres partait avec la liste. Le bandeau ne défile
+   plus ; c'est la liste du chef (.scm-bandeau--chef > .scm-pistes, plus bas) qui cède et défile. */
 .scm-bandeau {
   /* Ce qui tourne : la jauge du thème, sinon son accent qui monte depuis l'ombre. Le voile garde le
      texte lisible : le rose d'Holographique ou l'orange de Ninja, nus, restent sous 4:1 avec du blanc.
@@ -64,7 +67,7 @@
   flex-direction: column;
   gap: 6px;
   max-height: min(340px, 48%);
-  overflow-y: auto;
+  overflow: hidden;
   padding: 8px 10px 10px 18px;
   border-bottom: 1px solid var(--container-border);
   font-size: 11px;
@@ -73,10 +76,17 @@
   padding-bottom: 6px;
 }
 .scm-chiffres {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 14px;
+}
+/* La liste du chef : elle prend ce que la ligne des chiffres laisse, et défile seule. */
+.scm-bandeau--chef > .scm-pistes {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 .scm-kicker {
   font-size: 13px;
@@ -96,6 +106,8 @@
    Réduire partout. */
 .scm-actions {
   margin-left: auto;
+  /* Centrés sur la ligne : la flèche seule n'a pas de texte sur lequel s'aligner. */
+  align-self: center;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -113,11 +125,35 @@
   font-size: 11.5px;
   cursor: pointer;
 }
+/* Le bouton réduire n'est plus qu'une flèche : sans cadre, une case carrée qui s'éclaire au survol. */
 .scm-reduire {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r1);
   opacity: 0.75;
 }
-.scm-reduire:hover {
+.scm-reduire:hover,
+.scm-reduire:focus-visible {
   opacity: 1;
+  background: rgba(var(--voile-rgb), 0.08);
+}
+.scm-reduire-fleche {
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  /* Déplié : pointe vers le BAS ; le décalage recentre l'œil sur la pointe, pas sur la boîte. */
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+.scm-bandeau--chef.is-reduit .scm-reduire-fleche {
+  transform: translateY(2px) rotate(-135deg);
 }
 .scm-geste:hover:not(:disabled),
 .scm-retour:hover {

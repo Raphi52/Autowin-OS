@@ -55,6 +55,31 @@ describe('bloc du plan dans le chat — plus haut, sans écraser le fil', () => 
   })
 })
 
+/**
+ * SEULE LA LISTE DES LOTS DÉFILE (2026-11-26 : « rend scrollable uniquement la liste de lots »).
+ * Le bandeau entier défilait : la ligne des chiffres (Plan de lots, faits, tours, coût, écoulé, la
+ * flèche) partait vers le haut avec la liste. Le bandeau garde sa borne mais ne défile plus ; la
+ * ligne des chiffres ne cède pas, la liste du chef prend le reste et défile.
+ *
+ * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : un `overflow-y: auto` revenu sur `.scm-bandeau`, ou une
+ * liste du chef sans `min-height: 0` (elle ne rétrécirait jamais, et rien ne défilerait).
+ */
+describe('frise du chef — seule la liste des lots défile', () => {
+  it('ne fait plus défiler le bandeau entier', () => {
+    const bandeau = regles('.scm-bandeau')
+    expect(bandeau).toMatch(/overflow:\s*hidden/)
+    expect(bandeau).not.toMatch(/overflow-y:\s*auto/)
+  })
+
+  it('garde la ligne des chiffres entière, et fait céder puis défiler la liste', () => {
+    expect(regles('.scm-chiffres')).toMatch(/flex:\s*none/)
+    const liste = regles('.scm-bandeau--chef > .scm-pistes')
+    expect(liste).toMatch(/flex:\s*1 1 auto/)
+    expect(liste).toMatch(/min-height:\s*0/)
+    expect(liste).toMatch(/overflow-y:\s*auto/)
+  })
+})
+
 /** Le corps d'un bloc `@container` de la liste, de son ouverture à l'accolade en début de ligne. */
 const blocConteneur = (seuil: number): string =>
   styles.match(

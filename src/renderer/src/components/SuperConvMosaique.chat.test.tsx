@@ -94,4 +94,37 @@ describe('SuperConvDuChat', () => {
     window.removeEventListener('autowin:open-conversation', ecouter)
     await act(async () => racine.unmount())
   })
+
+  /*
+   * UNE FLÈCHE À LA PLACE DU MOT (2026-11-26 : « remplace le bouton réduire par une flèche up
+   * down »). Le bouton n'écrit plus « Réduire » / « Agrandir » : il garde ce nom pour un lecteur
+   * d'écran et dans l'infobulle, et la frise se replie toujours au clic.
+   */
+  it('le bouton réduire est une flèche, nommée, qui replie puis rouvre la liste', async () => {
+    window.localStorage.clear()
+    const hote = document.createElement('div')
+    document.body.appendChild(hote)
+    const racine = createRoot(hote)
+    await act(async () => {
+      racine.render(<SuperConvDuChat plan={PLAN} onglet="chef" />)
+    })
+    const bouton = (): HTMLButtonElement =>
+      hote.querySelector<HTMLButtonElement>('[data-testid="scm-reduire"]')!
+    expect(bouton().textContent).toBe('')
+    expect(bouton().querySelector('.scm-reduire-fleche')).not.toBeNull()
+    expect(bouton().getAttribute('aria-label')).toBe('Réduire')
+    expect(bouton().getAttribute('aria-expanded')).toBe('true')
+    expect(hote.querySelector('[data-testid="scm-lignes"]')).not.toBeNull()
+
+    await act(async () => bouton().click())
+    expect(bouton().getAttribute('aria-label')).toBe('Agrandir')
+    expect(bouton().getAttribute('aria-expanded')).toBe('false')
+    expect(hote.querySelector('[data-testid="scm-frise"]')?.classList).toContain('is-reduit')
+    expect(hote.querySelector('[data-testid="scm-lignes"]')).toBeNull()
+
+    await act(async () => bouton().click())
+    expect(hote.querySelector('[data-testid="scm-lignes"]')).not.toBeNull()
+    window.localStorage.clear()
+    await act(async () => racine.unmount())
+  })
 })
