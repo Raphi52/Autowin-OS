@@ -11,8 +11,9 @@
  * Usage : node scripts/draft-planche.mjs <propositions.json> [--etats repos,clair,violet]
  *           [--largeur 760] [--out <planche.html>] [--sans-apercu]
  *   - « repos » = la proposition sans classe d'état ; les autres posent `dk-etat-<état>` autour de
- *     la maquette, comme le carrousel. Par défaut : l'état de repos puis les `etats` de la 1ʳᵉ
- *     proposition ;
+ *     la maquette, comme le carrousel. Par défaut : l'état de repos de la 1ʳᵉ proposition puis les
+ *     `etats` de TOUTES ; une proposition n'est montrée dans un état déclaré par d'autres que si elle
+ *     le déclare aussi ;
  *   - les `reglages` du JSON sont posés à leur `valeur` (une maquette qui lit `var(--x)` sans repli
  *     s'afficherait sinon sans elle) ;
  *   - sans `--sans-apercu`, la planche passe par html-interactif-apercu.mjs (même moteur que le fil)
@@ -37,13 +38,28 @@ export function planche(spec, etats) {
     .join(';')
   let html = `<style>body{margin:0;padding:10px;box-sizing:border-box;color:#aaa;font:12px system-ui,sans-serif}
 .dkp-l{margin:14px 0 4px}.dkp-l b{color:#eee}.dkp{${vars}}${spec.css ?? ''}</style>`
+  const declare = (p, etat) => Array.isArray(p.etats) && p.etats.includes(etat)
   for (const etat of etats)
     spec.propositions.forEach((p, i) => {
-      const classe = etat === 'repos' || etat === p.etatRepos ? '' : `dk-etat-${etat}`
+      const repos = etat === 'repos' || etat === p.etatRepos
+      // Un état que d'autres propositions déclarent n'a pas de bouton sur celle-ci dans le carrousel :
+      // la recopier sans effet doublerait la planche pour rien. Un état que personne ne déclare
+      // (`--etats sombre`) reste posé sur toutes.
+      if (!repos && !declare(p, etat) && spec.propositions.some((q) => declare(q, etat))) return
+      const classe = repos ? '' : `dk-etat-${etat}`
       html += `<div class="dkp-l">${echapper(etat)} · <b>${i + 1} ${echapper(p.nom)}</b></div>`
       html += `<div class="dkp ${classe}"><style>${p.css ?? ''}</style>${p.html}</div>`
     })
   return html
+}
+
+/** Les états relus sans `--etats` : le repos de la 1ʳᵉ proposition, puis ceux de TOUTES les propositions
+ *  (conv-2185 : l'état « menu-ouvert » de la 6ᵉ seule n'était jamais relu). */
+export function etatsParDefaut(spec) {
+  const etats = [spec.propositions[0]?.etatRepos ?? 'repos']
+  for (const p of spec.propositions)
+    for (const e of Array.isArray(p.etats) ? p.etats : []) if (!etats.includes(e)) etats.push(e)
+  return etats
 }
 
 function principal(args) {
@@ -67,11 +83,7 @@ function principal(args) {
     console.log('« propositions » absent ou vide')
     return 2
   }
-  const premiere = spec.propositions[0]
-  const etats = option('--etats')?.split(',').filter(Boolean) ?? [
-    premiere.etatRepos ?? 'repos',
-    ...(Array.isArray(premiere.etats) ? premiere.etats : [])
-  ]
+  const etats = option('--etats')?.split(',').filter(Boolean) ?? etatsParDefaut(spec)
   const sortie = resolve(option('--out') ?? fichier.replace(/\.json$/i, '') + '-planche.html')
   writeFileSync(sortie, planche(spec, etats))
   const rendu = { ok: true, planche: sortie, etats, propositions: spec.propositions.length }
