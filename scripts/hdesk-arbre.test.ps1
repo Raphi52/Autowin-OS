@@ -16,6 +16,12 @@
   -AttendreElement/-AttendreTexte/-AttendreFenetre le voient et rendent son repere, un delai ecoule sort
   en code 3 avec l'ecran de cet instant. Chaque geste de hdesk-act.ps1 dit `arrive` (oui, non, incertain)
   et `refaisable`, refus compris ; un clic x/y dont la touche est mal ecrite ne part pas du tout.
+  L'attente se juge contre l'instant ou la fenetre du banc a MIS EN PAGE ce bouton (son evenement Loaded,
+  ecrit dans un fichier), pas contre son minuteur : l'arbre d'accessibilite WPF ne montre un element
+  qu'apres sa mise en page, alors que le titre change des le minuteur. Mesure du 2026-11-26 : une mise en
+  page bloquee 10 s apres le minuteur donne l'attente expiree, puis le titre vu en 1 ms et le bouton vu
+  des la reprise : la signature exacte d'un rouge intermittent de ce banc, ou l'attente n'etait pas en cause.
+  Attente allee a son delai sans bouton mis en page = la fenetre du banc n'a rien montre : code 2.
 
   Trois cibles (la troisieme : une liste WinForms de 100 lignes, dont « Ligne 90 » hors ecran) :
    - Table des caracteres (Win32) : l'arbre porte le bouton d'identifiant 103 (« Selectionner ») ; l'appui
@@ -32,7 +38,8 @@
    - hdesk-act.cs qui lit les touches APRES avoir poste le clic (l'ancien code) -> le champ 104 change
      malgre la touche refusee -> code 1 (mesure du 2026-11-26 : 3 verifications rouges).
   Usage : powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hdesk-arbre.test.ps1 [-Dossier <dossier des scripts>]
-  Code 0 = vert ; 1 = rouge ; 2 = banc impossible a monter.
+  Code 0 = vert ; 1 = rouge ; 2 = banc impossible a monter, ou fenetre du banc qui n'a pas montre ce
+  qu'une verification attendait (« BANC INCOMPLET », sans rouge).
 #>
 param([string]$Dossier = $PSScriptRoot)
 $ErrorActionPreference = 'Stop'
@@ -43,9 +50,11 @@ $idW32 = "hdtest-arbre-w32-$PID"
 $idWpf = "hdtest-arbre-wpf-$PID"
 $temoin = Join-Path $travail 'clic.txt'
 $pret = Join-Path $travail 'pret.txt'
+# Instant (aller-retour ISO) ou la fenetre WPF a mis « Arrive plus tard » en page.
+$misEnPage = Join-Path $travail 'mis-en-page.txt'
 $app = Join-Path $travail 'app-wpf.ps1'
 Set-Content -LiteralPath $app -Encoding UTF8 -Value @'
-param([string]$Temoin, [string]$Pret)
+param([string]$Temoin, [string]$Pret, [string]$MisEnPage)
 Add-Type -AssemblyName PresentationFramework
 $w = New-Object System.Windows.Window
 $w.Title = 'Banc arbre WPF'; $w.Width = 420; $w.Height = 520; $w.Left = 200; $w.Top = 150
@@ -72,6 +81,8 @@ foreach ($n in 1..5) { [void]$lb.Items.Add("Element de zone $n") }
 # fenetre au meme instant. Tout est cree ici : un gestionnaire d'evenement ne voit que ce niveau.
 $charger = New-Object System.Windows.Controls.Button; $charger.Content = 'Charger'
 $tard = New-Object System.Windows.Controls.Button; $tard.Content = 'Arrive plus tard'
+# Loaded part apres la mise en page : c'est a partir de la que l'arbre d'accessibilite montre le bouton.
+$tard.Add_Loaded({ Set-Content -LiteralPath $MisEnPage -Value ([DateTime]::Now.ToString('o')) })
 $minuteur = New-Object System.Windows.Threading.DispatcherTimer; $minuteur.Interval = [TimeSpan]::FromSeconds(6)
 $minuteur.Add_Tick({ $minuteur.Stop(); [void]$p.Children.Add($tard); $w.Title = 'Banc arbre WPF - charge' })
 $charger.Add_Click({ $minuteur.Start() })
@@ -98,8 +109,18 @@ $f.Add_Shown({ Set-Content -LiteralPath $Pret -Value 'pret' })
 '@
 
 $echecs = New-Object System.Collections.Generic.List[string]
+# Verifications que la fenetre du banc n'a pas permis de juger (elle n'a pas montre ce qu'on attendait).
+$incomplets = New-Object System.Collections.Generic.List[string]
 function Verifier([bool]$ok, [string]$quoi) {
   if ($ok) { Write-Output "ok    : $quoi" } else { Write-Output "ROUGE : $quoi"; $echecs.Add($quoi) }
+}
+function Incomplet([string]$quoi) { Write-Output "INCOMPLET : $quoi"; $incomplets.Add($quoi) }
+function MisEnPageA() {
+  # Instant ecrit par la fenetre WPF quand « Arrive plus tard » est mis en page ; $null s'il ne l'est pas.
+  if (-not (Test-Path $misEnPage)) { return $null }
+  try {
+    return [DateTime]::Parse((Get-Content -Raw -LiteralPath $misEnPage).Trim(), [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
+  } catch { return $null }
 }
 function Arbre([string]$id) {
   # Un refus du script sort sur stderr : avec 'Stop', PowerShell 5.1 en ferait une exception du banc.
@@ -250,7 +271,7 @@ try {
 
   # --- WPF : fenetre du banc, non agrandie --------------------------------------------------------
   $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-  $l = Lancer $idWpf $ps "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$app`" `"$temoin`" `"$pret`"" 'banc hdesk-arbre (WPF)'
+  $l = Lancer $idWpf $ps "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$app`" `"$temoin`" `"$pret`" `"$misEnPage`"" 'banc hdesk-arbre (WPF)'
   if (-not $l.pid) { Write-Output "BANC IMPOSSIBLE : fenetre WPF non lancee ($($l.erreur))"; exit 2 }
   $lancements += [int]$l.pid
   $limite = (Get-Date).AddSeconds(30)
@@ -333,14 +354,32 @@ try {
   $avant = Arbre $idWpf
   Verifier (@($avant.elements | Where-Object { $_.nom -eq 'Arrive plus tard' }).Count -eq 0) "'Arrive plus tard' absent juste apres 'Charger' : l'ecran charge encore"
   $at = ArbreAttente $idWpf @('-AttendreElement:Arrive plus tard', '-DelaiMs', '15000')
+  $finAttente = Get-Date
   $vu = $at.json.attente
-  Verifier ($at.code -eq 0 -and $vu.quoi -eq 'element' -and $vu.trouve -eq $true -and $vu.attenteMs -ge 200 -and $vu.element.nom -eq 'Arrive plus tard' -and "$($vu.element.ref)" -match '^@' -and $at.json.lecture) "attente d'un element : vu apres $($vu.attenteMs) ms, avec son repere $($vu.element.ref) ($(Debut $at.sortie))"
-  $r = Appuyer $idWpf $vu.element.ref
-  Verifier ($r.code -eq 0) "le repere rendu par l'attente s'appuie sans relire l'arbre ($(Debut $r.sortie))"
-  $at = ArbreAttente $idWpf @('-AttendreFenetre:WPF - charge', '-DelaiMs', '5000')
-  Verifier ($at.code -eq 0 -and $at.json.attente.trouve -eq $true -and $at.json.attente.fenetre -eq 'Banc arbre WPF - charge') "attente d'une fenetre par son titre ($(Debut $at.sortie))"
-  $at = ArbreAttente $idWpf @('-AttendreTexte:ARRIVE PLUS', '-DelaiMs', '5000')
-  Verifier ($at.code -eq 0 -and $at.json.attente.trouve -eq $true -and $at.json.attente.element.nom -eq 'Arrive plus tard') "attente d'un texte, sans la casse ($(Debut $at.sortie))"
+  $mp = MisEnPageA
+  # Rien a juger si l'attente est allee a son delai (code 3) sans que le bouton soit en page au moins 3 s
+  # avant la fin : la relecture suivante ne le voyait pas forcement (une lecture a dure jusqu'a ~2 s,
+  # mesure du 2026-11-26). Toute autre sortie (refus, plantage, sortie illisible) se juge, donc rougit.
+  $boutonMontre = $true
+  if ($at.code -eq 3 -and $vu.trouve -eq $false -and ($null -eq $mp -or $mp -gt $finAttente.AddSeconds(-3))) {
+    Incomplet "attente d'un element : la fenetre du banc n'a pas mis 'Arrive plus tard' en page pendant l'attente (fin $($finAttente.ToString('HH:mm:ss.fff')), mise en page $(if ($mp) { $mp.ToString('HH:mm:ss.fff') } else { 'pas encore' })) ($(Debut $at.sortie))"
+    # Le titre et le texte se jugent sur un ecran ou le bouton est la : on laisse la fenetre finir.
+    $limite = (Get-Date).AddSeconds(30)
+    while (-not (Test-Path $misEnPage) -and (Get-Date) -lt $limite) { Start-Sleep -Milliseconds 200 }
+    $boutonMontre = Test-Path $misEnPage
+  } else {
+    Verifier ($at.code -eq 0 -and $vu.quoi -eq 'element' -and $vu.trouve -eq $true -and $vu.attenteMs -ge 200 -and $vu.element.nom -eq 'Arrive plus tard' -and "$($vu.element.ref)" -match '^@' -and $at.json.lecture) "attente d'un element : vu apres $($vu.attenteMs) ms, avec son repere $($vu.element.ref) (mise en page $(if ($mp) { $mp.ToString('HH:mm:ss.fff') } else { 'pas encore' }), fin $($finAttente.ToString('HH:mm:ss.fff'))) ($(Debut $at.sortie))"
+    $r = Appuyer $idWpf $vu.element.ref
+    Verifier ($r.code -eq 0) "le repere rendu par l'attente s'appuie sans relire l'arbre ($(Debut $r.sortie))"
+  }
+  if ($boutonMontre) {
+    $at = ArbreAttente $idWpf @('-AttendreFenetre:WPF - charge', '-DelaiMs', '5000')
+    Verifier ($at.code -eq 0 -and $at.json.attente.trouve -eq $true -and $at.json.attente.fenetre -eq 'Banc arbre WPF - charge') "attente d'une fenetre par son titre ($(Debut $at.sortie))"
+    $at = ArbreAttente $idWpf @('-AttendreTexte:ARRIVE PLUS', '-DelaiMs', '5000')
+    Verifier ($at.code -eq 0 -and $at.json.attente.trouve -eq $true -and $at.json.attente.element.nom -eq 'Arrive plus tard') "attente d'un texte, sans la casse ($(Debut $at.sortie))"
+  } else {
+    Incomplet "attente d'une fenetre et d'un texte : 'Arrive plus tard' toujours pas mis en page 30 s plus tard"
+  }
   $at = ArbreAttente $idWpf @('-AttendreElement:Jamais la', '-DelaiMs', '800')
   Verifier ($at.code -eq 3 -and $at.json.attente.trouve -eq $false -and $at.json.attente.attenteMs -ge 800 -and @($at.json.elements).Count -gt 0 -and $at.sortie -match '(?m)^\[DELAI\]') "delai ecoule : code 3, l'ecran de cet instant rendu quand meme ($(Debut $at.sortie))"
   $at = ArbreAttente $idWpf @('-AttendreElement:@abcdef:e1')
@@ -380,6 +419,7 @@ try {
 }
 $apres = (Get-ItemProperty -LiteralPath $cle -ErrorAction SilentlyContinue).Advanced
 Verifier ("$avance" -eq "$apres") "reglage de l'utilisateur CharMap\Advanced inchange ($avance -> $apres)"
-if ($echecs.Count -eq 0) { Write-Output 'VERT : arbre lu, reperes verifies, zone lue seule, appui et remplissage en Win32, WPF et WinForms'; $code = 0 }
+if ($echecs.Count -eq 0 -and $incomplets.Count -eq 0) { Write-Output 'VERT : arbre lu, reperes verifies, zone lue seule, attente, appui et remplissage en Win32, WPF et WinForms'; $code = 0 }
+elseif ($echecs.Count -eq 0) { Write-Output "BANC INCOMPLET : $($incomplets.Count) verification(s) que la fenetre du banc n'a pas permis de juger, aucune en echec"; $code = 2 }
 else { Write-Output "ROUGE : $($echecs.Count) verification(s) en echec" }
 exit $code
