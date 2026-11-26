@@ -130,7 +130,11 @@ import {
   registreParDefaut
 } from './bureau/hdesk-gestion'
 import type { DemandeCreationBureau } from '../shared/hdesk-gestion'
-import { configureClaudeSessionRenewal, invalidateModelQuotaCache } from './modeles/model-quotas'
+import {
+  configureClaudeSessionRenewal,
+  configureTemoinQuotaMesure,
+  invalidateModelQuotaCache
+} from './modeles/model-quotas'
 import { renouvelerSessionClaude } from './providers/claude-session-renewal'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight/preflight-probes'
 import { type ReasoningEffort, type Role, type RoleBinding } from './profil/roles'
@@ -1271,6 +1275,15 @@ configureCopieDuFilDuChat((conversationId) => copieNotee(os.conversations.get(co
 // La sonde de quota fait renouveler par le CLI la session expiree du compte qu'elle lit : sans ce
 // cablage, la barre restait sur les chiffres d'avant la bascule jusqu'au prochain message.
 configureClaudeSessionRenewal((configDir) => renouvelerSessionClaude(configDir))
+// La jauge d'un compte qui mesure du quota disponible fait tomber le mur de quota de CE compte : un
+// quota remis à zéro avant l'heure annoncée par le refus redevient utilisable sans redémarrage. Le
+// compte se retrouve par son dossier, pas par le compte actif, qui a pu changer pendant la sonde.
+configureTemoinQuotaMesure((configDir, fenetres, mesureLe) => {
+  const compte = claudeAccounts.current().accounts.find((account) => account.dir === configDir)
+  if (compte && os.registry.leverMurSiQuotaMesure('claude', compte.id, fenetres, mesureLe)) {
+    console.info(`[quotas] quota du compte ${compte.id} revenu d'après sa jauge : mur levé`)
+  }
+})
 // Tout changement du compte actif (interface, depart d'un tour) rend le quota memorise
 // faux et la liste des comptes de l'interface perimee : on jette l'un et on previent l'autre.
 claudeAccounts.onActiveChange(() => {

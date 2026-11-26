@@ -11,6 +11,7 @@ import {
 import { resolveProviderTimeoutMs, withIdleDeadline } from './watchdog'
 import { estMurDeQuota, instantDeRetourAnnonce } from '../../shared/reprise-quota'
 import type { ExecutionSupervisor } from '../orchestration/execution-supervisor'
+import type { ModelQuotaWindow } from '../../shared/model-quotas'
 import { masquerErreur, masquerSortie } from './sortie-masquee'
 
 /**
@@ -70,11 +71,14 @@ interface MurDeQuota {
   readonly raison: string
   /** Instant de retour annoncé par ce refus, ou rien quand il n'en annonce aucun. */
   readonly retourA?: number
+  /** Instant du refus : une jauge mesurée AVANT lui ne prouve pas que le quota est revenu. */
+  readonly poseA: number
 }
 
 function murDepuisRefus(raison: string, maintenant: Date = new Date()): MurDeQuota {
+  const poseA = maintenant.getTime()
   const retourA = instantDeRetourAnnonce(raison, maintenant)
-  return retourA === undefined ? { raison } : { raison, retourA }
+  return retourA === undefined ? { raison, poseA } : { raison, retourA, poseA }
 }
 
 /**
@@ -131,8 +135,9 @@ export class ProviderRegistry {
    * Providers dont le quota est épuisé, avec le refus qu'ils ont écrit.
    *
    * AUCUNE SONDE AUTOMATIQUE, à dessein : re-tester périodiquement si le quota est revenu COÛTERAIT du
-   * quota, pour une vérification que personne n'a demandée. Le mur tient donc toute la session, et c'est
-   * l'utilisateur qui le lève en relançant l'app — un geste délibéré, au moment où il veut travailler.
+   * quota, pour une vérification que personne n'a demandée. Le mur tombe donc sur trois signaux déjà
+   * payés : l'heure de retour que le refus annonce (`murEncoreDebout`), une jauge du compte qui mesure
+   * du quota disponible (`leverMurSiQuotaMesure`), ou le redémarrage de l'app.
    *
    * D'où l'état en mémoire : ce n'est pas une limite subie, c'est le mécanisme de levée.
    */
@@ -153,6 +158,36 @@ export class ProviderRegistry {
       return undefined
     }
     return mur.raison
+  }
+
+  /**
+   * LA JAUGE DU COMPTE A MESURÉ DU QUOTA : SON MUR TOMBE.
+   *
+   * Le mur ne tombait qu'à l'heure annoncée par le refus ou au redémarrage. Un quota remis à zéro
+   * avant cette heure (constaté le 2026-11-26 : jauges pleines, tour refusé en 1 ms sans appeler
+   * Claude) restait donc condamné jusqu'au 1er décembre. La barre de quota lit pourtant les en-têtes
+   * d'un vrai appel fait avec la session de CE compte : relire cette mesure ne dépense rien de plus,
+   * la règle « aucune sonde pour le mur » tient toujours.
+   *
+   * Seules les fenêtres du COMPTE ENTIER (sans `modelFamily`) comptent : le mur ne se pose que sur une
+   * limite du compte (`estMurDeQuota` exclut les limites d'un modèle). Il en faut au moins une, et
+   * toutes sous 100 % ; sinon la mesure ne prouve rien et le mur reste. Une sonde partie AVANT le
+   * refus (`mesureLe` = son départ) arrive parfois après lui : elle décrit l'état d'avant, elle ne
+   * lève rien. Rend `true` si le mur est tombé.
+   */
+  leverMurSiQuotaMesure(
+    providerId: string,
+    compte: string | undefined,
+    fenetres: readonly ModelQuotaWindow[],
+    mesureLe: number = Date.now()
+  ): boolean {
+    const cle = this.quotaWallKey(providerId, compte)
+    const mur = this.quotaWalls.get(cle)
+    if (!mur || mesureLe < mur.poseA) return false
+    const duCompte = fenetres.filter((f) => f.modelFamily === undefined)
+    if (duCompte.length === 0 || duCompte.some((f) => f.usedPercent >= 100)) return false
+    this.quotaWalls.delete(cle)
+    return true
   }
 
   /**

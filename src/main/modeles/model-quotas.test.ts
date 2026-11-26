@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildModelQuotaSnapshot,
+  configureTemoinQuotaMesure,
   getModelQuotaSnapshot,
   parseLatestCodexRateLimitSample,
   aggregateClaudeLocalUsage,
@@ -870,6 +871,53 @@ describe('quota d’un compte nommé', () => {
     const fetchFn = vi.fn(async () => enTetes('0.1', '0.1'))
     expect(await quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW })).toBeUndefined()
     expect(fetchFn).not.toHaveBeenCalled()
+  })
+
+  /*
+   * Le témoin est ce qui fait tomber le mur de quota du registre quand la jauge se remplit : sans
+   * lui, un quota remis à zéro gardait les tours refusés jusqu'à l'heure de l'ancien refus.
+   */
+  it('chaque mesure du compte est transmise au témoin, avec SON dossier ; un échec ne l’est pas', async () => {
+    const { home, dir } = dossierDeCompte('jeton-du-compte-deux-assez-long')
+    const vus: Array<{
+      configDir: string | undefined
+      septJours: number | undefined
+      mesureLe: number
+    }> = []
+    configureTemoinQuotaMesure((configDir, fenetres, mesureLe) => {
+      vus.push({
+        configDir,
+        septJours: fenetres.find((f) => f.id === 'seven-day')?.usedPercent,
+        mesureLe
+      })
+    })
+    await quotaClaudeDuCompte(dir, {
+      home,
+      fetchFn: vi.fn(async () => enTetes('0.0', '0.02')),
+      now: NOW
+    })
+    expect(vus).toEqual([{ configDir: dir, septJours: 2, mesureLe: NOW }])
+
+    const muet = dossierDeCompte(undefined)
+    await quotaClaudeDuCompte(muet.dir, { home: muet.home, fetchFn: vi.fn(), now: NOW })
+    expect(vus).toHaveLength(1)
+  })
+
+  it('un témoin en panne ne casse pas la jauge', async () => {
+    const { home, dir } = dossierDeCompte('jeton-du-compte-deux-assez-long')
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    configureTemoinQuotaMesure(() => {
+      throw new Error('registre indisponible')
+    })
+    const fenetres = await quotaClaudeDuCompte(dir, {
+      home,
+      fetchFn: vi.fn(async () => enTetes('0.1', '0.2')),
+      now: NOW
+    })
+    expect(fenetres).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'seven-day', usedPercent: 20 })])
+    )
+    expect(console.warn).toHaveBeenCalled()
   })
 
   it('deux lancements dans la minute ne paient qu’une sonde', async () => {

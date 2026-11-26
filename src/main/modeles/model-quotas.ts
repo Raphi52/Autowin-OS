@@ -957,6 +957,25 @@ const sondesParCompteEnVol = new Map<string, Promise<ModelQuotaWindow[] | undefi
 
 const cleDeCompte = (configDir: string | undefined): string => configDir ?? '<defaut>'
 
+/**
+ * TÉMOIN DE MESURE D'UN COMPTE : le main y branche la levée du mur de quota du registre
+ * (`ProviderRegistry.leverMurSiQuotaMesure`). Sans lui, un quota remis à zéro avant l'heure annoncée
+ * remplissait la jauge pendant que les tours restaient refusés sans appel. Injecté, même patron que
+ * `configureClaudeSessionRenewal` : par défaut il ne fait rien, ce module ne connaît pas le registre.
+ */
+export type TemoinQuotaMesure = (
+  configDir: string | undefined,
+  fenetres: readonly ModelQuotaWindow[],
+  /** Départ de la sonde : une mesure partie avant un refus décrit l'état d'avant lui. */
+  mesureLe: number
+) => void
+
+let temoinQuotaMesure: TemoinQuotaMesure = () => undefined
+
+export function configureTemoinQuotaMesure(temoin: TemoinQuotaMesure): void {
+  temoinQuotaMesure = temoin
+}
+
 /** La sonde de la barre de quota (compte actif) alimente la meme memoire : pas de double sonde. */
 function memoriserQuotaDuCompte(
   configDir: string | undefined,
@@ -964,6 +983,16 @@ function memoriserQuotaDuCompte(
   now: number
 ): void {
   quotasParCompte.set(cleDeCompte(configDir), { expiresAt: now + CACHE_MS, fenetres })
+  if (!fenetres) return
+  // Un témoin en panne ne doit jamais casser la jauge : il est DIT dans les journaux, pas avalé.
+  try {
+    temoinQuotaMesure(configDir, fenetres, now)
+  } catch (error) {
+    console.warn(
+      '[quotas] mesure du compte non transmise au mur de quota —',
+      error instanceof Error ? error.message : String(error)
+    )
+  }
 }
 
 /**
@@ -1007,6 +1036,7 @@ export async function quotaClaudeDuCompte(
 
 /** Vide la memoire des quotas par compte — reserve aux tests. */
 export function resetQuotasParCompteForTests(): void {
+  temoinQuotaMesure = () => undefined
   quotasParCompte.clear()
   sondesParCompteEnVol.clear()
   modelesDuCompte.clear()
