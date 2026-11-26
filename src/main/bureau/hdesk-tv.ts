@@ -641,7 +641,15 @@ export type ActionHdesk = {
   appui?: string
   /** Appui par élément : ce qui a changé dans sa fenêtre après le geste (scripts/hdesk-arbre.cs, EtatApres). */
   apres?: ApresGeste
+  arrive?: ArriveeGeste
+  /** Le refaire à l'identique ne peut rien doubler (remplir, sélectionner) ; faux pour un appui ou un clic. */
+  refaisable?: boolean
 }
+/**
+ * Le geste a-t-il atteint l'application (scripts/hdesk-act.ps1) : `oui` (son effet se lit dans `apres` ou
+ * sur une capture), `non` (refusé avant tout envoi), `incertain` (coupé en route, il a pu porter).
+ */
+export type ArriveeGeste = 'oui' | 'non' | 'incertain'
 export interface ApresGeste {
   changement?: boolean
   attenteMs?: number
@@ -654,30 +662,35 @@ export interface ApresGeste {
  * `code` : celui d'un refus d'appui par élément (« [PERIME] … », scripts/hdesk-arbre.cs) — PERIME,
  * INVALIDE, INTROUVABLE, AMBIGU, INACTIF, HORS_ECRAN, REFUSE, SANS_ARBRE.
  */
-export type ResultatGeste =
-  { ok: true; action?: ActionHdesk } | { ok: false; message: string; code?: string }
-
-/** Refus de hdesk-act.ps1 (stderr) : son code entre crochets en tête, s'il y en a un. */
-export function refusAct(message: string): { ok: false; message: string; code?: string } {
-  const m = /^\[([A-Z_]+)\]\s*/.exec(message)
-  return m ? { ok: false, message: message.slice(m[0].length), code: m[1] } : { ok: false, message }
+export type ResultatGeste = { ok: true; action?: ActionHdesk } | RefusGeste
+export interface RefusGeste {
+  ok: false
+  message: string
+  code?: string
+  arrive?: ArriveeGeste
+  refaisable?: boolean
 }
 
-// hdesk-act.ps1 ecrit son JSON {instanceId,x,y,cible,messages} sur la derniere ligne JSON de stdout.
+/**
+ * Refus de hdesk-act.ps1 : son message (stderr), code entre crochets en tête s'il y en a un, et ce que
+ * dit sa ligne JSON de stdout (`out`) — le geste est-il parti, peut-il être refait.
+ */
+export function refusAct(message: string, out = ''): RefusGeste {
+  const m = /^\[([A-Z_]+)\]\s*/.exec(message)
+  const refus: RefusGeste = m
+    ? { ok: false, message: message.slice(m[0].length), code: m[1] }
+    : { ok: false, message }
+  const ligne = derniereLigneJson(String(out || ''))
+  if (ligne?.arrive === 'oui' || ligne?.arrive === 'non' || ligne?.arrive === 'incertain')
+    refus.arrive = ligne.arrive
+  if (typeof ligne?.refaisable === 'boolean') refus.refaisable = ligne.refaisable
+  return refus
+}
+
+// hdesk-act.ps1 ecrit son JSON {instanceId,x,y,cible,messages,arrive,refaisable} sur la derniere ligne JSON de stdout.
 export function resultatAct(out: string): ResultatGeste {
-  const lignes = String(out || '')
-    .split(/\r?\n/)
-    .reverse()
-  for (const l of lignes) {
-    const t = l.trim()
-    if (!t.startsWith('{')) continue
-    try {
-      return { ok: true, action: JSON.parse(t) as ActionHdesk }
-    } catch {
-      /* ligne non JSON : on continue */
-    }
-  }
-  return { ok: true }
+  const action = derniereLigneJson(String(out || ''))
+  return action ? { ok: true, action: action as ActionHdesk } : { ok: true }
 }
 
 /**
@@ -758,7 +771,13 @@ export function agirHdesk(
       ? argumentsElement(racine, g, registre)
       : argumentsAct(racine, g, registre)
   } catch (e) {
-    return Promise.resolve({ ok: false, message: (e as Error).message })
+    // Refusé avant le script : rien n'est parti.
+    return Promise.resolve({
+      ok: false,
+      message: (e as Error).message,
+      arrive: 'non',
+      refaisable: true
+    })
   }
   const texte = texteDuGeste(g)
   return new Promise((resolve) => {
@@ -767,8 +786,17 @@ export function agirHdesk(
       args,
       { windowsHide: true, timeout: 20000 },
       (err, out, errOut) => {
-        if (err) resolve(refusAct(String(errOut || err.message).trim()))
-        else resolve(resultatAct(String(out)))
+        if (!err) {
+          resolve(resultatAct(String(out)))
+          return
+        }
+        const refus = refusAct(String(errOut || err.message).trim(), String(out ?? ''))
+        // Script coupé à son délai : il a pu envoyer le geste avant, le refaire pourrait le doubler.
+        if (err.killed && !refus.arrive) {
+          refus.arrive = 'incertain'
+          refus.refaisable = false
+        }
+        resolve(refus)
       }
     )
     // Entrée standard fermée dans tous les cas : sans texte, le script ne la lit pas. Un processus

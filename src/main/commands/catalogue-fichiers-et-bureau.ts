@@ -304,14 +304,26 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   {
     name: 'bureau_cache_observer',
     description:
-      'Capturer TON bureau Windows caché : l’image est jointe à ta prochaine lecture (PNG, pixels réels — ce sont les coordonnées de bureau_cache_agir). Le résultat porte aussi `arbre` : les éléments de la fenêtre (type, nom, repère @lecture:eN, id, état, valeur, « remplissable », position = centre en pixels de cette image), lus par l’accessibilité de Windows ; vise-les par `element` dans bureau_cache_agir, de préférence par leur repère. Arbre vide (page web, rendu GPU) : vise x/y sur l’image. Écran chargé : l’arbre est coupé, et il cite alors les ZONES où lire le reste ; `racine` relit une zone seule (ses éléments, avec leurs repères). Une page web ou un rendu GPU peut sortir uni (`statut: uni`) : lis alors le titre de la fenêtre ou pilote le navigateur par son port de débogage. Seulement les bureaux de cette conversation',
+      'Capturer TON bureau Windows caché : l’image est jointe à ta prochaine lecture (PNG, pixels réels — ce sont les coordonnées de bureau_cache_agir). Le résultat porte aussi `arbre` : les éléments de la fenêtre (type, nom, repère @lecture:eN, id, état, valeur, « remplissable », position = centre en pixels de cette image), lus par l’accessibilité de Windows ; vise-les par `element` dans bureau_cache_agir, de préférence par leur repère. Arbre vide (page web, rendu GPU) : vise x/y sur l’image. Écran chargé : l’arbre est coupé, et il cite alors les ZONES où lire le reste ; `racine` relit une zone seule (ses éléments, avec leurs repères). Écran qui CHARGE : `attendreElement`, `attendreTexte` ou `attendreFenetre` capture dès que la cible est là, au lieu d’observer en boucle. Une page web ou un rendu GPU peut sortir uni (`statut: uni`) : lis alors le titre de la fenêtre ou pilote le navigateur par son port de débogage. Seulement les bureaux de cette conversation',
     args: {
       racine:
         'facultatif — ne lire QU’UNE zone de l’arbre : repère @lecture:eN (le plus sûr), id, nom ou libellé d’un élément (200 caractères au plus) ; l’arbre rendu ne porte que ses descendants. L’image reste entière',
+      attendreElement:
+        'facultatif — attendre qu’un élément apparaisse avant la capture : id, nom ou libellé, résolu comme `element` de bureau_cache_agir (pas un repère : il vise un élément déjà lu). L’élément vu porte son repère dans `arbre`',
+      attendreTexte:
+        'facultatif — attendre qu’un élément CONTIENNE ce texte (nom, libellé ou valeur, sans la casse) avant la capture',
+      attendreFenetre:
+        'facultatif — attendre une fenêtre dont le titre contient ce texte (sans la casse) avant la capture',
+      delaiMs:
+        'facultatif — avec une attente : délai maximal en millisecondes, entier de 0 à 30000 (défaut 10000). Écoulé = capture et arbre de cet instant, `attente.trouve: false`',
       id: 'facultatif — identifiant du bureau. Absent = `chat-<id du fil>`'
     },
     argsTypes: {
-      racine: { type: 'string', maxLength: 200 }
+      racine: { type: 'string', maxLength: 200 },
+      attendreElement: { type: 'string', maxLength: 200 },
+      attendreTexte: { type: 'string', maxLength: 200 },
+      attendreFenetre: { type: 'string', maxLength: 200 },
+      delaiMs: { type: 'integer', minimum: 0, maximum: 30000 }
     },
     annotations: {
       readOnlyHint: true,
@@ -323,7 +335,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   {
     name: 'bureau_cache_agir',
     description:
-      'Cliquer, taper, appuyer une touche ou faire défiler dans TON bureau Windows caché (jamais la vraie souris ni le vrai clavier de l’utilisateur). Soit `element` : appuyer sur un élément de l’`arbre` de bureau_cache_observer (WPF : par l’accessibilité, où un clic posté échoue ; autre : clic à son centre, défilé à l’écran si besoin), plus sûr qu’un point. Vise-le par son REPÈRE @lecture:eN : refusé (`code: PERIME`) s’il a disparu ou changé depuis la lecture, sans appuyer sur un autre ; relis alors l’arbre. Avec `valeur`, tu REMPLIS ce champ (toute technologie, jamais un mot de passe). `element` = un seul appui ou un remplissage, sans frappe ni touche ; deux appuis rebasculent une case. Soit un clic au point (x, y), sauf `sansClic`, puis la frappe éventuelle. `action.apres` dit ce qui a changé : rien = re-observe. Un refus porte un `code` (PERIME, AMBIGU, INTROUVABLE, INACTIF, HORS_ECRAN, REFUSE…) et dit quoi faire. Plusieurs gestes d’un coup (remplir un formulaire) : `gestes`, joués dans l’ordre, arrêt au premier refus, résultat de chacun dans `resultats`. Seulement les bureaux de cette conversation',
+      'Cliquer, taper, appuyer une touche ou faire défiler dans TON bureau Windows caché (jamais la vraie souris ni le vrai clavier). Soit `element` : un élément de l’`arbre` de bureau_cache_observer (WPF : par l’accessibilité ; sinon clic à son centre, défilé si besoin). Vise son REPÈRE @lecture:eN : refusé (`code: PERIME`) s’il a changé depuis la lecture ; relis alors l’arbre. Avec `valeur`, tu REMPLIS ce champ (jamais un mot de passe). `element` = un seul appui ou remplissage, sans frappe ; deux appuis rebasculent une case. Soit un clic en (x, y), sauf `sansClic`, puis la frappe. `arrive` : oui, non (refusé avant envoi) ou incertain (a pu porter) ; `refaisable` : le refaire ne double rien. `action.apres` : ce qui a changé ; rien = re-observe, sans refaire un geste non refaisable. Un refus porte un `code` (PERIME, AMBIGU, INTROUVABLE, INACTIF…) et dit quoi faire. `gestes` : plusieurs gestes dans l’ordre, arrêt au premier refus. Seulement les bureaux de cette conversation',
     args: {
       gestes:
         'facultatif — à la place d’un geste seul : liste de 1 à 10 gestes, chacun un objet avec les champs d’un geste seul (element, valeur, x, y, texte, entree, touche, molette, sansClic), ex. [{"element":"@k3f9a2:e5","valeur":"Dupont"},{"element":"@k3f9a2:e8"}]. Tous vérifiés avant le premier : un geste mal formé = rien n’est joué',

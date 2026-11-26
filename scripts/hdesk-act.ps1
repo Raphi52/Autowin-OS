@@ -30,6 +30,18 @@
    - Un refus commence par son code entre crochets ([PERIME], [AMBIGU]...) suivi d'une ligne « Reessai : ».
    - -TexteEntree lit le texte sur l'entree standard : il ne passe plus par la ligne de commande, que
      tout processus du poste peut lire.
+
+  GESTE ARRIVE, REFAISABLE (2026-11-26, repris de la disposition des erreurs de vercel-labs/agent-desktop :
+  not_delivered / delivery_uncertain, retry safe, https://agent-browser.dev/desktop/configuration) :
+  « aucun changement visible » poussait a refaire un geste deja parti, donc a envoyer un formulaire deux
+  fois. Chaque sortie, reussie ou refusee, porte maintenant sur stdout :
+   - `arrive` : « oui » = le geste a atteint l'application (appel d'accessibilite abouti, ou messages postes
+     a la fenetre `cible`) ; son EFFET se lit dans `apres` ou sur une capture. « non » = refuse avant tout
+     envoi. « incertain » = coupe en route (l'appel d'accessibilite a leve) : il a pu porter.
+   - `refaisable` : le refaire a l'identique ne peut rien doubler. Vrai si rien n'est parti, ou pour un
+     geste qui pose un etat (remplir un champ, selectionner une ligne) ; faux pour un appui, une bascule,
+     un clic, une frappe, une touche ou la molette.
+  Un refus sort en code 1 avec son message sur stderr ET cette ligne JSON {instanceId, arrive, refaisable}.
 #>
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
@@ -95,7 +107,19 @@ function NoterGeste([bool]$ok, [string]$erreur) {
     [IO.File]::WriteAllText($journal, (($gardees -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
   } catch { }
 }
-trap { NoterGeste $false $_.Exception.Message; [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+# Ou en est le geste quand une erreur coupe le script : rien n'est parti tant qu'un envoi ne l'a pas dit.
+$script:arrive = 'non'
+$script:refaisable = $true
+function Refaisable([string]$appui) { return ($appui -eq 'accessibilite:SetValue' -or $appui -eq 'accessibilite:Select') }
+trap {
+  NoterGeste $false $_.Exception.Message
+  $message = $_.Exception.Message
+  if ($script:arrive -eq 'incertain') { $message += "`nLe geste a peut-etre porte : re-observe avant de le refaire, par quelque moyen que ce soit." }
+  elseif ($script:arrive -eq 'oui') { $message += "`nLe geste est arrive avant cette erreur : re-observe, ne le refais pas a l'aveugle." }
+  [Console]::Out.WriteLine(([pscustomobject][ordered]@{ instanceId = $InstanceId; arrive = $script:arrive; refaisable = $script:refaisable } | ConvertTo-Json -Compress))
+  [Console]::Error.WriteLine($message)
+  exit 1
+}
 # Ce que l'agent peut faire apres chaque refus d'un appui par element (code de hdesk-arbre.cs).
 $reessais = @{
   PERIME      = "Reessai : relis l'arbre (bureau_cache_observer), puis vise le nouveau repere."
@@ -159,15 +183,22 @@ if ($Element) {
   $res = [AutowinHdeskArbre]::Appuyer($bureau, $Element, $OrigineX, $OrigineY, $lectures, [bool]$Remplir, $Texte)
   if ($res.Erreur) {
     $code = if ($res.Code) { $res.Code } else { 'REFUSE' }
-    $suite = if ($reessais.ContainsKey($code)) { "`n" + $reessais[$code] } else { '' }
+    # Appel d'accessibilite parti puis leve : le reessai « par un autre moyen » pourrait doubler le geste ;
+    # la trappe dit a la place de re-observer d'abord.
+    if ($res.Tente) { $script:arrive = 'incertain'; $script:refaisable = $false }
+    $suite = if ($reessais.ContainsKey($code) -and -not $res.Tente) { "`n" + $reessais[$code] } else { '' }
     throw "[$code] $($res.Erreur)$suite"
   }
-  $vise = $res.Json | ConvertFrom-Json
   $appui = $res.Appui
+  if ($appui -ne 'clic') {
+    $script:arrive = 'oui'
+    $script:refaisable = Refaisable $appui
+  }
+  $vise = $res.Json | ConvertFrom-Json
   if ($appui -ne 'clic') {
     $apres = EtatApres
     NoterGeste $true ''
-    $sortie = [ordered]@{ instanceId = $InstanceId; element = $vise; appui = $appui }
+    $sortie = [ordered]@{ instanceId = $InstanceId; element = $vise; appui = $appui; arrive = $script:arrive; refaisable = $script:refaisable }
     if ($apres) { $sortie.apres = $apres }
     [pscustomobject]$sortie | ConvertTo-Json -Compress -Depth 6
     exit 0
@@ -178,6 +209,8 @@ if ($Element) {
 }
 Import-HdeskType -Source (Join-Path $PSScriptRoot 'hdesk-act.cs') -Type 'AutowinHdeskAct'
 $r = [AutowinHdeskAct]::Run($bureau, $X, $Y, $Texte, [bool]$Entree, $Touche, $Molette, $Touches, [bool]$SansClic)
+# hdesk-act.cs refuse tout avant le premier message poste ; un envoi deja parti reste dit, au cas ou.
+if ($r.Envoyes -gt 0) { $script:arrive = $(if ($r.Error) { 'incertain' } else { 'oui' }); $script:refaisable = $false }
 if ($r.Error) { throw $r.Error }
 $apres = if ($appui) { EtatApres } else { $null }
 NoterGeste $true ''
@@ -185,6 +218,8 @@ $sortie = [ordered]@{ instanceId = $InstanceId }
 if ($X -ge 0 -and $Y -ge 0) { $sortie.x = $X; $sortie.y = $Y } else { $sortie.vers = 'focus' }
 $sortie.cible = $r.Cible
 $sortie.messages = $r.Envoyes
+$sortie.arrive = $script:arrive
+$sortie.refaisable = $script:refaisable
 if ($appui) { $sortie.element = $vise; $sortie.appui = $appui }
 if ($apres) { $sortie.apres = $apres }
 # Clic + fleches d'un seul geste : la liste ouverte se referme avant la capture (hdesk-act-avertissements.ps1).

@@ -456,6 +456,232 @@ describe('outils du chat : observation et geste', () => {
   })
 })
 
+/*
+ * ATTENTE : un écran qui charge ne demande plus d'observer en boucle. Valeurs reprises du banc réel
+ * (scripts/hdesk-arbre.test.ps1, 2026-11-26) : « Arrive plus tard » vu après 3783 ms, repère rendu.
+ */
+describe('attendre un élément, un texte ou une fenêtre', () => {
+  const ARRIVE: ElementArbre = {
+    ref: '@xvlzfp:e38',
+    type: 'Button',
+    nom: 'Arrive plus tard',
+    techno: 'WPF',
+    actif: true,
+    x: 208,
+    y: 474,
+    largeur: 404,
+    hauteur: 20,
+    fenetre: 0
+  }
+  it('arguments : cible COLLÉE au bon paramètre, délai par défaut puis borné, origine en option', () => {
+    const a = argumentsArbre('R', 'b1', 500, {
+      attente: { quoi: 'element', cible: ' — Total ' },
+      origine: { x: 7, y: 57 }
+    })
+    expect(a.slice(9)).toEqual([
+      '-AttendreElement:— Total',
+      '-DelaiMs',
+      '10000',
+      '-OrigineX',
+      '7',
+      '-OrigineY',
+      '57'
+    ])
+    const delai = (delaiMs: number): string[] =>
+      argumentsArbre('R', 'b1', 500, { attente: { quoi: 'fenetre', cible: 'x', delaiMs } })
+    expect(delai(99999)).toEqual(expect.arrayContaining(['-AttendreFenetre:x', '30000']))
+    expect(delai(-5)).toContain('0')
+    expect(
+      argumentsArbre('R', 'b1', 500, {
+        racine: '@k3f9a2:e57',
+        attente: { quoi: 'texte', cible: 'zone 3', delaiMs: 5000 }
+      }).slice(9)
+    ).toEqual(['-Racine:@k3f9a2:e57', '-AttendreTexte:zone 3', '-DelaiMs', '5000'])
+  })
+  it('arguments : cible vide, trop longue ou attente inconnue → refus', () => {
+    const essai = (attente: unknown) => () =>
+      argumentsArbre('R', 'b1', 500, { attente: attente as never })
+    expect(essai({ quoi: 'element', cible: '  ' })).toThrow(/sans cible/)
+    expect(essai({ quoi: 'element', cible: 'x'.repeat(201) })).toThrow(/200/)
+    expect(essai({ quoi: 'image', cible: 'x' })).toThrow(/inconnue/)
+  })
+  it('lecture : le champ `attente` du script est gardé', () => {
+    const out = JSON.stringify({
+      bureau: 'AutowinTest_b1',
+      lecture: 'xvlzfp',
+      attente: {
+        quoi: 'element',
+        cible: 'Arrive plus tard',
+        trouve: true,
+        attenteMs: 3783,
+        element: ARRIVE
+      },
+      fenetres: ['Banc'],
+      total: 1,
+      omis: 0,
+      elements: [ARRIVE]
+    })
+    const l = interpreterArbre(out)
+    expect(l.ok && l.arbre.attente).toMatchObject({ trouve: true, attenteMs: 3783 })
+  })
+  it('texte : la ligne d’attente passe en tête, vue avec son repère ou écoulée avec le détail', () => {
+    const vu = texteArbre(
+      {
+        ok: true,
+        arbre: {
+          lecture: 'xvlzfp',
+          attente: {
+            quoi: 'element',
+            cible: 'Arrive plus tard',
+            trouve: true,
+            attenteMs: 3783,
+            element: ARRIVE
+          },
+          fenetres: ['Banc'],
+          total: 1,
+          omis: 0,
+          elements: [ARRIVE]
+        }
+      },
+      { x: 0, y: 0 }
+    )
+    expect(vu.split('\n')[0]).toBe(
+      'Attente : élément « Arrive plus tard » vu (@xvlzfp:e38) après 3783 ms.'
+    )
+    expect(vu).toContain('Button « Arrive plus tard » @xvlzfp:e38')
+    const ecoulee = texteArbre(
+      {
+        ok: true,
+        arbre: {
+          attente: {
+            quoi: 'fenetre',
+            cible: 'Facture',
+            trouve: false,
+            attenteMs: 10012,
+            detail: "Fenetres ouvertes : 'Banc'."
+          },
+          fenetres: ['Banc'],
+          total: 0,
+          omis: 0,
+          elements: []
+        }
+      },
+      undefined
+    )
+    expect(ecoulee.split('\n')[0]).toBe(
+      "Attente écoulée : fenêtre « Facture » toujours absent après 10012 ms — l'arbre et la capture sont ceux de cet instant. Fenetres ouvertes : 'Banc'."
+    )
+  })
+  it('texte : la ligne d’attente tient dans la limite, détail énorme compris', () => {
+    const t = texteArbre(
+      {
+        ok: true,
+        arbre: {
+          attente: {
+            quoi: 'element',
+            cible: 'x',
+            trouve: false,
+            attenteMs: 1,
+            detail: 'd'.repeat(5000)
+          },
+          fenetres: ['Table des caractères'],
+          total: 300,
+          omis: 0,
+          elements: Array.from({ length: 300 }, (_, i) => ({ ...SELECTIONNER, nom: `Case ${i}` }))
+        }
+      },
+      undefined
+    )
+    expect(t.length).toBeLessThanOrEqual(ARBRE_TEXTE_MAX)
+    expect(t.split('\n')[0].length).toBeLessThan(800)
+    // Limite plus courte que la ligne d'attente : jamais de budget négatif, la limite tient.
+    const courte = texteArbre(
+      {
+        ok: true,
+        arbre: {
+          attente: { quoi: 'texte', cible: 'Total', trouve: false, attenteMs: 9, detail: 'loin' },
+          fenetres: [],
+          total: 0,
+          omis: 0,
+          elements: []
+        }
+      },
+      undefined,
+      50
+    )
+    expect(courte).toHaveLength(50)
+    expect(courte).toMatch(/^Attente écoulée : texte « Total »/)
+  })
+  it('observer : l’attente passe AVANT la capture, avec l’origine connue ; son résultat est rendu', async () => {
+    const ordre: string[] = []
+    const recues: unknown[] = []
+    const lue = {
+      quoi: 'element' as const,
+      cible: 'Arrive plus tard',
+      trouve: true,
+      attenteMs: 3783
+    }
+    const outils = outilsBureauCacheDuChat({
+      capteur: () => ({
+        image: async () => (ordre.push('image'), IMAGE_RECADREE),
+        versEcran: (g) => g,
+        origine: () => ({ x: 7, y: 57 })
+      }),
+      lireArbre: async (_id, options) => {
+        ordre.push('arbre')
+        recues.push(options)
+        return {
+          ok: true,
+          arbre: { attente: lue, fenetres: ['Banc'], total: 1, omis: 0, elements: [ARRIVE] }
+        }
+      },
+      agir: async () => ({ ok: true })
+    })
+    const r = await outils.observer('x', undefined, { quoi: 'element', cible: 'Arrive plus tard' })
+    expect(ordre).toEqual(['arbre', 'image'])
+    expect(recues).toEqual([
+      { attente: { quoi: 'element', cible: 'Arrive plus tard' }, origine: { x: 7, y: 57 } }
+    ])
+    expect(r.attente).toEqual(lue)
+    expect(r.arbre?.split('\n')[0]).toMatch(/^Attente : élément « Arrive plus tard » vu/)
+  })
+  it('observer : attente refusée par le script → capture gardée, refus lisible avec son code', async () => {
+    const r = await outilsBureauCacheDuChat({
+      capteur: () => ({
+        image: async () => IMAGE_RECADREE,
+        versEcran: (g) => g,
+        origine: () => undefined
+      }),
+      lireArbre: async () => ({
+        ok: false,
+        code: 'INVALIDE',
+        message: 'Un repere (@k:e1) vise un element deja lu.'
+      }),
+      agir: async () => ({ ok: true })
+    }).observer('x', undefined, { quoi: 'element', cible: '@k:e1' })
+    expect(r).toMatchObject({ statut: 'ok' })
+    expect(r.arbre).toBe('Attente refusée [INVALIDE] : Un repere (@k:e1) vise un element deja lu.')
+  })
+  it('observer : zone ET attente refusées → la tête nomme les deux demandes', async () => {
+    const r = await outilsBureauCacheDuChat({
+      capteur: () => ({
+        image: async () => IMAGE_RECADREE,
+        versEcran: (g) => g,
+        origine: () => undefined
+      }),
+      lireArbre: async () => ({
+        ok: false,
+        code: 'INVALIDE',
+        message: 'Un repere ne s’attend pas.'
+      }),
+      agir: async () => ({ ok: true })
+    }).observer('x', '@k3f9a2:e57', { quoi: 'element', cible: '@k:e1' })
+    expect(r.arbre).toBe(
+      'Zone « @k3f9a2:e57 » avec attente non lue [INVALIDE] : Un repere ne s’attend pas.'
+    )
+  })
+})
+
 describe('outils du chat : le clic suit l’image recadrée', () => {
   /*
    * Pas de second CapteurHdesk réel ici : son constructeur purge TOUS les dossiers d'images du dossier

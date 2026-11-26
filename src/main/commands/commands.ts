@@ -53,10 +53,10 @@ import type {
   EntreeRegistre,
   GesteElement,
   GesteTv,
-  ImageTv,
   ResultatFermeture,
   ResultatGeste
 } from '../bureau/hdesk-tv'
+import type { AttenteArbre, ImageAvecArbre } from '../bureau/hdesk-arbre'
 import type { DemandeCreationBureau, ResultatCreationBureau } from '../../shared/hdesk-gestion'
 import type {
   ActionAgentNavigateur
@@ -347,9 +347,13 @@ export class AppCommandBus {
   lancerBureauCache?: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
   /**
    * L'image, et l'arbre d'accessibilité en texte quand il a pu être lu (hdesk-arbre.ts) ; `racine` = ne
-   * lire qu'une zone de l'arbre.
+   * lire qu'une zone de l'arbre ; `attente` = attendre un élément, un texte ou une fenêtre avant la capture.
    */
-  observerBureauCache?: (id: string, racine?: string) => Promise<ImageTv & { arbre?: string }>
+  observerBureauCache?: (
+    id: string,
+    racine?: string,
+    attente?: AttenteArbre
+  ) => Promise<ImageAvecArbre>
   agirBureauCache?: (geste: GesteTv | GesteElement) => Promise<ResultatGeste>
   ficheBureauCache?: (id: string) => EntreeRegistre | undefined
 

@@ -12,6 +12,10 @@
   Depuis le 2026-11-26 (lecture par zone) : une liste WPF SANS NOM est gardee comme zone, avec un repere ;
   hdesk-arbre.ps1 -Racine:<repere> ne rend que ses elements, et une racine inconnue, ambigue ou qui
   commence par un tiret long est refusee avec son code, jamais par une sortie muette.
+  Depuis le 2026-11-26 aussi (attente, geste arrive) : « Charger » fait apparaitre un bouton 6 s apres ;
+  -AttendreElement/-AttendreTexte/-AttendreFenetre le voient et rendent son repere, un delai ecoule sort
+  en code 3 avec l'ecran de cet instant. Chaque geste de hdesk-act.ps1 dit `arrive` (oui, non, incertain)
+  et `refaisable`, refus compris ; un clic x/y dont la touche est mal ecrite ne part pas du tout.
 
   Trois cibles (la troisieme : une liste WinForms de 100 lignes, dont « Ligne 90 » hors ecran) :
    - Table des caracteres (Win32) : l'arbre porte le bouton d'identifiant 103 (« Selectionner ») ; l'appui
@@ -24,7 +28,9 @@
   Entrees qui doivent faire ECHOUER ce banc (-Dossier vers une copie modifiee des scripts) :
    - hdesk-act.ps1 qui clique au centre au lieu d'utiliser l'accessibilite en WPF -> case restee « Off » ;
    - hdesk-arbre.cs qui accepte un repere sans verifier l'element vivant -> l'appui sur le bouton retire
-     ou renomme reussit -> code 1.
+     ou renomme reussit -> code 1 ;
+   - hdesk-act.cs qui lit les touches APRES avoir poste le clic (l'ancien code) -> le champ 104 change
+     malgre la touche refusee -> code 1 (mesure du 2026-11-26 : 3 verifications rouges).
   Usage : powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hdesk-arbre.test.ps1 [-Dossier <dossier des scripts>]
   Code 0 = vert ; 1 = rouge ; 2 = banc impossible a monter.
 #>
@@ -62,7 +68,14 @@ $tx = New-Object System.Windows.Controls.TextBox; $tx.Name = 'champ'
 # hors de la vue d'une liste WPF virtualisee n'existe pas dans l'arbre).
 $lb = New-Object System.Windows.Controls.ListBox; $lb.Height = 120
 foreach ($n in 1..5) { [void]$lb.Items.Add("Element de zone $n") }
-foreach ($x in @($b, $c, $i, $d1, $d2, $eph, $ret, $bas, $tx, $lb)) { [void]$p.Children.Add($x) }
+# Ecran qui CHARGE (attente) : « Charger » fait apparaitre « Arrive plus tard » 6 s apres, et retitre la
+# fenetre au meme instant. Tout est cree ici : un gestionnaire d'evenement ne voit que ce niveau.
+$charger = New-Object System.Windows.Controls.Button; $charger.Content = 'Charger'
+$tard = New-Object System.Windows.Controls.Button; $tard.Content = 'Arrive plus tard'
+$minuteur = New-Object System.Windows.Threading.DispatcherTimer; $minuteur.Interval = [TimeSpan]::FromSeconds(6)
+$minuteur.Add_Tick({ $minuteur.Stop(); [void]$p.Children.Add($tard); $w.Title = 'Banc arbre WPF - charge' })
+$charger.Add_Click({ $minuteur.Start() })
+foreach ($x in @($b, $c, $i, $d1, $d2, $eph, $ret, $bas, $tx, $lb, $charger)) { [void]$p.Children.Add($x) }
 $w.Content = $p
 $w.Add_ContentRendered({ Set-Content -LiteralPath $Pret -Value 'pret' })
 [void]$w.ShowDialog()
@@ -106,6 +119,22 @@ function ArbreZone([string]$id, [string]$racine) {
   if ($code -eq 0) { try { $json = ($sortie | ConvertFrom-Json) } catch { } }
   return [pscustomobject]@{ code = $code; sortie = $sortie; json = $json }
 }
+function ArbreAttente([string]$id, [string[]]$options) {
+  # Valeurs COLLEES aux -Attendre* (« -AttendreElement:<cible> »), comme depuis l'app. Code 3 = delai
+  # ecoule : la ligne JSON est rendue quand meme, d'ou sa lecture quel que soit le code.
+  $ErrorActionPreference = 'Continue'
+  $o = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Dossier 'hdesk-arbre.ps1') -InstanceId $id -Registre $registre @options 2>&1
+  $code = $LASTEXITCODE
+  $sortie = (($o | ForEach-Object { "$_" }) -join "`n")
+  return [pscustomobject]@{ code = $code; sortie = $sortie; json = (Json $sortie) }
+}
+function Point([string]$id, [string[]]$options) {
+  # Geste en x/y (pixels de l'ecran du bureau, ceux de l'arbre) ; un refus sort sur stderr.
+  $ErrorActionPreference = 'Continue'
+  $o = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Dossier 'hdesk-act.ps1') -InstanceId $id -Registre $registre @options 2>&1
+  return [pscustomobject]@{ code = $LASTEXITCODE; sortie = (($o | ForEach-Object { "$_" }) -join "`n") }
+}
+function Debut([string]$s) { if ($s.Length -le 300) { return $s } else { return $s.Substring(0, 300) + '...' } }
 function Appuyer([string]$id, [string]$element) {
   # Un refus du script sort sur stderr : avec 'Stop', PowerShell 5.1 en ferait une exception du banc.
   $ErrorActionPreference = 'Continue'
@@ -177,16 +206,47 @@ try {
   $j = Json $r.sortie
   Verifier ($r.code -eq 0 -and $j.appui -eq 'clic' -and $j.element.ref -eq $ref103) "appui Win32 par repere $ref103 ($($r.sortie))"
   Verifier ($j.apres.changement -eq $true -and ((@($j.apres.changements) -join ' | ') -match "valeur '!' -> '!!'")) "apres l'appui : le changement du champ 104 est rapporte ($((@($j.apres.changements)) -join ' | '))"
+  Verifier ($j.arrive -eq 'oui' -and $j.refaisable -eq $false) "clic par element : arrive, pas refaisable (arrive '$($j.arrive)', refaisable '$($j.refaisable)')"
   $ref104 = Repere $a2 { $_.id -eq '104' }
   # Accents ecrits par leur code : ce fichier sans BOM est lu en ANSI par Windows PowerShell 5.1.
   $accents = 'abc ' + [char]0xE9 + [char]0x20AC
   $r = Remplir $idW32 $ref104 $accents
   $j = Json $r.sortie
   Verifier ($r.code -eq 0 -and $j.appui -eq 'accessibilite:SetValue' -and $j.apres.element.valeur -ceq $accents) "remplissage Win32 du champ 104 par l'entree standard, accents compris (lu apres : '$($j.apres.element.valeur)')"
+  Verifier ($j.arrive -eq 'oui' -and $j.refaisable -eq $true) "remplissage : arrive, refaisable (meme valeur = meme etat) (arrive '$($j.arrive)', refaisable '$($j.refaisable)')"
   $r = Appuyer $idW32 '@e8'
-  Verifier ($r.code -eq 1 -and $r.sortie -match '^\[INVALIDE\]') "repere sans lecture (@e8) refuse ($($r.sortie))"
+  Verifier ($r.code -eq 1 -and $r.sortie -match '(?m)^\[INVALIDE\]') "repere sans lecture (@e8) refuse ($($r.sortie))"
   $r = Appuyer $idW32 '@zzzzzz:e1'
-  Verifier ($r.code -eq 1 -and $r.sortie -match '^\[PERIME\]' -and $r.sortie -match 'Reessai : relis') "repere d'une lecture inconnue refuse avec consigne de relecture ($($r.sortie))"
+  Verifier ($r.code -eq 1 -and $r.sortie -match '(?m)^\[PERIME\]' -and $r.sortie -match 'Reessai : relis') "repere d'une lecture inconnue refuse avec consigne de relecture ($($r.sortie))"
+  $j = Json $r.sortie
+  Verifier ($j.arrive -eq 'non' -and $j.refaisable -eq $true) "refus avant tout envoi : ligne JSON arrive 'non', refaisable ($($r.sortie))"
+
+  # --- Geste en x/y : arrive, refaisable ---------------------------------------------------------
+  # Clic sur « Selectionner » (103) avec une touche mal ecrite : refuse AVANT le clic, le champ 104 ne
+  # bouge pas. Mesure du 2026-11-26 : hdesk-act.cs postait le clic, puis refusait la touche ; l'agent
+  # lisait « refuse » pour un clic qui avait porte.
+  $a3 = Arbre $idW32
+  $s103 = @($a3.elements | Where-Object { $_.id -eq '103' })[0]
+  $px = [int]($s103.x + $s103.largeur / 2); $py = [int]($s103.y + $s103.hauteur / 2)
+  $v0 = "$((@($a3.elements | Where-Object { $_.id -eq '104' })[0]).valeur)"
+  $r = Point $idW32 @('-X', "$px", '-Y', "$py", '-Touches', 'zz')
+  $j = Json $r.sortie
+  Verifier ($r.code -eq 1 -and $r.sortie -match 'Touche illisible' -and $j.arrive -eq 'non' -and $j.refaisable -eq $true) "clic + touche illisible : refuse, arrive 'non', refaisable ($($r.sortie))"
+  $r = Point $idW32 @('-X', "$px", '-Y', "$py", '-Texte', 'z', '-Touche', 'Inconnue')
+  $j = Json $r.sortie
+  Verifier ($r.code -eq 1 -and $r.sortie -match 'Touche inconnue' -and $j.arrive -eq 'non' -and $j.refaisable -eq $true) "clic + texte + touche inconnue : refuse, arrive 'non', refaisable ($($r.sortie))"
+  Start-Sleep -Milliseconds 500
+  $v1 = "$((@((Arbre $idW32).elements | Where-Object { $_.id -eq '104' })[0]).valeur)"
+  Verifier ($v1 -ceq $v0) "rien n'est parti avec une touche refusee : champ 104 inchange ('$v0' -> '$v1')"
+  $r = Point $idW32 @('-X', "$px", '-Y', "$py")
+  $j = Json $r.sortie
+  $v2 = $v1
+  $limite = (Get-Date).AddSeconds(3)
+  while ($v2 -ceq $v1 -and (Get-Date) -lt $limite) {
+    Start-Sleep -Milliseconds 200
+    $v2 = "$((@((Arbre $idW32).elements | Where-Object { $_.id -eq '104' })[0]).valeur)"
+  }
+  Verifier ($r.code -eq 0 -and $j.arrive -eq 'oui' -and $j.refaisable -eq $false -and $v2 -cne $v1) "clic x/y : arrive 'oui', pas refaisable, et il a porte ('$v1' -> '$v2') ($($r.sortie))"
 
   # --- WPF : fenetre du banc, non agrandie --------------------------------------------------------
   $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -205,6 +265,8 @@ try {
   $limite = (Get-Date).AddSeconds(3)
   while (-not (Test-Path $temoin) -and (Get-Date) -lt $limite) { Start-Sleep -Milliseconds 100 }
   Verifier ($r.code -eq 0 -and $r.sortie -match 'accessibilite:Invoke' -and (Test-Path $temoin)) "appui par libelle -> bouton declenche ($($r.sortie))"
+  $j = Json $r.sortie
+  Verifier ($j.arrive -eq 'oui' -and $j.refaisable -eq $false) "appui d'accessibilite (Invoke) : arrive, pas refaisable (arrive '$($j.arrive)', refaisable '$($j.refaisable)')"
   $refCase = Repere $w { $_.type -eq 'CheckBox' }
   $r = Appuyer $idWpf $refCase
   $j = Json $r.sortie
@@ -214,16 +276,17 @@ try {
   Verifier ($r.code -eq 0 -and $case.coche -eq 'On') "appui par repere sur la case -> cochee, relu par l'arbre (lu : '$($case.coche)')"
   Verifier ($j.apres.changement -eq $true -and $j.apres.element.coche -eq 'On') "apres l'appui : la case est rapportee cochee ($($r.sortie))"
   $r = Appuyer $idWpf 'Bouton inactif'
-  Verifier ($r.code -eq 1 -and $r.sortie -match '^\[INACTIF\]') "bouton inactif refuse ($($r.sortie))"
+  $j = Json $r.sortie
+  Verifier ($r.code -eq 1 -and $r.sortie -match '(?m)^\[INACTIF\]' -and $j.arrive -eq 'non' -and $j.refaisable -eq $true) "bouton inactif refuse, rien n'est parti ($($r.sortie))"
   $r = Appuyer $idWpf 'Doublon'
   $lignes = @(([regex]::Matches($r.sortie, "Button 'Doublon' @")).Count)
-  Verifier ($r.code -eq 1 -and $r.sortie -match '^\[AMBIGU\]' -and $lignes[0] -eq 2) "deux 'Doublon' -> refus qui liste les deux boutons avec leur repere ($($r.sortie))"
+  Verifier ($r.code -eq 1 -and $r.sortie -match '(?m)^\[AMBIGU\]' -and $lignes[0] -eq 2) "deux 'Doublon' -> refus qui liste les deux boutons avec leur repere ($($r.sortie))"
   $r = Appuyer $idWpf 'Valider tout'
-  Verifier ($r.code -eq 1 -and $r.sortie -match '^\[INTROUVABLE\]' -and $r.sortie -match "Valider la saisie") "nom inconnu -> refus qui cite le plus proche ($($r.sortie))"
+  Verifier ($r.code -eq 1 -and $r.sortie -match '(?m)^\[INTROUVABLE\]' -and $r.sortie -match "Valider la saisie") "nom inconnu -> refus qui cite le plus proche ($($r.sortie))"
   # Rien de proche : l'element n'est pas a l'ecran (page pas encore ouverte, appli relancee). Le refus
   # cite ce qui L'EST et se laisse appuyer, sans les inactifs, pour viser sans relire l'arbre.
   $r = Appuyer $idWpf 'Facturation mensuelle'
-  Verifier ($r.code -eq 1 -and $r.sortie -match '^\[INTROUVABLE\]' -and $r.sortie -match "Button 'Retirer'" -and $r.sortie -notmatch 'Bouton inactif') "nom sans rien de proche -> refus qui liste les elements a viser, sans les inactifs ($($r.sortie))"
+  Verifier ($r.code -eq 1 -and $r.sortie -match '(?m)^\[INTROUVABLE\]' -and $r.sortie -match "Button 'Retirer'" -and $r.sortie -notmatch 'Bouton inactif') "nom sans rien de proche -> refus qui liste les elements a viser, sans les inactifs ($($r.sortie))"
   # Element RETIRE apres la lecture : son repere est refuse, rien n'est appuye a sa place.
   $w3 = Arbre $idWpf
   $refEph = Repere $w3 { $_.nom -eq 'Ephemere' }
@@ -231,7 +294,7 @@ try {
   $j = Json $r.sortie
   Verifier ($r.code -eq 0 -and ((@($j.apres.changements) -join ' | ') -match "Ephemere' \(disparu\)")) "apres 'Retirer' : la disparition d'Ephemere est rapportee ($((@($j.apres.changements)) -join ' | '))"
   $r = Appuyer $idWpf $refEph
-  Verifier ($r.code -eq 1 -and $r.sortie -match '^\[PERIME\]' -and $r.sortie -match "n'est plus a l'ecran") "repere d'un element retire refuse ($($r.sortie))"
+  Verifier ($r.code -eq 1 -and $r.sortie -match '(?m)^\[PERIME\]' -and $r.sortie -match "n'est plus a l'ecran") "repere d'un element retire refuse ($($r.sortie))"
   # Element RENOMME apres la lecture : meme element, mais il ne dit plus la meme chose -> refus.
   $w4 = Arbre $idWpf
   $refBas = Repere $w4 { $_.nom -eq 'Bascule A' }
@@ -239,7 +302,7 @@ try {
   $j = Json $r.sortie
   Verifier ($r.code -eq 0 -and $j.apres.element.nom -eq 'Bascule B') "appui par repere sur 'Bascule A' -> renomme, rapporte (lu apres : '$($j.apres.element.nom)')"
   $r = Appuyer $idWpf $refBas
-  Verifier ($r.code -eq 1 -and $r.sortie -match '^\[PERIME\]' -and $r.sortie -match 'a change' -and $r.sortie -match 'Bascule B') "meme repere apres renommage refuse ($($r.sortie))"
+  Verifier ($r.code -eq 1 -and $r.sortie -match '(?m)^\[PERIME\]' -and $r.sortie -match 'a change' -and $r.sortie -match 'Bascule B') "meme repere apres renommage refuse ($($r.sortie))"
   # Champ WPF rempli par son identifiant.
   $bonjour = 'Bonjour ' + [char]0xE9
   $r = Remplir $idWpf 'champ' $bonjour
@@ -256,13 +319,46 @@ try {
   $refZone = Repere $z.json { $_.nom -eq 'Element de zone 2' }
   $r = Appuyer $idWpf $refZone
   $j = Json $r.sortie
-  Verifier ($r.code -eq 0 -and $j.apres.element.selectionne -eq $true) "appui par un repere de la lecture de zone $refZone -> ligne selectionnee ($($r.sortie))"
+  Verifier ($r.code -eq 0 -and $j.apres.element.selectionne -eq $true -and $j.arrive -eq 'oui' -and $j.refaisable -eq $true) "appui par un repere de la lecture de zone $refZone -> ligne selectionnee, refaisable ($($r.sortie))"
   $z = ArbreZone $idWpf '@zzzzzz:e1'
   Verifier ($z.code -eq 1 -and $z.sortie -match '^\[PERIME\]') "zone d'une lecture inconnue refusee ($($z.sortie))"
   $z = ArbreZone $idWpf 'Doublon'
   Verifier ($z.code -eq 1 -and $z.sortie -match '^\[AMBIGU\]') "zone ambigue refusee ($($z.sortie))"
   $z = ArbreZone $idWpf ([string][char]0x2014 + ' Total')
   Verifier ($z.code -eq 1 -and $z.sortie -match '^\[INTROUVABLE\]') "racine qui commence par un tiret long : refus lisible, pas une sortie muette ($($z.sortie))"
+
+  # --- Attente (-Attendre*) : un ecran qui charge ----------------------------------------------------
+  $r = Appuyer $idWpf 'Charger'
+  Verifier ($r.code -eq 0) "appui sur 'Charger' ($(Debut $r.sortie))"
+  $avant = Arbre $idWpf
+  Verifier (@($avant.elements | Where-Object { $_.nom -eq 'Arrive plus tard' }).Count -eq 0) "'Arrive plus tard' absent juste apres 'Charger' : l'ecran charge encore"
+  $at = ArbreAttente $idWpf @('-AttendreElement:Arrive plus tard', '-DelaiMs', '15000')
+  $vu = $at.json.attente
+  Verifier ($at.code -eq 0 -and $vu.quoi -eq 'element' -and $vu.trouve -eq $true -and $vu.attenteMs -ge 200 -and $vu.element.nom -eq 'Arrive plus tard' -and "$($vu.element.ref)" -match '^@' -and $at.json.lecture) "attente d'un element : vu apres $($vu.attenteMs) ms, avec son repere $($vu.element.ref) ($(Debut $at.sortie))"
+  $r = Appuyer $idWpf $vu.element.ref
+  Verifier ($r.code -eq 0) "le repere rendu par l'attente s'appuie sans relire l'arbre ($(Debut $r.sortie))"
+  $at = ArbreAttente $idWpf @('-AttendreFenetre:WPF - charge', '-DelaiMs', '5000')
+  Verifier ($at.code -eq 0 -and $at.json.attente.trouve -eq $true -and $at.json.attente.fenetre -eq 'Banc arbre WPF - charge') "attente d'une fenetre par son titre ($(Debut $at.sortie))"
+  $at = ArbreAttente $idWpf @('-AttendreTexte:ARRIVE PLUS', '-DelaiMs', '5000')
+  Verifier ($at.code -eq 0 -and $at.json.attente.trouve -eq $true -and $at.json.attente.element.nom -eq 'Arrive plus tard') "attente d'un texte, sans la casse ($(Debut $at.sortie))"
+  $at = ArbreAttente $idWpf @('-AttendreElement:Jamais la', '-DelaiMs', '800')
+  Verifier ($at.code -eq 3 -and $at.json.attente.trouve -eq $false -and $at.json.attente.attenteMs -ge 800 -and @($at.json.elements).Count -gt 0 -and $at.sortie -match '(?m)^\[DELAI\]') "delai ecoule : code 3, l'ecran de cet instant rendu quand meme ($(Debut $at.sortie))"
+  $at = ArbreAttente $idWpf @('-AttendreElement:@abcdef:e1')
+  Verifier ($at.code -eq 1 -and $at.sortie -match '(?m)^\[INVALIDE\]') "un repere ne s'attend pas : refus lisible ($(Debut $at.sortie))"
+  $at = ArbreAttente $idWpf @('-AttendreElement:Charger', '-AttendreTexte:Charger')
+  Verifier ($at.code -eq 1 -and $at.sortie -match '(?m)^\[INVALIDE\]') "deux attentes a la fois : refus lisible ($(Debut $at.sortie))"
+  $w6 = Arbre $idWpf
+  $refListe = Repere $w6 { $_.type -eq 'List' -and -not $_.nom -and -not $_.id }
+  $at = ArbreAttente $idWpf @("-Racine:$refListe", '-AttendreTexte:Element de zone 3', '-DelaiMs', '5000')
+  $noms = @($at.json.elements | ForEach-Object { "$($_.nom)" })
+  Verifier ($at.code -eq 0 -and $at.json.attente.trouve -eq $true -and $at.json.racine.ref -eq $refListe -and ($noms -contains 'Element de zone 3') -and -not ($noms -contains 'Charger')) "attente puis lecture d'une zone seule ($($noms -join ', '))"
+  # L'element attendu dans la zone porte le repere de la lecture de zone (retrouve par son RuntimeId).
+  $w7 = Arbre $idWpf
+  $refListe = Repere $w7 { $_.type -eq 'List' -and -not $_.nom -and -not $_.id }
+  $at = ArbreAttente $idWpf @("-Racine:$refListe", '-AttendreElement:Element de zone 4', '-DelaiMs', '5000')
+  $vu = $at.json.attente.element
+  $ref4 = Repere $at.json { $_.ref -eq $vu.ref }
+  Verifier ($at.code -eq 0 -and $vu.nom -eq 'Element de zone 4' -and "$($vu.ref)" -match "^@$([regex]::Escape([string]$at.json.lecture)):e\d+$" -and $ref4) "attente d'un element dans une zone : il porte le repere de la lecture de zone ($($vu.ref))"
 
   # --- WinForms : element hors ecran d'une liste -------------------------------------------------
   $l = Lancer $idListe $ps "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$appListe`" `"$pretListe`"" 'banc hdesk-arbre (liste)'

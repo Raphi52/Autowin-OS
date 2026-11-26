@@ -27,6 +27,10 @@
 // lecture recoit un identifiant, chaque element un repere « @<lecture>:e<n> », et la lecture est gardee
 // sur disque (<registre>/<bureau>.lectures.txt, les LECTURES_GARDEES dernieres). Un appui par repere
 // retrouve l'element VIVANT par son RuntimeId et refuse (code PERIME) s'il a disparu ou change de nom.
+//
+// ATTENTE (2026-11-26, reprise de la commande wait de vercel-labs/agent-desktop) : un ecran qui charge
+// obligeait l'agent a observer en boucle, une capture et un arbre dans son contexte a chaque fois.
+// Attendre relit le bureau jusqu'a voir un element, un texte ou une fenetre, puis rend UNE lecture.
 // fix-ok: 3 édits mesurés sur une fenêtre WPF réelle (2026-11-03) : le refus « Doublon » citait aussi les 2 étiquettes Text, et « Valider tout » ne citait pas « Valider la saisie » (distance 9 > seuil 7).
 using System;
 using System.Collections.Generic;
@@ -79,9 +83,11 @@ public class AutowinHdeskArbre {
    * Resultat d'un appui. Code (refus) : INVALIDE, PERIME, INTROUVABLE, AMBIGU, INACTIF, HORS_ECRAN,
    * REFUSE, SANS_ARBRE ; hdesk-act.ps1 le place en tete du message, « [PERIME] ... ».
    * Rid/Hwnd/Avant : de quoi dire, apres le geste, ce qui a change (EtatApres).
+   * Tente : l'appel d'accessibilite est parti ; un refus apres lui (exception) n'exclut pas qu'il ait porte.
    */
   public class Resultat {
     public string Erreur, Code;
+    public bool Tente;
     public string Appui;
     public string Json = "";
     public int X, Y;
@@ -367,12 +373,14 @@ public class AutowinHdeskArbre {
   public static string Lire(string bureau, int plafond, string fichier) {
     return SurLeBureau(bureau, d => {
       var titres = new List<string>();
-      return JsonLecture(bureau, plafond, fichier, titres, Collecter(d, titres), null);
+      return JsonLecture(bureau, plafond, fichier, titres, Collecter(d, titres), null, null);
     });
   }
 
   // Numerote et garde la lecture (si `fichier`), puis la rend en JSON ; `racine` = la zone lue, s'il y en a une.
-  static string JsonLecture(string bureau, int plafond, string fichier, List<string> titres, List<Element> els, Element racine) {
+  // `attente` : le JSON du champ « attente », construit APRES la numerotation (il recoit les elements
+  // numerotes) pour porter les reperes.
+  static string JsonLecture(string bureau, int plafond, string fichier, List<string> titres, List<Element> els, Element racine, Func<List<Element>, string> attente) {
     int n = Math.Min(els.Count, Math.Max(0, plafond));
     string lecture = string.IsNullOrEmpty(fichier) ? "" : NouvelleLecture();
     if (lecture != "") {
@@ -381,6 +389,7 @@ public class AutowinHdeskArbre {
     }
     var sb = new StringBuilder("{\"bureau\":").Append(Js(bureau));
     if (lecture != "") sb.Append(",\"lecture\":").Append(Js(lecture));
+    if (attente != null) sb.Append(",\"attente\":").Append(attente(els));
     if (racine != null) sb.Append(",\"racine\":").Append(JsonElement(racine, 0, 0));
     sb.Append(",\"fenetres\":[");
     for (int i = 0; i < titres.Count; i++) sb.Append(i > 0 ? "," : "").Append(Js(titres[i]));
@@ -389,8 +398,11 @@ public class AutowinHdeskArbre {
     return sb.Append("]}").ToString();
   }
 
-  /** Lecture d'une zone : Json, ou refus (Code + Erreur) quand la racine ne se resout pas. */
-  public class LectureZone { public string Json = "", Code, Erreur; }
+  /**
+   * Lecture d'une zone ou apres une attente : Json, ou refus (Code + Erreur) quand la racine ne se resout
+   * pas. Expiree : l'attente a atteint son delai sans voir sa cible ; Json montre l'ecran a cet instant.
+   */
+  public class Lecture { public string Json = "", Code, Erreur; public bool Expiree; }
 
   /**
    * LECTURE PAR ZONE (idee reprise de la lecture par racine de vercel-labs/agent-desktop) : au-dela de la
@@ -401,27 +413,127 @@ public class AutowinHdeskArbre {
    * autres ; `racine` du JSON = l'element lui-meme. Meme forme de JSON que Lire.
    * ox/oy : origine de la capture recadree, pour citer des positions en pixels de l'IMAGE dans les refus.
    */
-  public static LectureZone LireZone(string bureau, int plafond, string fichier, string racine, int ox, int oy) {
+  public static Lecture LireZone(string bureau, int plafond, string fichier, string racine, int ox, int oy) {
     racine = (racine ?? "").Trim();
     return SurLeBureau(bureau, d => {
-      var res = new LectureZone();
+      var res = new Lecture();
       var titres = new List<string>();
-      var els = Collecter(d, titres);
-      var r = new Resultat();
-      var el = Resoudre(els, racine, fichier, r, ox, oy, Zones, "");
-      if (el == null) { res.Code = r.Code; res.Erreur = r.Erreur; return res; }
-      AutomationElementCollection tous;
-      using (DemandeLecture().Activate()) { tous = el.Ae.FindAll(TreeScope.Descendants, Condition.TrueCondition); }
-      var titre = el.Fenetre >= 0 && el.Fenetre < titres.Count ? titres[el.Fenetre] : "";
-      var dedans = new List<Element>();
-      foreach (AutomationElement e in tous) {
-        var x = Decrire(e, 0);
-        if (x == null) continue;
-        x.Hwnd = el.Hwnd;
-        dedans.Add(x);
+      LireLaZone(res, bureau, plafond, fichier, titres, Collecter(d, titres), racine, ox, oy, null);
+      return res;
+    });
+  }
+
+  // Zone `racine` lue parmi des elements deja collectes : res.Json, ou refus dans res.Code/res.Erreur.
+  static void LireLaZone(Lecture res, string bureau, int plafond, string fichier, List<string> titres, List<Element> els, string racine, int ox, int oy, Func<List<Element>, string> attente) {
+    var r = new Resultat();
+    var el = Resoudre(els, racine, fichier, r, ox, oy, Zones, "");
+    if (el == null) { res.Code = r.Code; res.Erreur = r.Erreur; return; }
+    AutomationElementCollection tous;
+    using (DemandeLecture().Activate()) { tous = el.Ae.FindAll(TreeScope.Descendants, Condition.TrueCondition); }
+    var titre = el.Fenetre >= 0 && el.Fenetre < titres.Count ? titres[el.Fenetre] : "";
+    var dedans = new List<Element>();
+    foreach (AutomationElement e in tous) {
+      var x = Decrire(e, 0);
+      if (x == null) continue;
+      x.Hwnd = el.Hwnd;
+      dedans.Add(x);
+    }
+    el.Fenetre = 0;
+    res.Json = JsonLecture(bureau, plafond, fichier, new List<string> { titre }, dedans, el, attente);
+  }
+
+  // ---- Attendre qu'une chose apparaisse --------------------------------------------------------------
+
+  /** Delai maximal d'une attente : un appel d'outil du chat est coupe vers 60 s, capture et lecture comprises. */
+  const int ATTENTE_MAX_MS = 30000;
+  /** Pause entre deux relectures. Table des caracteres : 340 elements lus en ~64 ms (mesure du 2026-11-03). */
+  const int ATTENTE_PAS_MS = 200;
+
+  static bool Contient(string s, string cible) {
+    return !string.IsNullOrEmpty(s) && s.IndexOf(cible, StringComparison.OrdinalIgnoreCase) >= 0;
+  }
+
+  /**
+   * Lecture APRES une attente : relit le bureau toutes les ATTENTE_PAS_MS jusqu'a voir la cible ou jusqu'a
+   * `delaiMs` (borne a ATTENTE_MAX_MS), puis rend la lecture de cet instant (forme de Lire, ou de LireZone
+   * si `racine`), avec `attente` {quoi, cible, trouve, attenteMs, element?, nombre?, plusieurs?, fenetre?, detail?}.
+   * `quoi` :
+   *  - « element » : resolu comme un appui (identifiant, nom ou libelle, exact puis « contient ») ; plusieurs
+   *    correspondances = present (plusieurs: true). Un repere ne s'attend pas : il vise un element deja lu.
+   *  - « texte » : nom, libelle ou valeur d'un element qui le contient, sans la casse (la valeur d'un champ
+   *    mot de passe n'est jamais lue, donc jamais comparee).
+   *  - « fenetre » : titre d'une fenetre visible du bureau qui le contient, sans la casse.
+   * Pas encore la (`trouve: false`, Expiree) : `detail` dit ce qui en approche (element) ou les fenetres ouvertes.
+   * ox/oy : origine de la capture recadree, pour les positions citees dans `detail`.
+   */
+  public static Lecture Attendre(string bureau, int plafond, string fichier, string racine, string quoi, string cible, int delaiMs, int ox, int oy) {
+    racine = (racine ?? "").Trim();
+    cible = (cible ?? "").Trim();
+    quoi = (quoi ?? "").Trim().ToLowerInvariant();
+    var refus = new Lecture { Code = "INVALIDE" };
+    if (quoi != "element" && quoi != "texte" && quoi != "fenetre") { refus.Erreur = "Attente inconnue '" + quoi + "' : element, texte ou fenetre."; return refus; }
+    if (cible == "") { refus.Erreur = "Rien a attendre : passe le nom, l'id ou le libelle d'un element, un texte, ou un titre de fenetre."; return refus; }
+    if (quoi == "element" && cible.StartsWith("@")) {
+      refus.Erreur = "Un repere (" + cible + ") vise un element deja lu : pour attendre qu'un element apparaisse, passe son nom, son libelle ou son id.";
+      return refus;
+    }
+    int delai = Math.Max(0, Math.Min(ATTENTE_MAX_MS, delaiMs));
+    return SurLeBureau(bureau, d => {
+      var sw = Stopwatch.StartNew();
+      List<string> titres = null;
+      List<Element> els = null;
+      Element vu = null;
+      string fenetre = null, detail = "";
+      int nombre = 0;
+      bool trouve = false, plusieurs = false;
+      while (true) {
+        if (quoi == "fenetre") {
+          // Titres seuls, sans l'arbre : une fenetre sans arbre d'accessibilite (rendu GPU) compte aussi.
+          foreach (var t in Fenetres(d).Values) if (Contient(t, cible)) { fenetre = t; break; }
+          trouve = fenetre != null;
+        } else {
+          titres = new List<string>();
+          els = Collecter(d, titres);
+          if (quoi == "element") {
+            var r = new Resultat();
+            vu = Resoudre(els, cible, "", r, ox, oy, Agissables, ", ou x/y sur l'image");
+            plusieurs = r.Code == "AMBIGU";
+            trouve = vu != null || plusieurs;
+            detail = r.Erreur ?? "";
+          } else {
+            var t = Filtrer(els, e => Contient(e.Nom, cible) || Contient(e.Libelle, cible) || Contient(e.Valeur, cible));
+            nombre = t.Count;
+            trouve = nombre > 0;
+            vu = trouve ? t[0] : null;
+          }
+        }
+        if (trouve || sw.ElapsedMilliseconds >= delai) break;
+        Thread.Sleep(ATTENTE_PAS_MS);
       }
-      el.Fenetre = 0;
-      res.Json = JsonLecture(bureau, plafond, fichier, new List<string> { titre }, dedans, el);
+      long ms = sw.ElapsedMilliseconds;
+      if (els == null) { titres = new List<string>(); els = Collecter(d, titres); }
+      if (!trouve && quoi == "fenetre") {
+        var ouvertes = new List<string>();
+        foreach (var t in Fenetres(d).Values) if (ouvertes.Count < TITRES_MAX) ouvertes.Add("'" + Court(t) + "'");
+        detail = ouvertes.Count == 0 ? "Aucune fenetre titree dans ce bureau." : "Fenetres ouvertes : " + string.Join(", ", ouvertes.ToArray()) + ".";
+      }
+      // Lecture d'une zone : ses elements sont relus a part ; l'element vu y prend son repere par son
+      // RuntimeId, comme un repere retrouve son element vivant.
+      Func<List<Element>, string> attente = numerotes => {
+        if (vu != null && vu.Ref == "" && vu.Rid != "")
+          foreach (var e in numerotes) if (e.Rid == vu.Rid && e.Ref != "") { vu = e; break; }
+        var sb = new StringBuilder("{\"quoi\":").Append(Js(quoi)).Append(",\"cible\":").Append(Js(cible));
+        sb.Append(",\"trouve\":").Append(trouve ? "true" : "false").Append(",\"attenteMs\":").Append(ms);
+        if (vu != null) sb.Append(",\"element\":").Append(JsonElement(vu, 0, 0));
+        if (nombre > 1) sb.Append(",\"nombre\":").Append(nombre);
+        if (plusieurs) sb.Append(",\"plusieurs\":true");
+        if (fenetre != null) sb.Append(",\"fenetre\":").Append(Js(fenetre));
+        if (detail != "") sb.Append(",\"detail\":").Append(Js(detail));
+        return sb.Append('}').ToString();
+      };
+      var res = new Lecture { Expiree = !trouve };
+      if (racine == "") res.Json = JsonLecture(bureau, plafond, fichier, titres, els, null, attente);
+      else LireLaZone(res, bureau, plafond, fichier, titres, els, racine, ox, oy, attente);
       return res;
     });
   }
@@ -799,6 +911,7 @@ public class AutowinHdeskArbre {
         try {
           var vp = (ValuePattern)el.Ae.GetCurrentPattern(ValuePattern.Pattern);
           if (vp.Current.IsReadOnly) { r.Code = "REFUSE"; r.Erreur = "Champ en lecture seule, rien n'a ete rempli :\n" + Decrit(el, ox, oy); return r; }
+          r.Tente = true;
           vp.SetValue(valeur ?? "");
           r.Appui = "accessibilite:SetValue";
         } catch (Exception e) {
@@ -808,13 +921,16 @@ public class AutowinHdeskArbre {
         return r;
       }
       if (el.Techno == "WPF" && (el.Invoke || el.Toggle || el.Selection || el.Deplier)) {
+        // Tente juste avant l'appel qui agit : un motif introuvable (GetCurrentPattern) n'a rien envoye.
         try {
-          if (el.Invoke) { ((InvokePattern)el.Ae.GetCurrentPattern(InvokePattern.Pattern)).Invoke(); r.Appui = "accessibilite:Invoke"; }
-          else if (el.Toggle) { ((TogglePattern)el.Ae.GetCurrentPattern(TogglePattern.Pattern)).Toggle(); r.Appui = "accessibilite:Toggle"; }
-          else if (el.Selection) { ((SelectionItemPattern)el.Ae.GetCurrentPattern(SelectionItemPattern.Pattern)).Select(); r.Appui = "accessibilite:Select"; }
+          if (el.Invoke) { var p = (InvokePattern)el.Ae.GetCurrentPattern(InvokePattern.Pattern); r.Tente = true; p.Invoke(); r.Appui = "accessibilite:Invoke"; }
+          else if (el.Toggle) { var p = (TogglePattern)el.Ae.GetCurrentPattern(TogglePattern.Pattern); r.Tente = true; p.Toggle(); r.Appui = "accessibilite:Toggle"; }
+          else if (el.Selection) { var p = (SelectionItemPattern)el.Ae.GetCurrentPattern(SelectionItemPattern.Pattern); r.Tente = true; p.Select(); r.Appui = "accessibilite:Select"; }
           else {
             var p = (ExpandCollapsePattern)el.Ae.GetCurrentPattern(ExpandCollapsePattern.Pattern);
-            if (p.Current.ExpandCollapseState == ExpandCollapseState.Collapsed) p.Expand(); else p.Collapse();
+            bool replie = p.Current.ExpandCollapseState == ExpandCollapseState.Collapsed;
+            r.Tente = true;
+            if (replie) p.Expand(); else p.Collapse();
             r.Appui = "accessibilite:ExpandCollapse";
           }
         } catch (Exception e) {

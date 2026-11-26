@@ -94,10 +94,16 @@ public sealed class AutowinHdeskAct {
   // puis la fenetre du dessus elle-meme.
   [StructLayout(LayoutKind.Sequential)] public struct GUITHREADINFO { public int cbSize, flags; public IntPtr hwndActive, hwndFocus, hwndCapture, hwndMenuOwner, hwndMoveSize, hwndCaret; public RECT rcCaret; }
   [DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint tid, ref GUITHREADINFO g);
+  [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
+  const int GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000;
+  // Une fenetre qui ne s'active jamais ne recoit pas le clavier. Mesure du 2026-11-26 : l'application
+  // lancee cree elle-meme deux calques « UAC Input Indicator » (WS_EX_NOACTIVATE, au premier plan) ; la
+  // frappe partait vers eux et le champ restait vide (banc hdesk-act.sansclic.test.ps1 rouge).
   IntPtr FenetreAuFocus() {
     IntPtr dessus = IntPtr.Zero;
     EnumProc cb = (w, l) => {
       if (!IsWindowVisible(w)) return true;
+      if ((GetWindowLong(w, GWL_EXSTYLE) & WS_EX_NOACTIVATE) != 0) return true;
       RECT r; if (!GetWindowRect(w, out r) || r.R <= r.L || r.B <= r.T) return true;
       dessus = w; return false;
     };
@@ -122,7 +128,22 @@ public sealed class AutowinHdeskAct {
     if (a.hDesk != IntPtr.Zero) CloseDesktop(a.hDesk);
     return a;
   }
+  // Touches lues AVANT tout envoi. Mesure du 2026-11-26 : lues en route, une touche mal ecrite etait
+  // refusee APRES le clic deja poste, et l'agent lisait « refuse » pour un geste qui avait porte.
+  static string LireTouches(string touches, string touche, System.Collections.Generic.List<int[]> lues) {
+    foreach (var morceau in (touches ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) {
+      var part = morceau.Trim().Split('x');
+      int vk; if (!int.TryParse(part[0], System.Globalization.NumberStyles.HexNumber, null, out vk)) return "Touche illisible : '" + morceau + "' (attendu : code hexadecimal, ex. 28x15,0D).";
+      int n = 1; if (part.Length > 2 || (part.Length == 2 && (!int.TryParse(part[1], out n) || n < 1))) return "Repetition illisible : '" + morceau + "' (attendu : code puis xN, N >= 1, ex. 28x15).";
+      lues.Add(new[] { vk, n });
+    }
+    if (!string.IsNullOrEmpty(touche) && !Touches.ContainsKey(touche)) return "Touche inconnue : " + touche + ".";
+    return null;
+  }
   void Go(string bureau, int x, int y, string texte, bool entree, string touche, int molette, string touches, bool sansClic) {
+    var lues = new System.Collections.Generic.List<int[]>();
+    Error = LireTouches(touches, touche, lues);
+    if (Error != null) return;
     SetThreadDpiAwarenessContext(new IntPtr(-4));
     hDesk = OpenDesktopW(bureau, 0, false, 0x10000000);
     if (hDesk == IntPtr.Zero) { Error = "Bureau '" + bureau + "' introuvable (Win32 " + Marshal.GetLastWin32Error() + ")."; return; }
@@ -148,20 +169,16 @@ public sealed class AutowinHdeskAct {
       Cliquer(h, lp);
       Thread.Sleep(150);
     }
-    foreach (var morceau in (touches ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) {
-      var part = morceau.Trim().Split('x');
-      int vk; if (!int.TryParse(part[0], System.Globalization.NumberStyles.HexNumber, null, out vk)) { Error = "Touche illisible : '" + morceau + "' (attendu : code hexadecimal, ex. 28x15,0D)."; return; }
-      int n = 1; if (part.Length > 1 && !int.TryParse(part[1], out n)) { Error = "Repetition illisible : '" + morceau + "'."; return; }
-      for (int k = 0; k < n; k++) {
-        PostMessageW(h, WM_KEYDOWN, new IntPtr(vk), new IntPtr(1)); Thread.Sleep(40);
-        PostMessageW(h, WM_KEYUP, new IntPtr(vk), new IntPtr(unchecked((int)0xC0000001))); Thread.Sleep(60);
+    foreach (var vkn in lues) {
+      for (int k = 0; k < vkn[1]; k++) {
+        PostMessageW(h, WM_KEYDOWN, new IntPtr(vkn[0]), new IntPtr(1)); Thread.Sleep(40);
+        PostMessageW(h, WM_KEYUP, new IntPtr(vkn[0]), new IntPtr(unchecked((int)0xC0000001))); Thread.Sleep(60);
         Envoyes += 2;
       }
     }
     foreach (char ch in texte ?? "") { PostMessageW(h, WM_CHAR, new IntPtr(ch), new IntPtr(1)); Envoyes++; }
     if (!string.IsNullOrEmpty(touche)) {
-      int[] k;
-      if (!Touches.TryGetValue(touche, out k)) { Error = "Touche inconnue : " + touche + "."; return; }
+      int[] k = Touches[touche];
       // Touche a code virtuel : KEYDOWN/KEYUP SEULS. La boucle de messages de la cible (TranslateMessage)
       // fabrique elle-meme le WM_CHAR : en poster un en plus DOUBLAIT l'effet (mesure 2026-10-01, Audit/hact-conv35 :
       // un Retour effacait 2 caracteres). Combinaison Ctrl : caractere de controle seul.

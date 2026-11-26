@@ -31,6 +31,11 @@ import {
  * scénarios visibles, et le reste était perdu sans moyen de le demander. Quand le texte déborde, il
  * propose maintenant les ZONES où ce reste se trouve, et `racine` (bureau_cache_observer) relit une zone
  * seule : seuls ses descendants, avec leurs propres repères.
+ *
+ * ATTENTE (2026-11-26, reprise de la commande wait de vercel-labs/agent-desktop) : sur un écran qui charge,
+ * l'agent observait en boucle, une capture et un arbre dans son contexte à chaque fois. `attente`
+ * (bureau_cache_observer) relit le bureau jusqu'à voir un élément, un texte ou une fenêtre, puis rend UNE
+ * observation : capture prise APRÈS l'attente, arbre de l'instant où la cible est apparue.
  */
 
 /** Éléments rendus par scripts/hdesk-arbre.ps1 ; le reste est compté dans `omis`. */
@@ -65,9 +70,39 @@ export interface ElementArbre {
   fenetre: number
 }
 
+/** Délai d'une attente sans `delaiMs`, et son maximum (ATTENTE_MAX_MS de scripts/hdesk-arbre.cs). */
+export const ATTENTE_DELAI_DEFAUT_MS = 10_000
+export const ATTENTE_DELAI_MAX_MS = 30_000
+
+/** Ce qu'on attend : un élément (résolu comme `element` d'un appui), un texte, ou une fenêtre par son titre. */
+export interface AttenteArbre {
+  quoi: 'element' | 'texte' | 'fenetre'
+  cible: string
+  delaiMs?: number
+}
+
+/** Le champ `attente` de la lecture rendue par scripts/hdesk-arbre.ps1 après une attente. */
+export interface AttenteLue {
+  quoi: AttenteArbre['quoi']
+  cible: string
+  trouve: boolean
+  attenteMs: number
+  /** L'élément vu (élément ou texte), avec son repère s'il est dans la lecture rendue. */
+  element?: ElementArbre
+  /** Texte : nombre d'éléments qui le contiennent, quand il y en a plusieurs. */
+  nombre?: number
+  /** Élément : plusieurs correspondent (présent, mais un appui par ce nom serait ambigu). */
+  plusieurs?: boolean
+  /** Fenêtre : le titre vu. */
+  fenetre?: string
+  /** Pas encore là : ce qui en approche, ou les fenêtres ouvertes ; plusieurs : les candidats. */
+  detail?: string
+}
+
 export interface ArbreHdesk {
   /** Identifiant de la lecture, celui des repères ; absent d'un ancien script. */
   lecture?: string
+  attente?: AttenteLue
   /** Lecture d'une zone (`-Racine`) : l'élément lu, dont `elements` sont les descendants. */
   racine?: ElementArbre
   fenetres: string[]
@@ -87,6 +122,21 @@ export type LectureArbre =
 export interface OptionsLecture {
   racine?: string
   origine?: OrigineCapture
+  /** Attendre la cible avant de lire (au plus `delaiMs`) ; la lecture rendue est celle de cet instant. */
+  attente?: AttenteArbre
+}
+
+const PARAMETRE_D_ATTENTE: Record<AttenteArbre['quoi'], string> = {
+  element: '-AttendreElement',
+  texte: '-AttendreTexte',
+  fenetre: '-AttendreFenetre'
+}
+
+/** Délai effectif d'une attente : `delaiMs` entier borné à [0, ATTENTE_DELAI_MAX_MS], défaut sinon. */
+export function delaiDAttente(a: AttenteArbre): number {
+  return Number.isInteger(a.delaiMs)
+    ? Math.min(Math.max(a.delaiMs!, 0), ATTENTE_DELAI_MAX_MS)
+    : ATTENTE_DELAI_DEFAUT_MS
 }
 
 export function argumentsArbre(
@@ -109,12 +159,25 @@ export function argumentsArbre(
     String(plafond)
   ]
   const racine = typeof options.racine === 'string' ? options.racine.trim() : ''
-  if (!racine) return args
+  const attente = options.attente
+  const cible = typeof attente?.cible === 'string' ? attente.cible.trim() : ''
+  if (attente && !PARAMETRE_D_ATTENTE[attente.quoi])
+    throw new Error('Attente inconnue : element, texte ou fenetre.')
+  if (attente && !cible) throw new Error('Attente sans cible.')
+  if (!racine && !attente) return args
   if (racine.length > ELEMENT_MAX)
     throw new Error(`Racine trop longue (${ELEMENT_MAX} caractères au plus).`)
+  if (cible.length > ELEMENT_MAX)
+    throw new Error(`Cible d'attente trop longue (${ELEMENT_MAX} caractères au plus).`)
   // Valeur COLLÉE au paramètre : séparée, une racine qui commence par un tiret (« — ») est lue par
   // PowerShell comme un nom de paramètre, et le script sort en code 2 sans message (mesure du 2026-11-26).
-  args.push(`-Racine:${racine}`)
+  if (racine) args.push(`-Racine:${racine}`)
+  if (attente)
+    args.push(
+      `${PARAMETRE_D_ATTENTE[attente.quoi]}:${cible}`,
+      '-DelaiMs',
+      String(delaiDAttente(attente))
+    )
   const o = options.origine
   if (o && Number.isInteger(o.x) && Number.isInteger(o.y) && o.x >= 0 && o.y >= 0)
     args.push(
@@ -142,6 +205,11 @@ export function interpreterArbre(out: string): LectureArbre {
       ok: true,
       arbre: {
         ...(typeof brut.lecture === 'string' && brut.lecture ? { lecture: brut.lecture } : {}),
+        ...(brut.attente &&
+        typeof brut.attente === 'object' &&
+        typeof brut.attente.trouve === 'boolean'
+          ? { attente: brut.attente }
+          : {}),
         ...(brut.racine && typeof brut.racine === 'object' ? { racine: brut.racine } : {}),
         fenetres: brut.fenetres.map(String),
         total: Number.isFinite(brut.total) ? Number(brut.total) : brut.elements.length,
@@ -165,18 +233,61 @@ export function lireArbreHdesk(
   } catch (e) {
     return Promise.resolve({ ok: false, message: (e as Error).message })
   }
+  // L'attente s'ajoute au délai de la lecture : elle peut durer jusqu'à ATTENTE_DELAI_MAX_MS.
+  const delai = ARBRE_DELAI_MS + (options.attente ? delaiDAttente(options.attente) : 0)
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',
       args,
-      { windowsHide: true, timeout: ARBRE_DELAI_MS, maxBuffer: 8 * 1024 * 1024 },
+      { windowsHide: true, timeout: delai, maxBuffer: 8 * 1024 * 1024 },
       (err, out, errOut) => {
+        // Code 3 : attente écoulée sans voir la cible ; la lecture de cet instant est rendue quand
+        // même, `attente.trouve: false` le dit.
+        if (!err || (options.attente && err.code === 3)) {
+          resolve(interpreterArbre(String(out)))
+          return
+        }
         // Un refus de la zone porte son code en tête (« [PERIME] … »), comme un appui refusé.
-        if (err) resolve(refusAct(String(errOut || err.message).trim()))
-        else resolve(interpreterArbre(String(out)))
+        resolve(refusAct(String(errOut || err.message).trim()))
       }
     )
   })
+}
+
+const QUOI_ATTENDU: Record<AttenteArbre['quoi'], string> = {
+  element: 'élément',
+  texte: 'texte',
+  fenetre: 'fenêtre'
+}
+
+/** Place laissée au `detail` d'une attente dans le texte de l'arbre (borné à ARBRE_TEXTE_MAX). */
+const ATTENTE_DETAIL_MAX = 600
+
+/** Première ligne du texte de l'arbre après une attente : vue ou pas, en combien de temps. */
+export function ligneAttente(a: AttenteLue): string {
+  const quoi = `${QUOI_ATTENDU[a.quoi] ?? a.quoi} « ${a.cible} »`
+  const ms = Number.isFinite(a.attenteMs) ? a.attenteMs : 0
+  const detail = typeof a.detail === 'string' ? a.detail.trim() : ''
+  const court =
+    detail.length > ATTENTE_DETAIL_MAX ? `${detail.slice(0, ATTENTE_DETAIL_MAX - 1)}…` : detail
+  if (!a.trouve)
+    return (
+      `Attente écoulée : ${quoi} toujours absent après ${ms} ms — l'arbre et la capture sont ceux de cet instant.` +
+      (court ? ` ${court}` : '')
+    )
+  const vu =
+    a.quoi === 'fenetre' && a.fenetre
+      ? ` (« ${a.fenetre} »)`
+      : a.element && typeof a.element.ref === 'string' && a.element.ref
+        ? ` (${a.element.ref})`
+        : ''
+  const plusieurs =
+    a.plusieurs === true
+      ? ' Plusieurs correspondent : vise-le par son repère.'
+      : Number.isInteger(a.nombre) && a.nombre! > 1
+        ? ` ${a.nombre} éléments le contiennent.`
+        : ''
+  return `Attente : ${quoi} vu${vu} après ${ms} ms.${plusieurs}`
 }
 
 /** Contrôles d'abord : 200 cases d'une grille ne doivent pas cacher les boutons dans 4 000 caractères. */
@@ -306,6 +417,19 @@ export function texteArbre(
   origine: OrigineCapture | undefined,
   max = ARBRE_TEXTE_MAX
 ): string {
+  // Après une attente, sa ligne passe en tête, dans la même limite de texte.
+  const attente = lecture.ok && lecture.arbre.attente ? ligneAttente(lecture.arbre.attente) : ''
+  if (!attente) return texteDeLArbre(lecture, origine, max)
+  // Limite plus courte que la ligne d'attente elle-même : elle seule, coupée.
+  if (attente.length + 1 >= max) return attente.slice(0, Math.max(0, max))
+  return `${attente}\n${texteDeLArbre(lecture, origine, max - attente.length - 1)}`
+}
+
+function texteDeLArbre(
+  lecture: LectureArbre,
+  origine: OrigineCapture | undefined,
+  max: number
+): string {
   if (!lecture.ok)
     return `Arbre d'accessibilité indisponible (${lecture.message}) : vise x/y sur l'image.`
   const { arbre } = lecture
@@ -418,33 +542,57 @@ export interface DependancesOutilsChat {
   agir: (g: GesteTv | GesteElement) => Promise<ResultatGeste>
 }
 
-export type ImageAvecArbre = ImageTv & { arbre?: string }
+export type ImageAvecArbre = ImageTv & { arbre?: string; attente?: AttenteLue }
 
 export function outilsBureauCacheDuChat(d: DependancesOutilsChat): {
-  /** `racine` : lire une seule zone (repère, id, nom ou libellé d'un élément) au lieu de tout l'arbre. */
-  observer: (id: string, racine?: string) => Promise<ImageAvecArbre>
+  /**
+   * `racine` : lire une seule zone (repère, id, nom ou libellé d'un élément) au lieu de tout l'arbre.
+   * `attente` : attendre un élément, un texte ou une fenêtre AVANT la capture.
+   */
+  observer: (id: string, racine?: string, attente?: AttenteArbre) => Promise<ImageAvecArbre>
   agir: (g: GesteTv | GesteElement) => Promise<ResultatGeste>
 } {
+  const lire = async (id: string, options?: OptionsLecture): Promise<LectureArbre> => {
+    try {
+      return await d.lireArbre(id, options)
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) }
+    }
+  }
   return {
-    async observer(id, racine) {
+    async observer(id, racine, attente) {
+      const zone = typeof racine === 'string' ? racine.trim() : ''
+      // Avec une attente, l'arbre AVANT l'image : la capture montre l'écran une fois la cible là.
+      // L'origine citée dans un refus est alors celle de la capture précédente (même recadrage, sauf
+      // fenêtre déplacée entre-temps) ; les positions de l'arbre rendu, elles, suivent la nouvelle image.
+      let lecture: LectureArbre | undefined
+      if (attente) {
+        const avant = d.capteur().origine(id)
+        lecture = await lire(id, {
+          ...(zone ? { racine: zone } : {}),
+          attente,
+          ...(avant ? { origine: avant } : {})
+        })
+      }
       const img = await d.capteur().image(id)
       if (img.statut !== 'ok' && img.statut !== 'uni') return img
-      // L'arbre APRÈS l'image : son origine est celle de l'image que l'agent va lire. Une panne de
-      // l'arbre ne coûte jamais la capture.
+      // Sans attente, l'arbre APRÈS l'image : son origine est celle de l'image que l'agent va lire. Une
+      // panne de l'arbre ne coûte jamais la capture.
       const origine = d.capteur().origine(id)
-      const zone = typeof racine === 'string' ? racine.trim() : ''
-      let lecture: LectureArbre
-      try {
-        lecture = await d.lireArbre(id, zone ? { racine: zone, origine } : undefined)
-      } catch (e) {
-        lecture = { ok: false, message: e instanceof Error ? e.message : String(e) }
-      }
-      if (zone && !lecture.ok)
+      lecture ??= await lire(id, zone ? { racine: zone, origine } : undefined)
+      // Refus d'une lecture demandée : la tête dit ce qui a été demandé, le message du script lequel a
+      // refusé et quoi passer.
+      if ((zone || attente) && !lecture.ok) {
+        const demande = zone
+          ? `Zone « ${zone} »${attente ? ' avec attente' : ''} non lue`
+          : 'Attente refusée'
         return {
           ...img,
-          arbre: `Zone « ${zone} » non lue${lecture.code ? ` [${lecture.code}]` : ''} : ${lecture.message}`
+          arbre: `${demande}${lecture.code ? ` [${lecture.code}]` : ''} : ${lecture.message}`
         }
-      return { ...img, arbre: texteArbre(lecture, origine) }
+      }
+      const lue = lecture.ok ? lecture.arbre.attente : undefined
+      return { ...img, arbre: texteArbre(lecture, origine), ...(lue ? { attente: lue } : {}) }
     },
     agir(g) {
       if (estGesteElement(g)) return d.agir({ ...g, origine: d.capteur().origine(g.id) })

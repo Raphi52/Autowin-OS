@@ -3,8 +3,15 @@
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import type { Message } from '../providers/types'
-import type { ActionHdesk, GesteElement, GesteTv, ResultatGeste } from '../bureau/hdesk-tv'
+import type {
+  ActionHdesk,
+  ArriveeGeste,
+  GesteElement,
+  GesteTv,
+  ResultatGeste
+} from '../bureau/hdesk-tv'
 import { ELEMENT_MAX, VALEUR_MAX } from '../bureau/hdesk-tv'
+import { ATTENTE_DELAI_MAX_MS, type AttenteArbre } from '../bureau/hdesk-arbre'
 import { identifiantBureauCacheChat } from '../consignes/consigne-bureau-cache'
 import type { ActionAgentNavigateur, CibleAgentNavigateur } from '../../shared/navigateur'
 import { argumentAbsent, booleenEnvoye, listeEnvoyee } from './arguments'
@@ -19,7 +26,9 @@ import {
 /**
  * Phrase rendue à l'agent après un geste sur un élément : ce que le script a relu dans la fenêtre
  * (`apres`, scripts/hdesk-arbre.cs EtatApres). Avec elle, l'agent sait si son geste a porté sans
- * refaire une capture ; sans changement visible, il sait qu'il doit re-observer.
+ * refaire une capture ; sans changement visible, il sait qu'il doit re-observer — et, quand le geste est
+ * arrivé sans être refaisable, qu'il ne doit pas le refaire : un effet lent (envoi, chargement) n'est pas
+ * encore visible, et un second appui enverrait le formulaire deux fois.
  */
 export function detailApres(quoi: string, action: ActionHdesk | undefined): string {
   const apres = action?.apres
@@ -31,7 +40,16 @@ export function detailApres(quoi: string, action: ActionHdesk | undefined): stri
   const ms = Number.isFinite(apres.attenteMs) ? ` en ${apres.attenteMs} ms` : ''
   if (apres.changement === true && lignes.length > 0)
     return `${quoi}. Changé dans la fenêtre${ms} : ${lignes.join(' ; ')}.`
+  if (action?.arrive === 'oui' && action.refaisable === false)
+    return `${quoi} : le geste est arrivé, mais aucun changement visible dans sa fenêtre${ms}. Ne le refais pas à l'aveugle (il pourrait agir deux fois) : re-observe (bureau_cache_observer), son effet peut être plus lent.`
   return `${quoi}, mais aucun changement visible dans sa fenêtre${ms} : le geste a peut-être été ignoré — re-observe (bureau_cache_observer) avant de continuer.`
+}
+
+/** Début de la phrase d'un geste qui n'a pas abouti : refusé, ou coupé après être parti. */
+function enteteDuRefus(arrive: ArriveeGeste | undefined): string {
+  if (arrive === 'incertain') return 'Geste interrompu, peut-être arrivé'
+  if (arrive === 'oui') return 'Geste arrivé, puis erreur'
+  return 'Geste refusé'
 }
 
 /**
@@ -104,9 +122,16 @@ export async function outilBureauCache(
     const racine = argumentAbsent(brutRacine) ? '' : String(brutRacine).trim()
     if (racine.length > ELEMENT_MAX)
       return refus(`Refusé : \`racine\` trop longue (${ELEMENT_MAX} caractères au plus).`)
-    const img = await bus.observerBureauCache!(id, racine || undefined)
+    const attente = lireAttente(a)
+    if ('refus' in attente) return refus(attente.refus)
+    const img = await bus.observerBureauCache!(id, racine || undefined, attente.attente)
     if (img.statut === 'ok' || img.statut === 'uni') {
       const content = img.dataUrl.slice(img.dataUrl.indexOf(',') + 1)
+      const capture =
+        img.statut === 'uni'
+          ? `Image unie (page web ou rendu GPU) : lis le titre de la fenêtre, ou pilote le navigateur par son port de débogage.`
+          : `Capture de ${id} jointe (${img.width}×${img.height} px).`
+      const lue = img.attente
       return {
         data: {
           ok: true,
@@ -114,11 +139,13 @@ export async function outilBureauCache(
           statut: img.statut,
           ...(img.statut === 'ok' ? { width: img.width, height: img.height } : {}),
           ...(racine ? { racine } : {}),
+          ...(lue ? { attente: { trouve: lue.trouve, attenteMs: lue.attenteMs } } : {}),
           ...(typeof img.arbre === 'string' ? { arbre: img.arbre } : {}),
-          detail:
-            img.statut === 'uni'
-              ? `Image unie (page web ou rendu GPU) : lis le titre de la fenêtre, ou pilote le navigateur par son port de débogage.`
-              : `Capture de ${id} jointe (${img.width}×${img.height} px).`
+          detail: !lue
+            ? capture
+            : lue.trouve
+              ? `Attendu ${lue.attenteMs} ms. ${capture}`
+              : `Attente écoulée (${lue.attenteMs} ms) sans voir la cible : capture et arbre de cet instant. ${capture}`
         },
         attachments: [
           {
@@ -221,6 +248,55 @@ export async function outilBureauCache(
   const r = await bus.agirBureauCache!(lu.geste)
   const { action, ...rendu } = resultatDuGeste(r, lu, true)
   return { data: { ...rendu, id, ...(action ? { action } : {}) } }
+}
+
+/** Arguments d'attente de bureau_cache_observer, et ce qu'ils attendent dans scripts/hdesk-arbre.ps1. */
+const ATTENTES = [
+  ['attendreElement', 'element'],
+  ['attendreTexte', 'texte'],
+  ['attendreFenetre', 'fenetre']
+] as const
+
+/**
+ * L'attente demandée à bureau_cache_observer, des deux voies d'appel (vrais types ou texte) : une seule
+ * cible parmi les trois, `delaiMs` entier de 0 à ATTENTE_DELAI_MAX_MS, et seulement avec une cible.
+ */
+function lireAttente(a: Record<string, unknown>): { attente?: AttenteArbre } | { refus: string } {
+  const demandees: AttenteArbre[] = []
+  for (const [cle, quoi] of ATTENTES) {
+    const brut = a[cle]
+    if (argumentAbsent(brut)) continue
+    if (typeof brut !== 'string' && typeof brut !== 'number')
+      return { refus: `Refusé : \`${cle}\` doit être un texte.` }
+    const cible = String(brut).trim()
+    if (!cible) continue
+    if (cible.length > ELEMENT_MAX)
+      return { refus: `Refusé : \`${cle}\` trop long (${ELEMENT_MAX} caractères au plus).` }
+    demandees.push({ quoi, cible })
+  }
+  if (demandees.length > 1)
+    return {
+      refus:
+        'Refusé : une seule attente à la fois — `attendreElement`, `attendreTexte` OU `attendreFenetre`.'
+    }
+  const brutDelai = a.delaiMs
+  if (argumentAbsent(brutDelai)) return demandees.length ? { attente: demandees[0] } : {}
+  if (!demandees.length)
+    return {
+      refus:
+        'Refusé : `delaiMs` va avec une attente (`attendreElement`, `attendreTexte` ou `attendreFenetre`).'
+    }
+  const delai = typeof brutDelai === 'string' && brutDelai.trim() ? Number(brutDelai) : brutDelai
+  if (
+    typeof delai !== 'number' ||
+    !Number.isInteger(delai) ||
+    delai < 0 ||
+    delai > ATTENTE_DELAI_MAX_MS
+  )
+    return {
+      refus: `Refusé : \`delaiMs\` = entier de 0 à ${ATTENTE_DELAI_MAX_MS} (millisecondes).`
+    }
+  return { attente: { ...demandees[0], delaiMs: delai } }
 }
 
 /** Champs d'un geste : ceux de `bureau_cache_agir` hors `id`, et ceux de chaque entrée de `gestes`. */
@@ -334,18 +410,38 @@ function lireGeste(a: Record<string, unknown>, id: string): GesteLu | { refus: s
 /**
  * Ce que l'agent lit d'un geste joué. `seul` : geste d'un appel à lui seul, dont la phrase rappelle de
  * re-observer ; dans un enchaînement, la même phrase à chaque geste ne ferait que répéter.
+ * `arrive` et `refaisable` (scripts/hdesk-act.ps1) montent au premier niveau, refus compris : c'est là que
+ * l'agent décide s'il peut refaire le geste.
  */
 function resultatDuGeste(
   r: ResultatGeste,
   lu: GesteLu,
   seul: boolean
-): { ok: boolean; detail: string; code?: string; action?: ActionHdesk } {
+): {
+  ok: boolean
+  detail: string
+  code?: string
+  arrive?: ArriveeGeste
+  refaisable?: boolean
+  action?: ActionHdesk
+} {
+  const source = r.ok ? r.action : r
+  const disposition = {
+    ...(source?.arrive ? { arrive: source.arrive } : {}),
+    ...(typeof source?.refaisable === 'boolean' ? { refaisable: source.refaisable } : {})
+  }
   if (!r.ok)
-    return { ok: false, ...(r.code ? { code: r.code } : {}), detail: `Geste refusé : ${r.message}` }
+    return {
+      ok: false,
+      ...(r.code ? { code: r.code } : {}),
+      ...disposition,
+      detail: `${enteteDuRefus(r.arrive)} : ${r.message}`
+    }
   const action = r.action ? { action: r.action } : {}
   if (lu.quoi === 'point')
     return {
       ok: true,
+      ...disposition,
       ...action,
       detail: seul
         ? 'Geste envoyé : re-observe (bureau_cache_observer) pour vérifier son effet.'
@@ -353,6 +449,7 @@ function resultatDuGeste(
     }
   return {
     ok: true,
+    ...disposition,
     ...action,
     detail: detailApres(lu.quoi === 'remplissage' ? 'Champ rempli' : 'Élément appuyé', r.action)
   }

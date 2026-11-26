@@ -582,9 +582,12 @@ describe('TV interactive — geste vers hdesk-act', () => {
   })
   it('refuse un identifiant hors ^[a-zA-Z0-9_-]+$ sans rien lancer', async () => {
     expect(() => argumentsAct('R', { id: 'a b;calc', x: 1, y: 1 })).toThrow(/invalide/)
+    // Refusé avant le script : rien n'est parti, le refaire ne double rien.
     expect(await agirHdesk('R', { id: '../x', x: 1, y: 1 })).toEqual({
       ok: false,
-      message: 'Identifiant de bureau invalide.'
+      message: 'Identifiant de bureau invalide.',
+      arrive: 'non',
+      refaisable: true
     })
   })
   it('refuse des coordonnées non finies ou négatives', () => {
@@ -647,6 +650,8 @@ describe.skipIf(process.platform !== 'win32')('journal des gestes — vrai hdesk
         reg
       )
       expect(r.ok).toBe(false)
+      // Ligne JSON du vrai script sur stdout : le bureau n'existe pas, rien n'est parti.
+      expect(r).toMatchObject({ arrive: 'non', refaisable: true })
       const brut = readFileSync(join(reg, `${id}.gestes.jsonl`), 'utf8')
       expect(brut).not.toContain('secret123')
       expect(lignes(reg, id)).toEqual([
@@ -781,6 +786,26 @@ describe('refus de hdesk-act — code en tête', () => {
   it('un refus sans code reste un message, sans code inventé', () => {
     expect(refusAct('Bureau introuvable.')).toEqual({ ok: false, message: 'Bureau introuvable.' })
   })
+  // Le refus dit aussi, par sa ligne JSON de stdout, si le geste est parti et s'il peut être refait.
+  it('lit `arrive` et `refaisable` de la ligne JSON de stdout ; valeurs inconnues ignorées', () => {
+    expect(
+      refusAct(
+        '[REFUSE] Appui par l’accessibilite refuse.',
+        '{"instanceId":"a","arrive":"incertain","refaisable":false}\n'
+      )
+    ).toEqual({
+      ok: false,
+      code: 'REFUSE',
+      message: 'Appui par l’accessibilite refuse.',
+      arrive: 'incertain',
+      refaisable: false
+    })
+    expect(refusAct('x', '{"arrive":"peut-etre","refaisable":"oui"}')).toEqual({
+      ok: false,
+      message: 'x'
+    })
+    expect(refusAct('x', 'pas de json')).toEqual({ ok: false, message: 'x' })
+  })
 })
 
 describe('remplir un champ — valeur sur l’entrée standard', () => {
@@ -820,6 +845,13 @@ describe('TV interactive — retour de hdesk-act', () => {
   })
   it('reste ok sans JSON lisible', () => {
     expect(resultatAct('rien')).toEqual({ ok: true })
+  })
+  it('garde `arrive` et `refaisable` du geste réussi', () => {
+    const out = '{"instanceId":"a","x":1,"y":2,"messages":2,"arrive":"oui","refaisable":false}'
+    expect(resultatAct(out)).toMatchObject({
+      ok: true,
+      action: { arrive: 'oui', refaisable: false }
+    })
   })
 })
 

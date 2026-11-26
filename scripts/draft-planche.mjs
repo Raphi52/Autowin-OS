@@ -93,7 +93,9 @@ function principal(args) {
     let verdict = {}
     try {
       verdict = JSON.parse(sortieApercu)
-    } catch {}
+    } catch {
+      // Sortie non JSON (aperçu planté) : son code d'échec, juste en dessous, la rend telle quelle.
+    }
     if ([1, 2, 4].includes(code)) {
       console.log(JSON.stringify({ ...rendu, ok: false, erreur: `apercu en code ${code}`, defauts: verdict.defauts ?? [], sortie: sortieApercu.slice(0, 800) }, null, 2))
       return 1

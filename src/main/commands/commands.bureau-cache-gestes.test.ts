@@ -3,6 +3,7 @@ import { AppCommandBus } from './commands'
 import { redactedArgs } from './rejeu'
 import { GESTES_MAX } from './outils-bureau-navigateur'
 import type { GesteElement, GesteTv, ImageTv, ResultatGeste } from '../bureau/hdesk-tv'
+import type { AttenteArbre, AttenteLue } from '../bureau/hdesk-arbre'
 
 /*
  * `bureau_cache_agir` avec `gestes` (plusieurs gestes en un appel, idée reprise du lot de
@@ -24,21 +25,28 @@ const IMAGE: ImageTv = {
   height: 600
 }
 
-function busBureau(rendus: ResultatGeste[] = []): {
+function busBureau(
+  rendus: ResultatGeste[] = [],
+  attenteRendue?: AttenteLue
+): {
   bus: AppCommandBus
   gestes: Array<GesteTv | GesteElement>
-  observes: Array<{ id: string; racine?: string }>
+  observes: Array<{ id: string; racine?: string; attente?: AttenteArbre }>
 } {
   const bus = new AppCommandBus(os, () => undefined)
   const gestes: Array<GesteTv | GesteElement> = []
-  const observes: Array<{ id: string; racine?: string }> = []
+  const observes: Array<{ id: string; racine?: string; attente?: AttenteArbre }> = []
   bus.agirBureauCache = async (g) => {
     gestes.push(g)
     return rendus[gestes.length - 1] ?? { ok: true }
   }
-  bus.observerBureauCache = async (id, racine) => {
-    observes.push({ id, ...(racine !== undefined ? { racine } : {}) })
-    return { ...IMAGE, id, arbre: 'arbre' }
+  bus.observerBureauCache = async (id, racine, attente) => {
+    observes.push({
+      id,
+      ...(racine !== undefined ? { racine } : {}),
+      ...(attente !== undefined ? { attente } : {})
+    })
+    return { ...IMAGE, id, arbre: 'arbre', ...(attenteRendue ? { attente: attenteRendue } : {}) }
   }
   bus.ficheBureauCache = (id) => ({ id, conversationId: 'conv-7' }) as never
   return { bus, gestes, observes }
@@ -228,6 +236,15 @@ describe('bureau_cache_observer : lire une seule zone', () => {
     expect(observes).toHaveLength(0)
   })
 
+  it('le catalogue publie l’attente avec ses vrais types', () => {
+    const observer = new AppCommandBus(os, () => undefined)
+      .catalog()
+      .find((c) => c.name === 'bureau_cache_observer')
+    expect(observer?.argsTypes?.attendreElement).toEqual({ type: 'string', maxLength: 200 })
+    expect(observer?.argsTypes?.delaiMs).toEqual({ type: 'integer', minimum: 0, maximum: 30000 })
+    expect(observer?.description).toContain('attendreElement')
+  })
+
   it('le catalogue publie `racine` et `gestes` avec leurs vrais types', () => {
     const cat = new AppCommandBus(os, () => undefined).catalog()
     const observer = cat.find((c) => c.name === 'bureau_cache_observer')
@@ -238,5 +255,146 @@ describe('bureau_cache_observer : lire une seule zone', () => {
     expect(Object.keys(agir?.argsTypes?.gestes?.items?.properties ?? {}).sort()).toEqual(
       ['element', 'entree', 'molette', 'sansClic', 'texte', 'touche', 'valeur', 'x', 'y'].sort()
     )
+  })
+})
+
+/*
+ * ATTENTE (idée reprise de la commande wait de vercel-labs/agent-desktop) : un écran qui charge ne
+ * demande plus d'observer en boucle ; l'attente part au branchement, qui la joue AVANT la capture.
+ */
+describe('bureau_cache_observer : attendre avant la capture', () => {
+  it('une attente part au branchement, nettoyée ; `delaiMs` en texte (voie <cmd>) accepté', async () => {
+    const { bus, observes } = busBureau()
+    await bus.exec('bureau_cache_observer', { attendreElement: '  Valider ' }, 'conv-7')
+    await bus.exec('bureau_cache_observer', { attendreTexte: 'Total', delaiMs: '5000' }, 'conv-7')
+    await bus.exec('bureau_cache_observer', { attendreFenetre: 'Facture', delaiMs: 0 }, 'conv-7')
+    expect(observes).toEqual([
+      { id: 'chat-conv-7', attente: { quoi: 'element', cible: 'Valider' } },
+      { id: 'chat-conv-7', attente: { quoi: 'texte', cible: 'Total', delaiMs: 5000 } },
+      { id: 'chat-conv-7', attente: { quoi: 'fenetre', cible: 'Facture', delaiMs: 0 } }
+    ])
+  })
+
+  it('deux attentes, délai seul, délai hors bornes ou cible trop longue : refus, aucune capture', async () => {
+    const { bus, observes } = busBureau()
+    for (const [a, attendu] of [
+      [{ attendreElement: 'A', attendreTexte: 'B' }, 'une seule attente'],
+      [{ delaiMs: 5000 }, '`delaiMs` va avec une attente'],
+      [{ attendreElement: 'A', delaiMs: 30001 }, '`delaiMs` = entier'],
+      [{ attendreElement: 'A', delaiMs: 1.5 }, '`delaiMs` = entier'],
+      [{ attendreTexte: 'x'.repeat(201) }, 'trop long'],
+      [{ attendreFenetre: { titre: 'x' } }, 'doit être un texte']
+    ] as const) {
+      const r = await bus.exec('bureau_cache_observer', a, 'conv-7')
+      expect(donnees(r).ok).toBe(false)
+      expect(String(donnees(r).detail)).toContain(attendu)
+    }
+    expect(observes).toHaveLength(0)
+  })
+
+  it('le résultat dit si la cible a été vue et en combien de temps ; écoulée = la phrase le dit', async () => {
+    const vue = busBureau([], {
+      quoi: 'element',
+      cible: 'Valider',
+      trouve: true,
+      attenteMs: 3783
+    })
+    const r = await vue.bus.exec('bureau_cache_observer', { attendreElement: 'Valider' }, 'conv-7')
+    expect(donnees(r)).toMatchObject({ ok: true, attente: { trouve: true, attenteMs: 3783 } })
+    expect(String(donnees(r).detail)).toMatch(/^Attendu 3783 ms\. Capture de chat-conv-7 jointe/)
+    const ecoulee = busBureau([], {
+      quoi: 'element',
+      cible: 'Valider',
+      trouve: false,
+      attenteMs: 10012
+    })
+    const e = await ecoulee.bus.exec(
+      'bureau_cache_observer',
+      { attendreElement: 'Valider' },
+      'conv-7'
+    )
+    expect(donnees(e)).toMatchObject({ ok: true, attente: { trouve: false, attenteMs: 10012 } })
+    expect(String(donnees(e).detail)).toMatch(/^Attente écoulée \(10012 ms\) sans voir la cible/)
+  })
+})
+
+/*
+ * GESTE ARRIVÉ, REFAISABLE (disposition des erreurs de vercel-labs/agent-desktop : not_delivered,
+ * delivery_uncertain, retry safe) : « aucun changement visible » poussait à refaire un geste déjà parti.
+ */
+describe('bureau_cache_agir : le geste est-il arrivé, peut-il être refait', () => {
+  it('appui arrivé sans changement visible : `arrive`/`refaisable` au premier niveau, ne pas le refaire', async () => {
+    const { bus } = busBureau([
+      {
+        ok: true,
+        action: {
+          appui: 'accessibilite:Invoke',
+          arrive: 'oui',
+          refaisable: false,
+          apres: { changement: false, attenteMs: 1000 }
+        }
+      }
+    ])
+    const r = await bus.exec('bureau_cache_agir', { element: 'Envoyer' }, 'conv-7')
+    expect(donnees(r)).toMatchObject({ ok: true, arrive: 'oui', refaisable: false })
+    expect(String(donnees(r).detail)).toContain('le geste est arrivé')
+    expect(String(donnees(r).detail)).toContain('Ne le refais pas à l')
+  })
+
+  it('remplissage sans changement visible : refaisable, la phrase garde « re-observe »', async () => {
+    const { bus } = busBureau([
+      {
+        ok: true,
+        action: {
+          appui: 'accessibilite:SetValue',
+          arrive: 'oui',
+          refaisable: true,
+          apres: { changement: false }
+        }
+      }
+    ])
+    const r = await bus.exec('bureau_cache_agir', { element: 'Nom', valeur: 'Dupont' }, 'conv-7')
+    expect(donnees(r)).toMatchObject({ ok: true, arrive: 'oui', refaisable: true })
+    expect(String(donnees(r).detail)).toMatch(/^Champ rempli, mais aucun changement visible/)
+  })
+
+  it('coupé en route : « peut-être arrivé », jamais « refusé » ; refus avant envoi : refaisable', async () => {
+    const { bus } = busBureau([
+      {
+        ok: false,
+        code: 'REFUSE',
+        message: 'Appui par l’accessibilite refuse.\nLe geste a peut-etre porte : re-observe.',
+        arrive: 'incertain',
+        refaisable: false
+      },
+      { ok: false, code: 'INACTIF', message: 'Element inactif.', arrive: 'non', refaisable: true }
+    ])
+    const r = await bus.exec('bureau_cache_agir', { element: 'Envoyer' }, 'conv-7')
+    expect(donnees(r)).toMatchObject({
+      ok: false,
+      code: 'REFUSE',
+      arrive: 'incertain',
+      refaisable: false
+    })
+    expect(String(donnees(r).detail)).toMatch(/^Geste interrompu, peut-être arrivé : /)
+    const n = await bus.exec('bureau_cache_agir', { element: 'Envoyer' }, 'conv-7')
+    expect(donnees(n)).toMatchObject({ ok: false, arrive: 'non', refaisable: true })
+    expect(String(donnees(n).detail)).toMatch(/^Geste refusé : /)
+  })
+
+  it('enchaînement : chaque résultat porte `arrive` et `refaisable`', async () => {
+    const { bus } = busBureau([
+      { ok: true, action: { arrive: 'oui', refaisable: true } },
+      { ok: true, action: { arrive: 'oui', refaisable: false } }
+    ])
+    const r = await bus.exec(
+      'bureau_cache_agir',
+      { gestes: [{ element: 'Nom', valeur: 'Dupont' }, { element: 'Envoyer' }] },
+      'conv-7'
+    )
+    expect(donnees(r).resultats).toEqual([
+      expect.objectContaining({ n: 1, arrive: 'oui', refaisable: true }),
+      expect.objectContaining({ n: 2, arrive: 'oui', refaisable: false })
+    ])
   })
 })
