@@ -140,3 +140,64 @@ describe('navigateur_lire — un mot de passe du coffre affiché par la page rep
     expect(rendu).toContain('= [secret:PORTAIL_PASSWORD]')
   })
 })
+
+describe('navigateur_console — un mot de passe du coffre cité par la page repart masqué', () => {
+  it('erreur de console et adresse d’une requête en échec (formulaire en GET) : ni brut ni encodé', async () => {
+    // Valeur fixe : ses symboles changent sous l'encodage d'une adresse, le cas que le masquage
+    // brut laissait passer.
+    const valeur = 'Nouveau!Mdp#2026=ok@x'
+    etat.coffre!.ajouterCle('PORTAIL_PASSWORD', valeur)
+    const encodee = new URLSearchParams([['NewPassword', valeur]]).toString()
+    expect(encodee).not.toContain(valeur)
+    bus.navigateur = () =>
+      ({
+        etat: (fil: string) => ({ conversationId: fil, ongletActif: 'onglet-1', onglets: [] }),
+        lignesConsole: () => [
+          {
+            ongletId: 'onglet-1',
+            niveau: 'error',
+            message: `Échec de validation pour ${valeur}`,
+            source: `${SITE}/app.js?${encodee}`,
+            ligne: 3,
+            horodatage: 1
+          }
+        ],
+        requetesEchouees: () => [
+          {
+            ongletId: 'onglet-1',
+            url: `${SITE}/Identity/Account/Manage/ChangePassword?${encodee}`,
+            methode: 'GET',
+            statut: 500,
+            typeRessource: 'mainFrame',
+            horodatage: 1
+          },
+          {
+            ongletId: 'onglet-1',
+            url: `${SITE}/api?q=${encodeURIComponent(valeur)}`,
+            methode: 'GET',
+            erreur: 'net::ERR_FAILED',
+            typeRessource: 'xhr',
+            horodatage: 1
+          }
+        ]
+      }) as unknown as NavigateurDeLAgent
+    const r = await bus.exec('navigateur_console', {}, 'conv-a')
+    const rendu = JSON.stringify(r)
+    expect(rendu).not.toContain(valeur)
+    expect(rendu).not.toContain(encodee)
+    expect(rendu).not.toContain(encodeURIComponent(valeur))
+    const d = r.data as {
+      erreurs: Array<{ message: string; source: string }>
+      requetesEchouees: Array<{ url: string; methode: string }>
+    }
+    expect(d.erreurs[0]).toMatchObject({
+      message: 'Échec de validation pour [secret:PORTAIL_PASSWORD]',
+      source: `${SITE}/app.js?NewPassword=[secret:PORTAIL_PASSWORD]`
+    })
+    expect(d.requetesEchouees.map((q) => q.url)).toEqual([
+      `${SITE}/Identity/Account/Manage/ChangePassword?NewPassword=[secret:PORTAIL_PASSWORD]`,
+      `${SITE}/api?q=[secret:PORTAIL_PASSWORD]`
+    ])
+    expect(d.requetesEchouees[0].methode).toBe('GET')
+  })
+})

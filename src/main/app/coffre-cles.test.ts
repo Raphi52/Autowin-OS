@@ -382,6 +382,21 @@ describe('coffre à clés — injection et masquage', () => {
     expect(coffre.masquerValeurs('')).toBe('')
   })
 
+  it('masque aussi la valeur encodée dans une adresse (formulaire en GET, encodeURIComponent)', () => {
+    // fix-ok: mesuré — le masquage ne cherchait que la valeur brute ; dans l'adresse d'une requête
+    // en échec, `navigateur_console` rendait `Nouveau%21Mdp%232026…` tel quel au modèle.
+    const coffre = coffreDeTest()
+    coffre.ajouterCle('PORTAIL_PASSWORD', 'Mdp!#$%*+-=?@_~2026')
+    // Demi-paire isolée : `encodeURIComponent` lève ; le masquage ne doit pas tomber pour autant.
+    coffre.ajouterCle('ETRANGE_TOKEN', 'abc\uD800defghij')
+    const formulaire = new URLSearchParams([['p', 'Mdp!#$%*+-=?@_~2026']]).toString()
+    const composant = `q=${encodeURIComponent('Mdp!#$%*+-=?@_~2026')}`
+    expect(coffre.masquerValeurs(`/a?${formulaire}&${composant} brut=Mdp!#$%*+-=?@_~2026`)).toBe(
+      '/a?p=[secret:PORTAIL_PASSWORD]&q=[secret:PORTAIL_PASSWORD] brut=[secret:PORTAIL_PASSWORD]'
+    )
+    expect(coffre.masquerValeurs('x=abc\uD800defghij')).toBe('x=[secret:ETRANGE_TOKEN]')
+  })
+
   it('masquer sans chiffrement rend le texte intact, sans exception', () => {
     const coffre = coffreDeTest({ chiffrement: () => undefined })
     expect(coffre.masquerValeurs(`clé ${VALEUR_MISTRAL}`)).toBe(`clé ${VALEUR_MISTRAL}`)

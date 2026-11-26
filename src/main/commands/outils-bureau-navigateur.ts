@@ -340,16 +340,21 @@ export async function outilNavigateur(
       if (depuis !== undefined && !Number.isFinite(depuis))
         return refus('Refusé : `depuis` est un horodatage en millisecondes (un nombre).')
       const recent = (t: number): boolean => depuis === undefined || t >= depuis
+      // La page écrit ce qu'elle veut dans sa console, et un formulaire envoyé en GET met le mot de
+      // passe tapé depuis le coffre dans l'adresse de sa requête : tout texte rendu repart masqué.
       const erreurs = nav
         .lignesConsole(fil)
         .filter((l) => l.niveau === 'error' && recent(l.horodatage))
         .map(({ message, source, ligne, horodatage: t }) => ({
-          message,
-          source,
+          message: masquerValeurs(message),
+          source: masquerValeurs(source),
           ligne,
           horodatage: t
         }))
-      const requetesEchouees = nav.requetesEchouees(fil).filter((r) => recent(r.horodatage))
+      const requetesEchouees = nav
+        .requetesEchouees(fil)
+        .filter((r) => recent(r.horodatage))
+        .map((r) => ({ ...r, url: masquerValeurs(r.url) }))
       return {
         data: {
           ok: true,

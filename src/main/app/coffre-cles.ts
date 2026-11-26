@@ -123,6 +123,21 @@ export const NOM_FICHIER_COFFRE = 'coffre-cles.bin'
 /** En dessous, une valeur est trop courte pour être masquée sans abîmer du texte ordinaire. */
 export const LONGUEUR_MIN_MASQUAGE = 8
 
+/**
+ * Formes que prend une valeur dans une adresse : un formulaire envoyé en GET la range encodée
+ * (`!` → `%21`…), un script l'encode par `encodeURIComponent`. Le masquage brut laisserait passer
+ * ces formes, que les adresses rendues par le navigateur (console, requêtes en échec) contiennent.
+ */
+function formesDansUneAdresse(valeur: string): string[] {
+  const formulaire = new URLSearchParams([['', valeur]]).toString().slice(1)
+  try {
+    return [formulaire, encodeURIComponent(valeur)]
+  } catch {
+    // Demi-paire UTF-16 isolée : `encodeURIComponent` lève, la forme du formulaire suffit.
+    return [formulaire]
+  }
+}
+
 const NOM_VALIDE = /^[A-Za-z_][A-Za-z0-9_]*$/
 const SUFFIXES_DE_CLE = /(?:_API_KEY|_APIKEY|_KEY|_TOKEN|_SECRET|_PAT|_PASSWORD)$/i
 /** Les réglages d'Autowin lui-même ne sont pas des clés d'agent ; `AUTOWIN_COFFRE_NOMS` y vit. */
@@ -520,10 +535,16 @@ export function creerCoffre(options: OptionsCoffre = {}): Coffre {
         // Les plus longues d'abord : une valeur qui en contient une autre doit être masquée entière.
         const aMasquer = charger()
           .contenu.entrees.filter((e) => e.valeur.length >= LONGUEUR_MIN_MASQUAGE)
-          .sort((a, b) => b.valeur.length - a.valeur.length || a.nom.localeCompare(b.nom))
+          .flatMap((e) =>
+            [...new Set([e.valeur, ...formesDansUneAdresse(e.valeur)])].map((motif) => ({
+              motif,
+              nom: e.nom
+            }))
+          )
+          .sort((a, b) => b.motif.length - a.motif.length || a.nom.localeCompare(b.nom))
         let sortie = texte
-        for (const e of aMasquer) {
-          if (sortie.includes(e.valeur)) sortie = sortie.split(e.valeur).join(`[secret:${e.nom}]`)
+        for (const { motif, nom } of aMasquer) {
+          if (sortie.includes(motif)) sortie = sortie.split(motif).join(`[secret:${nom}]`)
         }
         return sortie
       } catch {
