@@ -18,7 +18,7 @@
  *      `secretColumnViolation`) : `*` et toute colonne de mot de passe / clé sont refusés avant
  *      d'atteindre le serveur.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { runSqlcmdJson, type SqlcmdDeps } from './sqlcmd-runner'
 
 export interface SqlTarget {
@@ -29,7 +29,8 @@ export interface SqlTarget {
 /**
  * CONFIGURATION DU CATALOGUE — plus aucune valeur d'entreprise dans le code. Le serveur, la base, la
  * table et les colonnes de l'autorité viennent d'un fichier propre à chaque utilisateur
- * (`<userData>/sql-catalog.json`, chargé au démarrage par `index.ts`). SANS configuration, le
+ * (`<userData>/sql-catalog.json`, chargé au démarrage par `index.ts`, puis RELU dès qu'il change —
+ * `rechargerSiModifie`, sans redémarrage). SANS configuration, le
  * catalogue est VIDE et marqué `degraded` : aucune base n'est lisible. Défaut FERMÉ.
  */
 export interface SqlCatalogConfig {
@@ -92,9 +93,28 @@ export function parseSqlCatalogConfig(value: unknown): SqlCatalogConfig | undefi
 let configuration: SqlCatalogConfig | undefined
 
 /**
+ * Le fichier d'où vient la configuration, et sa signature au moment de la lecture. Sert à le RELIRE
+ * dès qu'il change. Vécu conv-2195 (27/11/2026) : une copie de test déclarée avec l'accord de
+ * l'utilisateur restait refusée parce que le fichier n'était lu qu'au démarrage, et le redémarrage
+ * attendait derrière dix tâches — trois tours perdus pour une simple lecture de dev.
+ */
+let fichier: { path: string; signature: string } | undefined
+
+function signatureDe(path: string): string {
+  try {
+    const s = statSync(path)
+    return `${s.mtimeMs}|${s.size}`
+  } catch {
+    return 'absent'
+  }
+}
+
+/**
  * Charge `sql-catalog.json`. Fichier absent, illisible ou invalide → aucune configuration (fermé).
+ * Le fichier reste suivi : toute modification ultérieure est relue au prochain appel.
  */
 export function loadSqlCatalogConfigFile(path: string): SqlCatalogConfig | undefined {
+  const signature = signatureDe(path)
   let config: SqlCatalogConfig | undefined
   try {
     if (existsSync(path)) config = parseSqlCatalogConfig(JSON.parse(readFileSync(path, 'utf8')))
@@ -102,16 +122,31 @@ export function loadSqlCatalogConfigFile(path: string): SqlCatalogConfig | undef
     config = undefined
   }
   configureSqlCatalog(config)
+  fichier = { path, signature }
   return config
 }
 
-/** Installe (ou retire, sans argument) la configuration. Vide le cache. */
+/**
+ * Relit le fichier s'il a changé depuis sa dernière lecture. Un `stat` par appel : négligeable devant
+ * une requête SQL. Le fichier devenu absent ou invalide FERME l'accès, comme au démarrage — jamais
+ * de repli sur l'ancienne configuration.
+ */
+function rechargerSiModifie(): void {
+  if (fichier && signatureDe(fichier.path) !== fichier.signature) loadSqlCatalogConfigFile(fichier.path)
+}
+
+/**
+ * Installe (ou retire, sans argument) la configuration. Vide le cache. Une configuration posée à la
+ * main (tests) n'est plus liée à un fichier : elle ne sera pas écrasée par une relecture.
+ */
 export function configureSqlCatalog(config?: SqlCatalogConfig): void {
   configuration = config
   cache = undefined
+  fichier = undefined
 }
 
 export function getSqlCatalogConfig(): SqlCatalogConfig | undefined {
+  rechargerSiModifie()
   return configuration
 }
 
@@ -224,6 +259,7 @@ export interface CatalogDeps extends SqlcmdDeps {
  * les cibles fixes — donc aucune base de production. Défaut FERMÉ, et visible.
  */
 export async function resolveSqlTargets(deps: CatalogDeps = {}): Promise<SqlTargetCatalog> {
+  rechargerSiModifie()
   const maintenant = (deps.now ?? Date.now)()
   if (cache && cache.expire > maintenant) return cache.catalogue
 
@@ -252,6 +288,7 @@ export type LectureBasesExploitees =
  * complète.
  */
 export async function lireBasesExploitees(deps: SqlcmdDeps = {}): Promise<LectureBasesExploitees> {
+  rechargerSiModifie()
   const config = configuration
   if (!config) return { ok: false, erreur: 'aucun catalogue SQL configuré (sql-catalog.json).' }
   const resultat = await runSqlcmdJson(

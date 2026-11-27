@@ -1,7 +1,10 @@
 // fix-ok: valeurs propres à entreprise (serveur, base, table, colonnes du catalogue) écrites en dur — mesuré par grep; remplacées par la config sql-catalog.json, fermée par défaut (tests sql-read-catalog/guard rouge si on rouvre)
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { configureSqlCatalog as configurerCatalogueTest } from './sql-read-catalog'
 import { TEST_SQL_CATALOG } from './sql-catalog.test-fixture'
 
@@ -14,7 +17,9 @@ import {
   devTargets,
   estBaseCatalogue,
   estServeurDev,
+  getSqlCatalogConfig,
   lireBasesExploitees,
+  loadSqlCatalogConfigFile,
   parseCatalogRows,
   parseSqlCatalogConfig,
   resolveSqlTargets
@@ -307,6 +312,79 @@ describe('resolveSqlTargets', () => {
     child2.emit('close', 1)
     await p2
     expect(spawnFn).toHaveBeenCalledTimes(2)
+  })
+})
+
+/**
+ * LE FICHIER EST RELU QUAND IL CHANGE, SANS REDÉMARRAGE. Vécu conv-2195 (27/11/2026) : avec l'accord
+ * de l'utilisateur, l'agent déclare une copie de test (un serveur de dev neuf) dans
+ * `sql-catalog.json` ; `sql_query` la refuse encore (« Serveur hors périmètre ») parce que le fichier
+ * n'était lu qu'au démarrage, et le redémarrage attend derrière 10 tâches. Trois tours perdus pour
+ * une lecture de dev.
+ */
+describe('sql-catalog.json modifié pendant que l’app tourne', () => {
+  const dossier = mkdtempSync(join(tmpdir(), 'sql-catalog-'))
+  const chemin = join(dossier, 'sql-catalog.json')
+  const ecrire = (config: object, mtimeS: number): void => {
+    writeFileSync(chemin, JSON.stringify(config), 'utf8')
+    utimesSync(chemin, mtimeS, mtimeS)
+  }
+  // Autorité injoignable : seules les cibles de dev comptent, c'est ce que le cas réel exerce.
+  const degrade = (): Parameters<typeof resolveSqlTargets>[0] => {
+    const child = fakeChild()
+    queueMicrotask(() => child.emit('close', 1))
+    return {
+      spawnFn: vi.fn(() => child) as never,
+      sqlcmdPath: 'sqlcmd.exe',
+      outputFile: fakeFile('Msg 4060'),
+      outputPath: 'T:\\cat.json'
+    }
+  }
+
+  beforeEach(() => clearSqlTargetCache())
+  afterAll(() => {
+    configureSqlCatalog(TEST_SQL_CATALOG)
+    rmSync(dossier, { recursive: true, force: true })
+  })
+
+  it('un serveur de dev ajouté au fichier est lisible au prochain appel', async () => {
+    ecrire(TEST_SQL_CATALOG, 1_000)
+    loadSqlCatalogConfigFile(chemin)
+    expect((await resolveSqlTargets(degrade())).has('SRV-NEUF', 'COPIE_QUALIF')).toBe(false)
+
+    ecrire({ ...TEST_SQL_CATALOG, devServers: [...TEST_SQL_CATALOG.devServers, 'SRV-NEUF'] }, 2_000)
+    const c = await resolveSqlTargets(degrade())
+    expect(c.has('SRV-NEUF', 'COPIE_QUALIF')).toBe(true)
+    expect(estServeurDev('SRV-NEUF')).toBe(true)
+  })
+
+  it('contrôle négatif : fichier inchangé → pas de relecture, le cache tient', async () => {
+    ecrire(TEST_SQL_CATALOG, 3_000)
+    loadSqlCatalogConfigFile(chemin)
+    const child = fakeChild()
+    const spawnFn = vi.fn(() => child)
+    const deps = {
+      spawnFn: spawnFn as never,
+      sqlcmdPath: 'sqlcmd.exe',
+      outputFile: fakeFile('[{"d":"DB_ALPHA","s":"SRV-PROD\\\\PROD"}]'),
+      outputPath: 'T:\\cat.json',
+      now: () => 1_000
+    }
+    const p = resolveSqlTargets(deps)
+    child.emit('close', 0)
+    await p
+    await resolveSqlTargets(deps)
+    expect(spawnFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('fichier devenu invalide → fermé, jamais l’ancienne config', async () => {
+    ecrire({ ...TEST_SQL_CATALOG, devServers: ['SRV-NEUF'] }, 4_000)
+    loadSqlCatalogConfigFile(chemin)
+    expect(estServeurDev('SRV-NEUF')).toBe(true)
+    ecrire({ server: 'x;DROP' }, 5_000)
+    const c = await resolveSqlTargets(degrade())
+    expect(c.has('SRV-NEUF', 'COPIE_QUALIF')).toBe(false)
+    expect(getSqlCatalogConfig()).toBeUndefined()
   })
 })
 
