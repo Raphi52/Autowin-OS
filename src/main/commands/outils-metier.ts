@@ -15,6 +15,9 @@ import { getSqlCatalogConfig } from '../prod/sql-read-catalog'
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
+import { declarerNonProd } from '../prod/declarer-non-prod'
+import { estBaseCatalogue, lireBasesExploitees } from '../prod/sql-read-catalog'
+import { autowinAppDataRoot } from '../app/app-data'
 
 /** Cas de `AppCommandBus.run` : vérification, Brain, profil, skills, tâches, SQL, tickets. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerOutilsMetier(
@@ -143,6 +146,26 @@ export async function executerOutilsMetier(
           // Le guichet ne contourne rien : il ouvre l'écran de saisie de l'utilisateur quand la
           // porte refuse, et c'est la porte qui tranche à nouveau avec le jeton obtenu.
           ...(bus.guichetProd ? { guichetProd: bus.guichetProd } : {})
+        }
+      )
+    case 'declarer_hors_production':
+      // conv-2195 : l'accord de l'utilisateur passe par un CLIC dans le fil (le guichet), jamais par
+      // les arguments du modèle. Même racine que le hook du terminal (`autowinAppDataRoot`, claude.ts),
+      // qui relit ce fichier à chaque appel SQL : la base s'ouvre dans le même tour.
+      return await declarerNonProd(
+        { nature: a.nature, nom: a.nom, motif: a.motif },
+        {
+          racine: autowinAppDataRoot(),
+          ...(conversationId ? { conversationId } : {}),
+          ...(bus.guichetProd ? { guichet: bus.guichetProd } : {}),
+          ...(bus.porteProd ? { porte: bus.porteProd } : {}),
+          niveau: () => bus.porteProd?.etat().niveau ?? 'confirmation',
+          basesExploitees: () =>
+            lireBasesExploitees(bus.cheminSqlcmd() ? { sqlcmdPath: bus.cheminSqlcmd() } : {}),
+          estCatalogue: (nature, nom) =>
+            nature === 'base'
+              ? estBaseCatalogue(nom)
+              : (getSqlCatalogConfig()?.server ?? '').trim().toLowerCase() === nom.trim().toLowerCase()
         }
       )
     case 'ticket_get':

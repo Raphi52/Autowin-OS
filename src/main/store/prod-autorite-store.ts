@@ -5,8 +5,9 @@
  * POURQUOI UN FICHIER, ET PAS DU CODE. Le classifieur (`prod-guard.ts`) refuse toute règle de nom,
  * et il a raison : `DB_EPSILON_COPIE` ressemble à une base et n'en est pas une, `DB_ALPHA` ne
  * contient pas le mot « prod » et c'est une base de production. Seule une DÉCLARATION explicite peut
- * trancher. Ce fichier est cette déclaration ; il n'est jamais écrit par l'application ni par le
- * modèle.
+ * trancher. Ce fichier est cette déclaration ; le modèle ne l'écrit jamais. L'application ne fait
+ * qu'y AJOUTER une entrée `non-prod`, et seulement après un clic de l'utilisateur dans le fil
+ * (`prod/declarer-non-prod.ts`, conv-2195) — jamais pour une cible déclarée prod ou exploitée.
  *
  * ABSENT OU ILLISIBLE = LISTE VIDE, ET UNE LISTE VIDE BLOQUE TOUT (« inconnu vaut prod »). Ce n'est
  * pas une panne silencieuse : c'est le comportement le plus fermé, choisi exprès. Un fichier effacé

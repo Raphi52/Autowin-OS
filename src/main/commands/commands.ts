@@ -957,6 +957,7 @@ export class AppCommandBus {
       case 'task_delete':
       case 'task_list':
       case 'sql_query':
+      case 'declarer_hors_production':
       case 'ticket_get':
       case 'ticket_update':
       case 'ticket_search':

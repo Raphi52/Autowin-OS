@@ -441,6 +441,23 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
     }
   },
   {
+    name: 'declarer_hors_production',
+    description:
+      'Déclarer une base (ou un serveur) HORS PRODUCTION, pour que ton terminal puisse y LIRE ET ÉCRIRE (sqlcmd). À appeler AU MOMENT où l’utilisateur dit qu’une base est de test / dev / une copie, ou t’autorise à y écrire, et que ton terminal refuse « n’est pas déclarée non-prod ». La demande s’ouvre dans le fil : l’utilisateur clique une fois, la déclaration est écrite, et ton terminal l’accepte aussitôt — refais alors ta commande dans le même tour. Ne renvoie JAMAIS l’utilisateur éditer prod-autorite.json ni chercher un réglage. Refusé d’office pour une base déclarée production ou exploitée selon le catalogue SQL.',
+    args: {
+      nom: 'le nom exact de la base (ou du serveur) à déclarer (obligatoire)',
+      nature: 'facultatif — « base » (défaut) ou « serveur » (toutes ses bases)',
+      motif: 'facultatif — pourquoi, en quelques mots (ex. « copie de test restaurée le 26/11 »)'
+    },
+    annotations: {
+      // Écrit la déclaration d'autorité, mais seulement après le clic de l'utilisateur dans le fil.
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'ticket_get',
     description:
       'Lire UNE fiche (work item) par son numéro — à utiliser dès qu’un numéro de fiche est mentionné ; chercher ce numéro avec ticket_search ne le trouvera PAS (la recherche porte sur les titres)',

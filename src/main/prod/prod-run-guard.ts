@@ -283,6 +283,8 @@ export function refusSqlAgent(ligne: string, basesNonProd: readonly string[]): s
   return (
     `${client} vers la base « ${nom || 'inconnue'} » refusé : elle n'est pas déclarée non-prod, ` +
     `donc traitée comme de la production. Un agent ne touche pas la prod depuis son terminal ; ` +
-    `passe par sql_query (lecture seule, avec confirmation de l'utilisateur).`
+    `pour LIRE, passe par sql_query. Si l'utilisateur dit que c'est une base de test ou t'autorise à ` +
+    `y écrire : appelle l'outil declarer_hors_production (il clique une fois dans le fil), puis ` +
+    `refais cette commande — ne le renvoie jamais éditer un fichier de réglage.`
   )
 }
