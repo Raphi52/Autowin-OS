@@ -38,6 +38,16 @@ describe('refus définitifs de reprise', () => {
     ).toBeUndefined()
   })
 
+  // Message copié de deux fils de lot (redémarrage du 27/11) : deux lots d'un dépôt de
+  // l'utilisateur, déjà sur main, repeints « échec » (pastille rouge) à chaque démarrage. Ce refus
+  // n'est émis QUE dans la branche `preparedShaIsPublished` (worktree-manager-cycle.ts:658) : le
+  // travail est publié, seule la SHA exacte manque pour ranger la copie.
+  it('reconnaît la publication prouvée dont la SHA exacte manque (worktree-manager-cycle.ts:663)', () => {
+    const reel =
+      'Reprise du worktree refusée : La SHA exacte de la publication historique est indisponible.'
+    expect(classifierRefusDeReprise(reel)).toBe('publication-acquise')
+  })
+
   it('reconnaît la copie durable absente ou incomplète (coordinator:272)', () => {
     expect(
       classifierRefusDeReprise(

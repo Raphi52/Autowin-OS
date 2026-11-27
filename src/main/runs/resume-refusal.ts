@@ -92,6 +92,15 @@ export function classifierRefusDeReprise(message: string): RefusDeReprise | unde
   if (/Reprise du worktree refusée[^:]*: publication \S+ déjà engagée/.test(message)) {
     return 'publication-acquise'
   }
+  // Même verdict, AUTRE phrase : `worktree-manager-cycle.ts:663` ne l'émet que DANS la branche
+  // `preparedShaIsPublished` — la SHA préparée est prouvée sur la base, seule sa SHA exacte de
+  // publication manque pour ranger la copie (la branche de l'agent a bougé depuis). Non classé, ce
+  // refus repeignait en « échec » le tour final d'un lot déjà sur main, à chaque démarrage
+  // (mesuré le 27/11 sur deux fils de lot). Le chemin `publication-acquise` ne range rien : la
+  // branche, et ce qu'elle porte au-delà de la SHA publiée, reste intacte.
+  if (/La SHA exacte de la publication historique est indisponible/.test(message)) {
+    return 'publication-acquise'
+  }
   // Les deux apostrophes acceptées : le message source porte U+2019, mais un transport peut la
   // normaliser en ASCII.
   if (/copie durable à reprendre n[’']existe plus/.test(message)) {
