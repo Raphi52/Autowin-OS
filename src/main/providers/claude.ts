@@ -41,8 +41,8 @@ import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
 import { NOM_FICHIER_RAPPELS } from '../../shared/rappels-outils'
-import { refusReglageProd, refusSqlAgent } from '../prod/prod-run-guard'
-import { chargerAutoriteProd } from '../store/prod-autorite-store'
+import { basesNonProdDuTexte, refusReglageProd, refusSqlAgent } from '../prod/prod-run-guard'
+import { chargerAutoriteProd, cheminAutoriteProd } from '../store/prod-autorite-store'
 import { autowinAppDataRoot } from '../app/app-data'
 import { fusionnerServeursMcp, serveursMcpActifs, type ServeurMcpUtilisateur } from './mcp-servers'
 import { isAbsolute, join } from 'node:path'
@@ -1120,7 +1120,9 @@ export function scriptDesGardesCourant(): string {
   // d'outil : un run ne peut pas les faire taire, puisqu'il n'écrit pas dans ce dossier.
   // fix-ok: branchement neuf, mesuré rouge puis vert : claude.rappels-outils.test.ts sans cette ligne → aucun rappel (sortie vide) ; 3 édits = import, appel, remise sur une ligne (3 tests lisent cet appel dans le source).
   const rappels = dossierModsAutowin ? join(dossierModsAutowin, NOM_FICHIER_RAPPELS) : undefined
-  return scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees(), dossierModsAutowin, rappels)
+  // conv-2195 : le chemin de la déclaration est passé pour que le hook la RELISE à chaque appel SQL ;
+  // la liste figée ne sert plus que de valeur de départ.
+  return scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees(), dossierModsAutowin, rappels, cheminAutoriteProd(autowinAppDataRoot()), basesNonProdDuTexte)
 }
 
 /**

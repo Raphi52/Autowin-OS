@@ -400,7 +400,13 @@ export function scriptHookGardes(
   // fix-ok: fonctionnalité neuve, pas un correctif : 4 édits = import, paramètre, sérialisation, appel ; banc rappels-outils.test.ts rouge avant (module absent).
   // RAPPELS AU BON MOMENT (shared/rappels-outils.ts) : chemin complet de
   // `mods/autowin/rappels-outils.json`, relu à chaque appel d'outil. Absent → aucun rappel.
-  fichierRappels?: string
+  fichierRappels?: string,
+  // conv-2195 : le fichier de déclaration de la prod (`prod-autorite.json`) et sa lecture
+  // (`basesNonProdDuTexte`, prod-run-guard.ts). Fournis → la liste non-prod est RELUE à chaque appel
+  // SQL : une base déclarée pendant le tour s'ouvre tout de suite (fichier illisible → aucune).
+  // Absents → la liste figée `basesNonProd` (appelants qui ne portent pas la prod).
+  fichierAutoriteProd?: string,
+  basesNonProdDuTexte?: (texte: string) => string[]
 ): string {
   // Le découpage des heredocs est PASSÉ aux fonctions qui en ont besoin, jamais appelé par nom :
   // vitest et les bundlers réécrivent un appel importé (voir src/shared/heredocs.ts).
@@ -414,6 +420,14 @@ const refusTacheWindows = ${refusTacheWindows.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
 const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
 const basesNonProd = ${JSON.stringify(basesNonProd)};
+const fichierAutoriteProd = ${JSON.stringify(fichierAutoriteProd ?? '')};
+const basesNonProdDuTexte = ${basesNonProdDuTexte ? basesNonProdDuTexte.toString() : 'undefined'};
+const basesNonProdCourantes = () => {
+  if (!fichierAutoriteProd || !basesNonProdDuTexte) return basesNonProd;
+  try {
+    return basesNonProdDuTexte(process.getBuiltinModule('node:fs').readFileSync(fichierAutoriteProd, 'utf8'));
+  } catch { return []; }
+};
 // fix-ok: 4 édits = construction du branchement (import, paramètre, sérialisation, appel) ; rouge mesuré avant : garde-mod-autowin.hook.test.ts 4/5 en échec, le script ne refusait aucune écriture sous mods/autowin.
 const refusEcritureModAutowin = ${refusEcritureModAutowin.toString()};
 const dossierModProtege = ${JSON.stringify(dossierModProtege ?? '')};
@@ -633,7 +647,7 @@ process.stdin.on('end', () => {
       fs.writeFileSync(p, JSON.stringify(h.concat([cle]).slice(-20)));
     }
   } catch {}
-  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusTacheWindows(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusEcritureModAutowin({ outil: String(j.tool_name || ''), chemin, shell, cwd: String(j.cwd || process.cwd()), estUnRun: !!process.env.AUTOWIN_HDESK_ID }, dossierModProtege) || refusSqlAgent(shell, basesNonProd) || copieALaDemande(j, chemin, shell) || refusFichierReserve(j, chemin) || refusCommitDeFichierReserve(j, shell);
+  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusTacheWindows(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusEcritureModAutowin({ outil: String(j.tool_name || ''), chemin, shell, cwd: String(j.cwd || process.cwd()), estUnRun: !!process.env.AUTOWIN_HDESK_ID }, dossierModProtege) || (refusSqlAgent(shell, []) && refusSqlAgent(shell, basesNonProdCourantes())) ||copieALaDemande(j, chemin, shell) || refusFichierReserve(j, chemin) || refusCommitDeFichierReserve(j, shell);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));

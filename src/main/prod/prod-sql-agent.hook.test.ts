@@ -117,3 +117,74 @@ describe('hook des agents — SQL vers la production', () => {
     expect(refuse(hook(`sqlcmd -d APP_DEV -Q "select 1"`, decl))).toBe(true)
   })
 })
+
+/**
+ * conv-2195 : l'utilisateur déclare une copie de test non-prod PENDANT que l'agent tourne, écrit
+ * « go », et le terminal refuse encore. Cause : la liste était FIGÉE dans le script au lancement de
+ * l'agent (`basesNonProd` sérialisée). Le script relit désormais le fichier de déclaration à chaque
+ * appel SQL.
+ */
+describe('hook des agents — la liste non-prod est relue à chaque commande', () => {
+  const ligne = 'sqlcmd -S SRV-TEST2 -d APP_COPIE_QUALIF -Q "select 1"'
+  function scriptAvecFichier(): { lancer: (commande: string) => string; fichier: string } {
+    const dossier = mkdtempSync(join(tmpdir(), 'garde-sql-relu-'))
+    const fichier = join(dossier, 'prod-autorite.json')
+    const script = join(dossier, 'garde.mjs')
+    const g = garde as unknown as Record<string, unknown>
+    const fabrique = scriptHookGardes as unknown as (...a: unknown[]) => string
+    // Liste figée VIDE au lancement : seule la relecture du fichier peut ouvrir la base.
+    writeFileSync(
+      script,
+      fabrique(g.refusReglageProd, g.refusSqlAgent, [], undefined, undefined, fichier, g.basesNonProdDuTexte),
+      'utf8'
+    )
+    const lancer = (commande: string): string =>
+      spawnSync(process.execPath, [script], {
+        input: JSON.stringify({ tool_name: 'PowerShell', tool_input: { command: commande } }),
+        encoding: 'utf8'
+      }).stdout
+    return { lancer, fichier }
+  }
+
+  it('ouvre la base dès que la déclaration est écrite, sans relancer l’agent', () => {
+    const { lancer, fichier } = scriptAvecFichier()
+    writeFileSync(fichier, '[]', 'utf8')
+    expect(refuse(lancer(ligne))).toBe(true)
+    writeFileSync(
+      fichier,
+      JSON.stringify([{ nature: 'base', nom: 'APP_COPIE_QUALIF', classe: 'non-prod' }]),
+      'utf8'
+    )
+    expect(lancer(ligne)).toBe('')
+  })
+
+  it('reste fermé si la même base est aussi déclarée prod, ou si le fichier est illisible', () => {
+    const { lancer, fichier } = scriptAvecFichier()
+    writeFileSync(
+      fichier,
+      JSON.stringify([
+        { nature: 'base', nom: 'app_copie_qualif', classe: 'non-prod' },
+        { nature: 'base', nom: 'APP_COPIE_QUALIF ', classe: 'prod' }
+      ]),
+      'utf8'
+    )
+    expect(refuse(lancer(ligne))).toBe(true)
+    writeFileSync(fichier, '{ pas du json', 'utf8')
+    expect(refuse(lancer(ligne))).toBe(true)
+  })
+
+  it('basesNonProdDuTexte suit les règles du chargeur (objet entrees, serveur préfixé, entrées fautives ignorées)', () => {
+    const texte = JSON.stringify({
+      entrees: [
+        { nature: 'serveur', nom: ' SRV-TEST2 ', classe: 'non-prod' },
+        { nature: 'base', nom: 'Formation', classe: 'non-prod' },
+        { nature: 'chemin', nom: 'D:/x', classe: 'non-prod' },
+        { nature: 'base', nom: '', classe: 'non-prod' },
+        { nature: 'base', nom: 'Ventes', classe: 'peut-etre' }
+      ]
+    })
+    const lire = (garde as unknown as Record<string, (t: string) => string[]>).basesNonProdDuTexte
+    expect(lire(texte)).toEqual(['serveur:srv-test2', 'formation'])
+    expect(lire('nimporte')).toEqual([])
+  })
+})

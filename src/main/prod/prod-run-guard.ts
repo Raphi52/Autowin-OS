@@ -54,6 +54,46 @@ export function cibleSqlDeCommande(ligne: string): CibleSqlRun | undefined {
 }
 
 /**
+ * LES BASES NON-PROD, LUES DANS LE TEXTE DU FICHIER DE DÉCLARATION (`prod-autorite.json`). Mêmes règles
+ * que le chargeur (`store/prod-autorite-store.ts` + `construireAutoriteProd`) : tableau ou objet
+ * `{ entrees }`, natures `base` et `serveur` seules (serveur rendu préfixé `serveur:`), nom normalisé
+ * (espaces autour, casse), entrée fautive ignorée, et un nom AUSSI déclaré `prod` reste fermé.
+ * Texte illisible → aucune : tout client SQL reste refusé.
+ *
+ * POURQUOI ICI (conv-2195) : le hook du terminal figeait la liste au lancement de l'agent. Une base
+ * déclarée pendant le tour restait refusée jusqu'au relancement — l'utilisateur avait déclaré, écrit
+ * « go », et l'agent butait encore. Le hook relit maintenant le fichier à chaque appel SQL avec CETTE
+ * fonction. AUTOPORTÉE : sérialisée telle quelle dans le script du hook, aucune référence au module.
+ */
+export function basesNonProdDuTexte(texte: string): string[] {
+  let brut: unknown
+  try {
+    brut = JSON.parse(String(texte ?? ''))
+  } catch {
+    return []
+  }
+  const tableau = Array.isArray(brut)
+    ? brut
+    : brut && typeof brut === 'object' && Array.isArray((brut as { entrees?: unknown }).entrees)
+      ? ((brut as { entrees: unknown[] }).entrees as unknown[])
+      : []
+  const prod = new Set<string>()
+  const nonProd: string[] = []
+  for (const element of tableau) {
+    if (!element || typeof element !== 'object') continue
+    const e = element as { nature?: unknown; nom?: unknown; classe?: unknown }
+    if (e.nature !== 'base' && e.nature !== 'serveur') continue
+    if (typeof e.nom !== 'string') continue
+    const nom = e.nom.trim().toLowerCase()
+    if (!nom) continue
+    const cle = (e.nature === 'serveur' ? 'serveur:' : '') + nom
+    if (e.classe === 'prod') prod.add(cle)
+    else if (e.classe === 'non-prod' && !nonProd.includes(cle)) nonProd.push(cle)
+  }
+  return nonProd.filter((cle) => !prod.has(cle))
+}
+
+/**
  * GARDE SQL DES AGENTS lancés par `orchestrate` : leur terminal ne passe ni par
  * `run` ni par `sql_query`, seul le hook PreToolUse du CLI le voit. Ce hook ne peut pas ouvrir la
  * fenêtre de confirmation : une base de production OU inconnue est donc refusée NET, et seules les
