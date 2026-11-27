@@ -160,6 +160,15 @@ export function finalizeSansSecours(
   // happait sur un HEAD détaché d'un dépôt tiers avant que la garde d'après ne dise « étrangère ».
   const ownershipIssue = this.ownershipIssue(path)
   if (ownershipIssue) {
+    // Une reprise dont le commit est DEJA publie, sur un dossier qui a perdu son lien git (retrait
+    // coupe par un verrou), n'a rien a fusionner : c'est un rangement a finir. `cleanupPublished`
+    // n'ecrit rien dans un dossier dont l'appartenance n'est pas prouvee (garde identique).
+    if (
+      options.expectedAgentSha &&
+      this.isPublished(options.expectedAgentSha, expectedBaseBranch)
+    ) {
+      return this.cleanupPublished(agentId, options.expectedAgentSha, expectedBaseBranch)
+    }
     return {
       outcome: 'blocked',
       agentId,

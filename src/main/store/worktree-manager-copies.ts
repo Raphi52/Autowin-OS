@@ -1376,7 +1376,37 @@ export function cleanupAgentWorktree(
     }
   }
 
-  const cleanup = this.cleanupWorktree(quarantinePath, false, { raison: 'quarantaine' })
+  let cleanup = this.cleanupWorktree(quarantinePath, false, { raison: 'quarantaine' })
+  /*
+   * RETRAIT A MOITIE : git a deja defait la copie, seuls des fichiers verrouilles sont restes.
+   *
+   * Mesure le 2026-11-27 (copie `run-25e43b1371c2-1`, worktree-manager.retrait-a-moitie.test.ts) :
+   * `git worktree remove` avait retire le lien `.git` et les fichiers suivis ; des fichiers tenus
+   * par un processus (190 Mo de modules et de binaires) survivaient. Le reste etait remis a sa
+   * place, puis `unpublishedFiles` y lancait git : sans `.git`, git remonte au depot PARENT (le
+   * dossier d'Autowin, qui ignore ses copies) et plante — exception lue « fusion refusee » sur un
+   * travail deja publie, dans 9 runs. Et si le parent ne plantait pas, git y lirait SON etat a lui.
+   *
+   * Rien n'est a sauver dans ce reste : la quarantaine a ete PROUVEE sans fichier non publie juste
+   * au-dessus (`quarantinedFiles`), et le commit vit sur `branch`. Mesure sur la copie d'origine :
+   * ses 783 sources restantes etaient identiques au commit publie. Le retrait git EST fait ; seul
+   * le disque est en retard. Le reste reprend son nom avec
+   * la fiche « retrait commence », que `reprendreSuppressionsCommencees` finit au passage suivant une
+   * fois le verrou tombe — puis la suite continue comme un rangement reussi. Aucun git n'est lance
+   * dans le reste. Une copie encore liee (refus avant tout geste) garde le chemin d'origine.
+   */
+  if (!cleanup.ok && existsSync(quarantinePath) && this.ownershipIssue(quarantinePath)) {
+    try {
+      if (existsSync(path)) throw new Error(`${path} existe déjà`)
+      renameSync(quarantinePath, path)
+    } catch (erreur) {
+      // Le verrou tient aussi le dossier : le reste demeure en quarantaine, nommé au balayage.
+      this.noterEchecDeBalayage(quarantinePath, `reste du retrait non déplacé : ${message(erreur)}`)
+      return { ok: false, advanced: false, files: [] }
+    }
+    if (!this.noterSuppressionCommencee(path)) return { ok: false, advanced: false, files: [] }
+    cleanup = { ok: true, detail: 'retrait git fait ; le reste verrouillé est confié au balayage' }
+  }
   if (cleanup.ok) {
     /*
      * L'historique CLI se purge sur le chemin D'ORIGINE, jamais sur celui de la quarantaine.
