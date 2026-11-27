@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import {
   effacerPeinture,
@@ -34,7 +34,6 @@ export function ChatFindBar({
   const [terme, setTerme] = useState('')
   const [rang, setRang] = useState(-1)
   const [total, setTotal] = useState(0)
-  const plagesRef = useRef<Range[]>([])
   const champRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -51,28 +50,32 @@ export function ChatFindBar({
    * première), sinon on avance ou recule EN BOUCLE. Toujours une relecture du DOM : le fil peut
    * avoir grandi (tour en cours) depuis la frappe précédente.
    */
-  const parcourir = useCallback(
-    (recherche: string, pas: number, rangCourant: number) => {
-      const plages = occurrencesDansLeDom(racine(), recherche)
-      plagesRef.current = plages
-      setTotal(plages.length)
-      if (plages.length === 0) {
-        setRang(-1)
-        peindreOccurrences([], null)
-        return
-      }
-      const suivant = pas === 0 ? 0 : indexSuivant(rangCourant, plages.length, pas)
-      setRang(suivant)
-      peindreOccurrences(plages, plages[suivant] ?? null)
-      revelerOccurrence(plages[suivant])
-    },
-    [racine]
-  )
+  const parcourir = (recherche: string, pas: number, rangCourant: number): void => {
+    const plages = occurrencesDansLeDom(racine(), recherche)
+    setTotal(plages.length)
+    if (plages.length === 0) {
+      setRang(-1)
+      peindreOccurrences([], null)
+      return
+    }
+    const suivant = pas === 0 ? 0 : indexSuivant(rangCourant, plages.length, pas)
+    setRang(suivant)
+    peindreOccurrences(plages, plages[suivant] ?? null)
+    revelerOccurrence(plages[suivant])
+  }
+
+  /**
+   * Seul un NOUVEAU TERME ramène à la première occurrence. Le corps passe par un `useEffectEvent`
+   * pour que `racine` n'entre pas dans les dépendances : `ChatView` la recrée à chaque rendu, et le
+   * fil se redessine sans cesse pendant un tour — chaque rendu relançait la recherche et faisait
+   * remonter le fil jusqu'au premier mot, en boucle.
+   */
+  const nouvelleRecherche = useEffectEvent((recherche: string) => parcourir(recherche, 0, -1))
 
   useEffect(() => {
-    const attente = window.setTimeout(() => parcourir(terme, 0, -1), AMORTISSEMENT_MS)
+    const attente = window.setTimeout(() => nouvelleRecherche(terme), AMORTISSEMENT_MS)
     return () => window.clearTimeout(attente)
-  }, [terme, parcourir])
+  }, [terme])
 
   const etiquette = total > 0 ? `${rang + 1}/${total}` : terme.trim() ? t('recherche.aucun') : ' '
 
