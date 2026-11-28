@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   mkdirSync,
   mkdtempSync,
@@ -9,8 +9,58 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+/*
+ * On compte les lectures du disque qui servent au balayage (`stat`, `readdir`, et leurs formes synchrones) :
+ * combien en tout, combien en vol au même instant, et combien entre deux tours de la boucle d'événements.
+ * Chaque appel passe au vrai disque.
+ */
+const { lectures } = vi.hoisted(() => ({
+  lectures: { appels: 0, enVol: 0, max: 0, depuisLeTour: 0, maxParTour: 0 }
+}))
+function compterUneLecture(): void {
+  lectures.appels += 1
+  lectures.depuisLeTour += 1
+  lectures.maxParTour = Math.max(lectures.maxParTour, lectures.depuisLeTour)
+}
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('node:fs/promises')>()
+  const compte =
+    <A extends unknown[], R>(f: (...args: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      compterUneLecture()
+      lectures.enVol += 1
+      lectures.max = Math.max(lectures.max, lectures.enVol)
+      try {
+        return await f(...args)
+      } finally {
+        lectures.enVol -= 1
+      }
+    }
+  return {
+    ...reel,
+    stat: compte(reel.stat as (...a: unknown[]) => Promise<unknown>),
+    readdir: compte(reel.readdir as (...a: unknown[]) => Promise<unknown>)
+  }
+})
+vi.mock('node:fs', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('node:fs')>()
+  const compte =
+    <A extends unknown[], R>(f: (...args: A) => R) =>
+    (...args: A): R => {
+      compterUneLecture()
+      return f(...args)
+    }
+  return {
+    ...reel,
+    statSync: compte(reel.statSync as (...a: unknown[]) => unknown),
+    readdirSync: compte(reel.readdirSync as (...a: unknown[]) => unknown)
+  }
+})
+
 import {
   encoderCheminCli,
+  LECTURES_EN_VOL_DU_BALAYAGE,
   planHistoriqueCliASupprimer,
   planifierRangementHistoriquesCli,
   racinesHistoriqueCliPour,
@@ -199,10 +249,10 @@ describe('rangerHistoriquesCliOrphelins', () => {
     return { base, projets, parent, nom, reste, autre }
   }
 
-  it('range le reste dans une corbeille datée, sans rien supprimer, et laisse le reste intact', () => {
+  it('range le reste dans une corbeille datée, sans rien supprimer, et laisse le reste intact', async () => {
     const { base, projets, parent, nom, reste, autre } = monter()
 
-    const bilan = rangerHistoriquesCliOrphelins({
+    const bilan = await rangerHistoriquesCliOrphelins({
       racines: [projets],
       dossiersDeCopies: [parent],
       jour: JOUR
@@ -218,10 +268,10 @@ describe('rangerHistoriquesCliOrphelins', () => {
     expect(readFileSync(join(autre, 'S1.jsonl'), 'utf8')).toBe('recent')
   })
 
-  it('mesurer compte sans rien déplacer', () => {
+  it('mesurer compte sans rien déplacer', async () => {
     const { projets, parent, reste } = monter()
 
-    const bilan = rangerHistoriquesCliOrphelins({
+    const bilan = await rangerHistoriquesCliOrphelins({
       racines: [projets],
       dossiersDeCopies: [parent],
       jour: JOUR,
@@ -235,13 +285,13 @@ describe('rangerHistoriquesCliOrphelins', () => {
     expect(existsSync(reste)).toBe(true)
   })
 
-  it('une copie encore présente n’est jamais rangée', () => {
+  it('une copie encore présente n’est jamais rangée', async () => {
     const { projets, parent, reste } = monter()
     const vivante = join(parent, 'agent__vivant')
     mkdirSync(vivante, { recursive: true })
     poserSession(join(projets, encoderCheminCli(vivante)), 'S9', ANCIEN, 'vivant')
 
-    const bilan = rangerHistoriquesCliOrphelins({
+    const bilan = await rangerHistoriquesCliOrphelins({
       racines: [projets],
       dossiersDeCopies: [parent],
       jour: JOUR
@@ -251,7 +301,7 @@ describe('rangerHistoriquesCliOrphelins', () => {
     expect(existsSync(join(projets, encoderCheminCli(vivante), 'S9.jsonl'))).toBe(true)
   })
 
-  it('n’écrase jamais une entrée déjà présente dans la corbeille du même jour', () => {
+  it('n’écrase jamais une entrée déjà présente dans la corbeille du même jour', async () => {
     const { base, projets, parent, nom, reste } = monter()
     poserSession(
       join(base, '.claude', 'corbeille-historique-cli', JOUR, nom),
@@ -260,7 +310,7 @@ describe('rangerHistoriquesCliOrphelins', () => {
       'déjà là'
     )
 
-    const bilan = rangerHistoriquesCliOrphelins({
+    const bilan = await rangerHistoriquesCliOrphelins({
       racines: [projets],
       dossiersDeCopies: [parent],
       jour: JOUR
@@ -272,6 +322,97 @@ describe('rangerHistoriquesCliOrphelins', () => {
     expect(
       readFileSync(join(base, '.claude', 'corbeille-historique-cli', JOUR, nom, 'S1.jsonl'), 'utf8')
     ).toBe('déjà là')
+  })
+})
+
+/*
+ * LE GEL MESURÉ (gels.jsonl, 22 au 27/11/2026) : 12 gels, 20,8 s de fenêtre figée, jusqu'à 6 287 `statSync`
+ * par passage, tous dans `lireSessions` / `lireDossiersHistorique`. Le ménage des copies range l'historique
+ * d'une copie retirée, et pour le faire lit TOUTES les sessions de TOUS les dossiers d'historique, sur le fil
+ * principal. Ces tests ne mesurent pas un chrono (instable) : ils constatent que la boucle reprend la main
+ * pendant le balayage, et que le disque n'est jamais sollicité par milliers d'un coup.
+ */
+describe('le balayage de l’historique ne tient pas le fil principal', () => {
+  /** `dossiers` dossiers d'historique sous une racine `projects`, `sessions` sessions chacun, et un dossier de copies vide. */
+  function monterBeaucoup(
+    dossiers: number,
+    sessions: number
+  ): { projets: string; parent: string; total: number } {
+    const base = mkdtempSync(join(tmpdir(), 'autowin-balayage-histo-'))
+    const projets = join(base, '.claude', 'projects')
+    const parent = join(base, 'worktrees', 'hash')
+    mkdirSync(parent, { recursive: true })
+    for (let d = 0; d < dossiers; d += 1) {
+      const dossier = join(projets, encoderCheminCli(join(parent, `agent__mort-${d}`)))
+      mkdirSync(dossier, { recursive: true })
+      for (let s = 0; s < sessions; s += 1) writeFileSync(join(dossier, `S${s}.jsonl`), 'x', 'utf8')
+    }
+    return { projets, parent, total: dossiers * sessions }
+  }
+
+  /**
+   * Lance `travail` en faisant tourner la boucle d'événements à côté (phase `setImmediate`) : chaque tour remet à
+   * zéro le compte des lectures faites depuis le précédent. `maxParTour` dit donc combien de lectures le balayage a
+   * enchaînées sans jamais rendre la main.
+   */
+  async function sousLaBoucle<T>(
+    travail: () => Promise<T>
+  ): Promise<{ resultat: T; tours: number }> {
+    let tours = 0
+    let actif = true
+    const tourner = (): void => {
+      if (!actif) return
+      tours += 1
+      lectures.depuisLeTour = 0
+      setImmediate(tourner)
+    }
+    Object.assign(lectures, { appels: 0, max: 0, depuisLeTour: 0, maxParTour: 0 })
+    setImmediate(tourner)
+    const resultat = await travail()
+    actif = false
+    return { resultat, tours }
+  }
+
+  // fix-ok: une version « async » de façade (corps en statSync) passait le premier test, qui ne comptait que les tours : on compte désormais les lectures entre deux tours.
+  // Entrée qui ferait échouer une fausse correction — une fonction marquée `async` dont le corps garde
+  // `statSync` : sur ces 30 dossiers de 10 sessions, les 330 lectures s'enchaînent dans un seul tour de boucle
+  // (les micro-tâches d'un `async` ne rendent pas la main), bien au-delà de la limite.
+  it('rend la main à la boucle entre deux paquets de lectures, sur 300 sessions', async () => {
+    const { projets, parent, total } = monterBeaucoup(30, 10)
+
+    const { resultat, tours } = await sousLaBoucle(() =>
+      rangerHistoriquesCliOrphelins({
+        racines: [projets],
+        dossiersDeCopies: [parent],
+        jour: '2026-11-28',
+        mesurer: true
+      })
+    )
+
+    expect(resultat.avant).toBe(30)
+    expect(lectures.appels).toBeGreaterThanOrEqual(total)
+    expect(tours).toBeGreaterThan(0)
+    // Mesuré : 16 (un paquet) quand le balayage rend la main ; 330 d'un bloc quand il est synchrone.
+    expect(lectures.maxParTour).toBeLessThanOrEqual(2 * LECTURES_EN_VOL_DU_BALAYAGE)
+  })
+
+  // Entrée qui ferait échouer une fausse correction — un seul `Promise.all` sur tout le balayage : 3 dossiers
+  // de 5 × la borne sessions chacun, soit des centaines de lectures lancées d'un coup.
+  it('ne lance jamais plus de LECTURES_EN_VOL_DU_BALAYAGE lectures du disque à la fois', async () => {
+    const { projets, parent, total } = monterBeaucoup(3, 5 * LECTURES_EN_VOL_DU_BALAYAGE)
+    lectures.appels = 0
+    lectures.max = 0
+
+    const bilan = await rangerHistoriquesCliOrphelins({
+      racines: [projets],
+      dossiersDeCopies: [parent],
+      jour: '2026-11-28',
+      mesurer: true
+    })
+
+    expect(bilan.avant).toBe(3)
+    expect(lectures.appels).toBeGreaterThanOrEqual(total)
+    expect(lectures.max).toBe(LECTURES_EN_VOL_DU_BALAYAGE)
   })
 })
 
@@ -426,7 +567,7 @@ describe('ramener puis ranger l’historique d’une copie retirée', () => {
     ).toBe('tour 1')
   })
 
-  it('range le dossier de la copie une fois sa session ramenée ; un sous-dossier de run sans autre exemplaire reste, et la copie voisine aussi', () => {
+  it('range le dossier de la copie une fois sa session ramenée ; un sous-dossier de run sans autre exemplaire reste, et la copie voisine aussi', async () => {
     const c = contexte()
     c.poser(c.copie, `${SESSION}.jsonl`, 'tour 1')
     const sousRun = `${c.copie}${A}agent__run-1${A}1`
@@ -434,7 +575,7 @@ describe('ramener puis ranger l’historique d’une copie retirée', () => {
     c.poser(join(c.base, 'copies-de-taches', 'conv-2'), `${SESSION}.jsonl`, 'voisine')
     ramenerLesSessionsDUneCopie({ copie: c.copie, dossierAvant: c.depot, racines: [c.racine] })
 
-    const bilan = rangerHistoriqueCliDUneCopie({
+    const bilan = await rangerHistoriqueCliDUneCopie({
       copie: c.copie,
       racines: [c.racine],
       jour: '2026-11-08'

@@ -1,13 +1,5 @@
-import type { Dirent } from 'node:fs'
-import {
-  copyFileSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  statSync
-} from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
+import { access, mkdir, readdir, rename, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
@@ -300,56 +292,116 @@ function corbeilleDe(racine: string, jour: string): string {
   return join(dirname(racine), 'corbeille-historique-cli', jour)
 }
 
-function lireSessions(dossier: string): { sessions: SessionHistorique[]; illisible: boolean } {
-  let entrees: Dirent[]
-  try {
-    entrees = readdirSync(dossier, { withFileTypes: true })
-  } catch {
-    return { sessions: [], illisible: true }
-  }
-  const sessions: SessionHistorique[] = []
-  let illisible = false
-  for (const entree of entrees) {
-    if (!entree.isFile() || !entree.name.endsWith(SUFFIXE_SESSION)) continue
-    try {
-      sessions.push({
-        id: entree.name.slice(0, -SUFFIXE_SESSION.length),
-        mtime: statSync(join(dossier, entree.name)).mtimeMs
-      })
-    } catch {
-      illisible = true
+/*
+ * LE BALAYAGE NE TIENT PAS LE FIL PRINCIPAL. Ranger l'historique d'UNE copie lit les sessions de TOUS les
+ * dossiers d'historique (il faut savoir si chacune a sa version ailleurs) : jusqu'à 6 287 `statSync` d'un bloc
+ * mesurés en un passage, 2,9 s de fenêtre figée au pire, 20,8 s en 12 gels sur une semaine (gels.jsonl, 22 au
+ * 27/11/2026). Les lectures passent donc par `fs/promises`, et la boucle reprend la main entre deux réponses du
+ * disque. La borne garde le disque occupé sans réserver des milliers de requêtes d'un coup.
+ */
+// fix-ok: gels mesurés (gels-classement, 7 jours) sur les `statSync` de lireSessions/lireDossiersHistorique, appelés par le ménage des copies.
+export const LECTURES_EN_VOL_DU_BALAYAGE = 16
+
+/** `faire` sur chaque élément, jamais plus de `LECTURES_EN_VOL_DU_BALAYAGE` à la fois ; les résultats gardent l'ordre. */
+async function avecLecturesBornees<T, R>(
+  elements: readonly T[],
+  faire: (element: T) => Promise<R>
+): Promise<R[]> {
+  const resultats: R[] = new Array(elements.length)
+  let suivant = 0
+  const lecteur = async (): Promise<void> => {
+    while (suivant < elements.length) {
+      const rang = suivant
+      suivant += 1
+      resultats[rang] = await faire(elements[rang])
     }
   }
-  return { sessions, illisible }
+  const lecteurs = Math.min(LECTURES_EN_VOL_DU_BALAYAGE, elements.length)
+  await Promise.all(Array.from({ length: lecteurs }, lecteur))
+  return resultats
 }
 
-function lireDossiersHistorique(racines: readonly string[]): DossierHistorique[] {
+/** Les dossiers d'historique d'une racine `projects` ; aucun si elle est absente (compte jamais utilisé). */
+async function dossiersDeLaRacine(racine: string): Promise<string[]> {
+  try {
+    const entrees = await readdir(racine, { withFileTypes: true })
+    return entrees.filter((e) => e.isDirectory()).map((e) => e.name)
+  } catch {
+    return []
+  }
+}
+
+/** Les fichiers de session au premier niveau d'un dossier d'historique ; `null` s'il ne se lit pas. */
+async function fichiersDeSession(dossier: string): Promise<string[] | null> {
+  try {
+    const entrees = await readdir(dossier, { withFileTypes: true })
+    return entrees.filter((e) => e.isFile() && e.name.endsWith(SUFFIXE_SESSION)).map((e) => e.name)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Chaque dossier d'historique des racines, avec ses sessions datées. En trois passes à plat (les dossiers, leurs
+ * fichiers, leurs dates) plutôt qu'imbriquées : la borne vaut pour tout le balayage, pas par dossier.
+ */
+async function lireDossiersHistorique(racines: readonly string[]): Promise<DossierHistorique[]> {
   const dossiers: DossierHistorique[] = []
   for (const racine of racines) {
-    let entrees: Dirent[]
-    try {
-      entrees = readdirSync(racine, { withFileTypes: true })
-    } catch {
-      continue // racine absente (compte jamais utilisé) : rien à ranger
-    }
-    for (const entree of entrees) {
-      if (!entree.isDirectory()) continue
-      const { sessions, illisible } = lireSessions(join(racine, entree.name))
-      dossiers.push({ racine, nom: entree.name, sessions, illisible })
+    for (const nom of await dossiersDeLaRacine(racine)) {
+      dossiers.push({ racine, nom, sessions: [], illisible: false })
     }
   }
+  const fichiers = await avecLecturesBornees(dossiers, (d) =>
+    fichiersDeSession(join(d.racine, d.nom))
+  )
+  const aDater: Array<{ dossier: DossierHistorique; fichier: string }> = []
+  dossiers.forEach((dossier, rang) => {
+    const noms = fichiers[rang]
+    if (noms === null) dossier.illisible = true
+    else for (const fichier of noms) aDater.push({ dossier, fichier })
+  })
+  const dates = await avecLecturesBornees(aDater, ({ dossier, fichier }) =>
+    stat(join(dossier.racine, dossier.nom, fichier)).then(
+      (info) => info.mtimeMs,
+      () => null
+    )
+  )
+  aDater.forEach(({ dossier, fichier }, rang) => {
+    const mtime = dates[rang]
+    if (mtime === null) dossier.illisible = true
+    else dossier.sessions.push({ id: fichier.slice(0, -SUFFIXE_SESSION.length), mtime })
+  })
   return dossiers
 }
 
+/** Le nombre de dossiers d'historique des racines, sans lire leurs sessions : le bilan n'a besoin que du compte. */
+async function compterDossiersHistorique(racines: readonly string[]): Promise<number> {
+  let compte = 0
+  for (const racine of racines) compte += (await dossiersDeLaRacine(racine)).length
+  return compte
+}
+
 /** Tout ce qui se trouve dans les dossiers de copies : ce sont les copies présentes, qui revendiquent leur historique. */
-function copiesDesDossiers(dossiersDeCopies: readonly string[]): string[] {
-  return dossiersDeCopies.flatMap((dossier) => {
+async function copiesDesDossiers(dossiersDeCopies: readonly string[]): Promise<string[]> {
+  const copies: string[] = []
+  for (const dossier of dossiersDeCopies) {
     try {
-      return readdirSync(dossier).map((nom) => join(dossier, nom))
+      for (const nom of await readdir(dossier)) copies.push(join(dossier, nom))
     } catch {
-      return []
+      /* dossier de copies absent : aucune copie n'y revendique rien */
     }
-  })
+  }
+  return copies
+}
+
+async function existe(chemin: string): Promise<boolean> {
+  try {
+    await access(chemin)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -358,18 +410,20 @@ function copiesDesDossiers(dossiersDeCopies: readonly string[]): string[] {
  * `mesurer` compte sans rien déplacer. `dossiersDeCopies` sont les dossiers qui portent directement les copies
  * (`worktrees/<dépôt>`, `copies-de-fil`, `retours-de-tour`) : leurs enfants sont les copies présentes.
  */
-export function rangerHistoriquesCliOrphelins(entree: {
+export async function rangerHistoriquesCliOrphelins(entree: {
   racines: readonly string[]
   dossiersDeCopies: readonly string[]
   jour: string
   mesurer?: boolean
   /** Ne retient que les dossiers d'historique voulus ; les autres restes ne sont ni rangés ni comptés. */
   seulement?: (nom: string) => boolean
-}): BilanDuRangement {
-  const avant = lireDossiersHistorique(entree.racines)
+}): Promise<BilanDuRangement> {
+  const avant = await lireDossiersHistorique(entree.racines)
+  // Les copies présentes se lisent APRÈS le balayage, qui rend la main : une copie rouverte pendant qu'il lisait
+  // revendique encore son historique.
   const decisions = planifierRangementHistoriquesCli({
     dossiers: avant,
-    copiesExistantes: copiesDesDossiers(entree.dossiersDeCopies),
+    copiesExistantes: await copiesDesDossiers(entree.dossiersDeCopies),
     dossiersDeCopies: entree.dossiersDeCopies
   }).filter((d) => !entree.seulement || entree.seulement(d.nom))
   const aRanger = decisions.filter((d) => d.decision === 'ranger')
@@ -380,7 +434,7 @@ export function rangerHistoriquesCliOrphelins(entree: {
   if (!entree.mesurer) {
     for (const d of aRanger) {
       const destination = join(corbeilleDe(d.racine, entree.jour), d.nom)
-      if (existsSync(destination)) {
+      if (await existe(destination)) {
         gardes.push({
           chemin: d.chemin,
           raison: 'une entrée de même nom est déjà dans la corbeille du jour : rien n’est écrasé'
@@ -388,8 +442,8 @@ export function rangerHistoriquesCliOrphelins(entree: {
         continue
       }
       try {
-        mkdirSync(dirname(destination), { recursive: true })
-        renameSync(d.chemin, destination)
+        await mkdir(dirname(destination), { recursive: true })
+        await rename(d.chemin, destination)
         ranges.push(d.chemin)
       } catch (erreur) {
         gardes.push({
@@ -404,7 +458,7 @@ export function rangerHistoriquesCliOrphelins(entree: {
     aRanger: aRanger.map((d) => d.chemin),
     ranges,
     gardes,
-    apres: lireDossiersHistorique(entree.racines).length
+    apres: await compterDossiersHistorique(entree.racines)
   }
 }
 
@@ -453,7 +507,7 @@ export function rangerHistoriqueCliDUneCopie(entree: {
   copie: string
   racines: readonly string[]
   jour: string
-}): BilanDuRangement {
+}): Promise<BilanDuRangement> {
   const dossier = encoderCheminCli(entree.copie)
   return rangerHistoriquesCliOrphelins({
     racines: entree.racines,

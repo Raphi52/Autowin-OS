@@ -716,6 +716,7 @@ export class WorktreeManager {
   declare markProcess: OmitThisParameter<typeof copies.markProcess>
   declare markSpawnIntent: OmitThisParameter<typeof copies.markSpawnIntent>
   declare confirmSpawn: OmitThisParameter<typeof copies.confirmSpawn>
+  declare attendreBauxEnCours: OmitThisParameter<typeof copies.attendreBauxEnCours>
   declare hasActiveProcesses: OmitThisParameter<typeof copies.hasActiveProcesses>
   declare operationInProgress: typeof copies.operationInProgress
   declare blockingDirtyFiles: typeof copies.blockingDirtyFiles

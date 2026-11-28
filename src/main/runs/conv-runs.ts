@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseRun } from '../dashboards/runs'
 import { scanRunsBounded, comparablePath, type RunEntry } from '../dashboards/runs-scan'
+import { attendreFichier, deposerFichier, relireFichier } from '../gel/ecriture-hors-fil'
 import type { OrchestrationStep } from '../orchestration/orchestrator'
 import { ensureAutowinAppData } from '../app/app-data'
 import type { RunClosureObservation, RunFileStatus } from '../../shared/run-execution'
@@ -843,24 +844,37 @@ function texteDEtape(texte: string | undefined): string | undefined {
 }
 
 /**
+ * Les dossiers de run retirés par `deleteConvRun` dans ce processus. `deposerFichier` crée le
+ * dossier qui manque : sans cette liste, l'étape suivante d'un run encore en cours le recréerait
+ * avec sa seule `trace.json`, que plus aucune liste ne montre ni ne range.
+ */
+const dossiersDeRunRetires = new Set<string>()
+
+/**
  * Persiste le FIL des sous-agents (exec/juge/gate avec contenu) à côté du RUN.md.
  * Sidecar JSON séparé → ne casse pas le format autowin du .md.
+ *
+ * Posé HORS du fil principal (`deposerFichier`) : réécrire en entier un fichier qui porte jusqu'à
+ * 200 000 caractères par étape a figé la fenêtre 3 fois, 4,1 s en tout (`gels.jsonl` du 21 au
+ * 28/11/2026). `loadConvRunTrace` relit la dernière étape déposée, comme avant l'écriture.
  */
 export function saveConvRunTrace(runPath: string, steps: OrchestrationStep[]): void {
+  const chemin = tracePath(runPath)
+  if (dossiersDeRunRetires.has(comparablePath(dirname(chemin)))) return
   try {
     const trimmed = steps.map((s) => ({ ...s, text: texteDEtape(s.text) }))
-    writeFileSync(tracePath(runPath), JSON.stringify(trimmed), 'utf8')
+    deposerFichier(chemin, JSON.stringify(trimmed))
   } catch {
-    /* la trace est un bonus d'affichage : son échec ne casse rien */
+    /* étape impossible à sérialiser : la trace est un bonus d'affichage, son échec ne casse rien */
   }
 }
 
 /** Relit le fil des sous-agents d'un run (null si absent/illisible). */
 export function loadConvRunTrace(runPath: string): OrchestrationStep[] | null {
   try {
-    const p = tracePath(runPath)
-    if (!existsSync(p)) return null
-    const data = JSON.parse(readFileSync(p, 'utf8'))
+    const texte = relireFichier(tracePath(runPath))
+    if (texte === undefined) return null
+    const data = JSON.parse(texte)
     return Array.isArray(data) ? (data as OrchestrationStep[]) : null
   } catch {
     return null
@@ -963,7 +977,19 @@ export async function deleteConvRun(
       (run) => run.session === convId && samePath(run.path, candidate)
     )
     if (!allowed) throw new Error('RUN non autorisé pour cette conversation')
-    await rm(workspace, { recursive: true, force: false })
+    // Une trace déposée et pas encore posée recréerait le dossier après sa suppression : la
+    // dernière valeur devient « supprimée », et on la laisse atterrir avant de retirer le dossier.
+    const cle = comparablePath(workspace)
+    dossiersDeRunRetires.add(cle)
+    const trace = tracePath(candidate)
+    deposerFichier(trace, null)
+    await attendreFichier(trace)
+    try {
+      await rm(workspace, { recursive: true, force: false })
+    } catch (erreur) {
+      dossiersDeRunRetires.delete(cle)
+      throw erreur
+    }
     return { kind: 'deleted' }
   }
 

@@ -42,25 +42,25 @@ describe('ClaudeAccountsStore', () => {
     expect(store.env()).toEqual({})
   })
 
-  it('bascule vers un compte ajouté et injecte SON dossier', () => {
+  it('bascule vers un compte ajouté et injecte SON dossier', async () => {
     const { store, dirs } = makeStore()
-    const added = store.add('perso')
+    const added = await store.add('perso')
     expect(dirs).toContain(added.dir)
     store.switchTo(added.id)
     expect(store.env()).toEqual({ CLAUDE_CONFIG_DIR: added.dir })
   })
 
-  it('revient au défaut, et l’env redevient vide', () => {
+  it('revient au défaut, et l’env redevient vide', async () => {
     const { store } = makeStore()
-    const added = store.add()
+    const added = await store.add()
     store.switchTo(added.id)
     store.switchTo(DEFAULT_ACCOUNT_ID)
     expect(store.env()).toEqual({})
   })
 
-  it('persiste la bascule', () => {
+  it('persiste la bascule', async () => {
     const { store, written } = makeStore()
-    const added = store.add()
+    const added = await store.add()
     store.switchTo(added.id)
     const reloaded = parseState(JSON.parse(written()!), 'now')
     expect(reloaded.activeId).toBe(added.id)
@@ -77,9 +77,9 @@ describe('ClaudeAccountsStore', () => {
     expect(() => store.remove(DEFAULT_ACCOUNT_ID)).toThrow(/défaut/)
   })
 
-  it('supprimer le compte ACTIF rebascule sur le défaut au lieu de laisser un état sans sortie', () => {
+  it('supprimer le compte ACTIF rebascule sur le défaut au lieu de laisser un état sans sortie', async () => {
     const { store, removed } = makeStore()
-    const added = store.add()
+    const added = await store.add()
     store.switchTo(added.id)
     store.remove(added.id)
     expect(store.active().id).toBe(DEFAULT_ACCOUNT_ID)
@@ -87,23 +87,23 @@ describe('ClaudeAccountsStore', () => {
     expect(removed).toContain(added.dir)
   })
 
-  it('donne des ids distincts à des comptes successifs', () => {
+  it('donne des ids distincts à des comptes successifs', async () => {
     const { store } = makeStore()
-    expect(store.add().id).not.toBe(store.add().id)
+    expect((await store.add()).id).not.toBe((await store.add()).id)
   })
 
-  it('enregistre l’identité observée et l’utilise comme nom affiché', () => {
+  it('enregistre l’identité observée et l’utilise comme nom affiché', async () => {
     const { store } = makeStore()
-    const added = store.add()
+    const added = await store.add()
     store.setIdentity(added.id, { email: 'autre@example.com', subscriptionType: 'max' })
     const account = store.find(added.id)!
     expect(accountDisplayName(account)).toBe('autre@example.com')
     expect(account.subscriptionType).toBe('max')
   })
 
-  it('efface l’identité quand la sonde dit « non connecté » (pas de puce qui ment)', () => {
+  it('efface l’identité quand la sonde dit « non connecté » (pas de puce qui ment)', async () => {
     const { store } = makeStore()
-    const added = store.add()
+    const added = await store.add()
     store.setIdentity(added.id, { email: 'x@y.fr', subscriptionType: 'team' })
     store.setIdentity(added.id, undefined)
     const account = store.find(added.id)!
@@ -260,20 +260,17 @@ describe('persistance — un compte non écrit est un compte perdu', () => {
     })
   }
 
-  it('ADD échoue bruyamment quand l’état ne peut pas être écrit', () => {
+  it('ADD échoue bruyamment quand l’état ne peut pas être écrit', async () => {
     // Vécu le 2026-08-07 : le compte apparaissait dans l’UI puis disparaissait a chaque
     // redemarrage, sans aucun signal — parce que l’echec d’ecriture etait avale en silence.
     const store = storeWithFailingWrite()
-    expect(() => store.add()).toThrow(/EACCES/)
+    await expect(store.add()).rejects.toThrow(/EACCES/)
   })
 
-  it('l’echec d’ecriture est EXPOSE, jamais avale', () => {
+  it('l’echec d’ecriture est EXPOSE, jamais avale', async () => {
     const store = storeWithFailingWrite()
-    try {
-      store.add()
-    } catch {
-      // l’erreur est attendue ; ce qui compte ici c’est la trace laissee.
-    }
+    // l’erreur est attendue ; ce qui compte ici c’est la trace laissee.
+    await store.add().catch(() => undefined)
     expect(store.persistError).toMatch(/EACCES/)
   })
 
@@ -331,7 +328,7 @@ describe('relocation du userData — le dossier d’un compte suit la racine cou
 })
 
 describe('ClaudeAccountsStore.onActiveChange', () => {
-  it('previent a chaque changement du compte actif, et seulement alors', () => {
+  it('previent a chaque changement du compte actif, et seulement alors', async () => {
     const files = new Map<string, string>()
     const store = new ClaudeAccountsStore('/s/state.json', '/s/accounts', {
       readFile: (p) => {
@@ -343,13 +340,13 @@ describe('ClaudeAccountsStore.onActiveChange', () => {
       makeDir: () => undefined,
       removeDir: () => undefined
     })
-    const second = store.add('B')
+    const second = await store.add('B')
     const vus: string[] = []
     store.onActiveChange((id) => vus.push(id))
     store.switchTo(second.id)
     store.switchTo(second.id)
     store.switchTo(DEFAULT_ACCOUNT_ID)
-    store.add('C')
+    await store.add('C')
     expect(vus).toEqual([second.id, 'default'])
   })
 })

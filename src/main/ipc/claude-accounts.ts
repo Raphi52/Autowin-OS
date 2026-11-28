@@ -118,9 +118,9 @@ export function registerClaudeAccountsIpc({ os, claudeAccounts }: ClaudeAccounts
     await refreshAllAccountIdentities()
     return claudeAccountsPayload()
   })
-  ipcMain.handle('os:claudeAccounts:add', (event, label: unknown) => {
+  ipcMain.handle('os:claudeAccounts:add', async (event, label: unknown) => {
     assertTrustedRendererSender(event, 'Claude accounts add')
-    const account = claudeAccounts.add(typeof label === 'string' ? label : undefined)
+    const account = await claudeAccounts.add(typeof label === 'string' ? label : undefined)
     // On enchaine directement sur le login DANS LE DOSSIER DU NOUVEAU COMPTE : un compte ajoute
     // mais jamais authentifie ne servirait a rien, et l'utilisateur n'a aucun moyen de le faire
     // lui-meme depuis l'app.
