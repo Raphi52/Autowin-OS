@@ -75,4 +75,12 @@ describe('repères de coût servis à chaque tour', () => {
       toursDeChat: 1
     })
   })
+
+  it('rend la dépense brute d’un fil aux plans de lots, non arrondie, et rien pour un fil inconnu', () => {
+    const r = new ReperesDeCoutEnCours()
+    r.ajouter(ligne('conv-lot', 't1', 'supervisor', 0.333))
+    r.ajouter(ligne('conv-lot', 't1', 'subagent', 89.4))
+    expect(r.depenseDuFil('conv-lot')).toBeCloseTo(89.733, 3)
+    expect(r.depenseDuFil('conv-inconnu')).toBeUndefined()
+  })
 })

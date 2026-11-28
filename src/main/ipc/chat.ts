@@ -3385,6 +3385,8 @@ Le fil reprend ensuite normalement.`
         : Promise.resolve({ ok: false, error: 'lancement dans un fil non câblé' }),
     tourActif: (fil) => activeChatTurns.isInFlight(fil),
     existe: (fil) => Boolean(os.conversations.get(fil)),
+    // Le registre des coûts : coût attendu au dépôt, dépense réelle à chaque réveil du chef.
+    depenseDuFil: (fil) => os.cost.depenseDuFil(fil),
     ecrire: (de, a, texte) => bus.ecrireDepuisLeFil(de, a, texte),
     // Les fils qui tiennent les fichiers d'un lot refusé par la base : leurs traces de fichiers
     // (celles de `proprietaire_fichier`), hors fils qui les ont seulement VUS changer.

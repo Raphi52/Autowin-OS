@@ -285,6 +285,11 @@ export class CostAggregator {
     return this.reperes.reperes(conversationId)
   }
 
+  /** Ce qu'un fil a coûté jusqu'ici (`undefined` : aucune ligne au registre). */
+  depenseDuFil(conversationId: string): number | undefined {
+    return this.reperes.depenseDuFil(conversationId)
+  }
+
   /** Cout total cumule (0 si aucun tour n'a de costUsd). */
   totalUsd(): number {
     return this.turns.reduce((sum, t) => sum + (t.costUsd ?? 0), 0)

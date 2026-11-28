@@ -211,6 +211,11 @@ export interface PlanDeLots {
   contexte?: string
   /** Décisions notées en route par le chef ou un lot ; les lots lancés ensuite les reçoivent. */
   decisions?: DecisionDuPlan[]
+  /**
+   * Coût attendu au dépôt (USD), tiré des lots déjà mesurés sur ce poste (`repereDUnLot`) : le
+   * réveil du chef met la dépense réelle en face (`CoutDuPlan`). Absent : pas assez de mesures.
+   */
+  estimationUsd?: number
 }
 
 export interface DecisionDuPlan {
@@ -1979,6 +1984,106 @@ export function suiteDeLOrdreAuLot(
 }
 
 /**
+ * LE COÛT D'UN PLAN, MESURÉ (2026-11-28, kaizen de conv-2153). Le chef de plan-676a4b19 a annoncé
+ * « entre 100 et 400 $ » pour 18 lots : il n'avait pour repère que le coût d'une exécution
+ * `orchestrate` (médiane 5 $, `reperes-de-cout.ts`). Un fil de lot en coûtait de 30 à 220 $ ; le plan
+ * a dépensé environ 2 000 $ en trois jours, et aucun réveil du chef ne montrait la dépense : ni lui ni
+ * ses bilans ne pouvaient la comparer à l'annonce. Ces calculs INFORMENT, ils ne bloquent rien
+ * (décision de l'utilisateur du 2026-10-28, « ni budget ni blocage »).
+ */
+export interface RepereDUnLot {
+  medianeUsd: number
+  neufSurDixSousUsd: number
+  /** Lots faits dont le fil a une dépense mesurée. */
+  mesures: number
+}
+/** Sous ce nombre de lots mesurés, une médiane ne dit rien : aucun chiffre n'est avancé. */
+export const LOTS_MESURES_MIN = 5
+
+export interface CoutDuPlan {
+  /** Dépensé dans les fils des lots de ce plan. */
+  lotsUsd: number
+  /** Dépensé dans le fil chef depuis sa création (il peut porter des tours d'avant le plan). */
+  chefUsd?: number
+}
+
+/** Ce que coûte la dépense d'un fil, telle que le registre des coûts la tient ; `undefined` : rien. */
+export type DepenseDuFil = (fil: string) => number | undefined
+
+const dollars = (usd: number): string =>
+  usd >= 10 ? `${Math.round(usd)} $` : `${(Math.round(usd * 100) / 100).toFixed(2)} $`
+
+/** Médiane et 9e décile du coût d'un fil de lot FAIT, sur tous les plans connus du poste. */
+export function repereDUnLot(
+  plans: readonly PlanDeLots[],
+  depense: DepenseDuFil
+): RepereDUnLot | undefined {
+  const vus = new Set<string>()
+  const couts: number[] = []
+  for (const plan of plans)
+    for (const lot of plan.lots) {
+      if (lot.etat !== 'fait' || !lot.fil || vus.has(lot.fil)) continue
+      vus.add(lot.fil)
+      const usd = depense(lot.fil)
+      if (typeof usd === 'number' && Number.isFinite(usd) && usd > 0) couts.push(usd)
+    }
+  if (couts.length < LOTS_MESURES_MIN) return undefined
+  couts.sort((a, b) => a - b)
+  const q = (x: number): number =>
+    couts[Math.min(couts.length - 1, Math.floor(x * (couts.length - 1)))] ?? 0
+  return { medianeUsd: q(0.5), neufSurDixSousUsd: q(0.9), mesures: couts.length }
+}
+
+/** La dépense réelle d'un plan : ses fils de lots, et le fil chef à part. */
+export function coutDuPlan(plan: PlanDeLots, depense: DepenseDuFil): CoutDuPlan {
+  const fils = new Set(plan.lots.map((l) => l.fil).filter((f): f is string => Boolean(f)))
+  let lotsUsd = 0
+  for (const fil of fils) lotsUsd += depense(fil) ?? 0
+  const chefUsd = depense(plan.chef)
+  return { lotsUsd, ...(chefUsd !== undefined ? { chefUsd } : {}) }
+}
+
+/**
+ * L'estimation gardée sur le plan : le HAUT de la fourchette (9 sur 10). Mesuré au rejeu de
+ * plan-676a4b19 : la médiane du poste était de 10 $ par lot sur 354 lots, et ses lots en coûtaient
+ * 30 à 220 $ ; un plafond à la médiane sonnerait pour tout plan un peu lourd, celui-ci signale
+ * l'écart réel (512 $ estimés pour 18 lots, contre 2 059 $ dépensés à la fin).
+ */
+export function estimationDuPlan(nbLots: number, repere: RepereDUnLot): number {
+  return nbLots * repere.neufSurDixSousUsd
+}
+
+/** Le coût attendu d'un plan de `nbLots`, rendu au chef au dépôt : c'est le chiffre à annoncer. */
+export function texteCoutAttendu(nbLots: number, repere: RepereDUnLot | undefined): string {
+  if (!repere)
+    return `COÛT : moins de ${LOTS_MESURES_MIN} lots déjà mesurés sur ce poste, aucun ordre de grandeur fiable. N’annonce pas un chiffre tiré du coût d’une exécution (uneExecution) : un fil de lot coûte bien plus ; dis que la dépense se lira dans le tableau du plan.`
+  return (
+    `COÛT ATTENDU, mesuré sur ce poste : un lot de plan coûte ${dollars(repere.medianeUsd)} en médiane ` +
+    `(9 sur 10 sous ${dollars(repere.neufSurDixSousUsd)}, sur ${repere.mesures} lots faits) ; ces ${nbLots} lots ≈ ` +
+    `${dollars(nbLots * repere.medianeUsd)}, jusqu’à ${dollars(estimationDuPlan(nbLots, repere))} si chacun reste dans les 9 sur 10, ` +
+    `plus les tours de ton fil. C’est cette fourchette que tu annonces à l’utilisateur, pas le coût d’une ` +
+    `exécution (uneExecution) ; chaque réveil te montrera la dépense réelle en face.`
+  )
+}
+
+/** La ligne du réveil : dépensé, contre l'estimation du dépôt. */
+export function texteCoutDuPlan(plan: PlanDeLots, cout: CoutDuPlan): string {
+  // Les lots seuls face à l’estimation, qui ne compte qu’eux : le fil chef peut porter des tours
+  // d’avant le plan, et ferait sonner l’alerte à tort.
+  const depasse = plan.estimationUsd !== undefined && cout.lotsUsd > plan.estimationUsd
+  return (
+    `Dépensé jusqu’ici : ${dollars(cout.lotsUsd)} dans les fils des lots` +
+    (cout.chefUsd !== undefined ? `, plus ${dollars(cout.chefUsd)} dans ton fil` : '') +
+    (plan.estimationUsd !== undefined
+      ? ` — estimé au dépôt : jusqu’à ${dollars(plan.estimationUsd)}`
+      : '') +
+    (depasse
+      ? ` — DÉPASSÉ : dis-le à l’utilisateur dans ce tour, avec ce que le plan a rendu pour cette somme et ce qu’il reste à payer.`
+      : '.')
+  )
+}
+
+/**
  * Le but d'ensemble tel que le chef l'a écrit en tête du contexte (sa première ligne), sinon le
  * titre. Le réveil le remet sous les yeux du chef : sans lui, chaque lot était jugé contre sa
  * seule demande (tests verts, écran lisible) et un résultat cumulé en dessous du but passait
@@ -1992,7 +2097,11 @@ export function butDuPlan(plan: PlanDeLots): string {
 const BUT_MAX = 400
 
 /** Le tour lancé par l'app dans le fil chef quand des lots ont fini. */
-export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): string {
+export function promptDeReveil(
+  plan: PlanDeLots,
+  rangs: readonly number[],
+  cout?: CoutDuPlan
+): string {
   const nouveaux = rangs
     .map((r) => plan.lots.find((l) => l.rang === r))
     .filter((l): l is LotDuPlan => Boolean(l))
@@ -2021,6 +2130,7 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
     `RÉVEIL DU PLAN DE LOTS « ${plan.titre} » (${plan.id}) — message de l’app, pas de l’utilisateur.`,
     `Lots qui viennent de finir : ${nouveaux.length ? nouveaux.join(' ; ') : 'aucun'}.`,
     `Avancement : ${bilan.texte}. Statut du plan : ${LIBELLE_STATUT[plan.statut]}${plan.raison ? ` — ${plan.raison}` : ''}.`,
+    ...(cout ? [texteCoutDuPlan(plan, cout)] : []),
     `But du plan : ${butDuPlan(plan)}`,
     ...(ecarts.length
       ? [

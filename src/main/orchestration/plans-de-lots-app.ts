@@ -32,6 +32,10 @@ import {
   paralleleRelu,
   pauseAvantRedemarrage,
   promptDeReveil,
+  coutDuPlan,
+  estimationDuPlan,
+  repereDUnLot,
+  texteCoutAttendu,
   promptDuLot,
   refuserLot,
   relancerLot,
@@ -116,6 +120,11 @@ export interface DepsPlans {
   stockage?: { lire: () => string; ecrire: (contenu: string) => void }
   maintenant?: () => number
   nouvelId?: () => string
+  /**
+   * Dépense d'un fil telle que le registre des coûts la tient (`CostAggregator.depenseDuFil`). Sert
+   * le coût attendu au dépôt et la dépense réelle à chaque réveil du chef. Absent : rien n'est chiffré.
+   */
+  depenseDuFil?: (fil: string) => number | undefined
   journaliser?: (message: string, detail?: unknown) => void
 }
 
@@ -564,6 +573,13 @@ export class CoordinateurDesPlans {
       // « Arrêter » dans le tableau. Un plan déjà lancé (même contenu redéposé) n'est pas relancé.
       if (r.plan.statut !== 'attente-accord')
         return { ok: true, plan: resume(r.plan), detail: r.detail }
+      // Le coût attendu se mesure sur les lots déjà faits du poste, jamais sur une exécution seule
+      // (kaizen de conv-2153 : 100 à 400 $ annoncés, environ 2 000 $ dépensés).
+      const depense = this.#deps.depenseDuFil
+      const repere = depense ? repereDUnLot(this.#plans, depense) : undefined
+      if (repere)
+        this.#poser({ ...r.plan, estimationUsd: estimationDuPlan(r.plan.lots.length, repere) })
+      const coutAttendu = depense ? ` ${texteCoutAttendu(r.plan.lots.length, repere)}` : ''
       const lance = await this.accepter(chef, r.plan.id)
       if (!lance.ok)
         throw new Error(`plan_de_lots : plan ${r.plan.id} déposé mais non lancé — ${lance.erreur}`)
@@ -572,7 +588,7 @@ export class CoordinateurDesPlans {
         plan: resume(lance.plan),
         detail:
           `${r.detail} LANCÉ : ${lance.detail}. L’app ouvre un fil par lot et te réveillera à chaque fin de lot ; ` +
-          'l’utilisateur peut l’arrêter dans le tableau au-dessus de la zone de saisie. Dis-le-lui en une phrase, puis termine ton tour.'
+          `l’utilisateur peut l’arrêter dans le tableau au-dessus de la zone de saisie.${coutAttendu} Dis-le-lui en une phrase${coutAttendu ? ', coût compris' : ''}, puis termine ton tour.`
       }
     }
     if (action === 'etat') {
@@ -1012,7 +1028,11 @@ export class CoordinateurDesPlans {
     this.#rangsDuReveil.set(chef, { planId: attente.planId, rangs: [...attente.rangs] })
     let r: { ok: boolean; error?: string }
     try {
-      r = await this.#deps.lancer(chef, promptDeReveil(plan, [...attente.rangs]))
+      const depense = this.#deps.depenseDuFil
+      r = await this.#deps.lancer(
+        chef,
+        promptDeReveil(plan, [...attente.rangs], depense ? coutDuPlan(plan, depense) : undefined)
+      )
     } catch (e) {
       r = { ok: false, error: (e as Error)?.message ?? String(e) }
     }

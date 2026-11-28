@@ -79,6 +79,14 @@ export class ReperesDeCoutEnCours {
     this.cache = undefined
   }
 
+  /**
+   * Ce que ce fil a coûté jusqu'ici, exécutions comprises ; `undefined` s'il n'a aucune ligne au
+   * registre. Lu par les plans de lots (coût attendu au dépôt, dépense à chaque réveil du chef).
+   */
+  depenseDuFil(conversationId: string): number | undefined {
+    return this.parFil.get(conversationId)?.depenseUsd
+  }
+
   reperes(conversationId?: string): ReperesDeCout {
     if (!this.cache) {
       const execs = [...this.executions.values()].filter((v) => v > 0).sort((a, b) => a - b)
