@@ -93,10 +93,7 @@ describe('renderer chat IPC contract', () => {
 
   it('conserve le checkpoint et persiste le règlement tardif sur os:orchestrate', () => {
     const { main } = readChatContractSources()
-    const directRun = main.slice(
-      main.indexOf("ipcMain.handle('os:orchestrate'"),
-      main.indexOf("ipcMain.handle('os:behaviourComposition'")
-    )
+    const directRun = extractIpcHandler(main, 'os:orchestrate')
     const runTaskAt = directRun.indexOf('os.runTask(')
     const lifecycleAt = directRun.indexOf('(lifecycle) =>')
     const forgetAt = directRun.indexOf('os.forgetResumableOrchestration')
@@ -110,10 +107,7 @@ describe('renderer chat IPC contract', () => {
 
   it('la lignee directe passe le dossier du fil au run : sa copie vit dans le dépôt de ce dossier', () => {
     const { main } = readChatContractSources()
-    const directRun = main.slice(
-      main.indexOf("ipcMain.handle('os:orchestrate'"),
-      main.indexOf("ipcMain.handle('os:behaviourComposition'")
-    )
+    const directRun = extractIpcHandler(main, 'os:orchestrate')
     // `runTask` reçoit ce dossier en 18ᵉ position, après deux emplacements réservés à la suite de `runtimeSnapshot`.
     expect(directRun).toMatch(
       /runtimeSnapshot,\s*undefined,\s*undefined,\s*(\/\/[^\n]*\n\s*)*\{ workspace: dossierDuTour\(conversationId\) \}/
@@ -122,10 +116,7 @@ describe('renderer chat IPC contract', () => {
 
   it('la lignée directe refuse un fil dont le dossier rangé a disparu, avant de lancer le run', () => {
     const { main } = readChatContractSources()
-    const directRun = main.slice(
-      main.indexOf("ipcMain.handle('os:orchestrate'"),
-      main.indexOf("ipcMain.handle('os:behaviourComposition'")
-    )
+    const directRun = extractIpcHandler(main, 'os:orchestrate')
     expect(directRun.indexOf('refuserTourSiDossierDisparu(')).toBeGreaterThanOrEqual(0)
     expect(directRun.indexOf('refuserTourSiDossierDisparu(')).toBeLessThan(
       directRun.indexOf('os.runTask(')
@@ -140,10 +131,7 @@ describe('renderer chat IPC contract', () => {
    */
   it('la lignee directe PROJETTE la couverture de cout, comme la lignee commands', () => {
     const { main } = readChatContractSources()
-    const directRun = main.slice(
-      main.indexOf("ipcMain.handle('os:orchestrate'"),
-      main.indexOf("ipcMain.handle('os:behaviourComposition'")
-    )
+    const directRun = extractIpcHandler(main, 'os:orchestrate')
     const deliveredAt = directRun.indexOf('const delivered = {')
     const coverageAt = directRun.indexOf('executionCostCoverageFields(')
 

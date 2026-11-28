@@ -20,8 +20,10 @@ describe('index.ts — la reprise des fils coupés par le quota', () => {
   it('seuls les deux canaux de la fenêtre ouvrent un tour au nom d’une personne', () => {
     // `run-pilot-chat.ts` marque le tour d'après sa fenêtre. Un lanceur de fond qui en passerait une,
     // tâche, règle ou scout, redeviendrait reprenable seul, sans ses bornes.
+    // Trié : le source est lu fichier par fichier, et les lanceurs vivent dans plusieurs modules de
+    // src/main/ipc/ ; seul compte QUI passe une fenêtre, pas l'ordre des fichiers.
     const appels = source.match(/runPilotChat\(\s*[^,\s]+/gu) ?? []
-    expect(appels.map((appel) => appel.replace(/runPilotChat\(\s*/u, ''))).toEqual([
+    expect(appels.map((appel) => appel.replace(/runPilotChat\(\s*/u, '')).sort()).toEqual([
       'event.sender',
       'event.sender',
       'undefined',
@@ -61,8 +63,16 @@ describe('index.ts — la reprise des fils coupés par le quota', () => {
   })
 
   it('le suivi existe avant que le canal de la liste ne puisse le lire', () => {
+    // Les canaux des conversations s'enregistrent dans `registerConversationsEtBoardIpc`
+    // (src/main/ipc/chat-conversations-et-board.ts), qui reçoit le suivi déjà déclaré par
+    // `registerChatIpc`.
     expect(source.indexOf('const suiviDesFilsCoupes')).toBeLessThan(
-      source.indexOf('registerConversationsIpc({')
+      source.indexOf('registerConversationsEtBoardIpc(ctx, { suiviDesFilsCoupes })')
+    )
+    const module = source.slice(source.indexOf('export function registerConversationsEtBoardIpc('))
+    expect(module.indexOf('const { suiviDesFilsCoupes } = deps')).toBeGreaterThan(-1)
+    expect(module.indexOf('const { suiviDesFilsCoupes } = deps')).toBeLessThan(
+      module.indexOf('registerConversationsIpc({')
     )
   })
 })
