@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { mkdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { attendreFichier, deposerFichier } from '../gel/ecriture-hors-fil'
 
 /**
  * Plusieurs comptes Claude sur la même machine, avec bascule en un clic — comme claude.exe.
@@ -319,9 +320,25 @@ export function claudeAccountEnv(): Record<string, string> {
   }
 }
 
+/**
+ * L'écrivain par défaut : hors du fil principal, et réglé seulement quand l'état est posé.
+ *
+ * `writeFileSync` ici a figé la fenêtre 2 fois, 3,4 s en tout (`gels.jsonl` du 21 au 28/11/2026) :
+ * ouvrir la liste des comptes sonde chaque compte, et chaque identité lue réécrit le fichier.
+ * `deposerFichier` crée le dossier qui manque et ne pose que la dernière valeur d'une rafale ; la
+ * cause d'un refus part au journal de l'app (`[ecriture-hors-fil]`).
+ */
+async function ecrireHorsDuFil(path: string, data: string): Promise<void> {
+  deposerFichier(path, data)
+  if (!(await attendreFichier(path))) {
+    throw new Error(`le disque a refusé ${path} (cause au journal : [ecriture-hors-fil])`)
+  }
+}
+
 export interface AccountsStoreDeps {
   readFile?: (path: string) => string
-  writeFile?: (path: string, data: string) => void
+  /** Un échec se dit par une exception ou une promesse rejetée : les deux deviennent `persistError`. */
+  writeFile?: (path: string, data: string) => void | Promise<void>
   makeDir?: (path: string) => void
   removeDir?: (path: string) => void
   now?: () => string
@@ -339,7 +356,7 @@ export class ClaudeAccountsStore {
   ) {
     this.deps = {
       readFile: deps.readFile ?? ((path) => readFileSync(path, 'utf8')),
-      writeFile: deps.writeFile ?? ((path, data) => writeFileSync(path, data, 'utf8')),
+      writeFile: deps.writeFile ?? ecrireHorsDuFil,
       makeDir: deps.makeDir ?? ((path) => void mkdirSync(path, { recursive: true })),
       removeDir: deps.removeDir ?? ((path) => supprimerArbre(path)),
       now: deps.now ?? (() => new Date().toISOString())
@@ -408,11 +425,11 @@ export class ClaudeAccountsStore {
     }
   }
 
-  private persist(): void {
+  /** Se règle quand l'état est posé, ou refusé (`persistError`) ; ne rejette jamais. */
+  private async persist(): Promise<void> {
     this.notifyActiveChange()
     try {
-      this.deps.makeDir(dirname(this.statePath))
-      this.deps.writeFile(this.statePath, JSON.stringify(this.state, null, 2))
+      await this.deps.writeFile(this.statePath, JSON.stringify(this.state, null, 2))
       this.persistError = null
     } catch (error) {
       // Fail-open volontaire sur l'APPEL (une bascule non persistée vaut mieux qu'un appel Claude
@@ -436,7 +453,7 @@ export class ClaudeAccountsStore {
     return accountEnv(this.active())
   }
 
-  add(label?: string): ClaudeAccount {
+  async add(label?: string): Promise<ClaudeAccount> {
     const id = nextAccountId(this.state)
     const dir = join(this.accountsRoot, id)
     this.deps.makeDir(dir)
@@ -447,12 +464,16 @@ export class ClaudeAccountsStore {
       addedAt: this.deps.now()
     }
     this.state = { ...this.state, accounts: [...this.state.accounts, account] }
-    this.persist()
+    await this.persist()
     // Contrairement a la bascule, un AJOUT non persiste ne vaut rien : le compte disparait au
     // prochain demarrage en laissant un dossier orphelin. On refuse plutot que de mentir.
     if (this.persistError) {
+      const refus = this.persistError
       this.state = { ...this.state, accounts: this.state.accounts.filter((it) => it.id !== id) }
-      throw new Error(`compte Claude non enregistre (etat non ecrit) : ${this.persistError}`)
+      // L'état refusé reste la dernière valeur déposée : la fermeture de l'app la poserait, avec
+      // le compte qu'on vient de refuser. On dépose l'état d'avant à sa place.
+      void this.persist()
+      throw new Error(`compte Claude non enregistre (etat non ecrit) : ${refus}`)
     }
     return account
   }
@@ -462,7 +483,7 @@ export class ClaudeAccountsStore {
       throw new Error(`compte Claude inconnu : ${id}`)
     }
     this.state = { ...this.state, activeId: id }
-    this.persist()
+    void this.persist()
     return this.active()
   }
 
@@ -488,7 +509,7 @@ export class ClaudeAccountsStore {
         // de la liste, ce que l'utilisateur a demandé. Un dossier orphelin ne casse rien.
       }
     }
-    this.persist()
+    void this.persist()
   }
 
   /**
@@ -510,7 +531,7 @@ export class ClaudeAccountsStore {
           : account
       )
     }
-    this.persist()
+    void this.persist()
   }
 
   /** Le compte visé, ou `undefined`. Utile au principal pour retrouver son dossier avant sonde. */
