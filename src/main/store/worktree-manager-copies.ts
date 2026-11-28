@@ -16,6 +16,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
+import { type FileHandle, open } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { delierLesDependances } from './dependances-copie-agent'
 import { isSameProcessIdentity } from '../app/process-identity'
@@ -1190,7 +1191,44 @@ export function markSpawnIntent(
   rmSync(intentPath, { force: true })
 }
 
-/** Transfert atomique intention → PID : aucun crash ne peut laisser une fenêtre sans lease. */
+/** Les compléments de bail partis en fond : `attendreBauxEnCours` les attend. */
+const complementsDeBail = new Set<Promise<void>>()
+
+/**
+ * Complète un bail EXISTANT hors du fil principal, et ne le recrée jamais.
+ *
+ * `r+` ouvre sans créer : si le CLI a fini entre-temps, `markProcess(false)` a retiré le bail, et
+ * une écriture en `w` le ferait renaître pour un PID mort (ou recyclé, qui garderait la copie).
+ * Écrire en tête PUIS tronquer : un lecteur ne voit jamais le fichier vide, au pire l'ancienne
+ * valeur. Un échec laisse le bail tel que le renommage l'a posé, toujours valable : identité
+ * inconnue, que `hasActiveProcesses` traite en gardant la copie.
+ */
+async function completerBail(chemin: string, contenu: string): Promise<void> {
+  let fichier: FileHandle
+  try {
+    fichier = await open(chemin, 'r+')
+  } catch (erreur) {
+    if ((erreur as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw erreur
+  }
+  try {
+    const octets = Buffer.from(contenu, 'utf8')
+    await fichier.write(octets, 0, octets.length, 0)
+    await fichier.truncate(octets.length)
+  } finally {
+    await fichier.close()
+  }
+}
+
+/**
+ * Transfert atomique intention → PID : aucun crash ne peut laisser une fenêtre sans lease.
+ *
+ * Le RENOMMAGE reste synchrone : dès le retour, `hasActiveProcesses` lit le bail du PID et plus
+ * l'intention. Le contenu, lui, se complète en fond : `writeFileSync` sur ce fichier tout juste
+ * renommé a figé la fenêtre jusqu'à 3,2 s (16 gels, 26,7 s sur 7 jours, `gels.jsonl` du
+ * 21 au 28/11/2026). D'ici là, le bail garde l'horodatage de l'intention, que `hasActiveProcesses`
+ * lit comme un bail sans identité. Un arrêt de l'app avant la fin laisse ce même bail valable.
+ */
 export function confirmSpawn(
   this: WorktreeManager,
   agentId: string,
@@ -1204,10 +1242,21 @@ export function confirmSpawn(
   const intentPath = join(leaseDir, `spawn-pending-${token}`)
   const leasePath = join(leaseDir, String(pid))
   renameSync(intentPath, leasePath)
-  writeFileSync(
-    leasePath,
-    JSON.stringify({ identity: this.processIdentity(pid) ?? null, recordedAt: Date.now() })
-  )
+  const contenu = JSON.stringify({
+    identity: this.processIdentity(pid) ?? null,
+    recordedAt: Date.now()
+  })
+  const complement = completerBail(leasePath, contenu)
+    .catch((erreur: unknown) => {
+      console.warn(`[worktree] bail ${leasePath} non complété :`, erreur)
+    })
+    .finally(() => complementsDeBail.delete(complement))
+  complementsDeBail.add(complement)
+}
+
+/** Attend les compléments de bail encore en route, sans tenir le fil. */
+export async function attendreBauxEnCours(this: WorktreeManager): Promise<void> {
+  while (complementsDeBail.size > 0) await Promise.all(complementsDeBail)
 }
 
 /** Nettoie les leases de PID morts et indique si un CLI vivant possède encore la copie. */

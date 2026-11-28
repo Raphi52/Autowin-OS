@@ -24,6 +24,8 @@ import {
   formatOrchestrationOutcomePourLeModele
 } from '../../shared/orchestration-outcome'
 import { racineDe } from '../store/worktree-manager.test-helpers'
+import { loadConvRunTrace } from '../runs/conv-runs'
+import { attendreFichier } from '../gel/ecriture-hors-fil'
 
 /*
  * RACINE APP-DATA PROPRE A CE FICHIER.
@@ -491,13 +493,12 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
   })
 
   it('écrit trace.json à CHAQUE étape, avant de la diffuser — pas seulement à la fin du run', async () => {
-    // Une interface rechargée en plein run doit pouvoir relire le fil déjà joué.
+    // Une interface rechargée en plein run doit pouvoir relire le fil déjà joué. Elle le relit par
+    // `loadConvRunTrace` (IPC du chat) : l'étape déposée y est visible avant d'être posée sur disque.
+    // fix-ok: la trace se pose désormais hors du fil (`deposerFichier`) ; relue sur le disque à la diffusion, elle rendait [0, 0] au lieu de [1, 2] (mesuré).
     const os = fakeOs()
     let runPath: string | undefined
-    const lireTrace = (chemin: string): Array<{ step: string }> | null => {
-      const fichier = join(dirname(chemin), 'trace.json')
-      return existsSync(fichier) ? JSON.parse(readFileSync(fichier, 'utf8')) : null
-    }
+    const lireTrace = (chemin: string): Array<{ step: string }> | null => loadConvRunTrace(chemin)
     const etapesSurDisqueALaDiffusion: number[] = []
     const vu: { pendantLeRun: Array<{ step: string }> | null } = { pendantLeRun: null }
     os.runTask = async (...args: unknown[]) => {
@@ -524,11 +525,17 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     try {
       await bus.exec('orchestrate', { task: `/build trace par étape ${Date.now()}` }, 'conv-1')
       expect(runPath).toBeTypeOf('string')
-      // Chaque diffusion trouve DÉJÀ son étape sur disque : l'interface qui relit ne la rate pas.
+      // Chaque diffusion trouve DÉJÀ son étape à la relecture : l'interface qui relit ne la rate pas.
       expect(etapesSurDisqueALaDiffusion).toEqual([1, 2])
       // Le run n'a pas encore rendu la main, et le fil est déjà là.
       expect(vu.pendantLeRun?.map((s) => s.step)).toEqual(['exec', 'judge'])
+      // Et il atterrit bien dans `trace.json`, hors du fil principal.
+      const fichier = join(dirname(runPath!), 'trace.json')
+      expect(await attendreFichier(fichier)).toBe(true)
+      expect(JSON.parse(readFileSync(fichier, 'utf8'))).toHaveLength(2)
     } finally {
+      // Une trace encore en route recréerait le dossier après son retrait.
+      await attendreFichier()
       if (runPath) supprimerArbre(dirname(runPath))
     }
   })
