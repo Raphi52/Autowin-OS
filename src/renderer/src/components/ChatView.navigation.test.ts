@@ -53,10 +53,14 @@ describe('navigation pendant une reponse', () => {
   })
 
   it('synchronise le routage live avant de publier une nouvelle selection', () => {
+    // Les deux corps vivent dans des modules voisins (chat-view-fil.ts, chat-view-gestes-mosaique.ts),
+    // ChatView n'en garde que les relais : la fin du corps est l'accolade de la colonne 0.
     const load = source.match(
-      /async function loadConv\(c: Conv[^)]*\): Promise<void> \{[\s\S]*?\n\s{2}\}/
+      /async function loadConv\(ctx: FilCtx, c: Conv[^)]*\): Promise<void> \{[\s\S]*?\n\}/
     )?.[0]
-    const fresh = source.match(/function newConv\(\): void \{[\s\S]*?\n\s{2}\}/)?.[0]
+    const fresh = source.match(
+      /function newConv\(ctx: GestesMosaiqueCtx\): void \{[\s\S]*?\n\}/
+    )?.[0]
 
     expect(load).toBeDefined()
     expect(fresh).toBeDefined()

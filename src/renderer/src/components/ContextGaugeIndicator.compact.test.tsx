@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ContextGaugeIndicator } from './ContextGaugeIndicator'
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import type { ContextGauge } from '../../../shared/context-gauge'
 
@@ -90,7 +89,7 @@ describe('bouton Compacter dans le panneau de contexte', () => {
   })
 
   it('est CABLE dans ChatView sur la demande de compaction partagee', () => {
-    const source = readFileSync(join(__dirname, 'ChatView.tsx'), 'utf8').replace(/\s+/g, ' ')
+    const source = lireSourceDuChatView().replace(/\s+/g, ' ')
     expect(source).toContain('onCompact={')
     expect(source).toContain('COMPACT_REQUEST')
     expect(COMPACT_REQUEST.length).toBeGreaterThan(40)

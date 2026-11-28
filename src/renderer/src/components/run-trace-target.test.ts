@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { failedActionRunId, pickRunForTrace, runIdFromActionData } from './run-trace-target'
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { sourceDuBus } from '../../../main/commands/source-du-bus.test-helpers'
 
 const run = (path: string, mtime: number) => ({ path, mtime })
@@ -97,7 +98,7 @@ describe('cablage du clic « action avec erreur » → trace', () => {
   })
 
   it('le Chat OUVRE la trace du run resolu (et ne se contente plus de cadrer la liste)', () => {
-    const chat = read('ChatView.tsx')
+    const chat = lireSourceDuChatView()
     expect(chat).toContain('pickRunForTrace(runsRef.current, runId)')
     // `viewRun` vient d'un hook appelé plus bas dans le composant : le clic le lit par sa ref,
     // tenue à jour à chaque rendu. Les deux moitiés comptent : un appel sans ref nourrie n'ouvre rien.
