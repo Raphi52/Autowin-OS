@@ -205,11 +205,11 @@ export const CATALOG: CommandSpec[] = [
      */
     name: 'plan_de_lots',
     description:
-      "Mener une tâche LONGUE en plusieurs fils, depuis TON fil (le chef). Action « deposer » : un plan de 2 à 20 lots (vise 3 à 8 : un lot coûte un tour ; le dépôt te rend le coût mesuré d’un lot sur ce poste, c’est lui que tu annonces, jamais celui d’une exécution) sur des fichiers séparés ; un lot qui a besoin du RÉSULTAT d'un autre l'attend par « apres » ; un prérequis en échec le bloque jusqu'à sa relance. Le plan PART AUSSITÔT déposé, sans clic de l'utilisateur (il peut l'arrêter) : ne dépose qu'un plan prêt, dis pourquoi tu découpes et rends la main. L'app ouvre un fil par lot (tous les lots prêts ensemble) et te réveille à chaque fin : un lot fini attend ta réception (« valider » ou « refuser ») avant que ses dépendants partent ; un échec, « relancer » ou « valider ». Fais le bilan. Chaque lot reçoit sa demande, le « contexte », les décisions notées et la liste des autres lots. Action « noter » (chef OU lot) : une décision pour les lots en cours et à venir. Action « ajouter » (chef) : des lots en plus, pas un second plan. Action « etat » : le tableau. Un fil de lot ne dépose pas de plan.",
+      "Mener une tâche LONGUE en plusieurs fils, depuis TON fil (le chef). Action « deposer » : un plan de 2 à 20 lots sur des fichiers séparés (vise 3 à 8 ; annonce le coût d’un lot que le dépôt te rend, pas celui d’une exécution) ; un lot qui a besoin du RÉSULTAT d'un autre l'attend par « apres » ; un prérequis en échec le bloque. Le plan PART AUSSITÔT déposé, sans clic de l'utilisateur (il peut l'arrêter) : ne dépose qu'un plan prêt, dis pourquoi tu découpes et rends la main. L'app ouvre un fil par lot et te réveille à chaque fin : un lot fini attend ta réception (« valider » ou « refuser ») avant ses dépendants ; un échec, « relancer » ou « valider ». Fais le bilan. Chaque lot reçoit sa demande, le « contexte », les décisions notées et la liste des autres lots. Action « noter » (chef OU lot) : une décision pour les lots en cours et à venir. Action « ajouter » (chef) : des lots en plus, pas un second plan, même plein. Action « etat » : le tableau. Un fil de lot ne dépose pas de plan.",
     args: {
       action:
         'deposer|etat|relancer|valider|refuser|noter|ajouter (défaut : deposer si « plan » est donné, sinon etat)',
-      plan: 'pour deposer — découpe pour qu’un résultat jugeable par l’utilisateur contre le but (un écran, un parcours complet) sorte dans le premier tiers des lots, pas seulement à la fin ; { "titre", "contexte" (le but, les décisions et contraintes déjà prises, comment les lots s’emboîtent : 80 à 3 000 caractères), "parallele" (défaut : tous les lots prêts ; baisse-le seulement pour une ressource partagée qu’aucun fichier ne nomme, une base ou un serveur), "plafondTours" (TOTAL des tours du plan ENTIER, relances comprises, PAS un nombre par lot — défaut : 2 × le nombre de lots ; au moins le nombre de lots, sinon le plan est refusé), "lots": [ { "titre", "demande" (le message autoporté que recevra le fil, une commande /build en tête est reconnue), "critere" (OBLIGATOIRE, 20 à 600 caractères : ce que l’utilisateur constatera quand ce lot sera fini et comment tu le vérifieras — un écran comparé à l’original, un parcours joué, une commande et son résultat ; tu recevras le lot sur ce point), "fichiers": [chemins prévus, estimés d’une lecture ciblée], "apres": [numéros des lots à attendre — facultatif, sans cycle], "modele" (facultatif : haiku ou sonnet pour un lot simple ; absent = le modèle du fil) } ] } ; pour ajouter — { "lots": [ mêmes champs ] }, rangs à la suite, « apres » peut viser un lot déjà là, et « avant »: [N] fait attendre le lot N (pas encore parti) jusqu’à la réception du lot ajouté',
+      plan: 'pour deposer — découpe pour qu’un résultat jugeable par l’utilisateur contre le but (un écran, un parcours complet) sorte dans le premier tiers des lots, pas seulement à la fin ; { "titre", "contexte" (le but, les décisions et contraintes déjà prises, comment les lots s’emboîtent : 80 à 3 000 caractères), "parallele" (défaut : tous les lots prêts ; baisse-le seulement pour une ressource partagée qu’aucun fichier ne nomme, une base ou un serveur), "plafondTours" (TOTAL des tours du plan ENTIER, relances comprises, PAS un nombre par lot — défaut : 2 × le nombre de lots ; au moins le nombre de lots, sinon le plan est refusé), "lots": [ { "titre", "demande" (le message autoporté que recevra le fil, une commande /build en tête est reconnue), "critere" (OBLIGATOIRE, 20 à 600 caractères : ce que l’utilisateur constatera quand ce lot sera fini et comment tu le vérifieras — un écran comparé à l’original, un parcours joué, une commande et son résultat ; tu recevras le lot sur ce point), "fichiers": [chemins prévus, estimés d’une lecture ciblée], "apres": [numéros des lots à attendre — facultatif, sans cycle], "modele" (facultatif : haiku ou sonnet pour un lot simple ; absent = le modèle du fil) } ] } ; pour ajouter — { "lots": [ mêmes champs ] } (seuls les lots encore ouverts comptent dans les 20 : un lot reçu libère sa place pour le travail qui manque au but), rangs à la suite, « apres » peut viser un lot déjà là, et « avant »: [N] fait attendre le lot N (pas encore parti) jusqu’à la réception du lot ajouté',
       lot: 'pour relancer, valider ou refuser — le numéro du lot (1, 2…)',
       preuve:
         'pour valider — ce que tu as constaté toi-même sur le critère du lot (capture lue, parcours joué, commande et code de sortie), 20 caractères au moins ; il passe « fait » et ses dépendants partent',
@@ -218,7 +218,9 @@ export const CATALOG: CommandSpec[] = [
       motif:
         'pour refuser un lot à recevoir — ce qui manque, constaté, et ce qu’il doit rendre ; son fil le reçoit tel quel et repart (un tour compté)',
       decision:
-        'pour noter — la décision en une phrase (300 caractères au plus), ex. « le module s’appelle carte-du-plan.ts »'
+        'pour noter — la décision en une phrase (300 caractères au plus), ex. « le module s’appelle carte-du-plan.ts »',
+      remplace:
+        'pour noter, chef seulement, facultatif — le numéro d’une décision périmée que la nouvelle remplace (le refus d’un plan plein les numérote) ; sans lui, une 31e décision est refusée'
     },
     argsTypes: {
       action: {
@@ -254,11 +256,12 @@ export const CATALOG: CommandSpec[] = [
       },
       lot: { type: 'integer', minimum: 1 },
       decision: { type: 'string', maxLength: 300 },
+      remplace: { type: 'integer', minimum: 1 },
       preuve: { type: 'string', maxLength: 300 },
       ecart: { type: 'string', maxLength: 300 },
       motif: { type: 'string', maxLength: 1000 }
     },
-    argsFacultatifs: ['action', 'plan', 'lot', 'decision', 'preuve', 'ecart', 'motif'],
+    argsFacultatifs: ['action', 'plan', 'lot', 'decision', 'remplace', 'preuve', 'ecart', 'motif'],
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,

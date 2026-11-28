@@ -1687,6 +1687,47 @@ describe('noterDecision — la mémoire partagée du plan (conv-1284)', () => {
     expect(noterDecision(p, 'une de plus', 'chef', 99).ok).toBe(false)
   })
 
+  /*
+   * PLAN PLEIN (conv-2205) : six décisions du chef de plan-676a4b19 refusées après la 30e (« 30
+   * décisions déjà notées »), dont la tâche des tuiles de l'accueil pour le lot 18. Le plafond
+   * borne ce que chaque lot reçoit dans sa demande : le chef y fait place en remplaçant une
+   * décision périmée, au lieu de perdre la nouvelle.
+   */
+  it('plan plein : le chef remplace une décision périmée par la nouvelle ; le refus les numérote', () => {
+    let p = plan()
+    for (let i = 1; i <= DECISIONS_MAX; i++) {
+      const n = noterDecision(p, `décision ${i}`, 'chef', i)
+      if (!n.ok) throw new Error(n.erreur)
+      p = n.plan
+    }
+    const plein = noterDecision(p, 'tuiles de l’accueil au lot 18', 'chef', 99)
+    expect(plein.ok).toBe(false)
+    if (!plein.ok) {
+      expect(plein.erreur).toMatch(/remplace/)
+      expect(plein.erreur).toMatch(/3\. décision 3/)
+    }
+    const r = noterDecision(p, 'tuiles de l’accueil au lot 18', 'chef', 99, 3)
+    if (!r.ok) throw new Error(r.erreur)
+    const textes = (r.plan.decisions ?? []).map((d) => d.texte)
+    expect(textes).toHaveLength(DECISIONS_MAX)
+    expect(textes).not.toContain('décision 3')
+    expect(textes.at(-1)).toBe('tuiles de l’accueil au lot 18')
+  })
+
+  it('remplacer : réservé au chef, numéro existant exigé', () => {
+    let p = plan()
+    for (let i = 1; i <= 3; i++) {
+      const n = noterDecision(p, `décision ${i}`, 'chef', i)
+      if (!n.ok) throw new Error(n.erreur)
+      p = n.plan
+    }
+    const parUnLot = noterDecision(p, 'autre', 'lot 2', 9, 1)
+    expect(parUnLot.ok).toBe(false)
+    if (!parUnLot.ok) expect(parUnLot.erreur).toMatch(/seul le chef/)
+    for (const mauvais of [0, 4, 1.5, '2'])
+      expect(noterDecision(p, 'autre', 'chef', 9, mauvais).ok).toBe(false)
+  })
+
   it('refuse un plan écarté (refusé, remplacé) ; accepte un plan fini', () => {
     expect(noterDecision({ ...plan(), statut: 'remplace' }, 'x', 'chef', 1).ok).toBe(false)
     expect(noterDecision({ ...plan(), statut: 'refuse' }, 'x', 'chef', 1).ok).toBe(false)
@@ -1857,6 +1898,33 @@ describe('ajouterLots — un plan lancé grandit au lieu d’en exiger un second
     expect(trop.ok).toBe(false)
     expect(ajouterLots(plan, []).ok).toBe(false)
     expect(ajouterLots(plan, { lots: 'non' }).ok).toBe(false)
+  })
+
+  /*
+   * PLAN PLEIN (conv-2205, plan-676a4b19 de conv-2153) : 20 lots dont 18 reçus ; le chef a voulu
+   * ajouter quatre fois le travail qui manquait au but (tuiles de l'accueil, écrans faits main en
+   * démonstration…) et l'ajout était refusé sur le TOTAL (« 21 lots au total : 20 au plus »). Le
+   * plafond protège les comptes rendus par heure, que seuls les lots encore ouverts envoient.
+   */
+  it('plan plein : les lots déjà reçus ne comptent plus, le travail manquant s’ajoute', () => {
+    const vingt = Array.from({ length: LOTS_MAX }, (_, i) => lot(i + 1))
+    let plan = lancerCeQuiPart(planAccepte({ lots: vingt }))
+    for (let rang = 1; rang <= 18; rang++)
+      plan = noterFinDeTour(plan, `conv-1${rang}0`, { ok: true }, 5).plan
+    plan = recevoir(plan, ...Array.from({ length: 18 }, (_, i) => i + 1))
+    const r = ajouterLots(plan, [lot(21)])
+    if (!r.ok) throw new Error(r.erreur)
+    expect(r.plan.lots.length).toBe(LOTS_MAX + 1)
+    expect(r.plan.lots.at(-1)).toMatchObject({ rang: 21, etat: 'a-faire' })
+    expect(lotsAPartir(r.plan)).toEqual([21])
+  })
+
+  it('plan plein : refusé quand les lots encore OUVERTS dépassent le plafond, et le refus le dit', () => {
+    const vingt = Array.from({ length: LOTS_MAX }, (_, i) => lot(i + 1))
+    const plan = lancerCeQuiPart(planAccepte({ lots: vingt }))
+    const r = ajouterLots(plan, [lot(21)])
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erreur).toMatch(/20 lots encore ouverts.*reçois d’abord/)
   })
 
   it('un lot ajouté qui annonce le fichier d’un lot vivant : averti, et jamais en même temps', () => {

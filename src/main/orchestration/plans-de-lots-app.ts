@@ -606,7 +606,7 @@ export class CoordinateurDesPlans {
       const vu = this.planDuFil(chef)
       if (!vu) throw new Error('plan_de_lots : aucun plan dans ce fil — rien où noter.')
       const de = vu.role === 'chef' ? 'chef' : `lot ${vu.rang}`
-      const r = noterDecision(vu.plan, args.decision, de, this.#maintenant())
+      const r = noterDecision(vu.plan, args.decision, de, this.#maintenant(), args.remplace)
       if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
       if (r.deja)
         return { ok: true, plan: resume(r.plan), detail: 'décision déjà notée : rien de nouveau.' }
@@ -618,6 +618,7 @@ export class CoordinateurDesPlans {
         plan: resume(r.plan),
         detail:
           `décision notée (${de}) : ` +
+          (r.remplacee ? `elle remplace « ${r.remplacee} », retirée du plan ; ` : '') +
           (prevenus.length
             ? `envoyée aux lots en cours : ${prevenus.join(', ')} ; `
             : 'aucun lot en cours à prévenir ; ') +

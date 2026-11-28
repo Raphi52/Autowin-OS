@@ -16,7 +16,11 @@ import { estMurDeQuota } from './reprise-quota'
  * Aucune E/S, aucun lancement. Il sert aussi l'écran (tableau d'avancement).
  */
 
-/** Au-delà, le chef regroupe : 20 comptes rendus restent sous les 30 envois par heure du journal. */
+/**
+ * Au-delà, le chef regroupe : 20 comptes rendus restent sous les 30 envois par heure du journal.
+ * Au dépôt, c'est le nombre de lots ; à l'ajout, celui des lots encore OUVERTS (`ajouterLots`) : un
+ * lot reçu n'envoie plus rien, et le travail qui manque au but doit pouvoir rejoindre le plan.
+ */
 export const LOTS_MAX = 20
 /**
  * PAR DÉFAUT, TOUS LES LOTS PRÊTS PARTENT ENSEMBLE (2026-11-20, conv-2052).
@@ -628,8 +632,11 @@ export function noterDecision(
   plan: PlanDeLots,
   texte: unknown,
   de: string,
-  maintenant: number
-): { ok: true; plan: PlanDeLots; deja?: boolean } | { ok: false; erreur: string } {
+  maintenant: number,
+  remplace?: unknown
+):
+  | { ok: true; plan: PlanDeLots; deja?: boolean; remplacee?: string }
+  | { ok: false; erreur: string } {
   if (PLAN_ECARTE.has(plan.statut))
     return { ok: false, erreur: `plan ${LIBELLE_STATUT[plan.statut]} : aucune décision à y noter.` }
   if (typeof texte !== 'string' || !texte.trim())
@@ -642,17 +649,45 @@ export function noterDecision(
     }
   if (faitCreerUneCopieGit(t)) return { ok: false, erreur: `decision : ${REFUS_COPIE_EN_DOUBLE}` }
   const decisions = plan.decisions ?? []
+  if (remplace !== undefined) {
+    if (de !== 'chef')
+      return { ok: false, erreur: 'remplace : seul le chef remplace une décision du plan.' }
+    if (
+      typeof remplace !== 'number' ||
+      !Number.isInteger(remplace) ||
+      remplace < 1 ||
+      remplace > decisions.length
+    )
+      return {
+        ok: false,
+        erreur: `remplace : numéro d’une décision notée attendu (1 à ${decisions.length}).`
+      }
+  }
   if (decisions.some((d) => d.texte.toLowerCase() === t.toLowerCase()))
     return { ok: true, plan, deja: true }
-  if (decisions.length >= DECISIONS_MAX)
-    return {
-      ok: false,
-      erreur: `${DECISIONS_MAX} décisions déjà notées : le plan n’en garde pas plus.`
-    }
+  if (remplace === undefined && decisions.length >= DECISIONS_MAX)
+    return { ok: false, erreur: refusDecisionsPleines(decisions) }
+  const ecartee = typeof remplace === 'number' ? decisions[remplace - 1] : undefined
+  const gardees = ecartee ? decisions.filter((d) => d !== ecartee) : decisions
   return {
     ok: true,
-    plan: { ...plan, decisions: [...decisions, { texte: t, de, le: maintenant }] }
+    plan: { ...plan, decisions: [...gardees, { texte: t, de, le: maintenant }] },
+    ...(ecartee ? { remplacee: ecartee.texte } : {})
   }
+}
+
+/**
+ * PLAN PLEIN (conv-2205) : les décisions notées entrent dans la demande de chaque lot, d'où le
+ * plafond. Sur le plan-676a4b19, six décisions du chef ont été refusées après la 30e et perdues pour
+ * les lots suivants. Le refus donne donc au chef de quoi faire place : les décisions numérotées, et
+ * le paramètre qui en remplace une périmée.
+ */
+function refusDecisionsPleines(decisions: readonly DecisionDuPlan[]): string {
+  const court = (s: string): string => (s.length > 90 ? `${s.slice(0, 89)}…` : s)
+  return [
+    `${DECISIONS_MAX} décisions déjà notées : le plan n’en garde pas plus. Fais-lui place : renote-la avec « remplace » = le numéro d’une décision périmée (lot déjà reçu, choix revu) :`,
+    ...decisions.map((d, i) => `${i + 1}. ${court(d.texte)} (${d.de})`)
+  ].join('\n')
 }
 
 /** Statuts où le chef peut ajouter des lots : le plan tourne, attend une relance, ou vient de finir. */
@@ -695,10 +730,15 @@ export function ajouterLots(
   if (!bruts) return { ok: false, erreur: 'lots à ajouter : liste attendue ({ "lots": [ … ] }).' }
   if (bruts.length === 0) return { ok: false, erreur: 'aucun lot à ajouter.' }
   const total = plan.lots.length + bruts.length
-  if (total > LOTS_MAX)
+  // PLAN PLEIN (conv-2205) : le plafond compte les lots encore OUVERTS, pas le total. Sur le
+  // plan-676a4b19, 18 lots reçus sur 20 suffisaient à refuser quatre ajouts du travail qui manquait
+  // au but (tuiles de l'accueil, écrans en démonstration) : ce travail n'a jamais eu de lot. Un lot
+  // reçu n'envoie plus de compte rendu, il ne pèse plus sur ce que le plafond protège.
+  const ouverts = plan.lots.filter((l) => l.etat !== 'fait').length
+  if (ouverts + bruts.length > LOTS_MAX)
     return {
       ok: false,
-      erreur: `${total} lots au total : ${LOTS_MAX} au plus, regroupe les lots ajoutés.`
+      erreur: `${ouverts} lots encore ouverts + ${bruts.length} ajouté(s) : ${LOTS_MAX} lots ouverts au plus — reçois d’abord les lots finis (« valider »), ou regroupe les lots ajoutés.`
     }
   const lus = lireLots(bruts, plan.lots.length + 1, total)
   if (!lus.ok) return lus
