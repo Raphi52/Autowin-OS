@@ -108,6 +108,7 @@ describe('lot en échec rattrapé dans son propre fil', () => {
     await b.coord.outil('conv-1', {
       action: 'valider',
       lot: 1,
+      ecart: 'aucun',
       preuve: 'capture lue : le coffre masque les valeurs, tests verts'
     })
     expect(b.lot(1)?.etat).toBe('fait')
@@ -142,6 +143,7 @@ describe('lot en échec rattrapé dans son propre fil', () => {
     await b.coord.outil('conv-1', {
       action: 'valider',
       lot: 1,
+      ecart: 'aucun',
       preuve: 'capture lue : le coffre masque les valeurs, tests verts'
     })
     expect(b.lot(1)?.etat).toBe('fait')

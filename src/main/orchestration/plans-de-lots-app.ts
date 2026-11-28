@@ -650,15 +650,20 @@ export class CoordinateurDesPlans {
       const rang = Number(args.lot)
       if (!Number.isInteger(rang) || rang < 1)
         throw new Error('plan_de_lots : « lot » — numéro du lot à valider attendu (1, 2…).')
-      const r = validerLot(vu.plan, rang, args.preuve, this.#maintenant())
+      const r = validerLot(vu.plan, rang, args.preuve, this.#maintenant(), args.ecart)
       if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
       this.#poser(r.plan)
       await this.#lancerLesSuivants(r.plan.id)
       const apres = this.#plan(r.plan.id) ?? r.plan
+      const ecart = apres.lots.find((l) => l.rang === rang)?.sousLeBut
       return {
         ok: true,
         plan: resume(apres),
-        detail: `lot ${rang} validé : « fait » dans le tableau, sans tour compté ; les lots qui l’attendaient peuvent partir. ${bilanDuPlan(apres).texte}`
+        detail:
+          (ecart
+            ? `lot ${rang} validé SOUS LE BUT : « fait », compté à part dans l’avancement que voit l’utilisateur (« ${ecart} ») ; dis-le-lui dans ce tour. `
+            : `lot ${rang} validé : « fait » dans le tableau, sans tour compté. `) +
+          `Les lots qui l’attendaient peuvent partir. ${bilanDuPlan(apres).texte}`
       }
     }
     if (action === 'refuser') {

@@ -143,6 +143,11 @@ export interface LotDuPlan {
    */
   refus?: string
   /**
+   * Ce que le chef a déclaré SOUS LE BUT du plan en validant ce lot (`validerLot`, `ecart`) : le lot
+   * est fait, mais pas fini au regard de la demande. Compté à part dans l'avancement.
+   */
+  sousLeBut?: string
+  /**
    * Rangs des lots qui doivent être FAITS avant que celui-ci parte (lot 2). Facultatif :
    * un plan écrit sur disque avant ce champ n'en porte pas.
    */
@@ -859,7 +864,11 @@ function fichiersPris(lots: readonly LotDuPlan[]): FichiersPris {
  * fusionne, et un vrai conflit reste un échec à arbitrer. Rend `plan` tel quel s'il n'y a rien à
  * rendre (aucun lot en cours dans ce fil, ou déjà rendu).
  */
-export function libererFichiersDuLot(plan: PlanDeLots, fil: string, maintenant: number): PlanDeLots {
+export function libererFichiersDuLot(
+  plan: PlanDeLots,
+  fil: string,
+  maintenant: number
+): PlanDeLots {
   const lot = plan.lots.find((l) => l.fil === fil && l.etat === 'en-cours')
   if (!lot || lot.fichiersLiberes !== undefined) return plan
   return avecLot(plan, lot.rang, { fichiersLiberes: maintenant })
@@ -1646,12 +1655,23 @@ export function relancerLot(
  * C'est aussi LA RÉCEPTION d'un lot rendu (« à recevoir », 2026-11-13) : le seul chemin vers « fait »
  * d'un tour réussi. La preuve dit ce que le chef a constaté sur le critère du lot ; une preuve d'un
  * mot (« ok », « vu ») ne dit rien de vérifiable et se refuse.
+ *
+ * L'ÉCART AU BUT (2026-11-28, kaizen de conv-2153). Le critère d'un lot est un échantillon (« un geste
+ * joué sur 3 écrans », « ou la cause nommée ») ; le but du plan est ce que l'utilisateur a demandé.
+ * Mesuré sur plan-676a4b19 (refonte d'une application métier « 100 % fonctionnelle », environ
+ * 2 000 $, 3 jours) : le chef a validé 18 lots en écrivant dans sa réponse, pour la plupart, ce qui
+ * restait sous le but (écrans encore en exemple, aucun document fabriqué, gestes absents). Le tableau
+ * affichait « 18 faits sur 20 », et l'utilisateur a découvert l'écart en ouvrant l'app : « le
+ * résultat est franchement à chier par rapport à la demande ». L'écart se déclare donc AU GESTE
+ * (`ecart`, « aucun » s'il n'y en a pas) et se compte à part dans l'avancement (`bilanDuPlan`) :
+ * un « fait » sous le but ne passe plus pour fini.
  */
 export function validerLot(
   plan: PlanDeLots,
   rang: number,
   preuve: unknown,
-  maintenant: number
+  maintenant: number,
+  ecart: unknown
 ): { ok: true; plan: PlanDeLots } | { ok: false; erreur: string } {
   const lot = plan.lots.find((l) => l.rang === rang)
   if (!lot)
@@ -1667,10 +1687,17 @@ export function validerLot(
       ok: false,
       erreur: `« preuve » attendue (${PREUVE_MIN} caractères au moins) : ce que tu as constaté sur le travail du lot${lot.critere ? `, contre son critère « ${lot.critere} »` : ''} (capture lue, parcours joué, commande et code de sortie).`
     }
+  const ecartLu = lireEcart(ecart)
+  if (ecartLu === undefined)
+    return {
+      ok: false,
+      erreur: `« ecart » attendu : ce qui reste SOUS LE BUT du plan (« ${butDuPlan(plan)} ») dans le périmètre du lot ${rang} — écrans encore en exemple, gestes ou fonctions de l'original absents —, ou « aucun » si le lot le tient. Un écart est compté à part dans l'avancement que voit l'utilisateur.`
+    }
   const fait = avecLot(plan, rang, {
     etat: 'fait',
     raison: `validé par le chef : ${texte}`.slice(0, RAISON_MAX),
     refus: undefined,
+    sousLeBut: ecartLu || undefined,
     fin: maintenant
   })
   // Même fin qu'un dernier lot repris après un redémarrage (`noterFinDeTour`) : un plan interrompu
@@ -1686,6 +1713,20 @@ export function validerLot(
   }
 }
 const PREUVE_MIN = 20
+export const ECART_MAX = 300
+/** « aucun » (et ses variantes) : le lot tient le but, rien n'est compté sous le but. */
+const SANS_ECART = /^(aucun|aucune|rien|néant|neant|none|no)[.!]?$/i
+
+/**
+ * L'écart déclaré par le chef : '' s'il n'y en a pas, le texte borné sinon, `undefined` quand rien
+ * de lisible n'a été dit (le geste se refuse alors : se taire n'est pas « aucun »).
+ */
+function lireEcart(ecart: unknown): string | undefined {
+  const texte = typeof ecart === 'string' ? ecart.replace(/\s+/g, ' ').trim() : ''
+  if (!texte) return undefined
+  if (SANS_ECART.test(texte)) return ''
+  return texte.length > ECART_MAX ? `${texte.slice(0, ECART_MAX - 1)}…` : texte
+}
 
 /**
  * LE REFUS D'UN LOT RENDU (2026-11-13, demande de l'utilisateur). Le chef a trouvé ce qui manque :
@@ -1754,6 +1795,8 @@ export interface BilanDuPlan {
   attendPublication: number
   /** Lots rendus que le chef n'a encore ni validés ni refusés. */
   aRecevoir: number
+  /** Parmi les faits : ceux que le chef a validés en déclarant un écart au but (`sousLeBut`). */
+  sousLeBut: number
   texte: string
 }
 
@@ -1768,10 +1811,11 @@ export function bilanDuPlan(plan: PlanDeLots): BilanDuPlan {
     interrompus: compte('interrompu'),
     attendChef: compte('attend-chef'),
     attendPublication: compte('attend-publication'),
-    aRecevoir: compte('a-recevoir')
+    aRecevoir: compte('a-recevoir'),
+    sousLeBut: plan.lots.filter((l) => l.etat === 'fait' && l.sousLeBut).length
   }
   const texte =
-    `${pluriel(b.faits, 'fait')}, ${b.echecs} en échec, ${b.enCours} en cours, ${b.aFaire} à faire` +
+    `${pluriel(b.faits, 'fait')}${b.sousLeBut ? ` (dont ${b.sousLeBut} sous le but)` : ''}, ${b.echecs} en échec, ${b.enCours} en cours, ${b.aFaire} à faire` +
     (b.aRecevoir ? `, ${b.aRecevoir} à recevoir` : '') +
     (b.interrompus ? `, ${pluriel(b.interrompus, 'interrompu')}` : '') +
     (b.attendChef ? `, ${b.attendChef} ${b.attendChef > 1 ? 'attendent' : 'attend'} le chef` : '') +
@@ -1968,11 +2012,21 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
         (l.refus ? ` — refusé avant pour : ${l.refus.replace(/\s+/g, ' ').slice(0, 200)}` : '')
     )
   const bilan = bilanDuPlan(plan)
+  // Les écarts que le chef a lui-même déclarés en validant : sans cette liste, chaque réveil
+  // repartait de « N faits » et le bilan à l'utilisateur les perdait d'un tour à l'autre.
+  const ecarts = plan.lots
+    .filter((l) => l.etat === 'fait' && l.sousLeBut)
+    .map((l) => `lot ${l.rang} « ${l.titre} » : ${l.sousLeBut}`)
   return [
     `RÉVEIL DU PLAN DE LOTS « ${plan.titre} » (${plan.id}) — message de l’app, pas de l’utilisateur.`,
     `Lots qui viennent de finir : ${nouveaux.length ? nouveaux.join(' ; ') : 'aucun'}.`,
     `Avancement : ${bilan.texte}. Statut du plan : ${LIBELLE_STATUT[plan.statut]}${plan.raison ? ` — ${plan.raison}` : ''}.`,
     `But du plan : ${butDuPlan(plan)}`,
+    ...(ecarts.length
+      ? [
+          `Sous le but, d’après tes propres réceptions (à redire à l’utilisateur dans tout bilan, tant qu’aucun lot ne les reprend) : ${ecarts.join(' ; ')}.`
+        ]
+      : []),
     ...(desLots.length
       ? [
           `Décisions notées par les lots : ${desLots.map((d) => `« ${d.texte} » (${d.de})`).join(' ; ')}.`
@@ -1987,7 +2041,7 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
     // La porte entre les lots : sans ce geste, les dépendants d'un lot rendu ne partent pas.
     ...(aRecevoir.length
       ? [
-          `- À RECEVOIR, leurs dépendants attendent ton geste : ${aRecevoir.join(' ; ')}. Pour chacun, constate toi-même son critère et le but (capture lue, parcours joué, commande rejouée — son compte rendu seul ne prouve rien), puis plan_de_lots action « valider » (lot N, preuve : ce que tu as constaté) ; s’il manque quelque chose, action « refuser » (lot N, motif : ce qui manque et ce qu’il doit rendre) — il repart dans son fil avec ce motif. Aucun lot ne reste à recevoir à la fin de ton tour ;`
+          `- À RECEVOIR, leurs dépendants attendent ton geste : ${aRecevoir.join(' ; ')}. Pour chacun, constate toi-même son critère et le but (capture lue, parcours joué, commande rejouée — son compte rendu seul ne prouve rien), puis plan_de_lots action « valider » (lot N, preuve : ce que tu as constaté, ecart : ce qui reste sous le but dans son périmètre, ou « aucun ») ; s’il manque quelque chose, action « refuser » (lot N, motif : ce qui manque et ce qu’il doit rendre) — il repart dans son fil avec ce motif. Aucun lot ne reste à recevoir à la fin de ton tour ;`
         ]
       : []),
     // Un découpage par couches (outils, logique, serveur, écrans) ne montre rien de jugeable avant
@@ -2014,7 +2068,7 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
           '- un lot en échec dont la cause se corrige : relance-le avec plan_de_lots (action « relancer », lot N) ; sinon dis-le ;',
           // Sans ce geste, le chef concluait « son travail est bon » dans sa réponse, et le tableau
           // gardait « échec » et « Relancer » pour l'utilisateur (`validerLot`).
-          '- un lot en échec dont le travail est pourtant bon (bloqué par un rouge qui n’est pas le sien, par exemple) : vérifie-le, puis passe-le « fait » avec plan_de_lots (action « valider », lot N, preuve : ce que tu as vérifié) — aucun tour compté ;',
+          '- un lot en échec dont le travail est pourtant bon (bloqué par un rouge qui n’est pas le sien, par exemple) : vérifie-le, puis passe-le « fait » avec plan_de_lots (action « valider », lot N, preuve : ce que tu as vérifié, ecart : ce qui reste sous le but, ou « aucun ») — aucun tour compté ;',
           '- une décision qui vaut pour les lots à venir : note-la (action « noter ») ; du travail qui manque au chantier : ajoute des lots (action « ajouter ») plutôt qu’un second plan ;',
           '- les lots suivants partent seuls dès que tu as reçu leurs prérequis : n’en lance aucun à la main ;',
           '- quand le plan est terminé ou arrêté, rends à l’utilisateur le bilan assemblé : ce qui est fait, avec quelle preuve, ce qui reste.',

@@ -87,7 +87,12 @@ describe('plan_de_lots « valider » : le verdict du chef passe dans le tableau'
     await lotBloqueSansRapport(b)
     const toursAvant = b.plan()?.toursLances ?? 0
 
-    const r = await b.coord.outil('conv-1', { action: 'valider', lot: 1, preuve: PREUVE })
+    const r = await b.coord.outil('conv-1', {
+      action: 'valider',
+      lot: 1,
+      ecart: 'aucun',
+      preuve: PREUVE
+    })
 
     expect(r.ok).toBe(true)
     expect(b.lot(1)?.etat).toBe('fait')
@@ -110,17 +115,17 @@ describe('plan_de_lots « valider » : le verdict du chef passe dans le tableau'
 
     await expect(b.coord.outil('conv-1', { action: 'valider', lot: 1 })).rejects.toThrow(/preuve/)
     await expect(
-      b.coord.outil('conv-1', { action: 'valider', lot: 1, preuve: '   ' })
+      b.coord.outil('conv-1', { action: 'valider', lot: 1, ecart: 'aucun', preuve: '   ' })
     ).rejects.toThrow(/preuve/)
     await expect(
-      b.coord.outil('conv-1', { action: 'valider', lot: 2, preuve: PREUVE })
+      b.coord.outil('conv-1', { action: 'valider', lot: 2, ecart: 'aucun', preuve: PREUVE })
     ).rejects.toThrow(/lot 2 est à faire/)
     await expect(
-      b.coord.outil('conv-1', { action: 'valider', lot: 9, preuve: PREUVE })
+      b.coord.outil('conv-1', { action: 'valider', lot: 9, ecart: 'aucun', preuve: PREUVE })
     ).rejects.toThrow(/lot 9 inconnu/)
     // Un lot ne se déclare pas fait lui-même : seul le chef tranche.
     await expect(
-      b.coord.outil('conv-100', { action: 'valider', lot: 1, preuve: PREUVE })
+      b.coord.outil('conv-100', { action: 'valider', lot: 1, ecart: 'aucun', preuve: PREUVE })
     ).rejects.toThrow(/seul le fil chef/)
 
     expect(JSON.stringify(b.plan())).toBe(avant)

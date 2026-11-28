@@ -103,7 +103,7 @@ const PREUVE = 'capture lue : l’écran rendu tient son critère'
 function recevoir(plan: PlanDeLots, ...rangs: number[]): PlanDeLots {
   let p = plan
   for (const rang of rangs) {
-    const v = validerLot(p, rang, PREUVE, 4000)
+    const v = validerLot(p, rang, PREUVE, 4000, 'aucun')
     if (!v.ok) throw new Error(v.erreur)
     p = v.plan
   }
@@ -790,7 +790,7 @@ describe('validerLot — le verdict du chef', () => {
 
   it('lot en échec validé : fait, la preuve pour raison, aucun tour compté, le dépendant peut partir', () => {
     const p = bloqueParLeLot1()
-    const r = validerLot(p, 1, PREUVE, 4000)
+    const r = validerLot(p, 1, PREUVE, 4000, 'aucun')
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.plan.lots[0]).toMatchObject({
@@ -807,14 +807,14 @@ describe('validerLot — le verdict du chef', () => {
 
   it('refuse un lot qui n’est pas en échec, un lot inconnu, une preuve vide ; borne la preuve', () => {
     const p = bloqueParLeLot1()
-    const aFaire = validerLot(p, 2, PREUVE, 4000)
+    const aFaire = validerLot(p, 2, PREUVE, 4000, 'aucun')
     expect(aFaire.ok).toBe(false)
     if (!aFaire.ok) expect(aFaire.erreur).toMatch(/lot 2 est à faire/)
-    expect(validerLot(p, 9, PREUVE, 4000).ok).toBe(false)
-    const vide = validerLot(p, 1, '  ', 4000)
+    expect(validerLot(p, 9, PREUVE, 4000, 'aucun').ok).toBe(false)
+    const vide = validerLot(p, 1, '  ', 4000, 'aucun')
     expect(vide.ok).toBe(false)
     if (!vide.ok) expect(vide.erreur).toMatch(/preuve/)
-    const longue = validerLot(p, 1, 'x'.repeat(1000), 4000)
+    const longue = validerLot(p, 1, 'x'.repeat(1000), 4000, 'aucun')
     expect(longue.ok).toBe(true)
     if (longue.ok) expect(longue.plan.lots[0].raison?.length).toBe(300)
   })
@@ -822,6 +822,65 @@ describe('validerLot — le verdict du chef', () => {
   it('le réveil du chef lui donne ce geste pour un lot en échec dont le travail est bon', () => {
     const p = bloqueParLeLot1()
     expect(promptDeReveil(p, [1])).toMatch(/action « valider », lot N, preuve/)
+  })
+})
+
+/*
+ * L'ÉCART AU BUT (kaizen de conv-2153, 2026-11-28). Rejoue plan-676a4b19 : le chef recevait un lot
+ * en écrivant « Lot 15 validé. Ce qu'il promettait marche, mais quatre écrans restent des
+ * exemples », puis validait ; le tableau comptait « fait » et affichait « 18 faits sur 20 » pendant
+ * trois jours, jusqu'à ce que l'utilisateur ouvre l'app et trouve le résultat loin de sa demande.
+ */
+describe('validerLot — l’écart au but se déclare et se compte à part', () => {
+  const ECART = 'quatre écrans restent des exemples : leurs données sont dans des bases absentes'
+  const deuxLotsRendus = (): PlanDeLots => {
+    let p = lancerCeQuiPart(planAccepte({ parallele: 2, lots: [lot(1), lot(2)] }))
+    p = noterFinDeTour(p, 'conv-110', { ok: true, texte: 'Fait.' }, 3000).plan
+    p = noterFinDeTour(p, 'conv-120', { ok: true, texte: 'Fait.' }, 3001).plan
+    expect(p.lots.map((l) => l.etat)).toEqual(['a-recevoir', 'a-recevoir'])
+    return p
+  }
+
+  it('sans écart déclaré, la validation se refuse : se taire n’est pas « aucun »', () => {
+    const p = deuxLotsRendus()
+    for (const muet of [undefined, '', '   ', 42]) {
+      const r = validerLot(p, 1, PREUVE, 4000, muet)
+      expect(r.ok).toBe(false)
+      if (!r.ok) expect(r.erreur).toMatch(/« ecart » attendu .*SOUS LE BUT.*« aucun »/)
+    }
+  })
+
+  it('un écart déclaré : le lot est fait, compté sous le but, et redit au réveil suivant', () => {
+    const r = validerLot(deuxLotsRendus(), 1, PREUVE, 4000, ECART)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.plan.lots[0]).toMatchObject({ etat: 'fait', sousLeBut: ECART })
+    const b = bilanDuPlan(r.plan)
+    expect(b).toMatchObject({ faits: 1, sousLeBut: 1 })
+    expect(b.texte).toMatch(/^1 fait \(dont 1 sous le but\), /)
+    const reveil = promptDeReveil(r.plan, [2])
+    expect(reveil).toContain(`Sous le but, d’après tes propres réceptions`)
+    expect(reveil).toContain(`lot 1 « Lot 1 » : ${ECART}`)
+    // Le geste de réception nomme l'écart, pour le lot qui reste à recevoir.
+    expect(reveil).toMatch(/« valider » \(lot N, preuve : [^)]*ecart : /)
+  })
+
+  it('contrôle négatif : « aucun » laisse l’avancement tel qu’avant, sans ligne d’écart', () => {
+    for (const rien of ['aucun', 'Aucune.', 'rien', 'néant']) {
+      const r = validerLot(deuxLotsRendus(), 1, PREUVE, 4000, rien)
+      expect(r.ok).toBe(true)
+      if (!r.ok) return
+      expect(r.plan.lots[0].sousLeBut).toBeUndefined()
+      expect(bilanDuPlan(r.plan)).toMatchObject({ faits: 1, sousLeBut: 0 })
+      expect(bilanDuPlan(r.plan).texte).toMatch(/^1 fait, 0 en échec/)
+      expect(promptDeReveil(r.plan, [2])).not.toContain('Sous le but')
+    }
+  })
+
+  it('un écart trop long est borné, jamais refusé : le chef n’a pas à se censurer', () => {
+    const r = validerLot(deuxLotsRendus(), 1, PREUVE, 4000, 'x'.repeat(900))
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.plan.lots[0].sousLeBut?.length).toBe(300)
   })
 })
 
@@ -1062,10 +1121,10 @@ describe('apres — dépendances explicites entre lots', () => {
   it('validerLot sur un lot rendu : une preuve d’un mot ne dit rien de vérifiable', () => {
     let p = lancerCeQuiPart(planAccepte({ parallele: 2, lots: [lot(1), dep(2, [1])] }))
     p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
-    const vide = validerLot(p, 1, 'ok', 3100)
+    const vide = validerLot(p, 1, 'ok', 3100, 'aucun')
     expect(vide.ok).toBe(false)
     if (!vide.ok) expect(vide.erreur).toMatch(/contre son critère « le résultat se constate/)
-    expect(validerLot(p, 1, PREUVE, 3100).ok).toBe(true)
+    expect(validerLot(p, 1, PREUVE, 3100, 'aucun').ok).toBe(true)
   })
 
   it('un redémarrage sans lot en cours n’interrompt pas un plan dont un lot attend sa réception', () => {
@@ -1288,7 +1347,9 @@ describe('textes remis aux fils', () => {
     expect(texte).toMatch(
       /À RECEVOIR, leurs dépendants attendent ton geste : lot 1 « Lot 1 » \(fil conv-110\) — critère : le résultat se constate et ses tests passent/
     )
-    expect(texte).toMatch(/action « valider » \(lot N, preuve : ce que tu as constaté\)/)
+    expect(texte).toMatch(
+      /action « valider » \(lot N, preuve : ce que tu as constaté, ecart : ce qui reste sous le but dans son périmètre, ou « aucun »\)/
+    )
     expect(texte).toMatch(/action « refuser » \(lot N, motif : ce qui manque/)
     expect(texte).toMatch(/Aucun lot ne reste à recevoir à la fin de ton tour/)
     // « Réponds en une ligne » inviterait à passer : il n'est offert que s'il n'y a rien à recevoir.

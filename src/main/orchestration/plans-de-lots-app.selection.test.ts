@@ -68,6 +68,7 @@ describe('lancerSelection — un clic de trop ne repaie rien', () => {
       await b.coord.outil('chef', {
         action: 'valider',
         lot,
+        ecart: 'aucun',
         preuve: 'capture lue : le résultat tient son critère'
       })
     expect(b.coord.planDuFil('chef')?.plan.statut).toBe('termine')

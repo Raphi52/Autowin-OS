@@ -132,7 +132,12 @@ describe('plan_de_lots par le bus', () => {
     // La réception passe par l'outil du chef, comme son agent l'appelle.
     const recu = await bus.exec(
       'plan_de_lots',
-      { action: 'valider', lot: 1, preuve: 'capture lue : le résultat tient son critère' },
+      {
+        action: 'valider',
+        lot: 1,
+        ecart: 'aucun',
+        preuve: 'capture lue : le résultat tient son critère'
+      },
       'conv-A'
     )
     expect(recu.ok).toBe(true)

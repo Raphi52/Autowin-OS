@@ -42,6 +42,7 @@ export const TEXTES_FR = {
   'lots.statut.remplace': 'remplacé par un plan corrigé',
   'lots.bilan.faits.un': '{n} fait',
   'lots.bilan.faits.plusieurs': '{n} faits',
+  'lots.bilan.sousLeBut': ' (dont {n} sous le but)',
   'lots.bilan.interrompus.un': ', {n} interrompu',
   'lots.bilan.interrompus.plusieurs': ', {n} interrompus',
   'lots.bilan.attendChef.un': ', {n} attend le chef',
@@ -52,7 +53,7 @@ export const TEXTES_FR = {
   'lots.bilan.tours.un': '{n} tour',
   'lots.bilan.tours.plusieurs': '{n} tours',
   'lots.bilan.texte':
-    '{faits}, {echecs} en échec, {enCours} en cours, {aFaire} à faire{aRecevoir}{interrompus}{attendChef}{attendPublication} sur {total} — {tours} sur {plafond}',
+    '{faits}{sousLeBut}, {echecs} en échec, {enCours} en cours, {aFaire} à faire{aRecevoir}{interrompus}{attendChef}{attendPublication} sur {total} — {tours} sur {plafond}',
   'lots.parallele.un': '{n} fil en parallèle',
   'lots.parallele.plusieurs': '{n} fils en parallèle',
   'lots.cout.titre':
@@ -305,6 +306,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'lots.statut.remplace': 'replaced by a corrected plan',
   'lots.bilan.faits.un': '{n} done',
   'lots.bilan.faits.plusieurs': '{n} done',
+  'lots.bilan.sousLeBut': ' ({n} below the goal)',
   'lots.bilan.interrompus.un': ', {n} interrupted',
   'lots.bilan.interrompus.plusieurs': ', {n} interrupted',
   'lots.bilan.attendChef.un': ', {n} waiting for the lead',
@@ -315,7 +317,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'lots.bilan.tours.un': '{n} turn',
   'lots.bilan.tours.plusieurs': '{n} turns',
   'lots.bilan.texte':
-    '{faits}, {echecs} failed, {enCours} running, {aFaire} to do{aRecevoir}{interrompus}{attendChef}{attendPublication} out of {total} — {tours} of {plafond}',
+    '{faits}{sousLeBut}, {echecs} failed, {enCours} running, {aFaire} to do{aRecevoir}{interrompus}{attendChef}{attendPublication} out of {total} — {tours} of {plafond}',
   'lots.parallele.un': '{n} thread in parallel',
   'lots.parallele.plusieurs': '{n} threads in parallel',
   'lots.cout.titre':
@@ -564,6 +566,7 @@ export function texteDuBilan(plan: PlanDeLots, langue: Langue): string {
     t(auPluriel(n, langue) ? plusieurs : un, { n })
   return t('lots.bilan.texte', {
     faits: pluriel(b.faits, 'lots.bilan.faits.un', 'lots.bilan.faits.plusieurs'),
+    sousLeBut: b.sousLeBut ? t('lots.bilan.sousLeBut', { n: b.sousLeBut }) : '',
     echecs: b.echecs,
     enCours: b.enCours,
     aFaire: b.aFaire,

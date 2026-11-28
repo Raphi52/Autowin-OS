@@ -160,6 +160,7 @@ const recevoir = (b: ReturnType<typeof bancReel>, rang: number): Promise<unknown
   b.coord.outil('conv-1', {
     action: 'valider',
     lot: rang,
+    ecart: 'aucun',
     preuve: 'capture lue : l’écran rendu tient son critère'
   })
 

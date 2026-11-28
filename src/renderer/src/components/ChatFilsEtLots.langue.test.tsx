@@ -211,8 +211,21 @@ describe('plan de lots et fils proposés — langue', () => {
           ...l,
           etat: (['attend-publication', 'attend-publication', 'fait'] as const)[i]
         }))
+      },
+      // Faits SOUS LE BUT (écart déclaré par le chef à la validation) : comptés à part.
+      {
+        ...base,
+        toursLances: 3,
+        lots: base.lots.map((l, i) => ({
+          ...l,
+          etat: 'fait' as const,
+          ...(i < 2 ? { sousLeBut: 'quatre écrans restent des exemples' } : {})
+        }))
       }
     ]
     for (const p of varies) expect(texteDuBilan(p, 'fr')).toBe(bilanDuPlan(p).texte)
+    expect(texteDuBilan(varies[varies.length - 1], 'fr')).toMatch(
+      /^3 faits \(dont 2 sous le but\), /
+    )
   })
 })

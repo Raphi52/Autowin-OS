@@ -213,6 +213,8 @@ export const CATALOG: CommandSpec[] = [
       lot: 'pour relancer, valider ou refuser — le numéro du lot (1, 2…)',
       preuve:
         'pour valider — ce que tu as constaté toi-même sur le critère du lot (capture lue, parcours joué, commande et code de sortie), 20 caractères au moins ; il passe « fait » et ses dépendants partent',
+      ecart:
+        'pour valider, OBLIGATOIRE — ce qui reste SOUS LE BUT du plan dans le périmètre du lot (écrans encore en exemple, gestes ou fonctions de l’original absents), ou « aucun » s’il le tient ; un écart est compté à part dans l’avancement que voit l’utilisateur (« 18 faits, dont 11 sous le but »)',
       motif:
         'pour refuser un lot à recevoir — ce qui manque, constaté, et ce qu’il doit rendre ; son fil le reçoit tel quel et repart (un tour compté)',
       decision:
@@ -253,9 +255,10 @@ export const CATALOG: CommandSpec[] = [
       lot: { type: 'integer', minimum: 1 },
       decision: { type: 'string', maxLength: 300 },
       preuve: { type: 'string', maxLength: 300 },
+      ecart: { type: 'string', maxLength: 300 },
       motif: { type: 'string', maxLength: 1000 }
     },
-    argsFacultatifs: ['action', 'plan', 'lot', 'decision', 'preuve', 'motif'],
+    argsFacultatifs: ['action', 'plan', 'lot', 'decision', 'preuve', 'ecart', 'motif'],
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,

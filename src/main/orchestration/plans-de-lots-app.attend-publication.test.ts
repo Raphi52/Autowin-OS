@@ -174,6 +174,7 @@ describe('lot vérifié mais bloqué par le travail non commité d’un autre fi
     await b.coord.outil('conv-1', {
       action: 'valider',
       lot: 1,
+      ecart: 'aucun',
       preuve: 'capture lue : le coffre masque les valeurs, tests verts'
     })
     expect(b.lot(1)?.etat).toBe('fait')

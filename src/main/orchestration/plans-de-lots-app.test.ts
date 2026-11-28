@@ -94,7 +94,7 @@ const PREUVE = 'capture lue : l’écran rendu tient son critère'
 
 /** Le chef reçoit le lot par son outil, comme l'agent du fil chef. */
 const recevoir = (b: Banc, rang: number, chef = 'conv-1'): Promise<Record<string, unknown>> =>
-  b.coord.outil(chef, { action: 'valider', lot: rang, preuve: PREUVE })
+  b.coord.outil(chef, { action: 'valider', lot: rang, ecart: 'aucun', preuve: PREUVE })
 
 const plan4 = {
   titre: 'Traduction',

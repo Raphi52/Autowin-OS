@@ -1051,6 +1051,7 @@ describe('relance — le plan de lots du fil suit le run repris', () => {
     await apres.outil('conv-chef', {
       action: 'valider',
       lot: 1,
+      ecart: 'aucun',
       preuve: 'capture lue : les lecteurs sont explicites, tests verts'
     })
     expect(apres.plans()[0].lots.map((l) => l.etat)).toEqual(['fait', 'en-cours'])
