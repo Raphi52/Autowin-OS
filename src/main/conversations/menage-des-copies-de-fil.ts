@@ -210,12 +210,12 @@ function dossierAvantDeLaCopie(
  * (là où le CLI la cherchera), puis le dossier de la copie part en corbeille datée. Sans dossier d'avant, ou si une
  * session ne peut pas être posée, rien ne part : l'historique reste en place, et la raison remonte au bilan.
  */
-function rangerHistoriqueDeLaCopieRetiree(entree: {
+async function rangerHistoriqueDeLaCopieRetiree(entree: {
   copie: string
   dossierAvant: string | undefined
   racines: readonly string[]
   jour: string
-}): Array<{ chemin: string; raison: string }> {
+}): Promise<Array<{ chemin: string; raison: string }>> {
   if (entree.dossierAvant === undefined) return []
   const ramenees = ramenerLesSessionsDUneCopie({
     copie: entree.copie,
@@ -227,7 +227,11 @@ function rangerHistoriqueDeLaCopieRetiree(entree: {
       chemin,
       raison: 'session non posée sous le dossier d’avant : son historique reste en place'
     }))
-  rangerHistoriqueCliDUneCopie({ copie: entree.copie, racines: entree.racines, jour: entree.jour })
+  await rangerHistoriqueCliDUneCopie({
+    copie: entree.copie,
+    racines: entree.racines,
+    jour: entree.jour
+  })
   return []
 }
 
@@ -356,12 +360,12 @@ export async function menageDesCopiesDeFil(entree: {
       bilan.supprimees.push(chemin)
       aPrune = true
       bilan.echecs.push(
-        ...rangerHistoriqueDeLaCopieRetiree({
+        ...(await rangerHistoriqueDeLaCopieRetiree({
           copie: chemin,
           dossierAvant: dossierAvantDeLaCopie(entree.lireFils(), chemin, entree.depot),
           racines: (entree.racinesHistoriqueCli ?? racinesHistoriqueCliPour)(chemin),
           jour: jourDe(maintenant())
-        })
+        }))
       )
     } catch (erreur) {
       bilan.echecs.push({ chemin: decroche, raison: message(erreur) })
@@ -502,12 +506,12 @@ export async function menageDesCopiesDeTaches(
     if (retrait.etat !== 'retiree') continue
     bilan.supprimees.push(chemin)
     bilan.echecs.push(
-      ...rangerHistoriqueDeLaCopieRetiree({
+      ...(await rangerHistoriqueDeLaCopieRetiree({
         copie: chemin,
         dossierAvant: dossierAvantDeLaCopie(entree.lireFils(), chemin, entree.depot),
         racines: (entree.racinesHistoriqueCli ?? racinesHistoriqueCliPour)(chemin),
         jour: jourDe(maintenant())
-      })
+      }))
     )
     // Rendu à son dossier d'avant seulement après le retrait, et seulement s'il se sert toujours de cette copie.
     for (const id of decision.aDecrocher) {
