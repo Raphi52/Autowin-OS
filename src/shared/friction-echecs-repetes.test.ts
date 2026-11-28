@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { frictionEchecsRepetes, SEUIL_FRICTION } from './friction-echecs-repetes'
 import type { OrchestrationOutcome } from './orchestration-outcome'
+import { lireSourceDuChatView } from '../renderer/src/components/ChatView.source-complete'
 
 const bloque = (extra: Partial<OrchestrationOutcome> = {}): OrchestrationOutcome => ({
   status: 'failed',
@@ -96,16 +97,8 @@ describe('frictionEchecsRepetes — la série devient visible avant la relance s
  * exposé, testé, mais aucun appelant réel. On vérifie donc la présence de l'appel ET du rendu.
  */
 describe('câblage — la friction est réellement affichée dans le composer', () => {
-  const chatView = (): string => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('node:fs') as typeof import('node:fs')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require('node:path') as typeof import('node:path')
-    return fs.readFileSync(
-      path.join(__dirname, '..', 'renderer', 'src', 'components', 'ChatView.tsx'),
-      'utf8'
-    )
-  }
+  // ChatView et les fichiers voisins où son code a été déplacé tel quel.
+  const chatView = (): string => lireSourceDuChatView()
 
   it('appelle frictionEchecsRepetes sur les issues du fil', () => {
     const source = chatView()

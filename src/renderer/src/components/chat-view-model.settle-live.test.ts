@@ -68,10 +68,14 @@ describe('un tour clos ne laisse rien « en cours »', () => {
     // Contrat de SOURCE : `patchLast` est une closure dans un composant de 2600 lignes, non importable.
     // On verifie donc que l'entonnoir de mutation appelle bien le regleur, sans quoi les tests ci-dessus
     // passeraient sur une fonction que l'application n'utilise jamais.
-    const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
-    const start = source.indexOf('function patchLast(')
+    // Depuis la découpe de ChatView, son corps vit dans `chat-view-fil.ts` (fonction de module) et
+    // ChatView n'en garde que le relais : les deux moitiés comptent.
+    const vue = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    expect(vue).toContain('return chargementFil.patchLast(ctxFil(), ')
+    const source = readFileSync(new URL('./chat-view-fil.ts', import.meta.url), 'utf8')
+    const start = source.indexOf('export function patchLast(')
     expect(start, 'patchLast introuvable').toBeGreaterThan(-1)
-    const body = source.slice(start, source.indexOf('\n  }', start))
+    const body = source.slice(start, source.indexOf('\n}\n', start))
     expect(body).toContain('settleIfDone(')
   })
 })

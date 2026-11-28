@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { zoneDuTourDeChat } from '../../../main/app/source-process-principal.test-helpers'
 import {
   callsLabel,
@@ -199,7 +200,7 @@ describe('câblage — l’indicateur est réellement monté dans le composeur',
   const read = (rel: string): string => readFileSync(join(__dirname, rel), 'utf8')
 
   it('ChatView monte le composant avec la conversation active', () => {
-    const chat = read('ChatView.tsx')
+    const chat = lireSourceDuChatView()
     expect(chat).toContain(
       "import { ConversationCostIndicator } from './ConversationCostIndicator'"
     )

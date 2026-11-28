@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { lireSourceDuChatView } from '../components/ChatView.source-complete'
 
 describe('Autowin UI contract', () => {
   const css = readFileSync(new URL('./ui-system.css', import.meta.url), 'utf8')
@@ -254,7 +255,7 @@ describe('Autowin UI contract', () => {
     // ChatView n'a PLUS de titre (decision utilisateur du 2026-10-15 : « Conversations » prenait une
     // ligne pour rien). Garder ModuleHeader la-bas exigerait un titre cache juste pour ce test ; le
     // contrat devient : aucun titre fait main dans ChatView — s'il revient, il passe par ModuleHeader.
-    expect(component('ChatView.tsx')).not.toMatch(/<h1[\s>]/)
+    expect(lireSourceDuChatView()).not.toMatch(/<h1[\s>]/)
     // AgentsTopologyView n'a plus de titre non plus : l'en-tête d'Agent Studio (ViewTopBar) le porte,
     // et sa première rangée est celle des profils.
     expect(component('AgentsTopologyView.tsx')).not.toMatch(/<h[12][\s>]/)

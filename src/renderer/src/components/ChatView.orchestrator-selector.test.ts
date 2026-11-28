@@ -422,8 +422,9 @@ describe('selecteur orchestrateur Chat', () => {
     // choix, que le main relit au départ de chacun de ses tours. (2026-11-04) : ce choix
     // pose AUSSI l'orchestrateur d'Agents Studio, jamais sur « revenir au défaut » (comportement
     // prouvé par ChatView.modele-studio.test.tsx).
+    // Le corps vit dans chat-view-modele.ts (fonction de module : il finit à la colonne 0).
     const choix = source.slice(source.indexOf('async function changerModeleDuFil('))
-    const corps = choix.slice(0, choix.indexOf('\n  }\n'))
+    const corps = choix.slice(0, choix.indexOf('\n}\n'))
     expect(corps.match(/if \(option\) await poserOrchestrateurDuStudio\(option\)/g)).toHaveLength(2)
     expect(corps).toContain('window.api.conversationSetModel(')
     expect(corps).toContain('option ? option.provider : null')

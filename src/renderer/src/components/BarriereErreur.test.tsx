@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BarriereErreur } from './BarriereErreur'
 import { ChatMessageRow } from './ChatMessageRow'
 import { VueMesuree } from './VueMesuree'
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import type { Msg } from './chat-view-types'
 import { nomDeZone } from '../textes-ecrans/barriere-erreur'
 
@@ -177,14 +178,17 @@ describe('les blocs posés à la main', () => {
     ['ChatMosaic.tsx', 'zone="chat-lots"', 1],
     ['ChatMosaic.tsx', 'zone="chat-fil"', 1]
   ])('%s garde %s', (fichier, pose, attendu) => {
-    const source = readFileSync(join(__dirname, fichier), 'utf8')
+    const source =
+      fichier === 'ChatView.tsx'
+        ? lireSourceDuChatView()
+        : readFileSync(join(__dirname, fichier), 'utf8')
     expect(source.split(`<BarriereErreur ${pose}`).length - 1).toBe(attendu)
   })
 
   it.each(['chat-fil', 'chat-saisie', 'chat-workflows'])(
     'la panne de %s ne suit pas l’utilisateur dans une autre conversation',
     (zone) => {
-      const source = readFileSync(join(__dirname, 'ChatView.tsx'), 'utf8')
+      const source = lireSourceDuChatView()
       expect(source).toContain(`<VueMesuree id="${zone}" bloc cle={activeId}>`)
     }
   )
@@ -208,7 +212,7 @@ describe('ce que dit le bloc en panne', () => {
     const composants = join(__dirname)
     const sources = [
       readFileSync(join(composants, '..', 'App.tsx'), 'utf8'),
-      readFileSync(join(composants, 'ChatView.tsx'), 'utf8')
+      lireSourceDuChatView()
     ].join('\n')
     const zones = [...sources.matchAll(/<VueMesuree id="([^"]+)"/g)].map((m) => m[1])
     // 14 : l'écran Tickets est devenu un onglet du Board, sa zone est partie avec lui.

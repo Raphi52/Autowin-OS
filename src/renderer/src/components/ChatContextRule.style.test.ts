@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { lireSourceDuChatView } from './ChatView.source-complete'
 
 const styles = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
 const verre = readFileSync(new URL('../assets/theme-nebuleuse-verre.css', import.meta.url), 'utf8')
@@ -123,7 +124,7 @@ describe('mot « contexte » au bout du remplissage', () => {
 })
 
 describe('placement : sous l en-tete du chat, plus au-dessus du champ', () => {
-  const vue = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+  const vue = lireSourceDuChatView()
   const composer = readFileSync(new URL('./ChatComposer.tsx', import.meta.url), 'utf8')
 
   it('est rendue DANS l en-tete du chat, en dernier, sur son filet du bas', () => {
