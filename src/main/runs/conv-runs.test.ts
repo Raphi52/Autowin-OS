@@ -15,6 +15,7 @@ import {
 } from './conv-runs'
 import type { OrchestrationStep } from '../orchestration/orchestrator'
 import { isBlocked } from '../../shared/run-blocked'
+import { attendreFichier } from '../gel/ecriture-hors-fil'
 
 const root = mkdtempSync(join(tmpdir(), 'aos-convruns-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -193,7 +194,10 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
       attachedPath: nativeAttached
     })
     expect(existsSync(nativeAttached)).toBe(true)
-    expect(existsSync(join(dirname(nativeAttached), 'trace.json'))).toBe(true)
+    // La trace se pose hors du fil principal : on la laisse atterrir avant de lire le disque.
+    const trace = join(dirname(nativeAttached), 'trace.json')
+    expect(await attendreFichier(trace)).toBe(true)
+    expect(existsSync(trace)).toBe(true)
   })
 
   it('retourne le chemin attaché canonique quand la requête change seulement de casse', async () => {
